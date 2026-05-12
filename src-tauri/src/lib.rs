@@ -55,6 +55,8 @@ fn set_study_mode_active(state: tauri::State<'_, AppState>, active: bool) -> Res
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             active_session_id: Mutex::new(None),
             study_mode_active: Mutex::new(false),

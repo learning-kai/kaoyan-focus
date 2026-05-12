@@ -8,16 +8,20 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "release:win": "tauri build --bundles nsis"
+    "release:win": "tauri build --bundles nsis",
+    "release:win:update": "node scripts/release-win-update.mjs",
+    "release:metadata": "node scripts/generate-latest-json.mjs \"src-tauri/target/release/bundle/nsis/考研专注_0.1.1_x64-setup.exe\" \"https://github.com/OWNER/REPO/releases/latest/download\""
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "@vitejs/plugin-react": "^5.0.0",
-    "vite": "^7.0.0",
-    "typescript": "^5.9.0",
+    "dayjs": "^1.11.13",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "dayjs": "^1.11.13"
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

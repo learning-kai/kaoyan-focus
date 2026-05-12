@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { listFocusSessions } from '../services/focusApi';
 import { getCurrentForegroundApp } from '../services/monitorApi';
 import { getAppDataLocation, getAppSettings, saveAppSettings } from '../services/settingsApi';
+import { checkForAppUpdate, installAppUpdate, type AppUpdate } from '../services/updateApi';
 import type { FocusSession } from '../types/focus';
 import type { ForegroundApp } from '../types/monitor';
 import type { AppSettings } from '../types/settings';
@@ -21,8 +22,13 @@ export default function SettingsPage() {
   const [dataLocation, setDataLocation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [availableUpdate, setAvailableUpdate] = useState<AppUpdate | null>(null);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
 
   useEffect(() => {
     void initializeSettingsPage();
@@ -90,6 +96,49 @@ export default function SettingsPage() {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCheckUpdate() {
+    try {
+      setCheckingUpdate(true);
+      setError(null);
+      setUpdateMessage(null);
+      setUpdateProgress(null);
+      const update = await checkForAppUpdate();
+      setAvailableUpdate(update);
+
+      if (update === null) {
+        setUpdateMessage('当前已经是最新版本。');
+        return;
+      }
+
+      setUpdateMessage(`发现新版本 ${update.version}${update.body ? `：${update.body}` : ''}`);
+    } catch (reason) {
+      setAvailableUpdate(null);
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
+
+  async function handleInstallUpdate() {
+    if (availableUpdate === null) {
+      return;
+    }
+
+    try {
+      setInstallingUpdate(true);
+      setError(null);
+      setUpdateMessage('正在下载更新...');
+      await installAppUpdate(availableUpdate, ({ downloadedBytes, totalBytes }) => {
+        if (totalBytes && totalBytes > 0) {
+          setUpdateProgress(Math.round((downloadedBytes / totalBytes) * 100));
+        }
+      });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+      setInstallingUpdate(false);
     }
   }
 
@@ -202,6 +251,23 @@ export default function SettingsPage() {
       )}
 
       {savedMessage && <p className="success-text">{savedMessage}</p>}
+
+      <div className="tool-card">
+        <div>
+          <h3>在线更新</h3>
+          <p>检查发布服务器上的新版本，下载完成后会自动重启应用。</p>
+          {updateMessage && <p>{updateMessage}</p>}
+          {updateProgress !== null && <p>下载进度 {updateProgress}%</p>}
+        </div>
+        <div className="row-actions">
+          <button className="small-action" disabled={checkingUpdate || installingUpdate} onClick={() => void handleCheckUpdate()} type="button">
+            {checkingUpdate ? '检查中' : '检查更新'}
+          </button>
+          <button className="small-action enabled" disabled={availableUpdate === null || installingUpdate} onClick={() => void handleInstallUpdate()} type="button">
+            {installingUpdate ? '安装中' : '下载并安装'}
+          </button>
+        </div>
+      </div>
 
       <div className="settings-list">
         <label>

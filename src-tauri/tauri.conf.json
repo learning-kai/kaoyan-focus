@@ -27,5 +27,16 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.ico"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcxQzk2MjM2MTMwOENDRDUKUldUVnpBZ1RObUxKY1FWTnBxVnRZTWM3REhzL2k4MmQweGU2U1RYNW5ZWDFQRnFBS3pkNHJDYWEK",
+      "endpoints": [
+        "https://github.com/OWNER/REPO/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
