@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Activity,
+  BellRing,
+  BookOpen,
+  CheckCircle2,
+  Coffee,
+  Gauge,
+  Play,
+  RefreshCw,
+  ShieldCheck,
+  Timer,
+} from 'lucide-react';
+import {
   confirmStudyBreak,
   getFocusStatsSummary,
   getStudyModeState,
@@ -255,7 +267,7 @@ export default function FocusPage() {
         selectedSubjectId,
       );
       setStudyState(nextState);
-      setNotice('学习模式已开始。关闭窗口会进入托盘，后台仍会计时和执行白名单。');
+      setNotice('学习模式已开始。关闭窗口会进入托盘，后台仍会计时并执行白名单。');
       lastReminderKeyRef.current = reminderKey(nextState);
       void notifyStudyReminder({
         title: '学习模式已开始',
@@ -287,11 +299,12 @@ export default function FocusPage() {
   }
 
   return (
-    <section className="focus-workbench">
-      <header className="workbench-header">
+    <section className="page-shell focus-workbench">
+      <header className="page-header">
         <div>
           <p className="eyebrow">学习模式 / 后台番茄钟</p>
-          <h2>考研专注控制台</h2>
+          <h2>专注控制台</h2>
+          <p>启动后窗口可隐藏到托盘，后台继续计时、切换阶段并执行白名单。</p>
         </div>
         <div className={`phase-badge phase-${studyState.phase}`}>
           <span>{phaseLabel[studyState.phase]}</span>
@@ -299,60 +312,48 @@ export default function FocusPage() {
         </div>
       </header>
 
-      {error && <p className="error-text">{error}</p>}
-      {notice && <p className="success-text">{notice}</p>}
-      {monitorError && <p className="error-text">前台检测失败：{monitorError}</p>}
+      {error && <p className="alert error">{error}</p>}
+      {notice && <p className="alert success">{notice}</p>}
+      {monitorError && <p className="alert error">前台检测失败：{monitorError}</p>}
 
-      <div className="status-ribbon">
-        <article>
-          <span>学习总剩余</span>
-          <strong>{formatSeconds(active ? studyState.study_remaining_seconds : studyMinutes * 60)}</strong>
-        </article>
-        <article>
-          <span>本轮阶段</span>
-          <strong>{phaseLabel[studyState.phase]}</strong>
-        </article>
-        <article>
-          <span>强制执行</span>
-          <strong>{studyState.focus_enforcement_active ? '运行中' : active ? '休息暂停' : '未启动'}</strong>
-        </article>
-        <article>
-          <span>科目</span>
-          <strong>{selectedSubjectName ?? '未指定'}</strong>
-        </article>
-      </div>
-
-      <div className="workbench-grid">
+      <div className="focus-grid">
         <section className="timer-console">
           <div className="timer-topline">
-            <span>{studyState.phase === 'awaiting_break' ? '等待本人确认' : '当前倒计时'}</span>
-            <span>{active ? formatDateTime(studyState.started_at) : '准备开始'}</span>
+            <span>{studyState.phase === 'awaiting_break' ? '等待本人确认' : '当前阶段倒计时'}</span>
+            <span>{active ? `开始于 ${formatDateTime(studyState.started_at)}` : '准备开始'}</span>
           </div>
-          <div className="timer-display compact">{timerValue}</div>
+          <div className="timer-display">{timerValue}</div>
           <p className="timer-caption">{buildPhaseMessage(studyState)}</p>
 
           <div className="progress-stack">
-            <div>
-              <span>学习进度</span>
-              <div className="progress-track"><i style={{ width: `${totalProgress}%` }} /></div>
-            </div>
-            <div>
-              <span>阶段进度</span>
-              <div className="progress-track accent"><i style={{ width: `${phaseProgress}%` }} /></div>
-            </div>
+            <ProgressBar label="学习总进度" value={totalProgress} />
+            <ProgressBar label="当前阶段进度" value={phaseProgress} accent />
           </div>
 
-          <div className="action-group console-actions">
+          <div className="metric-strip">
+            <Metric icon={Timer} label="总剩余" value={formatSeconds(active ? studyState.study_remaining_seconds : studyMinutes * 60)} />
+            <Metric icon={Activity} label="阶段" value={phaseLabel[studyState.phase]} />
+            <Metric
+              icon={ShieldCheck}
+              label="强制执行"
+              value={studyState.focus_enforcement_active ? '运行中' : active ? '休息暂停' : '未启动'}
+            />
+          </div>
+
+          <div className="action-group">
             {!active ? (
               <button className="primary-action" onClick={handleStart} type="button">
+                <Play size={18} />
                 开始学习模式
               </button>
             ) : studyState.phase === 'awaiting_break' ? (
               <button className="primary-action" onClick={handleConfirmBreak} type="button">
+                <Coffee size={18} />
                 确认开始休息
               </button>
             ) : (
               <button className="secondary-action" onClick={refreshStudyState} type="button">
+                <RefreshCw size={18} />
                 刷新状态
               </button>
             )}
@@ -360,88 +361,27 @@ export default function FocusPage() {
         </section>
 
         <aside className="side-stack">
-          <section className="control-panel">
-            <h3>学习计划</h3>
+          <section className="panel">
+            <div className="panel-title">
+              <div>
+                <p className="eyebrow">Plan</p>
+                <h3>学习计划</h3>
+              </div>
+              <BookOpen size={20} />
+            </div>
+
             <div className="field-grid">
-              <label>
-                <span>学习模式时长</span>
-                <input
-                  className="number-input"
-                  disabled={controlsDisabled}
-                  min={1}
-                  onChange={(event) => setStudyMinutes(Number(event.target.value) || 1)}
-                  type="number"
-                  value={studyMinutes}
-                />
-              </label>
-              <label>
-                <span>番茄钟时长</span>
-                <input
-                  className="number-input"
-                  disabled={controlsDisabled}
-                  min={1}
-                  onChange={(event) => setFocusMinutes(Number(event.target.value) || 1)}
-                  type="number"
-                  value={focusMinutes}
-                />
-              </label>
-              <label>
-                <span>休息时长</span>
-                <input
-                  className="number-input"
-                  disabled={controlsDisabled}
-                  min={1}
-                  onChange={(event) => setBreakMinutes(Number(event.target.value) || 1)}
-                  type="number"
-                  value={breakMinutes}
-                />
-              </label>
+              <NumberField disabled={controlsDisabled} label="学习模式" onChange={setStudyMinutes} value={studyMinutes} />
+              <NumberField disabled={controlsDisabled} label="番茄钟" onChange={setFocusMinutes} value={focusMinutes} />
+              <NumberField disabled={controlsDisabled} label="休息" onChange={setBreakMinutes} value={breakMinutes} />
             </div>
 
-            <div className="preset-strip">
-              {studyPresetMinutes.map((minutes) => (
-                <button
-                  className={studyMinutes === minutes ? 'chip active' : 'chip'}
-                  disabled={controlsDisabled}
-                  key={minutes}
-                  onClick={() => setStudyMinutes(minutes)}
-                  type="button"
-                >
-                  {minutes}m
-                </button>
-              ))}
-            </div>
+            <PresetStrip disabled={controlsDisabled} items={studyPresetMinutes} prefix="" selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} />
+            <PresetStrip disabled={controlsDisabled} items={focusPresetMinutes} prefix="专注 " selected={focusMinutes} suffix="m" onSelect={setFocusMinutes} />
+            <PresetStrip disabled={controlsDisabled} items={breakPresetMinutes} prefix="休息 " selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} />
 
-            <div className="preset-strip">
-              {focusPresetMinutes.map((minutes) => (
-                <button
-                  className={focusMinutes === minutes ? 'chip active' : 'chip'}
-                  disabled={controlsDisabled}
-                  key={minutes}
-                  onClick={() => setFocusMinutes(minutes)}
-                  type="button"
-                >
-                  专注 {minutes}m
-                </button>
-              ))}
-            </div>
-
-            <div className="preset-strip">
-              {breakPresetMinutes.map((minutes) => (
-                <button
-                  className={breakMinutes === minutes ? 'chip active' : 'chip'}
-                  disabled={controlsDisabled}
-                  key={minutes}
-                  onClick={() => setBreakMinutes(minutes)}
-                  type="button"
-                >
-                  休息 {minutes}m
-                </button>
-              ))}
-            </div>
-
-            <label className="subject-picker">
-              <span className="field-label">科目</span>
+            <label className="field-block">
+              <span>科目</span>
               <select
                 className="select-input"
                 disabled={controlsDisabled || subjects.length === 0}
@@ -455,72 +395,77 @@ export default function FocusPage() {
               </select>
             </label>
 
-            <div className="mode-switch compact-mode">
-              <button className={mode === 'normal' ? 'mode active' : 'mode'} disabled={controlsDisabled} onClick={() => setMode('normal')} type="button">
+            <div className="segmented-control">
+              <button className={mode === 'normal' ? 'active' : ''} disabled={controlsDisabled} onClick={() => setMode('normal')} type="button">
                 普通模式
               </button>
-              <button className={mode === 'strict' ? 'mode active' : 'mode'} disabled={controlsDisabled} onClick={() => setMode('strict')} type="button">
+              <button className={mode === 'strict' ? 'active' : ''} disabled={controlsDisabled} onClick={() => setMode('strict')} type="button">
                 强制模式
               </button>
             </div>
           </section>
 
-          <section className="monitor-compact">
-            <div className="panel-heading-row">
-              <h3>前台监控</h3>
-              <span>{studyState.focus_enforcement_active ? '后台执行中' : '待命'}</span>
+          <section className="panel monitor-panel">
+            <div className="panel-title">
+              <div>
+                <p className="eyebrow">Monitor</p>
+                <h3>前台监控</h3>
+              </div>
+              <Gauge size={20} />
             </div>
             {latestAppCheck ? (
-              <div className={latestAppCheck.match_result.allowed ? 'monitor-card allowed slim' : 'monitor-card blocked slim'}>
+              <div className={latestAppCheck.match_result.allowed ? 'monitor-card allowed' : 'monitor-card blocked'}>
                 <div>
-                  <span>{latestAppCheck.match_result.reason}</span>
+                  <span>{latestAppCheck.match_result.allowed ? '已放行' : '已拦截'}</span>
                   <strong>{latestAppCheck.foreground_app.process_name}</strong>
                   <p>{latestAppCheck.foreground_app.window_title || '无窗口标题'}</p>
                   {latestAppCheck.match_result.detected_domain && <p>识别网站：{latestAppCheck.match_result.detected_domain}</p>}
                 </div>
-                <div>
+                <div className="monitor-count">
                   <span>累计拦截</span>
                   <strong>{latestAppCheck.interruption_count}</strong>
                 </div>
               </div>
             ) : (
-              <div className="empty-state compact-empty">学习阶段会自动检查前台窗口。关闭主界面到托盘后，后端仍会继续执行。</div>
+              <div className="empty-state compact">
+                学习阶段会自动检查前台窗口。关闭主界面到托盘后，后端仍会继续执行。
+              </div>
             )}
           </section>
         </aside>
       </div>
 
       <div className="overview-grid">
-        <section className="mini-panel">
-          <h3>今日统计</h3>
-          <div className="stats-grid focus-stats">
-            <article className="stat-card">
-              <span>今日</span>
-              <strong>{formatDuration(stats?.today_seconds ?? 0)}</strong>
-            </article>
-            <article className="stat-card">
-              <span>本周</span>
-              <strong>{formatDuration(stats?.week_seconds ?? 0)}</strong>
-            </article>
-            <article className="stat-card">
-              <span>本月</span>
-              <strong>{formatDuration(stats?.month_seconds ?? 0)}</strong>
-            </article>
-            <article className="stat-card">
-              <span>拦截</span>
-              <strong>{stats?.interruption_count ?? 0}</strong>
-            </article>
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Today</p>
+              <h3>今日统计</h3>
+            </div>
+            <CheckCircle2 size={20} />
+          </div>
+          <div className="stats-grid four">
+            <Metric icon={Timer} label="今日" value={formatDuration(stats?.today_seconds ?? 0)} />
+            <Metric icon={Timer} label="本周" value={formatDuration(stats?.week_seconds ?? 0)} />
+            <Metric icon={Timer} label="本月" value={formatDuration(stats?.month_seconds ?? 0)} />
+            <Metric icon={ShieldCheck} label="拦截" value={`${stats?.interruption_count ?? 0}`} />
           </div>
         </section>
 
-        <section className="mini-panel">
-          <h3>最近记录</h3>
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">History</p>
+              <h3>最近记录</h3>
+            </div>
+            <BellRing size={20} />
+          </div>
           {history.length === 0 ? (
-            <div className="empty-state compact-empty">还没有专注记录。</div>
+            <div className="empty-state compact">还没有专注记录。</div>
           ) : (
             <div className="compact-history">
               {history.slice(0, 5).map((session) => (
-                <article className="history-row compact-row" key={session.id}>
+                <article className="list-row compact-row" key={session.id}>
                   <div>
                     <strong>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</strong>
                     <p>{formatDateTime(session.started_at)}</p>
@@ -621,4 +566,86 @@ function buildReminder(studyState: StudyModeState) {
   }
 
   return null;
+}
+
+function ProgressBar({ accent = false, label, value }: { accent?: boolean; label: string; value: number }) {
+  return (
+    <div>
+      <div className="progress-label">
+        <span>{label}</span>
+        <strong>{Math.round(value)}%</strong>
+      </div>
+      <div className={accent ? 'progress-track accent' : 'progress-track'}>
+        <i style={{ width: `${value}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function Metric({ icon: Icon, label, value }: { icon: typeof Timer; label: string; value: string }) {
+  return (
+    <article className="metric-card">
+      <Icon size={18} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function NumberField({
+  disabled,
+  label,
+  onChange,
+  value,
+}: {
+  disabled: boolean;
+  label: string;
+  onChange: (value: number) => void;
+  value: number;
+}) {
+  return (
+    <label className="field-block">
+      <span>{label}</span>
+      <input
+        className="number-input"
+        disabled={disabled}
+        min={1}
+        onChange={(event) => onChange(Number(event.target.value) || 1)}
+        type="number"
+        value={value}
+      />
+    </label>
+  );
+}
+
+function PresetStrip({
+  disabled,
+  items,
+  onSelect,
+  prefix,
+  selected,
+  suffix,
+}: {
+  disabled: boolean;
+  items: number[];
+  onSelect: (value: number) => void;
+  prefix: string;
+  selected: number;
+  suffix: string;
+}) {
+  return (
+    <div className="preset-strip">
+      {items.map((minutes) => (
+        <button
+          className={selected === minutes ? 'chip active' : 'chip'}
+          disabled={disabled}
+          key={`${prefix}-${minutes}`}
+          onClick={() => onSelect(minutes)}
+          type="button"
+        >
+          {prefix}{minutes}{suffix}
+        </button>
+      ))}
+    </div>
+  );
 }

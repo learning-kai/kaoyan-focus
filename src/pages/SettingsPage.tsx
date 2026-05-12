@@ -1,4 +1,16 @@
 import { useEffect, useState } from 'react';
+import {
+  Activity,
+  BellRing,
+  Database,
+  Download,
+  HardDrive,
+  MonitorDot,
+  RefreshCw,
+  Save,
+  Settings2,
+  ShieldCheck,
+} from 'lucide-react';
 import { listFocusSessions } from '../services/focusApi';
 import { getCurrentForegroundApp } from '../services/monitorApi';
 import { getAppDataLocation, getAppSettings, saveAppSettings } from '../services/settingsApi';
@@ -145,159 +157,214 @@ export default function SettingsPage() {
   const focusRunning = latestSession?.status === 'running';
 
   return (
-    <section className="page-card">
-      <div className="page-heading">
-        <p className="eyebrow">阶段 8 / 设置持久化</p>
-        <h2>设置</h2>
-        <p>配置默认专注参数和约束边界，所有设置都会保存到本地数据库。</p>
-      </div>
-
-      <div className="settings-panel">
-        <div className="setting-row">
-          <div>
-            <strong>默认学习模式时长</strong>
-            <p>进入学习模式后的总约束时间。</p>
-          </div>
-          <input
-            className="number-input"
-            max={720}
-            min={1}
-            onChange={(event) => updateSettings({ default_study_minutes: Number(event.target.value) || 1 })}
-            type="number"
-            value={settings.default_study_minutes}
-          />
-        </div>
-
-        <div className="setting-row">
-          <div>
-            <strong>默认番茄专注时长</strong>
-            <p>学习模式内每轮番茄钟的专注分钟数。</p>
-          </div>
-          <input
-            className="number-input"
-            max={120}
-            min={1}
-            onChange={(event) => updateSettings({ default_focus_minutes: Number(event.target.value) || 1 })}
-            type="number"
-            value={settings.default_focus_minutes}
-          />
-        </div>
-
-        <div className="setting-row">
-          <div>
-            <strong>默认休息时长</strong>
-            <p>本人确认开始休息后的倒计时分钟数。</p>
-          </div>
-          <input
-            className="number-input"
-            max={60}
-            min={1}
-            onChange={(event) => updateSettings({ break_minutes: Number(event.target.value) || 1 })}
-            type="number"
-            value={settings.break_minutes}
-          />
-        </div>
-
-        <div className="setting-row">
-          <div>
-            <strong>默认专注模式</strong>
-            <p>普通模式更轻量，强制模式会保持更严格的学习约束。</p>
-          </div>
-          <div className="segmented-control">
-            <button
-              className={settings.default_focus_mode === 'normal' ? 'active' : ''}
-              onClick={() => updateSettings({ default_focus_mode: 'normal' })}
-              type="button"
-            >
-              普通
-            </button>
-            <button
-              className={settings.default_focus_mode === 'strict' ? 'active' : ''}
-              onClick={() => updateSettings({ default_focus_mode: 'strict' })}
-              type="button"
-            >
-              强制
-            </button>
-          </div>
-        </div>
-
-        <button className="primary-action" disabled={saving} onClick={() => void handleSaveSettings()} type="button">
-          {saving ? '保存中' : '保存设置'}
-        </button>
-      </div>
-
-      {dataLocation && (
-        <div className="details-card">
-          <div>
-            <span>数据文件路径</span>
-            <strong>{dataLocation}</strong>
-          </div>
-        </div>
-      )}
-
-      {savedMessage && <p className="success-text">{savedMessage}</p>}
-
-      <div className="tool-card">
+    <section className="page-shell">
+      <header className="page-header">
         <div>
-          <h3>在线更新</h3>
-          <p>检查发布服务器上的新版本，下载完成后会自动重启应用。</p>
-          {updateMessage && <p>{updateMessage}</p>}
-          {updateProgress !== null && <p>下载进度 {updateProgress}%</p>}
+          <p className="eyebrow">设置 / 本地持久化</p>
+          <h2>应用设置</h2>
+          <p>配置默认学习参数、更新渠道和 Windows 前台检测能力。设置会保存到本地 SQLite 数据库。</p>
         </div>
-        <div className="row-actions">
-          <button className="small-action" disabled={checkingUpdate || installingUpdate} onClick={() => void handleCheckUpdate()} type="button">
-            {checkingUpdate ? '检查中' : '检查更新'}
-          </button>
-          <button className="small-action enabled" disabled={availableUpdate === null || installingUpdate} onClick={() => void handleInstallUpdate()} type="button">
-            {installingUpdate ? '安装中' : '下载并安装'}
-          </button>
-        </div>
-      </div>
-
-      <div className="settings-list">
-        <label>
-          <input checked={focusRunning} readOnly type="checkbox" />
-          专注期间关闭窗口时最小化到托盘
-        </label>
-        <label>
-          <input checked readOnly type="checkbox" />
-          记录非白名单应用干扰事件
-        </label>
-      </div>
-
-      <div className="tool-card">
-        <div>
-          <h3>当前前台应用检测</h3>
-          <p>用于验证 Windows API 能否识别当前正在使用的窗口和进程。</p>
-        </div>
-        <button className="small-action enabled" disabled={loading} onClick={() => void handleDetectForegroundApp()} type="button">
-          {loading ? '检测中' : '检测当前应用'}
+        <button className="secondary-action" onClick={() => void initializeSettingsPage()} type="button">
+          <RefreshCw size={17} />
+          刷新
         </button>
+      </header>
+
+      {error && <p className="alert error">{error}</p>}
+      {savedMessage && <p className="alert success">{savedMessage}</p>}
+
+      <div className="content-grid two">
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Defaults</p>
+              <h3>默认学习参数</h3>
+            </div>
+            <Settings2 size={20} />
+          </div>
+
+          <div className="settings-panel">
+            <SettingNumber
+              label="学习模式时长"
+              max={720}
+              min={1}
+              onChange={(value) => updateSettings({ default_study_minutes: value })}
+              text="进入学习模式后的总约束时间。"
+              value={settings.default_study_minutes}
+            />
+            <SettingNumber
+              label="番茄专注时长"
+              max={120}
+              min={1}
+              onChange={(value) => updateSettings({ default_focus_minutes: value })}
+              text="学习模式内每轮番茄钟的专注分钟数。"
+              value={settings.default_focus_minutes}
+            />
+            <SettingNumber
+              label="休息时长"
+              max={60}
+              min={1}
+              onChange={(value) => updateSettings({ break_minutes: value })}
+              text="本人确认开始休息后的倒计时分钟数。"
+              value={settings.break_minutes}
+            />
+
+            <div className="setting-row">
+              <div>
+                <strong>默认专注模式</strong>
+                <p>普通模式更轻量，强制模式会保持更严格的学习约束。</p>
+              </div>
+              <div className="segmented-control">
+                <button
+                  className={settings.default_focus_mode === 'normal' ? 'active' : ''}
+                  onClick={() => updateSettings({ default_focus_mode: 'normal' })}
+                  type="button"
+                >
+                  普通
+                </button>
+                <button
+                  className={settings.default_focus_mode === 'strict' ? 'active' : ''}
+                  onClick={() => updateSettings({ default_focus_mode: 'strict' })}
+                  type="button"
+                >
+                  强制
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button className="primary-action" disabled={saving} onClick={() => void handleSaveSettings()} type="button">
+            <Save size={18} />
+            {saving ? '保存中' : '保存设置'}
+          </button>
+        </section>
+
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">System</p>
+              <h3>系统状态</h3>
+            </div>
+            <HardDrive size={20} />
+          </div>
+
+          <div className="settings-list">
+            <Capability enabled={focusRunning} icon={BellRing} text="专注期间关闭窗口时最小化到托盘" />
+            <Capability enabled icon={ShieldCheck} text="记录非白名单应用干扰事件" />
+            <Capability enabled={Boolean(dataLocation)} icon={Database} text="SQLite 本地数据目录可用" />
+          </div>
+
+          {dataLocation && (
+            <div className="details-card">
+              <span>数据文件路径</span>
+              <strong>{dataLocation}</strong>
+            </div>
+          )}
+        </section>
       </div>
 
-      {focusRunning && <p className="notice">当前有进行中的专注。此时点击窗口关闭按钮会隐藏到托盘，可从托盘图标重新打开。</p>}
-      {error && <p className="error-text">{error}</p>}
+      <div className="content-grid two">
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Update</p>
+              <h3>在线更新</h3>
+            </div>
+            <Download size={20} />
+          </div>
+          <p className="panel-copy">检查发布服务器上的新版本，下载完成后会自动重启应用。</p>
+          {updateMessage && <p className="alert neutral">{updateMessage}</p>}
+          {updateProgress !== null && <p className="alert neutral">下载进度 {updateProgress}%</p>}
+          <div className="row-actions">
+            <button className="secondary-action" disabled={checkingUpdate || installingUpdate} onClick={() => void handleCheckUpdate()} type="button">
+              <RefreshCw size={17} />
+              {checkingUpdate ? '检查中' : '检查更新'}
+            </button>
+            <button className="primary-action" disabled={availableUpdate === null || installingUpdate} onClick={() => void handleInstallUpdate()} type="button">
+              <Download size={17} />
+              {installingUpdate ? '安装中' : '下载并安装'}
+            </button>
+          </div>
+        </section>
 
-      {foregroundApp && (
-        <div className="details-card">
-          <div>
-            <span>进程名</span>
-            <strong>{foregroundApp.process_name}</strong>
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Foreground</p>
+              <h3>前台应用检测</h3>
+            </div>
+            <MonitorDot size={20} />
           </div>
-          <div>
-            <span>进程 ID</span>
-            <strong>{foregroundApp.process_id}</strong>
-          </div>
-          <div>
-            <span>窗口标题</span>
-            <strong>{foregroundApp.window_title || '无标题'}</strong>
-          </div>
-          <div>
-            <span>进程路径</span>
-            <strong>{foregroundApp.process_path || '无法读取'}</strong>
-          </div>
-        </div>
-      )}
+          <p className="panel-copy">用于验证 Windows API 能否识别当前正在使用的窗口和进程。</p>
+          <button className="secondary-action" disabled={loading} onClick={() => void handleDetectForegroundApp()} type="button">
+            <Activity size={17} />
+            {loading ? '检测中' : '检测当前应用'}
+          </button>
+
+          {foregroundApp && (
+            <div className="details-card stacked">
+              <Detail label="进程名" value={foregroundApp.process_name} />
+              <Detail label="进程 ID" value={String(foregroundApp.process_id)} />
+              <Detail label="窗口标题" value={foregroundApp.window_title || '无标题'} />
+              <Detail label="进程路径" value={foregroundApp.process_path || '无法读取'} />
+            </div>
+          )}
+        </section>
+      </div>
+
+      {focusRunning && <p className="alert neutral">当前有进行中的专注。点击窗口关闭按钮会隐藏到托盘，可从托盘图标重新打开。</p>}
     </section>
+  );
+}
+
+function SettingNumber({
+  label,
+  max,
+  min,
+  onChange,
+  text,
+  value,
+}: {
+  label: string;
+  max: number;
+  min: number;
+  onChange: (value: number) => void;
+  text: string;
+  value: number;
+}) {
+  return (
+    <div className="setting-row">
+      <div>
+        <strong>{label}</strong>
+        <p>{text}</p>
+      </div>
+      <input
+        className="number-input"
+        max={max}
+        min={min}
+        onChange={(event) => onChange(Number(event.target.value) || min)}
+        type="number"
+        value={value}
+      />
+    </div>
+  );
+}
+
+function Capability({ enabled, icon: Icon, text }: { enabled: boolean; icon: typeof BellRing; text: string }) {
+  return (
+    <label className="capability-row">
+      <Icon size={17} />
+      <input checked={enabled} readOnly type="checkbox" />
+      <span>{text}</span>
+    </label>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
