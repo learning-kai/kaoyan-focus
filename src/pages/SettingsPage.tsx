@@ -201,7 +201,7 @@ export default function SettingsPage() {
         <div className="setting-row">
           <div>
             <strong>默认专注模式</strong>
-            <p>普通模式更轻量，严格模式会启用应急退出流程。</p>
+            <p>普通模式更轻量，强制模式会保持更严格的学习约束。</p>
           </div>
           <div className="segmented-control">
             <button
@@ -216,24 +216,9 @@ export default function SettingsPage() {
               onClick={() => updateSettings({ default_focus_mode: 'strict' })}
               type="button"
             >
-              严格
+              强制
             </button>
           </div>
-        </div>
-
-        <div className="setting-row">
-          <div>
-            <strong>应急退出冷静期</strong>
-            <p>严格模式下点击应急退出后需要等待的秒数。</p>
-          </div>
-          <input
-            className="number-input"
-            max={300}
-            min={0}
-            onChange={(event) => updateSettings({ emergency_cooldown_seconds: Number(event.target.value) || 0 })}
-            type="number"
-            value={settings.emergency_cooldown_seconds}
-          />
         </div>
 
         <button className="primary-action" disabled={saving} onClick={() => void handleSaveSettings()} type="button">
@@ -273,10 +258,6 @@ export default function SettingsPage() {
         <label>
           <input checked={focusRunning} readOnly type="checkbox" />
           专注期间关闭窗口时最小化到托盘
-        </label>
-        <label>
-          <input checked readOnly type="checkbox" />
-          严格模式应急退出会记录退出次数
         </label>
         <label>
           <input checked readOnly type="checkbox" />

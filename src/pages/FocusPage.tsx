@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   confirmStudyBreak,
-  emergencyExitStudyMode,
   getFocusStatsSummary,
   getStudyModeState,
   listFocusSessions,
   listSubjects,
-  resetStudyMode,
   startStudyMode,
 } from '../services/focusApi';
 import { notifyStudyReminder } from '../services/alertApi';
@@ -18,7 +16,6 @@ import type { FocusAppCheck } from '../types/monitor';
 const studyPresetMinutes = [60, 120, 180, 240];
 const focusPresetMinutes = [25, 45, 60, 90];
 const breakPresetMinutes = [5, 10, 15, 20];
-const emergencyConfirmText = '我确认应急退出';
 
 const idleStudyState: StudyModeState = {
   id: null,
@@ -47,7 +44,7 @@ const phaseLabel: Record<StudyModePhase, string> = {
   awaiting_break: '等待确认休息',
   break: '休息中',
   finished: '已完成',
-  emergency_exited: '应急退出',
+  emergency_exited: '已退出（历史）',
 };
 
 function formatSeconds(totalSeconds: number) {
@@ -89,7 +86,7 @@ function sessionStatusLabel(status: string) {
     running: '进行中',
     finished: '已完成',
     interrupted: '已中断',
-    emergency_exited: '应急退出',
+    emergency_exited: '已退出（历史）',
   };
 
   return labels[status] ?? status;
@@ -109,10 +106,6 @@ export default function FocusPage() {
   const [error, setError] = useState<string | null>(null);
   const [monitorError, setMonitorError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [emergencyExitOpen, setEmergencyExitOpen] = useState(false);
-  const [emergencyCooldownSeconds, setEmergencyCooldownSeconds] = useState(60);
-  const [emergencyCooldownRemaining, setEmergencyCooldownRemaining] = useState(60);
-  const [emergencyConfirmValue, setEmergencyConfirmValue] = useState('');
   const lastReminderKeyRef = useRef<string | null>(null);
   const initializedReminderRef = useRef(false);
 
@@ -171,19 +164,6 @@ export default function FocusPage() {
   }, [currentSession?.id, studyState.focus_enforcement_active]);
 
   useEffect(() => {
-    if (!emergencyExitOpen) {
-      return;
-    }
-
-    setEmergencyCooldownRemaining(emergencyCooldownSeconds);
-    const intervalId = window.setInterval(() => {
-      setEmergencyCooldownRemaining((current) => Math.max(current - 1, 0));
-    }, 1000);
-
-    return () => window.clearInterval(intervalId);
-  }, [emergencyCooldownSeconds, emergencyExitOpen]);
-
-  useEffect(() => {
     if (!initializedReminderRef.current) {
       initializedReminderRef.current = true;
       lastReminderKeyRef.current = reminderKey(studyState);
@@ -206,8 +186,6 @@ export default function FocusPage() {
     try {
       setError(null);
       const [settings, state] = await Promise.all([getAppSettings(), getStudyModeState()]);
-      setEmergencyCooldownSeconds(settings.emergency_cooldown_seconds);
-      setEmergencyCooldownRemaining(settings.emergency_cooldown_seconds);
       setStudyState(state);
 
       if (state.status !== 'active') {
@@ -256,7 +234,6 @@ export default function FocusPage() {
       setStudyState(nextState);
 
       if (nextState.status !== 'active') {
-        closeEmergencyExitPanel();
         await refreshDashboard();
       }
     } catch (reason) {
@@ -270,7 +247,6 @@ export default function FocusPage() {
       setMonitorError(null);
       setLatestAppCheck(null);
       setNotice(null);
-      closeEmergencyExitPanel();
       const nextState = await startStudyMode(
         studyMinutes * 60,
         focusMinutes * 60,
@@ -308,57 +284,6 @@ export default function FocusPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
-  }
-
-  async function handleEmergencyExit() {
-    try {
-      setError(null);
-      const nextState = await emergencyExitStudyMode();
-      setStudyState(nextState);
-      setLatestAppCheck(null);
-      setMonitorError(null);
-      setNotice('已执行应急退出，本次严格模式退出次数已记录。');
-      lastReminderKeyRef.current = reminderKey(nextState);
-      void notifyStudyReminder({
-        title: '应急退出完成',
-        body: '严格模式已结束，本次退出次数已记录。',
-      });
-      closeEmergencyExitPanel();
-      await refreshDashboard();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    }
-  }
-
-  async function handleReset() {
-    try {
-      setError(null);
-      const nextState = await resetStudyMode();
-      setStudyState(nextState);
-      setLatestAppCheck(null);
-      setMonitorError(null);
-      setNotice('学习模式已结束，后台强制执行已停止。');
-      lastReminderKeyRef.current = reminderKey(nextState);
-      void notifyStudyReminder({
-        title: '学习模式已结束',
-        body: '后台强制执行已停止，可以开始下一次学习计划。',
-      });
-      closeEmergencyExitPanel();
-      await refreshDashboard();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    }
-  }
-
-  function openEmergencyExitPanel() {
-    setEmergencyConfirmValue('');
-    setEmergencyExitOpen(true);
-  }
-
-  function closeEmergencyExitPanel() {
-    setEmergencyExitOpen(false);
-    setEmergencyConfirmValue('');
-    setEmergencyCooldownRemaining(emergencyCooldownSeconds);
   }
 
   return (
@@ -431,51 +356,7 @@ export default function FocusPage() {
                 刷新状态
               </button>
             )}
-
-            {active && (
-              <button className="secondary-action danger-outline" onClick={handleReset} type="button">
-                结束学习模式
-              </button>
-            )}
-
-            {active && studyState.mode === 'strict' && (
-              <button className="secondary-action danger-outline" onClick={openEmergencyExitPanel} type="button">
-                应急退出
-              </button>
-            )}
           </div>
-
-          {emergencyExitOpen && active && studyState.mode === 'strict' && (
-            <div className="emergency-panel">
-              <div>
-                <strong>严格模式应急退出</strong>
-                <p>等待冷却结束并输入确认文本后，才会结束当前学习模式。</p>
-              </div>
-              <div className="emergency-countdown">
-                <span>冷却剩余</span>
-                <strong>{formatSeconds(emergencyCooldownRemaining)}</strong>
-              </div>
-              <label className="field-label" htmlFor="emergency-confirm">确认文本</label>
-              <input
-                className="text-input"
-                id="emergency-confirm"
-                onChange={(event) => setEmergencyConfirmValue(event.target.value)}
-                placeholder={emergencyConfirmText}
-                value={emergencyConfirmValue}
-              />
-              <div className="emergency-actions">
-                <button className="secondary-action" onClick={closeEmergencyExitPanel} type="button">取消</button>
-                <button
-                  className="danger-solid"
-                  disabled={emergencyCooldownRemaining > 0 || emergencyConfirmValue.trim() !== emergencyConfirmText}
-                  onClick={handleEmergencyExit}
-                  type="button"
-                >
-                  确认退出
-                </button>
-              </div>
-            </div>
-          )}
         </section>
 
         <aside className="side-stack">
@@ -579,7 +460,7 @@ export default function FocusPage() {
                 普通模式
               </button>
               <button className={mode === 'strict' ? 'mode active' : 'mode'} disabled={controlsDisabled} onClick={() => setMode('strict')} type="button">
-                严格模式
+                强制模式
               </button>
             </div>
           </section>
@@ -688,7 +569,7 @@ function buildPhaseMessage(studyState: StudyModeState) {
   }
 
   if (studyState.phase === 'emergency_exited') {
-    return '严格模式已应急退出，本次退出已记录。';
+    return '检测到旧版本留下的退出状态。当前版本不再提供提前退出入口。';
   }
 
   return '设置学习时长、番茄钟和休息时间后开始。';
@@ -734,8 +615,8 @@ function buildReminder(studyState: StudyModeState) {
 
   if (studyState.status === 'emergency_exited' || studyState.phase === 'emergency_exited') {
     return {
-      title: '应急退出完成',
-      body: '严格模式已结束，本次退出次数已记录。',
+      title: '学习模式已退出',
+      body: '这是旧版本兼容状态。当前版本学习模式只能自然完成。',
     };
   }
 
