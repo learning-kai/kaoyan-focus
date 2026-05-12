@@ -4,6 +4,7 @@ use serde::Serialize;
 pub struct FocusSession {
     pub id: i64,
     pub mode: String,
+    pub subject_id: Option<i64>,
     pub planned_seconds: i64,
     pub actual_seconds: i64,
     pub started_at: String,

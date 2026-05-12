@@ -8,6 +8,7 @@ pub fn open_database(path: &Path) -> Result<Connection, String> {
 
     let connection = Connection::open(path).map_err(|error| error.to_string())?;
     run_migrations(&connection)?;
+    seed_default_subjects(&connection)?;
     Ok(connection)
 }
 
@@ -30,7 +31,78 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS whitelist_apps (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              process_name TEXT NOT NULL,
+              path TEXT,
+              match_type TEXT NOT NULL DEFAULT 'process_name',
+              note TEXT,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS app_events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              session_id INTEGER NOT NULL,
+              process_name TEXT NOT NULL,
+              process_path TEXT,
+              window_title TEXT,
+              event_type TEXT NOT NULL,
+              action_taken TEXT,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY (session_id) REFERENCES focus_sessions(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS subjects (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              color TEXT,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
             ",
         )
         .map_err(|error| error.to_string())
+}
+
+fn seed_default_subjects(connection: &Connection) -> Result<(), String> {
+    let count: i64 = connection
+        .query_row("SELECT COUNT(*) FROM subjects", [], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
+
+    if count > 0 {
+        return Ok(());
+    }
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let defaults = [
+        ("政治", "#ef4444"),
+        ("英语", "#3b82f6"),
+        ("数学", "#16a34a"),
+        ("专业课", "#a855f7"),
+    ];
+
+    for (name, color) in defaults {
+        connection
+            .execute(
+                "
+                INSERT INTO subjects (name, color, enabled, created_at, updated_at)
+                VALUES (?1, ?2, 1, ?3, ?3)
+                ",
+                rusqlite::params![name, color, now],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+
+    Ok(())
 }
