@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   confirmStudyBreak,
   emergencyExitStudyMode,
@@ -9,6 +9,7 @@ import {
   resetStudyMode,
   startStudyMode,
 } from '../services/focusApi';
+import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { getAppSettings } from '../services/settingsApi';
 import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
@@ -112,6 +113,8 @@ export default function FocusPage() {
   const [emergencyCooldownSeconds, setEmergencyCooldownSeconds] = useState(60);
   const [emergencyCooldownRemaining, setEmergencyCooldownRemaining] = useState(60);
   const [emergencyConfirmValue, setEmergencyConfirmValue] = useState('');
+  const lastReminderKeyRef = useRef<string | null>(null);
+  const initializedReminderRef = useRef(false);
 
   const active = studyState.status === 'active';
   const controlsDisabled = active;
@@ -179,6 +182,25 @@ export default function FocusPage() {
 
     return () => window.clearInterval(intervalId);
   }, [emergencyCooldownSeconds, emergencyExitOpen]);
+
+  useEffect(() => {
+    if (!initializedReminderRef.current) {
+      initializedReminderRef.current = true;
+      lastReminderKeyRef.current = reminderKey(studyState);
+      return;
+    }
+
+    const key = reminderKey(studyState);
+    if (key === lastReminderKeyRef.current) {
+      return;
+    }
+
+    lastReminderKeyRef.current = key;
+    const reminder = buildReminder(studyState);
+    if (reminder) {
+      void notifyStudyReminder(reminder);
+    }
+  }, [studyState.id, studyState.phase, studyState.status, studyState.cycle_index]);
 
   async function initializePage() {
     try {
@@ -258,6 +280,11 @@ export default function FocusPage() {
       );
       setStudyState(nextState);
       setNotice('学习模式已开始。关闭窗口会进入托盘，后台仍会计时和执行白名单。');
+      lastReminderKeyRef.current = reminderKey(nextState);
+      void notifyStudyReminder({
+        title: '学习模式已开始',
+        body: `第 ${nextState.cycle_index} 轮番茄钟开始，保持专注。`,
+      });
       await refreshDashboard();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -272,6 +299,11 @@ export default function FocusPage() {
       const nextState = await confirmStudyBreak();
       setStudyState(nextState);
       setNotice('休息已开始。休息结束后会自动进入下一轮番茄钟。');
+      lastReminderKeyRef.current = reminderKey(nextState);
+      void notifyStudyReminder({
+        title: '休息开始',
+        body: `休息 ${formatDuration(nextState.break_seconds)}，到点后自动进入下一轮番茄钟。`,
+      });
       await refreshDashboard();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -286,6 +318,11 @@ export default function FocusPage() {
       setLatestAppCheck(null);
       setMonitorError(null);
       setNotice('已执行应急退出，本次严格模式退出次数已记录。');
+      lastReminderKeyRef.current = reminderKey(nextState);
+      void notifyStudyReminder({
+        title: '应急退出完成',
+        body: '严格模式已结束，本次退出次数已记录。',
+      });
       closeEmergencyExitPanel();
       await refreshDashboard();
     } catch (reason) {
@@ -301,6 +338,11 @@ export default function FocusPage() {
       setLatestAppCheck(null);
       setMonitorError(null);
       setNotice('学习模式已结束，后台强制执行已停止。');
+      lastReminderKeyRef.current = reminderKey(nextState);
+      void notifyStudyReminder({
+        title: '学习模式已结束',
+        body: '后台强制执行已停止，可以开始下一次学习计划。',
+      });
       closeEmergencyExitPanel();
       await refreshDashboard();
     } catch (reason) {
@@ -650,4 +692,52 @@ function buildPhaseMessage(studyState: StudyModeState) {
   }
 
   return '设置学习时长、番茄钟和休息时间后开始。';
+}
+
+function reminderKey(studyState: StudyModeState) {
+  return [
+    studyState.id ?? 'idle',
+    studyState.status,
+    studyState.phase,
+    studyState.cycle_index,
+  ].join(':');
+}
+
+function buildReminder(studyState: StudyModeState) {
+  if (studyState.status === 'active' && studyState.phase === 'focus') {
+    return {
+      title: studyState.cycle_index > 1 ? '下一轮番茄钟开始' : '番茄钟开始',
+      body: `第 ${studyState.cycle_index} 轮开始，专注 ${formatDuration(studyState.focus_seconds)}。`,
+    };
+  }
+
+  if (studyState.status === 'active' && studyState.phase === 'awaiting_break') {
+    return {
+      title: '番茄钟结束',
+      body: '本轮已经到点。请确认开始休息；未确认前学习时间会继续累计。',
+    };
+  }
+
+  if (studyState.status === 'active' && studyState.phase === 'break') {
+    return {
+      title: '休息开始',
+      body: `休息 ${formatDuration(studyState.break_seconds)}，结束后自动进入下一轮番茄钟。`,
+    };
+  }
+
+  if (studyState.status === 'finished' || studyState.phase === 'finished') {
+    return {
+      title: '学习模式完成',
+      body: `本次学习已完成，共累计 ${formatDuration(studyState.study_elapsed_seconds)}。`,
+    };
+  }
+
+  if (studyState.status === 'emergency_exited' || studyState.phase === 'emergency_exited') {
+    return {
+      title: '应急退出完成',
+      body: '严格模式已结束，本次退出次数已记录。',
+    };
+  }
+
+  return null;
 }

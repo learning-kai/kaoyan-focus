@@ -56,6 +56,7 @@ fn set_study_mode_active(state: tauri::State<'_, AppState>, active: bool) -> Res
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             active_session_id: Mutex::new(None),
