@@ -1,4 +1,4 @@
-import type { FocusMode, FocusSession, FocusSessionRecovery, FocusStatsSummary, Subject } from '../types/focus';
+import type { FocusMode, FocusSession, FocusSessionRecovery, FocusStatsSummary, StudyModeState, Subject } from '../types/focus';
 
 async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke } = await import('@tauri-apps/api/core');
@@ -11,6 +11,38 @@ export function startFocusSession(plannedSeconds: number, mode: FocusMode, subje
     mode,
     subjectId,
   });
+}
+
+export function startStudyMode(
+  plannedSeconds: number,
+  focusSeconds: number,
+  breakSeconds: number,
+  mode: FocusMode,
+  subjectId?: number | null,
+): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('start_study_mode', {
+    plannedSeconds,
+    focusSeconds,
+    breakSeconds,
+    mode,
+    subjectId,
+  });
+}
+
+export function getStudyModeState(): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('get_study_mode_state');
+}
+
+export function confirmStudyBreak(): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('confirm_study_break');
+}
+
+export function emergencyExitStudyMode(): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('emergency_exit_study_mode');
+}
+
+export function resetStudyMode(): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('reset_study_mode');
 }
 
 export function setStudyModeActive(active: boolean): Promise<void> {

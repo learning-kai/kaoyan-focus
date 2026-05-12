@@ -32,6 +32,26 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS study_modes (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              mode TEXT NOT NULL DEFAULT 'normal',
+              subject_id INTEGER,
+              planned_seconds INTEGER NOT NULL,
+              focus_seconds INTEGER NOT NULL,
+              break_seconds INTEGER NOT NULL,
+              phase TEXT NOT NULL,
+              cycle_index INTEGER NOT NULL DEFAULT 1,
+              started_at TEXT NOT NULL,
+              phase_started_at TEXT NOT NULL,
+              ended_at TEXT,
+              current_session_id INTEGER,
+              status TEXT NOT NULL DEFAULT 'active',
+              finish_reason TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              FOREIGN KEY (current_session_id) REFERENCES focus_sessions(id)
+            );
+
             CREATE TABLE IF NOT EXISTS whitelist_apps (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               name TEXT NOT NULL,

@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{sync::Mutex, thread, time::Duration};
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -63,6 +63,13 @@ pub fn run() {
             last_blocked_process: Mutex::new(None),
         })
         .setup(|app| {
+            let app_handle = app.handle().clone();
+            let _ = commands::focus::sync_study_runtime_state(&app_handle);
+            thread::spawn(move || loop {
+                let _ = commands::focus::tick_background_study_mode(&app_handle);
+                thread::sleep(Duration::from_secs(3));
+            });
+
             let show_item = MenuItem::with_id(app, "tray_show", "显示主界面", true, Option::<&str>::None)?;
             let quit_item = MenuItem::with_id(app, "tray_quit", "退出", true, Option::<&str>::None)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
@@ -118,6 +125,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ping,
             set_study_mode_active,
+            commands::focus::start_study_mode,
+            commands::focus::get_study_mode_state,
+            commands::focus::confirm_study_break,
+            commands::focus::emergency_exit_study_mode,
+            commands::focus::reset_study_mode,
             commands::focus::start_focus_session,
             commands::focus::finish_focus_session,
             commands::focus::emergency_exit_focus_session,

@@ -42,8 +42,16 @@ pub fn check_focus_foreground_app(
     state: State<'_, AppState>,
     session_id: i64,
 ) -> Result<FocusAppCheck, String> {
+    check_focus_foreground_app_for_session(&app, state.inner(), session_id)
+}
+
+pub fn check_focus_foreground_app_for_session(
+    app: &AppHandle,
+    state: &AppState,
+    session_id: i64,
+) -> Result<FocusAppCheck, String> {
     let foreground_app = get_foreground_app()?;
-    let connection = open_database(&database_path(&app)?)?;
+    let connection = open_database(&database_path(app)?)?;
     let whitelist_process_names = enabled_whitelist_process_names(&connection)?;
     let whitelist_domains = enabled_whitelist_domains(&connection)?;
     let match_result = is_foreground_app_allowed(&foreground_app, &whitelist_process_names, &whitelist_domains);

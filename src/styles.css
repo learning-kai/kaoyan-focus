@@ -107,6 +107,281 @@ button:disabled {
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
 }
 
+.focus-workbench {
+  max-width: 1180px;
+  min-height: 680px;
+  padding: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98)),
+    #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.1);
+}
+
+.workbench-header,
+.status-ribbon,
+.workbench-grid,
+.overview-grid,
+.panel-heading-row {
+  display: grid;
+  gap: 18px;
+}
+
+.workbench-header {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.workbench-header h2,
+.workbench-header p,
+.control-panel h3,
+.mini-panel h3,
+.monitor-compact h3 {
+  margin: 0;
+}
+
+.workbench-header h2 {
+  font-size: 32px;
+  letter-spacing: 0;
+}
+
+.phase-badge {
+  display: grid;
+  gap: 4px;
+  min-width: 168px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  color: #0f172a;
+  background: #e2e8f0;
+}
+
+.phase-badge span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.phase-badge strong {
+  font-size: 18px;
+}
+
+.phase-focus,
+.phase-awaiting_break {
+  color: #052e16;
+  background: #bbf7d0;
+}
+
+.phase-break {
+  color: #1e3a8a;
+  background: #bfdbfe;
+}
+
+.phase-finished {
+  color: #334155;
+  background: #e2e8f0;
+}
+
+.phase-emergency_exited {
+  color: #7f1d1d;
+  background: #fecaca;
+}
+
+.status-ribbon {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 18px 0;
+}
+
+.status-ribbon article {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.status-ribbon span,
+.timer-topline,
+.progress-stack span,
+.field-grid span,
+.panel-heading-row span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.status-ribbon strong {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  font-size: 20px;
+}
+
+.workbench-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
+  align-items: start;
+}
+
+.timer-console,
+.control-panel,
+.monitor-compact,
+.mini-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.timer-console {
+  padding: 24px;
+}
+
+.timer-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.timer-display.compact {
+  margin: 16px 0 6px;
+  color: #0f172a;
+  font-size: 78px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.timer-caption {
+  min-height: 48px;
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.progress-stack {
+  display: grid;
+  gap: 12px;
+  margin: 22px 0;
+}
+
+.progress-track {
+  position: relative;
+  height: 10px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #16a34a;
+}
+
+.progress-track.accent i {
+  background: #2563eb;
+}
+
+.console-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.side-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.control-panel,
+.monitor-compact,
+.mini-panel {
+  padding: 18px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.field-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+.preset-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.preset-strip .chip {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+
+.compact-mode {
+  margin-top: 12px;
+}
+
+.panel-heading-row {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.monitor-card.slim {
+  grid-template-columns: 1fr auto;
+  margin: 14px 0 0;
+  padding: 14px;
+  border-radius: 8px;
+}
+
+.monitor-card.slim p {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.overview-grid {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  margin-top: 18px;
+}
+
+.focus-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.focus-stats .stat-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.focus-stats .stat-card strong {
+  margin-top: 8px;
+  font-size: 22px;
+}
+
+.compact-history {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.compact-row {
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.compact-empty {
+  border-radius: 8px;
+  padding: 18px;
+}
+
 .page-heading h2,
 .page-heading p {
   margin: 0;

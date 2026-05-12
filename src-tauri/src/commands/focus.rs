@@ -4,7 +4,7 @@ use crate::{
     storage::db::open_database,
 };
 use chrono::{DateTime, Datelike, Utc};
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -31,6 +31,45 @@ pub struct FocusSessionRecovery {
     pub remaining_seconds: i64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct StudyModeState {
+    pub id: Option<i64>,
+    pub phase: String,
+    pub status: String,
+    pub mode: String,
+    pub subject_id: Option<i64>,
+    pub planned_seconds: i64,
+    pub focus_seconds: i64,
+    pub break_seconds: i64,
+    pub cycle_index: i64,
+    pub started_at: Option<String>,
+    pub phase_started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub current_session: Option<FocusSession>,
+    pub study_elapsed_seconds: i64,
+    pub study_remaining_seconds: i64,
+    pub phase_elapsed_seconds: i64,
+    pub phase_remaining_seconds: i64,
+    pub focus_enforcement_active: bool,
+}
+
+#[derive(Debug, Clone)]
+struct StudyModeRecord {
+    id: i64,
+    mode: String,
+    subject_id: Option<i64>,
+    planned_seconds: i64,
+    focus_seconds: i64,
+    break_seconds: i64,
+    phase: String,
+    cycle_index: i64,
+    started_at: String,
+    phase_started_at: String,
+    ended_at: Option<String>,
+    current_session_id: Option<i64>,
+    status: String,
+}
+
 #[tauri::command]
 pub fn start_focus_session(
     app: AppHandle,
@@ -44,36 +83,248 @@ pub fn start_focus_session(
     }
 
     let now = Utc::now().to_rfc3339();
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?
-        .join("kaoyan-focus.sqlite3");
-    let connection = open_database(&db_path)?;
+    let connection = open_database(&database_path(&app)?)?;
+    let session = insert_focus_session(&connection, planned_seconds, &mode, subject_id, &now)?;
+    set_runtime_state(state.inner(), false, Some(session.id))?;
+    Ok(session)
+}
+
+#[tauri::command]
+pub fn start_study_mode(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    planned_seconds: i64,
+    focus_seconds: i64,
+    break_seconds: i64,
+    mode: String,
+    subject_id: Option<i64>,
+) -> Result<StudyModeState, String> {
+    if planned_seconds <= 0 {
+        return Err("学习模式时长必须大于 0 秒".to_string());
+    }
+
+    if focus_seconds <= 0 {
+        return Err("番茄钟时长必须大于 0 秒".to_string());
+    }
+
+    if break_seconds <= 0 {
+        return Err("休息时长必须大于 0 秒".to_string());
+    }
+
+    if mode != "normal" && mode != "strict" {
+        return Err("未知的专注模式".to_string());
+    }
+
+    let connection = open_database(&database_path(&app)?)?;
+    if get_active_study_mode_record(&connection)?.is_some() {
+        return Err("已有学习模式正在进行中".to_string());
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let session = insert_focus_session(&connection, focus_seconds, &mode, subject_id, &now)?;
+    connection
+        .execute(
+            "
+            INSERT INTO study_modes (
+              mode,
+              subject_id,
+              planned_seconds,
+              focus_seconds,
+              break_seconds,
+              phase,
+              cycle_index,
+              started_at,
+              phase_started_at,
+              current_session_id,
+              status,
+              created_at,
+              updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, 'focus', 1, ?6, ?6, ?7, 'active', ?6, ?6)
+            ",
+            params![
+                mode,
+                subject_id,
+                planned_seconds,
+                focus_seconds,
+                break_seconds,
+                now,
+                session.id
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    set_runtime_state(state.inner(), true, Some(session.id))?;
+    load_current_study_mode_state(&connection, Utc::now())
+}
+
+#[tauri::command]
+pub fn get_study_mode_state(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StudyModeState, String> {
+    advance_study_mode(&app, state.inner())
+}
+
+#[tauri::command]
+pub fn confirm_study_break(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StudyModeState, String> {
+    let current_state = advance_study_mode(&app, state.inner())?;
+    if current_state.status != "active" {
+        return Ok(current_state);
+    }
+
+    if current_state.phase != "awaiting_break" {
+        return Err("当前还没有到休息确认时间".to_string());
+    }
+
+    let connection = open_database(&database_path(&app)?)?;
+    let Some(record) = get_active_study_mode_record(&connection)? else {
+        set_runtime_state(state.inner(), false, None)?;
+        return Ok(idle_study_mode_state());
+    };
+
+    let now = Utc::now();
+    if study_elapsed_seconds(&record, now)? >= record.planned_seconds {
+        complete_study_mode_record(&connection, state.inner(), &record, now, "completed")?;
+        return load_current_study_mode_state(&connection, now);
+    }
+
+    if let Some(session_id) = record.current_session_id {
+        let session = get_focus_session_by_id(&connection, session_id)?;
+        let actual_seconds = seconds_since(&session.started_at, now)?;
+        finish_running_focus_session(&connection, session_id, actual_seconds, now, "pomodoro_completed")?;
+    }
 
     connection
         .execute(
             "
-            INSERT INTO focus_sessions (
-              mode,
-              subject_id,
-              planned_seconds,
-              actual_seconds,
-              started_at,
-              status,
-              interruption_count,
-              emergency_exit_count,
-              created_at,
-              updated_at
-            ) VALUES (?1, ?2, ?3, 0, ?4, 'running', 0, 0, ?4, ?4)
+            UPDATE study_modes
+            SET phase = 'break',
+                phase_started_at = ?1,
+                current_session_id = NULL,
+                updated_at = ?1
+            WHERE id = ?2 AND status = 'active'
             ",
-            params![mode, subject_id, planned_seconds, now],
+            params![now.to_rfc3339(), record.id],
         )
         .map_err(|error| error.to_string())?;
 
-    let session = get_focus_session_by_id(&connection, connection.last_insert_rowid())?;
-    *state.active_session_id.lock().map_err(|error| error.to_string())? = Some(session.id);
-    Ok(session)
+    set_runtime_state(state.inner(), true, None)?;
+    load_current_study_mode_state(&connection, now)
+}
+
+#[tauri::command]
+pub fn emergency_exit_study_mode(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StudyModeState, String> {
+    let _ = advance_study_mode(&app, state.inner())?;
+    let connection = open_database(&database_path(&app)?)?;
+    let Some(record) = get_active_study_mode_record(&connection)? else {
+        set_runtime_state(state.inner(), false, None)?;
+        return Ok(idle_study_mode_state());
+    };
+
+    if record.mode != "strict" {
+        return Err("只有严格模式支持应急退出".to_string());
+    }
+
+    let now = Utc::now();
+    if let Some(session_id) = record.current_session_id {
+        if let Ok(session) = get_focus_session_by_id(&connection, session_id) {
+            if session.status == "running" {
+                let actual_seconds = seconds_since(&session.started_at, now)?;
+                emergency_exit_running_focus_session(&connection, session_id, actual_seconds, now)?;
+            }
+        }
+    }
+
+    connection
+        .execute(
+            "
+            UPDATE study_modes
+            SET phase = 'emergency_exited',
+                status = 'emergency_exited',
+                finish_reason = 'emergency_exit',
+                ended_at = ?1,
+                current_session_id = NULL,
+                updated_at = ?1
+            WHERE id = ?2 AND status = 'active'
+            ",
+            params![now.to_rfc3339(), record.id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    set_runtime_state(state.inner(), false, None)?;
+    load_current_study_mode_state(&connection, now)
+}
+
+#[tauri::command]
+pub fn reset_study_mode(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StudyModeState, String> {
+    let connection = open_database(&database_path(&app)?)?;
+    if let Some(record) = get_active_study_mode_record(&connection)? {
+        let now = Utc::now();
+        if let Some(session_id) = record.current_session_id {
+            if let Ok(session) = get_focus_session_by_id(&connection, session_id) {
+                if session.status == "running" {
+                    let actual_seconds = seconds_since(&session.started_at, now)?;
+                    finish_running_focus_session(&connection, session_id, actual_seconds, now, "manual_end")?;
+                }
+            }
+        }
+
+        connection
+            .execute(
+                "
+                UPDATE study_modes
+                SET phase = 'finished',
+                    status = 'finished',
+                    finish_reason = 'manual_reset',
+                    ended_at = ?1,
+                    current_session_id = NULL,
+                    updated_at = ?1
+                WHERE id = ?2 AND status = 'active'
+                ",
+                params![now.to_rfc3339(), record.id],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+
+    set_runtime_state(state.inner(), false, None)?;
+    Ok(idle_study_mode_state())
+}
+
+pub fn tick_background_study_mode(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let study_state = advance_study_mode(app, state.inner())?;
+    if study_state.focus_enforcement_active {
+        if let Some(session_id) = study_state.current_session.as_ref().map(|session| session.id) {
+            let _ = crate::commands::monitor::check_focus_foreground_app_for_session(
+                app,
+                state.inner(),
+                session_id,
+            );
+        }
+    }
+
+    Ok(())
+}
+
+pub fn sync_study_runtime_state(app: &AppHandle) -> Result<(), String> {
+    let connection = open_database(&database_path(app)?)?;
+    let state = app.state::<AppState>();
+    if let Some(record) = get_active_study_mode_record(&connection)? {
+        set_runtime_state(state.inner(), true, record.current_session_id)?;
+    } else {
+        set_runtime_state(state.inner(), false, None)?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -239,38 +490,11 @@ pub fn recover_active_focus_session(
         .with_timezone(&Utc);
     let elapsed_seconds = (Utc::now() - started_at).num_seconds().max(0);
 
-    if elapsed_seconds >= session.planned_seconds {
-        let now = Utc::now().to_rfc3339();
-        connection
-            .execute(
-                "
-                UPDATE focus_sessions
-                SET actual_seconds = ?1,
-                    ended_at = ?2,
-                    status = 'interrupted',
-                    end_reason = 'recovered_after_due',
-                    updated_at = ?2
-                WHERE id = ?3
-                ",
-                params![session.planned_seconds.max(0), now, session.id],
-            )
-            .map_err(|error| error.to_string())?;
-
-        *state.active_session_id.lock().map_err(|error| error.to_string())? = None;
-        let updated_session = get_focus_session_by_id(&connection, session.id)?;
-        return Ok(Some(FocusSessionRecovery {
-            recovery_status: "interrupted_after_due".to_string(),
-            session: updated_session,
-            elapsed_seconds,
-            remaining_seconds: 0,
-        }));
-    }
-
     *state.active_session_id.lock().map_err(|error| error.to_string())? = Some(session.id);
 
     Ok(Some(FocusSessionRecovery {
         recovery_status: "resumed".to_string(),
-        remaining_seconds: session.planned_seconds - elapsed_seconds,
+        remaining_seconds: (session.planned_seconds - elapsed_seconds).max(0),
         session,
         elapsed_seconds,
     }))
@@ -441,7 +665,405 @@ fn subject_stats(connection: &rusqlite::Connection) -> Result<Vec<SubjectStats>,
     Ok(stats)
 }
 
-fn get_focus_session_by_id(connection: &rusqlite::Connection, session_id: i64) -> Result<FocusSession, String> {
+fn advance_study_mode(app: &AppHandle, state: &AppState) -> Result<StudyModeState, String> {
+    let connection = open_database(&database_path(app)?)?;
+    let Some(record) = get_active_study_mode_record(&connection)? else {
+        set_runtime_state(state, false, None)?;
+        return load_current_study_mode_state(&connection, Utc::now());
+    };
+
+    let now = Utc::now();
+    let study_elapsed_seconds = study_elapsed_seconds(&record, now)?;
+    if study_elapsed_seconds >= record.planned_seconds {
+        complete_study_mode_record(&connection, state, &record, now, "completed")?;
+        return load_study_mode_state_by_id(&connection, record.id, now);
+    }
+
+    match record.phase.as_str() {
+        "focus" => {
+            if record.current_session_id.is_none() {
+                let session = insert_focus_session(
+                    &connection,
+                    record.focus_seconds,
+                    &record.mode,
+                    record.subject_id,
+                    &now.to_rfc3339(),
+                )?;
+                connection
+                    .execute(
+                        "
+                        UPDATE study_modes
+                        SET current_session_id = ?1,
+                            phase_started_at = ?2,
+                            updated_at = ?2
+                        WHERE id = ?3 AND status = 'active'
+                        ",
+                        params![session.id, now.to_rfc3339(), record.id],
+                    )
+                    .map_err(|error| error.to_string())?;
+                set_runtime_state(state, true, Some(session.id))?;
+                return load_current_study_mode_state(&connection, now);
+            }
+
+            let phase_elapsed_seconds = seconds_since(&record.phase_started_at, now)?;
+            if phase_elapsed_seconds >= record.focus_seconds {
+                connection
+                    .execute(
+                        "
+                        UPDATE study_modes
+                        SET phase = 'awaiting_break',
+                            updated_at = ?1
+                        WHERE id = ?2 AND status = 'active'
+                        ",
+                        params![now.to_rfc3339(), record.id],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        "awaiting_break" => {}
+        "break" => {
+            let phase_elapsed_seconds = seconds_since(&record.phase_started_at, now)?;
+            if phase_elapsed_seconds >= record.break_seconds {
+                let session = insert_focus_session(
+                    &connection,
+                    record.focus_seconds,
+                    &record.mode,
+                    record.subject_id,
+                    &now.to_rfc3339(),
+                )?;
+                connection
+                    .execute(
+                        "
+                        UPDATE study_modes
+                        SET phase = 'focus',
+                            phase_started_at = ?1,
+                            cycle_index = cycle_index + 1,
+                            current_session_id = ?2,
+                            updated_at = ?1
+                        WHERE id = ?3 AND status = 'active'
+                        ",
+                        params![now.to_rfc3339(), session.id, record.id],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        _ => {}
+    }
+
+    let refreshed = get_active_study_mode_record(&connection)?;
+    if let Some(refreshed) = refreshed {
+        set_runtime_state(state, true, refreshed.current_session_id)?;
+    } else {
+        set_runtime_state(state, false, None)?;
+    }
+
+    load_current_study_mode_state(&connection, now)
+}
+
+fn complete_study_mode_record(
+    connection: &Connection,
+    state: &AppState,
+    record: &StudyModeRecord,
+    now: DateTime<Utc>,
+    finish_reason: &str,
+) -> Result<(), String> {
+    if let Some(session_id) = record.current_session_id {
+        if let Ok(session) = get_focus_session_by_id(connection, session_id) {
+            if session.status == "running" {
+                let actual_seconds = seconds_since(&session.started_at, now)?;
+                finish_running_focus_session(connection, session_id, actual_seconds, now, "completed")?;
+            }
+        }
+    }
+
+    connection
+        .execute(
+            "
+            UPDATE study_modes
+            SET phase = 'finished',
+                status = 'finished',
+                finish_reason = ?1,
+                ended_at = ?2,
+                current_session_id = NULL,
+                updated_at = ?2
+            WHERE id = ?3 AND status = 'active'
+            ",
+            params![finish_reason, now.to_rfc3339(), record.id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    set_runtime_state(state, false, None)
+}
+
+fn load_current_study_mode_state(connection: &Connection, now: DateTime<Utc>) -> Result<StudyModeState, String> {
+    if let Some(record) = get_active_study_mode_record(connection)? {
+        return study_mode_record_to_state(connection, &record, now);
+    }
+
+    if let Some(record) = get_latest_study_mode_record(connection)? {
+        return study_mode_record_to_state(connection, &record, now);
+    }
+
+    Ok(idle_study_mode_state())
+}
+
+fn load_study_mode_state_by_id(
+    connection: &Connection,
+    study_mode_id: i64,
+    now: DateTime<Utc>,
+) -> Result<StudyModeState, String> {
+    let record = get_study_mode_record_by_id(connection, study_mode_id)?;
+    study_mode_record_to_state(connection, &record, now)
+}
+
+fn idle_study_mode_state() -> StudyModeState {
+    StudyModeState {
+        id: None,
+        phase: "idle".to_string(),
+        status: "idle".to_string(),
+        mode: "normal".to_string(),
+        subject_id: None,
+        planned_seconds: 0,
+        focus_seconds: 0,
+        break_seconds: 0,
+        cycle_index: 0,
+        started_at: None,
+        phase_started_at: None,
+        ended_at: None,
+        current_session: None,
+        study_elapsed_seconds: 0,
+        study_remaining_seconds: 0,
+        phase_elapsed_seconds: 0,
+        phase_remaining_seconds: 0,
+        focus_enforcement_active: false,
+    }
+}
+
+fn study_mode_record_to_state(
+    connection: &Connection,
+    record: &StudyModeRecord,
+    now: DateTime<Utc>,
+) -> Result<StudyModeState, String> {
+    let current_session = record
+        .current_session_id
+        .and_then(|session_id| get_focus_session_by_id(connection, session_id).ok());
+    let effective_now = if record.status == "active" {
+        now
+    } else if let Some(ended_at) = record.ended_at.as_deref() {
+        parse_rfc3339(ended_at)?
+    } else {
+        now
+    };
+    let study_elapsed_seconds = seconds_since(&record.started_at, effective_now)?;
+    let phase_elapsed_seconds = if record.status == "active" {
+        seconds_since(&record.phase_started_at, now)?
+    } else {
+        0
+    };
+    let phase_remaining_seconds = match record.phase.as_str() {
+        "focus" => (record.focus_seconds - phase_elapsed_seconds).max(0),
+        "awaiting_break" => 0,
+        "break" => (record.break_seconds - phase_elapsed_seconds).max(0),
+        _ => 0,
+    };
+    let focus_enforcement_active = record.status == "active"
+        && matches!(record.phase.as_str(), "focus" | "awaiting_break")
+        && current_session.is_some();
+
+    Ok(StudyModeState {
+        id: Some(record.id),
+        phase: record.phase.clone(),
+        status: record.status.clone(),
+        mode: record.mode.clone(),
+        subject_id: record.subject_id,
+        planned_seconds: record.planned_seconds,
+        focus_seconds: record.focus_seconds,
+        break_seconds: record.break_seconds,
+        cycle_index: record.cycle_index,
+        started_at: Some(record.started_at.clone()),
+        phase_started_at: Some(record.phase_started_at.clone()),
+        ended_at: record.ended_at.clone(),
+        current_session,
+        study_elapsed_seconds,
+        study_remaining_seconds: (record.planned_seconds - study_elapsed_seconds).max(0),
+        phase_elapsed_seconds,
+        phase_remaining_seconds,
+        focus_enforcement_active,
+    })
+}
+
+fn get_active_study_mode_record(connection: &Connection) -> Result<Option<StudyModeRecord>, String> {
+    connection
+        .query_row(
+            "
+            SELECT id, mode, subject_id, planned_seconds, focus_seconds, break_seconds,
+                   phase, cycle_index, started_at, phase_started_at, ended_at,
+                   current_session_id, status
+            FROM study_modes
+            WHERE status = 'active'
+            ORDER BY id DESC
+            LIMIT 1
+            ",
+            [],
+            row_to_study_mode_record,
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+fn get_latest_study_mode_record(connection: &Connection) -> Result<Option<StudyModeRecord>, String> {
+    connection
+        .query_row(
+            "
+            SELECT id, mode, subject_id, planned_seconds, focus_seconds, break_seconds,
+                   phase, cycle_index, started_at, phase_started_at, ended_at,
+                   current_session_id, status
+            FROM study_modes
+            ORDER BY id DESC
+            LIMIT 1
+            ",
+            [],
+            row_to_study_mode_record,
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+fn get_study_mode_record_by_id(connection: &Connection, id: i64) -> Result<StudyModeRecord, String> {
+    connection
+        .query_row(
+            "
+            SELECT id, mode, subject_id, planned_seconds, focus_seconds, break_seconds,
+                   phase, cycle_index, started_at, phase_started_at, ended_at,
+                   current_session_id, status
+            FROM study_modes
+            WHERE id = ?1
+            ",
+            params![id],
+            row_to_study_mode_record,
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "学习模式记录不存在".to_string())
+}
+
+fn insert_focus_session(
+    connection: &Connection,
+    planned_seconds: i64,
+    mode: &str,
+    subject_id: Option<i64>,
+    now: &str,
+) -> Result<FocusSession, String> {
+    connection
+        .execute(
+            "
+            INSERT INTO focus_sessions (
+              mode,
+              subject_id,
+              planned_seconds,
+              actual_seconds,
+              started_at,
+              status,
+              interruption_count,
+              emergency_exit_count,
+              created_at,
+              updated_at
+            ) VALUES (?1, ?2, ?3, 0, ?4, 'running', 0, 0, ?4, ?4)
+            ",
+            params![mode, subject_id, planned_seconds, now],
+        )
+        .map_err(|error| error.to_string())?;
+
+    get_focus_session_by_id(connection, connection.last_insert_rowid())
+}
+
+fn finish_running_focus_session(
+    connection: &Connection,
+    session_id: i64,
+    actual_seconds: i64,
+    now: DateTime<Utc>,
+    end_reason: &str,
+) -> Result<(), String> {
+    connection
+        .execute(
+            "
+            UPDATE focus_sessions
+            SET actual_seconds = ?1,
+                ended_at = ?2,
+                status = 'finished',
+                end_reason = ?3,
+                updated_at = ?2
+            WHERE id = ?4 AND status = 'running'
+            ",
+            params![actual_seconds.max(0), now.to_rfc3339(), end_reason, session_id],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn emergency_exit_running_focus_session(
+    connection: &Connection,
+    session_id: i64,
+    actual_seconds: i64,
+    now: DateTime<Utc>,
+) -> Result<(), String> {
+    connection
+        .execute(
+            "
+            UPDATE focus_sessions
+            SET actual_seconds = ?1,
+                ended_at = ?2,
+                status = 'emergency_exited',
+                end_reason = 'emergency_exit',
+                emergency_exit_count = emergency_exit_count + 1,
+                updated_at = ?2
+            WHERE id = ?3 AND status = 'running'
+            ",
+            params![actual_seconds.max(0), now.to_rfc3339(), session_id],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn set_runtime_state(
+    state: &AppState,
+    study_mode_active: bool,
+    active_session_id: Option<i64>,
+) -> Result<(), String> {
+    *state
+        .study_mode_active
+        .lock()
+        .map_err(|error| error.to_string())? = study_mode_active;
+    *state
+        .active_session_id
+        .lock()
+        .map_err(|error| error.to_string())? = active_session_id;
+    Ok(())
+}
+
+fn study_elapsed_seconds(record: &StudyModeRecord, now: DateTime<Utc>) -> Result<i64, String> {
+    seconds_since(&record.started_at, now)
+}
+
+fn seconds_since(started_at: &str, now: DateTime<Utc>) -> Result<i64, String> {
+    Ok((now - parse_rfc3339(started_at)?).num_seconds().max(0))
+}
+
+fn parse_rfc3339(value: &str) -> Result<DateTime<Utc>, String> {
+    Ok(DateTime::parse_from_rfc3339(value)
+        .map_err(|error| error.to_string())?
+        .with_timezone(&Utc))
+}
+
+fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("kaoyan-focus.sqlite3"))
+}
+
+fn get_focus_session_by_id(connection: &Connection, session_id: i64) -> Result<FocusSession, String> {
     connection
         .query_row(
             "
@@ -457,6 +1079,24 @@ fn get_focus_session_by_id(connection: &rusqlite::Connection, session_id: i64) -
         .optional()
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "专注记录不存在".to_string())
+}
+
+fn row_to_study_mode_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<StudyModeRecord> {
+    Ok(StudyModeRecord {
+        id: row.get(0)?,
+        mode: row.get(1)?,
+        subject_id: row.get(2)?,
+        planned_seconds: row.get(3)?,
+        focus_seconds: row.get(4)?,
+        break_seconds: row.get(5)?,
+        phase: row.get(6)?,
+        cycle_index: row.get(7)?,
+        started_at: row.get(8)?,
+        phase_started_at: row.get(9)?,
+        ended_at: row.get(10)?,
+        current_session_id: row.get(11)?,
+        status: row.get(12)?,
+    })
 }
 
 fn row_to_focus_session(row: &rusqlite::Row<'_>) -> rusqlite::Result<FocusSession> {
