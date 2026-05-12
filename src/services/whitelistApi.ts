@@ -14,6 +14,14 @@ export function createWhitelistApp(name: string, processName: string, note?: str
   });
 }
 
+export function createWhitelistWebsite(name: string, domain: string, note?: string): Promise<WhitelistApp> {
+  return invokeCommand<WhitelistApp>('create_whitelist_website', {
+    name,
+    domain,
+    note: note?.trim() ? note.trim() : null,
+  });
+}
+
 export function listWhitelistApps(): Promise<WhitelistApp[]> {
   return invokeCommand<WhitelistApp[]>('list_whitelist_apps');
 }

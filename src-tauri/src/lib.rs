@@ -130,6 +130,7 @@ pub fn run() {
             commands::settings::get_app_data_location,
             commands::settings::save_app_settings,
             commands::whitelist::create_whitelist_app,
+            commands::whitelist::create_whitelist_website,
             commands::whitelist::list_recent_blocked_apps,
             commands::whitelist::list_whitelist_apps,
             commands::whitelist::list_running_processes,

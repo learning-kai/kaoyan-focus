@@ -98,6 +98,81 @@ pub fn create_whitelist_app(
 }
 
 #[tauri::command]
+pub fn create_whitelist_website(
+    app: AppHandle,
+    name: String,
+    domain: String,
+    note: Option<String>,
+) -> Result<WhitelistApp, String> {
+    let name = name.trim();
+    let domain = normalize_domain(&domain);
+
+    if name.is_empty() {
+        return Err("网站名称不能为空".to_string());
+    }
+
+    if domain.is_empty() || !domain.contains('.') {
+        return Err("网站域名不正确，例如 baidu.com".to_string());
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let connection = open_database(&database_path(&app)?)?;
+    let existing_id = connection
+        .query_row(
+            "
+            SELECT id
+            FROM whitelist_apps
+            WHERE match_type = 'website_domain'
+              AND lower(process_name) = lower(?1)
+            ORDER BY id DESC
+            LIMIT 1
+            ",
+            params![domain],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    if let Some(existing_id) = existing_id {
+        connection
+            .execute(
+                "
+                UPDATE whitelist_apps
+                SET name = ?1,
+                    note = ?2,
+                    enabled = 1,
+                    updated_at = ?3
+                WHERE id = ?4
+                ",
+                params![name, note, now, existing_id],
+            )
+            .map_err(|error| error.to_string())?;
+
+        return get_whitelist_app_by_id(&connection, existing_id);
+    }
+
+    connection
+        .execute(
+            "
+            INSERT INTO whitelist_apps (
+              name,
+              process_name,
+              path,
+              match_type,
+              note,
+              enabled,
+              created_at,
+              updated_at
+            ) VALUES (?1, ?2, NULL, 'website_domain', ?3, 1, ?4, ?4)
+            ",
+            params![name, domain, note, now],
+        )
+        .map_err(|error| error.to_string())?;
+
+    get_whitelist_app_by_id(&connection, connection.last_insert_rowid())
+}
+
+#[tauri::command]
 pub fn list_running_processes() -> Result<Vec<RunningProcess>, String> {
     read_running_processes()
 }
@@ -144,6 +219,7 @@ pub fn list_recent_blocked_apps(app: AppHandle) -> Result<Vec<RecentBlockedApp>,
             LEFT JOIN whitelist_apps w
               ON lower(w.process_name) = lower(latest.process_name)
              AND w.enabled = 1
+             AND w.match_type = 'process_name'
             WHERE latest.event_type = 'blocked_foreground_detected'
               AND w.id IS NULL
               AND latest.id = (
@@ -173,6 +249,16 @@ pub fn list_recent_blocked_apps(app: AppHandle) -> Result<Vec<RecentBlockedApp>,
         .map_err(|error| error.to_string())?;
 
     Ok(apps)
+}
+
+fn normalize_domain(value: &str) -> String {
+    value
+        .trim()
+        .trim_start_matches("http://")
+        .trim_start_matches("https://")
+        .trim_start_matches("www.")
+        .trim_end_matches('/')
+        .to_ascii_lowercase()
 }
 
 #[tauri::command]

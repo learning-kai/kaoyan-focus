@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { createWhitelistApp, deleteWhitelistApp, listRecentBlockedApps, listRunningProcesses, listWhitelistApps, setWhitelistAppEnabled } from '../services/whitelistApi';
+import { createWhitelistApp, createWhitelistWebsite, deleteWhitelistApp, listRecentBlockedApps, listRunningProcesses, listWhitelistApps, setWhitelistAppEnabled } from '../services/whitelistApi';
 import type { RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
 
 export default function WhitelistPage() {
   const [apps, setApps] = useState<WhitelistApp[]>([]);
+  const [entryType, setEntryType] = useState<'app' | 'website'>('app');
   const [name, setName] = useState('');
   const [processName, setProcessName] = useState('');
+  const [domain, setDomain] = useState('');
   const [processPath, setProcessPath] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [runningProcesses, setRunningProcesses] = useState<RunningProcess[]>([]);
@@ -33,9 +35,14 @@ export default function WhitelistPage() {
     try {
       setError(null);
       setLoading(true);
-      await createWhitelistApp(name, processName, note, processPath);
+      if (entryType === 'website') {
+        await createWhitelistWebsite(name, domain, note);
+      } else {
+        await createWhitelistApp(name, processName, note, processPath);
+      }
       setName('');
       setProcessName('');
+      setDomain('');
       setProcessPath(null);
       setNote('');
       await refreshApps();
@@ -126,8 +133,17 @@ export default function WhitelistPage() {
     <section className="page-card">
       <div className="page-heading">
         <p className="eyebrow">阶段 8 / 白名单增强</p>
-        <h2>软件白名单</h2>
-        <p>当前版本支持手动添加，也可以从正在运行的进程中选择学习软件。</p>
+        <h2>白名单</h2>
+        <p>支持学习软件和学习网站白名单。专注中浏览器打开非白名单网站时会被关闭。</p>
+      </div>
+
+      <div className="mode-switch">
+        <button className={entryType === 'app' ? 'mode active' : 'mode'} onClick={() => setEntryType('app')} type="button">
+          软件
+        </button>
+        <button className={entryType === 'website' ? 'mode active' : 'mode'} onClick={() => setEntryType('website')} type="button">
+          网站
+        </button>
       </div>
 
       <div className="tool-grid">
@@ -190,8 +206,12 @@ export default function WhitelistPage() {
       )}
 
       <div className="form-row whitelist-form">
-        <input onChange={(event) => setName(event.target.value)} placeholder="软件名称，例如 Anki" value={name} />
-        <input onChange={(event) => setProcessName(event.target.value)} placeholder="进程名，例如 anki.exe" value={processName} />
+        <input onChange={(event) => setName(event.target.value)} placeholder={entryType === 'website' ? '网站名称，例如 中国大学 MOOC' : '软件名称，例如 Anki'} value={name} />
+        {entryType === 'website' ? (
+          <input onChange={(event) => setDomain(event.target.value)} placeholder="域名，例如 icourse163.org" value={domain} />
+        ) : (
+          <input onChange={(event) => setProcessName(event.target.value)} placeholder="进程名，例如 anki.exe" value={processName} />
+        )}
         <input onChange={(event) => setNote(event.target.value)} placeholder="备注，可选" value={note} />
         <button disabled={loading} onClick={() => void handleCreate()} type="button">添加</button>
       </div>
@@ -210,7 +230,7 @@ export default function WhitelistPage() {
             <div className="list-row whitelist-row" key={app.id}>
               <div>
                 <strong>{app.name}</strong>
-                <p>{app.process_name}</p>
+                <p>{app.match_type === 'website_domain' ? `网站域名：${app.process_name}` : `进程名：${app.process_name}`}</p>
                 {app.path && <p>{app.path}</p>}
                 {app.note && <p>{app.note}</p>}
               </div>

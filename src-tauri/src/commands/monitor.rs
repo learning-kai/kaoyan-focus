@@ -45,7 +45,8 @@ pub fn check_focus_foreground_app(
     let foreground_app = get_foreground_app()?;
     let connection = open_database(&database_path(&app)?)?;
     let whitelist_process_names = enabled_whitelist_process_names(&connection)?;
-    let match_result = is_foreground_app_allowed(&foreground_app, &whitelist_process_names);
+    let whitelist_domains = enabled_whitelist_domains(&connection)?;
+    let match_result = is_foreground_app_allowed(&foreground_app, &whitelist_process_names, &whitelist_domains);
     let mut action_taken = None;
     let mut close_error = None;
 
@@ -190,7 +191,7 @@ fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 
 fn enabled_whitelist_process_names(connection: &rusqlite::Connection) -> Result<Vec<String>, String> {
     let mut statement = connection
-        .prepare("SELECT process_name FROM whitelist_apps WHERE enabled = 1")
+        .prepare("SELECT process_name FROM whitelist_apps WHERE enabled = 1 AND match_type = 'process_name'")
         .map_err(|error| error.to_string())?;
 
     let process_names = statement
@@ -200,4 +201,18 @@ fn enabled_whitelist_process_names(connection: &rusqlite::Connection) -> Result<
         .map_err(|error| error.to_string())?;
 
     Ok(process_names)
+}
+
+fn enabled_whitelist_domains(connection: &rusqlite::Connection) -> Result<Vec<String>, String> {
+    let mut statement = connection
+        .prepare("SELECT process_name FROM whitelist_apps WHERE enabled = 1 AND match_type = 'website_domain'")
+        .map_err(|error| error.to_string())?;
+
+    let domains = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    Ok(domains)
 }

@@ -686,6 +686,7 @@ export default function FocusPage() {
           <div>
             <span>{latestAppCheck.match_result.allowed ? '允许' : '干扰处理'}</span>
             <strong>{latestAppCheck.match_result.reason}</strong>
+            {latestAppCheck.match_result.detected_domain && <p>识别网站：{latestAppCheck.match_result.detected_domain}</p>}
             <p>
               {latestAppCheck.match_result.allowed
                 ? `累计干扰 ${latestAppCheck.interruption_count} 次`
