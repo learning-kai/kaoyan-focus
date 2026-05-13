@@ -552,6 +552,55 @@ pub fn list_focus_sessions(app: AppHandle) -> Result<Vec<FocusSession>, String> 
 }
 
 #[tauri::command]
+pub fn update_focus_session_subject(
+    app: AppHandle,
+    session_id: i64,
+    subject_id: Option<i64>,
+) -> Result<FocusSession, String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("kaoyan-focus.sqlite3");
+    let connection = open_database(&db_path)?;
+
+    if let Some(subject_id) = subject_id {
+        let subject_exists = connection
+            .query_row(
+                "SELECT 1 FROM subjects WHERE id = ?1 AND enabled = 1",
+                params![subject_id],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .is_some();
+
+        if !subject_exists {
+            return Err("科目不存在或已停用".to_string());
+        }
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let changed = connection
+        .execute(
+            "
+            UPDATE focus_sessions
+            SET subject_id = ?1,
+                updated_at = ?2
+            WHERE id = ?3
+            ",
+            params![subject_id, now, session_id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    if changed == 0 {
+        return Err("专注记录不存在".to_string());
+    }
+
+    get_focus_session_by_id(&connection, session_id)
+}
+
+#[tauri::command]
 pub fn list_subjects(app: AppHandle) -> Result<Vec<Subject>, String> {
     let db_path = app
         .path()

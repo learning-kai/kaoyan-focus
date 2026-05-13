@@ -74,6 +74,13 @@ export function listFocusSessions(): Promise<FocusSession[]> {
   return invokeCommand<FocusSession[]>('list_focus_sessions');
 }
 
+export function updateFocusSessionSubject(sessionId: number, subjectId: number | null): Promise<FocusSession> {
+  return invokeCommand<FocusSession>('update_focus_session_subject', {
+    sessionId,
+    subjectId,
+  });
+}
+
 export function listSubjects(): Promise<Subject[]> {
   return invokeCommand<Subject[]>('list_subjects');
 }

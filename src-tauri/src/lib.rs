@@ -138,6 +138,7 @@ pub fn run() {
             commands::focus::interrupt_focus_session,
             commands::focus::recover_active_focus_session,
             commands::focus::list_focus_sessions,
+            commands::focus::update_focus_session_subject,
             commands::focus::list_subjects,
             commands::focus::get_focus_stats_summary,
             commands::settings::get_app_settings,

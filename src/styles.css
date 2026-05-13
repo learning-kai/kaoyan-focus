@@ -1114,6 +1114,24 @@ svg {
   flex: 0 0 auto;
 }
 
+.session-edit-row {
+  align-items: center;
+}
+
+.session-subject-select {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 220px);
+  gap: 9px;
+  align-items: center;
+  min-width: 250px;
+}
+
+.session-subject-select span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .settings-panel {
   margin-bottom: 15px;
 }
@@ -1386,5 +1404,16 @@ svg {
 
   .ritual-stage {
     min-height: 360px;
+  }
+
+  .session-edit-row,
+  .session-subject-select {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .session-subject-select {
+    width: 100%;
+    min-width: 0;
   }
 }
