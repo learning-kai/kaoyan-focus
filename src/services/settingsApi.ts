@@ -1,4 +1,4 @@
-import type { AppSettings } from '../types/settings';
+import type { AppSettings, WebDavSettings, WebDavStatus, WebDavSyncResult } from '../types/settings';
 
 export type AppDataLocation = {
   app_data_dir: string;
@@ -20,4 +20,24 @@ export function saveAppSettings(settings: AppSettings): Promise<AppSettings> {
 
 export function getAppDataLocation(): Promise<AppDataLocation> {
   return invokeCommand<AppDataLocation>('get_app_data_location');
+}
+
+export function getWebDavSettings(): Promise<WebDavSettings> {
+  return invokeCommand<WebDavSettings>('get_webdav_settings');
+}
+
+export function saveWebDavSettings(settings: WebDavSettings): Promise<WebDavSettings> {
+  return invokeCommand<WebDavSettings>('save_webdav_settings', { settings });
+}
+
+export function testWebDavConnection(settings: WebDavSettings): Promise<WebDavStatus> {
+  return invokeCommand<WebDavStatus>('test_webdav_connection', { settings });
+}
+
+export function uploadDatabaseToWebDav(settings: WebDavSettings): Promise<WebDavSyncResult> {
+  return invokeCommand<WebDavSyncResult>('upload_database_to_webdav', { settings });
+}
+
+export function downloadDatabaseFromWebDav(settings: WebDavSettings): Promise<WebDavSyncResult> {
+  return invokeCommand<WebDavSyncResult>('download_database_from_webdav', { settings });
 }

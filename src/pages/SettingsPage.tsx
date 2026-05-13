@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Activity,
   BellRing,
+  Cloud,
   Database,
   Download,
   HardDrive,
@@ -10,14 +11,24 @@ import {
   Save,
   Settings2,
   ShieldCheck,
+  UploadCloud,
 } from 'lucide-react';
 import { listFocusSessions } from '../services/focusApi';
 import { getCurrentForegroundApp } from '../services/monitorApi';
-import { getAppDataLocation, getAppSettings, saveAppSettings } from '../services/settingsApi';
+import {
+  downloadDatabaseFromWebDav,
+  getAppDataLocation,
+  getAppSettings,
+  getWebDavSettings,
+  saveAppSettings,
+  saveWebDavSettings,
+  testWebDavConnection,
+  uploadDatabaseToWebDav,
+} from '../services/settingsApi';
 import { checkForAppUpdate, installAppUpdate, type AppUpdate } from '../services/updateApi';
 import type { FocusSession } from '../types/focus';
 import type { ForegroundApp } from '../types/monitor';
-import type { AppSettings } from '../types/settings';
+import type { AppSettings, WebDavSettings } from '../types/settings';
 
 const defaultSettings: AppSettings = {
   default_study_minutes: 120,
@@ -27,18 +38,28 @@ const defaultSettings: AppSettings = {
   emergency_cooldown_seconds: 60,
 };
 
+const defaultWebDavSettings: WebDavSettings = {
+  url: '',
+  username: '',
+  password: '',
+  remote_path: 'kaoyan-focus/kaoyan-focus.sqlite3',
+};
+
 export default function SettingsPage() {
   const [foregroundApp, setForegroundApp] = useState<ForegroundApp | null>(null);
   const [latestSession, setLatestSession] = useState<FocusSession | null>(null);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [webDavSettings, setWebDavSettings] = useState<WebDavSettings>(defaultWebDavSettings);
   const [dataLocation, setDataLocation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [webDavMessage, setWebDavMessage] = useState<string | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<AppUpdate | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [updateProgress, setUpdateProgress] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [webDavBusy, setWebDavBusy] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
 
@@ -47,7 +68,7 @@ export default function SettingsPage() {
   }, []);
 
   async function initializeSettingsPage() {
-    await Promise.all([refreshFocusState(), refreshSettings(), refreshDataLocation()]);
+    await Promise.all([refreshFocusState(), refreshSettings(), refreshDataLocation(), refreshWebDavSettings()]);
   }
 
   async function refreshFocusState() {
@@ -63,6 +84,15 @@ export default function SettingsPage() {
     try {
       setError(null);
       setSettings(await getAppSettings());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function refreshWebDavSettings() {
+    try {
+      setError(null);
+      setWebDavSettings(await getWebDavSettings());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -93,9 +123,59 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveWebDavSettings() {
+    await runWebDavAction(async () => {
+      const saved = await saveWebDavSettings(webDavSettings);
+      setWebDavSettings(saved);
+      return 'WebDAV 配置已保存。';
+    });
+  }
+
+  async function handleTestWebDav() {
+    await runWebDavAction(async () => {
+      const status = await testWebDavConnection(webDavSettings);
+      return status.message;
+    });
+  }
+
+  async function handleUploadWebDav() {
+    await runWebDavAction(async () => {
+      const result = await uploadDatabaseToWebDav(webDavSettings);
+      return `${result.message} 上传 ${formatBytes(result.bytes)}。`;
+    });
+  }
+
+  async function handleDownloadWebDav() {
+    await runWebDavAction(async () => {
+      const result = await downloadDatabaseFromWebDav(webDavSettings);
+      return result.backup_path
+        ? `${result.message} 备份路径：${result.backup_path}`
+        : result.message;
+    });
+    await initializeSettingsPage();
+  }
+
+  async function runWebDavAction(action: () => Promise<string>) {
+    try {
+      setWebDavBusy(true);
+      setError(null);
+      setWebDavMessage(null);
+      setWebDavMessage(await action());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setWebDavBusy(false);
+    }
+  }
+
   function updateSettings(patch: Partial<AppSettings>) {
     setSavedMessage(null);
     setSettings((current) => ({ ...current, ...patch }));
+  }
+
+  function updateWebDavSettings(patch: Partial<WebDavSettings>) {
+    setWebDavMessage(null);
+    setWebDavSettings((current) => ({ ...current, ...patch }));
   }
 
   async function handleDetectForegroundApp() {
@@ -162,7 +242,7 @@ export default function SettingsPage() {
         <div>
           <p className="eyebrow">设置 / 本地持久化</p>
           <h2>应用设置</h2>
-          <p>配置默认学习参数、更新渠道和 Windows 前台检测能力。设置会保存到本地 SQLite 数据库。</p>
+          <p>配置默认学习参数、WebDAV 数据同步、更新渠道和 Windows 前台检测能力。</p>
         </div>
         <button className="secondary-action" onClick={() => void initializeSettingsPage()} type="button">
           <RefreshCw size={17} />
@@ -242,6 +322,70 @@ export default function SettingsPage() {
         <section className="panel">
           <div className="panel-title">
             <div>
+              <p className="eyebrow">WebDAV</p>
+              <h3>数据同步</h3>
+            </div>
+            <Cloud size={20} />
+          </div>
+          <p className="panel-copy">填写 WebDAV 地址和账号后，可以把本机 SQLite 数据库上传到云端，或从云端恢复到本机。</p>
+
+          <div className="form-stack">
+            <input
+              className="text-input"
+              onChange={(event) => updateWebDavSettings({ url: event.target.value })}
+              placeholder="WebDAV 地址，例如 https://dav.example.com/remote.php/dav/files/me"
+              value={webDavSettings.url}
+            />
+            <div className="inline-fields">
+              <input
+                className="text-input"
+                onChange={(event) => updateWebDavSettings({ username: event.target.value })}
+                placeholder="用户名"
+                value={webDavSettings.username}
+              />
+              <input
+                className="text-input"
+                onChange={(event) => updateWebDavSettings({ password: event.target.value })}
+                placeholder="密码或应用密码"
+                type="password"
+                value={webDavSettings.password}
+              />
+            </div>
+            <input
+              className="text-input"
+              onChange={(event) => updateWebDavSettings({ remote_path: event.target.value })}
+              placeholder="远端文件路径"
+              value={webDavSettings.remote_path}
+            />
+          </div>
+
+          {webDavMessage && <p className="alert success">{webDavMessage}</p>}
+          <div className="row-actions">
+            <button className="secondary-action" disabled={webDavBusy} onClick={() => void handleSaveWebDavSettings()} type="button">
+              <Save size={17} />
+              保存
+            </button>
+            <button className="secondary-action" disabled={webDavBusy} onClick={() => void handleTestWebDav()} type="button">
+              <Cloud size={17} />
+              测试连接
+            </button>
+            <button className="primary-action" disabled={webDavBusy} onClick={() => void handleUploadWebDav()} type="button">
+              <UploadCloud size={17} />
+              上传本机数据
+            </button>
+            <button className="secondary-action" disabled={webDavBusy || focusRunning} onClick={() => void handleDownloadWebDav()} type="button">
+              <Download size={17} />
+              从云端恢复
+            </button>
+          </div>
+          {focusRunning && <p className="alert neutral">当前有进行中的专注，暂时不能从云端恢复数据库。</p>}
+        </section>
+      </div>
+
+      <div className="content-grid two">
+        <section className="panel">
+          <div className="panel-title">
+            <div>
               <p className="eyebrow">System</p>
               <h3>系统状态</h3>
             </div>
@@ -261,9 +405,7 @@ export default function SettingsPage() {
             </div>
           )}
         </section>
-      </div>
 
-      <div className="content-grid two">
         <section className="panel">
           <div className="panel-title">
             <div>
@@ -286,35 +428,45 @@ export default function SettingsPage() {
             </button>
           </div>
         </section>
-
-        <section className="panel">
-          <div className="panel-title">
-            <div>
-              <p className="eyebrow">Foreground</p>
-              <h3>前台应用检测</h3>
-            </div>
-            <MonitorDot size={20} />
-          </div>
-          <p className="panel-copy">用于验证 Windows API 能否识别当前正在使用的窗口和进程。</p>
-          <button className="secondary-action" disabled={loading} onClick={() => void handleDetectForegroundApp()} type="button">
-            <Activity size={17} />
-            {loading ? '检测中' : '检测当前应用'}
-          </button>
-
-          {foregroundApp && (
-            <div className="details-card stacked">
-              <Detail label="进程名" value={foregroundApp.process_name} />
-              <Detail label="进程 ID" value={String(foregroundApp.process_id)} />
-              <Detail label="窗口标题" value={foregroundApp.window_title || '无标题'} />
-              <Detail label="进程路径" value={foregroundApp.process_path || '无法读取'} />
-            </div>
-          )}
-        </section>
       </div>
 
-      {focusRunning && <p className="alert neutral">当前有进行中的专注。点击窗口关闭按钮会隐藏到托盘，可从托盘图标重新打开。</p>}
+      <section className="panel">
+        <div className="panel-title">
+          <div>
+            <p className="eyebrow">Foreground</p>
+            <h3>前台应用检测</h3>
+          </div>
+          <MonitorDot size={20} />
+        </div>
+        <p className="panel-copy">用于验证 Windows API 能否识别当前正在使用的窗口和进程。</p>
+        <button className="secondary-action" disabled={loading} onClick={() => void handleDetectForegroundApp()} type="button">
+          <Activity size={17} />
+          {loading ? '检测中' : '检测当前应用'}
+        </button>
+
+        {foregroundApp && (
+          <div className="details-card stacked">
+            <Detail label="进程名" value={foregroundApp.process_name} />
+            <Detail label="进程 ID" value={String(foregroundApp.process_id)} />
+            <Detail label="窗口标题" value={foregroundApp.window_title || '无标题'} />
+            <Detail label="进程路径" value={foregroundApp.process_path || '无法读取'} />
+          </div>
+        )}
+      </section>
     </section>
   );
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function SettingNumber({

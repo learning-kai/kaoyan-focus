@@ -10,6 +10,7 @@ mod commands {
     pub mod focus;
     pub mod monitor;
     pub mod settings;
+    pub mod sync;
     pub mod whitelist;
 }
 mod focus;
@@ -142,6 +143,11 @@ pub fn run() {
             commands::settings::get_app_settings,
             commands::settings::get_app_data_location,
             commands::settings::save_app_settings,
+            commands::sync::get_webdav_settings,
+            commands::sync::save_webdav_settings,
+            commands::sync::test_webdav_connection,
+            commands::sync::upload_database_to_webdav,
+            commands::sync::download_database_from_webdav,
             commands::whitelist::create_whitelist_app,
             commands::whitelist::create_whitelist_website,
             commands::whitelist::list_recent_blocked_apps,

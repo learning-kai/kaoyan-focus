@@ -488,6 +488,12 @@ svg {
   gap: 10px;
 }
 
+.inline-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .field-block {
   display: grid;
   gap: 7px;

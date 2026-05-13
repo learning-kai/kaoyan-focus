@@ -7,3 +7,29 @@ export type AppSettings = {
   default_focus_mode: FocusMode;
   emergency_cooldown_seconds: number;
 };
+
+export type WebDavSettings = {
+  url: string;
+  username: string;
+  password: string;
+  remote_path: string;
+};
+
+export type WebDavStatus = {
+  configured: boolean;
+  url: string;
+  username: string;
+  remote_path: string;
+  remote_exists: boolean;
+  remote_size: number | null;
+  last_modified: string | null;
+  message: string;
+};
+
+export type WebDavSyncResult = {
+  success: boolean;
+  message: string;
+  remote_url: string;
+  bytes: number;
+  backup_path: string | null;
+};
