@@ -39,6 +39,8 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               planned_seconds INTEGER NOT NULL,
               focus_seconds INTEGER NOT NULL,
               break_seconds INTEGER NOT NULL,
+              long_break_seconds INTEGER NOT NULL DEFAULT 900,
+              long_break_interval INTEGER NOT NULL DEFAULT 4,
               phase TEXT NOT NULL,
               cycle_index INTEGER NOT NULL DEFAULT 1,
               started_at TEXT NOT NULL,
@@ -92,7 +94,51 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
             );
             ",
         )
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+
+    add_column_if_missing(
+        connection,
+        "study_modes",
+        "long_break_seconds",
+        "INTEGER NOT NULL DEFAULT 900",
+    )?;
+    add_column_if_missing(
+        connection,
+        "study_modes",
+        "long_break_interval",
+        "INTEGER NOT NULL DEFAULT 4",
+    )?;
+
+    Ok(())
+}
+
+fn add_column_if_missing(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let mut statement = connection
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|error| error.to_string())?;
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    if columns.iter().any(|existing| existing == column) {
+        return Ok(());
+    }
+
+    connection
+        .execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+            [],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
 }
 
 fn seed_default_subjects(connection: &Connection) -> Result<(), String> {

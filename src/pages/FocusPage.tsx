@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Coffee,
   Gauge,
+  Leaf,
   Play,
   RefreshCw,
   ShieldCheck,
@@ -28,6 +29,8 @@ import type { FocusAppCheck } from '../types/monitor';
 const studyPresetMinutes = [60, 120, 180, 240];
 const focusPresetMinutes = [25, 45, 60, 90];
 const breakPresetMinutes = [5, 10, 15, 20];
+const longBreakPresetMinutes = [10, 15, 20, 30];
+const longBreakIntervalPresets = [2, 3, 4, 6];
 
 const idleStudyState: StudyModeState = {
   id: null,
@@ -38,6 +41,10 @@ const idleStudyState: StudyModeState = {
   planned_seconds: 0,
   focus_seconds: 0,
   break_seconds: 0,
+  long_break_seconds: 0,
+  long_break_interval: 4,
+  effective_break_seconds: 0,
+  break_kind: 'short',
   cycle_index: 0,
   started_at: null,
   phase_started_at: null,
@@ -53,10 +60,19 @@ const idleStudyState: StudyModeState = {
 const phaseLabel: Record<StudyModePhase, string> = {
   idle: '待开始',
   focus: '专注中',
-  awaiting_break: '等待确认休息',
+  awaiting_break: '等待休息确认',
   break: '休息中',
   finished: '已完成',
   emergency_exited: '已退出（历史）',
+};
+
+const phaseSubLabel: Record<StudyModePhase, string> = {
+  idle: '准备进入学习模式',
+  focus: '保持学习，后台强制执行白名单',
+  awaiting_break: '本轮已到点，确认后开始休息',
+  break: '休息结束后自动进入下一轮',
+  finished: '本次学习已写入记录',
+  emergency_exited: '历史退出状态',
 };
 
 let reminderBaselineKey: string | null = null;
@@ -110,6 +126,8 @@ export default function FocusPage() {
   const [studyMinutes, setStudyMinutes] = useState(120);
   const [focusMinutes, setFocusMinutes] = useState(25);
   const [breakMinutes, setBreakMinutes] = useState(5);
+  const [longBreakMinutes, setLongBreakMinutes] = useState(15);
+  const [longBreakInterval, setLongBreakInterval] = useState(4);
   const [mode, setMode] = useState<FocusMode>('normal');
   const [studyState, setStudyState] = useState<StudyModeState>(idleStudyState);
   const [history, setHistory] = useState<FocusSession[]>([]);
@@ -130,8 +148,9 @@ export default function FocusPage() {
   const timerValue = studyState.phase === 'idle'
     ? formatSeconds(focusMinutes * 60)
     : studyState.phase === 'awaiting_break'
-      ? '00:00'
+      ? formatSeconds(studyState.phase_elapsed_seconds)
       : formatSeconds(studyState.phase_remaining_seconds);
+  const activeClockLabel = studyState.phase === 'awaiting_break' ? '已继续学习' : '阶段倒计时';
   const totalProgress = studyState.planned_seconds > 0
     ? Math.min((studyState.study_elapsed_seconds / studyState.planned_seconds) * 100, 100)
     : 0;
@@ -204,11 +223,15 @@ export default function FocusPage() {
         setStudyMinutes(settings.default_study_minutes);
         setFocusMinutes(settings.default_focus_minutes);
         setBreakMinutes(settings.break_minutes);
+        setLongBreakMinutes(settings.long_break_minutes);
+        setLongBreakInterval(settings.long_break_interval);
         setMode(settings.default_focus_mode);
       } else {
         setStudyMinutes(Math.max(1, Math.round(state.planned_seconds / 60)));
         setFocusMinutes(Math.max(1, Math.round(state.focus_seconds / 60)));
         setBreakMinutes(Math.max(1, Math.round(state.break_seconds / 60)));
+        setLongBreakMinutes(Math.max(1, Math.round(state.long_break_seconds / 60)));
+        setLongBreakInterval(Math.max(1, state.long_break_interval));
         setMode(state.mode);
       }
 
@@ -263,15 +286,17 @@ export default function FocusPage() {
         studyMinutes * 60,
         focusMinutes * 60,
         breakMinutes * 60,
+        longBreakMinutes * 60,
+        longBreakInterval,
         mode,
         selectedSubjectId,
       );
       setStudyState(nextState);
-      setNotice('学习模式已开始。关闭窗口会进入托盘，后台仍会计时并执行白名单。');
+      setNotice('学习模式已开始。窗口关闭后会进入托盘，后台继续计时并执行白名单。');
       reminderBaselineKey = reminderKey(nextState);
       void notifyStudyReminder({
         title: '学习模式已开始',
-        body: `第 ${nextState.cycle_index} 轮番茄钟开始，保持专注。`,
+        body: `第 ${nextState.cycle_index} 轮番茄钟开始，专注 ${formatDuration(nextState.focus_seconds)}。`,
       });
       await refreshDashboard();
     } catch (reason) {
@@ -286,11 +311,11 @@ export default function FocusPage() {
       setLatestAppCheck(null);
       const nextState = await confirmStudyBreak();
       setStudyState(nextState);
-      setNotice('休息已开始。休息结束后会自动进入下一轮番茄钟。');
+      setNotice(`${breakKindLabel(nextState.break_kind)}已开始。休息结束后会自动进入下一轮番茄钟。`);
       reminderBaselineKey = reminderKey(nextState);
       void notifyStudyReminder({
-        title: '休息开始',
-        body: `休息 ${formatDuration(nextState.break_seconds)}，到点后自动进入下一轮番茄钟。`,
+        title: `${breakKindLabel(nextState.break_kind)}开始`,
+        body: `休息 ${formatDuration(nextState.effective_break_seconds)}，到点后自动进入下一轮番茄钟。`,
       });
       await refreshDashboard();
     } catch (reason) {
@@ -300,35 +325,40 @@ export default function FocusPage() {
 
   if (active) {
     return (
-      <section className="page-shell focus-minimal-shell">
-        <header className="page-header minimal-header">
-          <div>
-            <p className="eyebrow">学习模式运行中</p>
-            <h2>{phaseLabel[studyState.phase]}</h2>
-            <p>设置与白名单已锁定。窗口可隐藏到托盘，后台继续计时并执行学习约束。</p>
-          </div>
-          <div className={`phase-badge phase-${studyState.phase}`}>
-            <span>{selectedSubjectName ?? '未指定科目'}</span>
-            <strong>第 {studyState.cycle_index} 轮</strong>
-          </div>
-        </header>
-
+      <section className={`page-shell pomodoro-shell phase-${studyState.phase}`}>
         {error && <p className="alert error">{error}</p>}
         {notice && <p className="alert success">{notice}</p>}
         {monitorError && <p className="alert error">前台检测失败：{monitorError}</p>}
 
-        <section className={`minimal-timer phase-${studyState.phase}`}>
-          <div className="minimal-timer-main">
-            <span className="minimal-phase">{studyState.phase === 'awaiting_break' ? '等待确认休息' : '当前阶段'}</span>
-            <strong>{timerValue}</strong>
-            <p>{buildPhaseMessage(studyState)}</p>
+        <div className="pomodoro-focus">
+          <div className="pomodoro-topline">
+            <span>{phaseLabel[studyState.phase]}</span>
+            <span>{selectedSubjectName ?? '未指定科目'}</span>
           </div>
 
-          <div className="minimal-actions">
+          <div className="pomodoro-clock">
+            <p>{activeClockLabel}</p>
+            <strong>{timerValue}</strong>
+            <span>{buildPhaseMessage(studyState)}</span>
+          </div>
+
+          <div className="pomodoro-progress">
+            <ProgressBar label="学习总进度" value={totalProgress} />
+            <ProgressBar label="当前阶段" value={phaseProgress} accent />
+          </div>
+
+          <div className="pomodoro-core-grid">
+            <CoreFact label="轮次" value={`第 ${studyState.cycle_index} 轮`} />
+            <CoreFact label="剩余学习" value={formatSeconds(studyState.study_remaining_seconds)} />
+            <CoreFact label="休息规则" value={nextBreakLabel(studyState)} />
+            <CoreFact label="白名单" value={studyState.focus_enforcement_active ? '强制执行中' : '休息中暂停'} />
+          </div>
+
+          <div className="pomodoro-actions">
             {studyState.phase === 'awaiting_break' ? (
               <button className="primary-action" onClick={handleConfirmBreak} type="button">
                 <Coffee size={18} />
-                确认开始休息
+                确认开始{breakKindLabel(studyState.break_kind)}
               </button>
             ) : (
               <button className="secondary-action" onClick={refreshStudyState} type="button">
@@ -337,66 +367,27 @@ export default function FocusPage() {
               </button>
             )}
           </div>
-        </section>
 
-        <div className="minimal-progress-panel">
-          <ProgressBar label="学习总进度" value={totalProgress} />
-          <ProgressBar label="当前阶段进度" value={phaseProgress} accent />
-        </div>
-
-        <div className="minimal-metric-grid">
-          <Metric icon={Timer} label="总剩余" value={formatSeconds(studyState.study_remaining_seconds)} />
-          <Metric icon={Activity} label="已累计" value={formatSeconds(studyState.study_elapsed_seconds)} />
-          <Metric icon={Coffee} label="休息时长" value={formatDuration(studyState.break_seconds)} />
-          <Metric
-            icon={ShieldCheck}
-            label="白名单执行"
-            value={studyState.focus_enforcement_active ? '运行中' : '休息暂停'}
-          />
-        </div>
-
-        <section className="panel minimal-monitor-panel">
-          <div className="panel-title">
-            <div>
-              <p className="eyebrow">Monitor</p>
-              <h3>前台监控</h3>
-            </div>
-            <Gauge size={20} />
+          <div className="pomodoro-footer">
+            <span>{phaseSubLabel[studyState.phase]}</span>
+            <span>{latestAppCheck ? foregroundSummary(latestAppCheck) : '前台监控等待下一次检查'}</span>
           </div>
-          {latestAppCheck ? (
-            <div className={latestAppCheck.match_result.allowed ? 'monitor-card allowed' : 'monitor-card blocked'}>
-              <div>
-                <span>{latestAppCheck.match_result.allowed ? '已放行' : '已拦截'}</span>
-                <strong>{latestAppCheck.foreground_app.process_name}</strong>
-                <p>{latestAppCheck.foreground_app.window_title || '无窗口标题'}</p>
-                {latestAppCheck.match_result.detected_domain && <p>识别网站：{latestAppCheck.match_result.detected_domain}</p>}
-              </div>
-              <div className="monitor-count">
-                <span>累计拦截</span>
-                <strong>{latestAppCheck.interruption_count}</strong>
-              </div>
-            </div>
-          ) : (
-            <div className="empty-state compact">
-              学习和等待休息阶段会持续检查前台窗口；休息阶段暂停强制关闭。
-            </div>
-          )}
-        </section>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="page-shell focus-workbench">
-      <header className="page-header">
+    <section className="page-shell focus-ritual-shell">
+      <header className="ritual-header">
         <div>
-          <p className="eyebrow">学习模式 / 后台番茄钟</p>
-          <h2>专注控制台</h2>
-          <p>启动后窗口可隐藏到托盘，后台继续计时、切换阶段并执行白名单。</p>
+          <p className="eyebrow">沉浸番茄钟</p>
+          <h2>准备进入学习模式</h2>
+          <p>设置本次学习时长、番茄节奏和休息规则。开始后页面会切换成极简番茄钟，设置与白名单会自动锁定。</p>
         </div>
         <div className={`phase-badge phase-${studyState.phase}`}>
           <span>{phaseLabel[studyState.phase]}</span>
-          <strong>{active ? `第 ${studyState.cycle_index} 轮` : '后台待命'}</strong>
+          <strong>{studyState.phase === 'finished' ? '已完成' : '待命'}</strong>
         </div>
       </header>
 
@@ -404,131 +395,81 @@ export default function FocusPage() {
       {notice && <p className="alert success">{notice}</p>}
       {monitorError && <p className="alert error">前台检测失败：{monitorError}</p>}
 
-      <div className="focus-grid">
-        <section className="timer-console">
-          <div className="timer-topline">
-            <span>{studyState.phase === 'awaiting_break' ? '等待本人确认' : '当前阶段倒计时'}</span>
-            <span>{active ? `开始于 ${formatDateTime(studyState.started_at)}` : '准备开始'}</span>
-          </div>
-          <div className="timer-display">{timerValue}</div>
-          <p className="timer-caption">{buildPhaseMessage(studyState)}</p>
-
-          <div className="progress-stack">
-            <ProgressBar label="学习总进度" value={totalProgress} />
-            <ProgressBar label="当前阶段进度" value={phaseProgress} accent />
+      <div className="ritual-grid">
+        <section className="ritual-stage">
+          <div className="ritual-orbit">
+            <span>下一轮专注</span>
+            <strong>{formatSeconds(focusMinutes * 60)}</strong>
+            <p>{selectedSubjectName ?? '未指定科目'} · {mode === 'strict' ? '强制模式' : '普通模式'}</p>
           </div>
 
-          <div className="metric-strip">
-            <Metric icon={Timer} label="总剩余" value={formatSeconds(active ? studyState.study_remaining_seconds : studyMinutes * 60)} />
-            <Metric icon={Activity} label="阶段" value={phaseLabel[studyState.phase]} />
-            <Metric
-              icon={ShieldCheck}
-              label="强制执行"
-              value={studyState.focus_enforcement_active ? '运行中' : active ? '休息暂停' : '未启动'}
-            />
+          <div className="ritual-summary">
+            <CoreFact label="学习模式" value={formatDuration(studyMinutes * 60)} />
+            <CoreFact label="番茄时长" value={formatDuration(focusMinutes * 60)} />
+            <CoreFact label="短休息" value={formatDuration(breakMinutes * 60)} />
+            <CoreFact label="长休息" value={`${formatDuration(longBreakMinutes * 60)} / ${longBreakInterval} 轮`} />
           </div>
 
-          <div className="action-group">
-            {!active ? (
-              <button className="primary-action" onClick={handleStart} type="button">
-                <Play size={18} />
-                开始学习模式
-              </button>
-            ) : studyState.phase === 'awaiting_break' ? (
-              <button className="primary-action" onClick={handleConfirmBreak} type="button">
-                <Coffee size={18} />
-                确认开始休息
-              </button>
-            ) : (
-              <button className="secondary-action" onClick={refreshStudyState} type="button">
-                <RefreshCw size={18} />
-                刷新状态
-              </button>
-            )}
-          </div>
+          <button className="start-ritual-button" disabled={controlsDisabled} onClick={handleStart} type="button">
+            <Play size={22} />
+            开始学习
+          </button>
         </section>
 
-        <aside className="side-stack">
-          <section className="panel">
-            <div className="panel-title">
-              <div>
-                <p className="eyebrow">Plan</p>
-                <h3>学习计划</h3>
-              </div>
-              <BookOpen size={20} />
+        <aside className="ritual-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Plan</p>
+              <h3>本次节奏</h3>
             </div>
+            <BookOpen size={20} />
+          </div>
 
-            <div className="field-grid">
-              <NumberField disabled={controlsDisabled} label="学习模式" onChange={setStudyMinutes} value={studyMinutes} />
-              <NumberField disabled={controlsDisabled} label="番茄钟" onChange={setFocusMinutes} value={focusMinutes} />
-              <NumberField disabled={controlsDisabled} label="休息" onChange={setBreakMinutes} value={breakMinutes} />
-            </div>
+          <div className="ritual-fields">
+            <NumberField disabled={controlsDisabled} label="学习模式" onChange={setStudyMinutes} value={studyMinutes} />
+            <NumberField disabled={controlsDisabled} label="番茄钟" onChange={setFocusMinutes} value={focusMinutes} />
+            <NumberField disabled={controlsDisabled} label="短休息" onChange={setBreakMinutes} value={breakMinutes} />
+            <NumberField disabled={controlsDisabled} label="长休息" onChange={setLongBreakMinutes} value={longBreakMinutes} />
+          </div>
 
-            <PresetStrip disabled={controlsDisabled} items={studyPresetMinutes} prefix="" selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} />
-            <PresetStrip disabled={controlsDisabled} items={focusPresetMinutes} prefix="专注 " selected={focusMinutes} suffix="m" onSelect={setFocusMinutes} />
-            <PresetStrip disabled={controlsDisabled} items={breakPresetMinutes} prefix="休息 " selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} />
+          <PresetStrip disabled={controlsDisabled} items={studyPresetMinutes} prefix="学习 " selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} />
+          <PresetStrip disabled={controlsDisabled} items={focusPresetMinutes} prefix="番茄 " selected={focusMinutes} suffix="m" onSelect={setFocusMinutes} />
+          <PresetStrip disabled={controlsDisabled} items={breakPresetMinutes} prefix="短休 " selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} />
+          <PresetStrip disabled={controlsDisabled} items={longBreakPresetMinutes} prefix="长休 " selected={longBreakMinutes} suffix="m" onSelect={setLongBreakMinutes} />
+          <PresetStrip disabled={controlsDisabled} items={longBreakIntervalPresets} prefix="每 " selected={longBreakInterval} suffix=" 轮长休" onSelect={setLongBreakInterval} />
 
-            <label className="field-block">
-              <span>科目</span>
-              <select
-                className="select-input"
-                disabled={controlsDisabled || subjects.length === 0}
-                onChange={(event) => setSelectedSubjectId(event.target.value ? Number(event.target.value) : null)}
-                value={selectedSubjectId ?? ''}
-              >
-                <option value="">不指定</option>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>{subject.name}</option>
-                ))}
-              </select>
-            </label>
+          <label className="field-block">
+            <span>科目</span>
+            <select
+              className="select-input"
+              disabled={controlsDisabled || subjects.length === 0}
+              onChange={(event) => setSelectedSubjectId(event.target.value ? Number(event.target.value) : null)}
+              value={selectedSubjectId ?? ''}
+            >
+              <option value="">不指定</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>{subject.name}</option>
+              ))}
+            </select>
+          </label>
 
-            <div className="segmented-control">
-              <button className={mode === 'normal' ? 'active' : ''} disabled={controlsDisabled} onClick={() => setMode('normal')} type="button">
-                普通模式
-              </button>
-              <button className={mode === 'strict' ? 'active' : ''} disabled={controlsDisabled} onClick={() => setMode('strict')} type="button">
-                强制模式
-              </button>
-            </div>
-          </section>
-
-          <section className="panel monitor-panel">
-            <div className="panel-title">
-              <div>
-                <p className="eyebrow">Monitor</p>
-                <h3>前台监控</h3>
-              </div>
-              <Gauge size={20} />
-            </div>
-            {latestAppCheck ? (
-              <div className={latestAppCheck.match_result.allowed ? 'monitor-card allowed' : 'monitor-card blocked'}>
-                <div>
-                  <span>{latestAppCheck.match_result.allowed ? '已放行' : '已拦截'}</span>
-                  <strong>{latestAppCheck.foreground_app.process_name}</strong>
-                  <p>{latestAppCheck.foreground_app.window_title || '无窗口标题'}</p>
-                  {latestAppCheck.match_result.detected_domain && <p>识别网站：{latestAppCheck.match_result.detected_domain}</p>}
-                </div>
-                <div className="monitor-count">
-                  <span>累计拦截</span>
-                  <strong>{latestAppCheck.interruption_count}</strong>
-                </div>
-              </div>
-            ) : (
-              <div className="empty-state compact">
-                学习阶段会自动检查前台窗口。关闭主界面到托盘后，后端仍会继续执行。
-              </div>
-            )}
-          </section>
+          <div className="segmented-control">
+            <button className={mode === 'normal' ? 'active' : ''} disabled={controlsDisabled} onClick={() => setMode('normal')} type="button">
+              普通模式
+            </button>
+            <button className={mode === 'strict' ? 'active' : ''} disabled={controlsDisabled} onClick={() => setMode('strict')} type="button">
+              强制模式
+            </button>
+          </div>
         </aside>
       </div>
 
-      <div className="overview-grid">
-        <section className="panel">
+      <div className="ritual-overview">
+        <section className="soft-panel">
           <div className="panel-title">
             <div>
               <p className="eyebrow">Today</p>
-              <h3>今日统计</h3>
+              <h3>今日状态</h3>
             </div>
             <CheckCircle2 size={20} />
           </div>
@@ -540,7 +481,24 @@ export default function FocusPage() {
           </div>
         </section>
 
-        <section className="panel">
+        <section className="soft-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Monitor</p>
+              <h3>白名单状态</h3>
+            </div>
+            <Gauge size={20} />
+          </div>
+          <div className="ritual-monitor">
+            <Leaf size={18} />
+            <div>
+              <strong>{active ? '运行中' : '准备就绪'}</strong>
+              <p>{latestAppCheck ? foregroundSummary(latestAppCheck) : '开始学习后会持续检查前台窗口，并关闭非白名单软件或网站。'}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="soft-panel history-soft-panel">
           <div className="panel-title">
             <div>
               <p className="eyebrow">History</p>
@@ -552,7 +510,7 @@ export default function FocusPage() {
             <div className="empty-state compact">还没有专注记录。</div>
           ) : (
             <div className="compact-history">
-              {history.slice(0, 5).map((session) => (
+              {history.slice(0, 4).map((session) => (
                 <article className="list-row compact-row" key={session.id}>
                   <div>
                     <strong>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</strong>
@@ -578,34 +536,43 @@ function currentPhaseTotalSeconds(studyState: StudyModeState) {
   }
 
   if (studyState.phase === 'break') {
-    return studyState.break_seconds;
+    return studyState.effective_break_seconds;
   }
 
   return 0;
 }
 
+function breakKindLabel(kind: StudyModeState['break_kind']) {
+  return kind === 'long' ? '长休息' : '短休息';
+}
+
+function nextBreakLabel(studyState: StudyModeState) {
+  const seconds = studyState.effective_break_seconds || studyState.break_seconds;
+  return `${breakKindLabel(studyState.break_kind)} ${formatDuration(seconds)}`;
+}
+
 function buildPhaseMessage(studyState: StudyModeState) {
   if (studyState.phase === 'focus') {
-    return `第 ${studyState.cycle_index} 轮番茄钟进行中。窗口关到托盘后，后台仍会计时并关闭非白名单窗口。`;
+    return `第 ${studyState.cycle_index} 轮番茄钟进行中`;
   }
 
   if (studyState.phase === 'awaiting_break') {
-    return '本轮番茄钟已到点。确认休息前，学习时间继续累计，白名单强制执行继续生效。';
+    return `本轮已到点，确认后进入${nextBreakLabel(studyState)}`;
   }
 
   if (studyState.phase === 'break') {
-    return '正在休息。休息时间结束后，后台会自动进入下一轮番茄钟。';
+    return `${breakKindLabel(studyState.break_kind)}中`;
   }
 
   if (studyState.phase === 'finished') {
-    return '学习模式已完成，记录已写入本地 SQLite 数据库。';
+    return '学习模式已完成';
   }
 
   if (studyState.phase === 'emergency_exited') {
-    return '检测到旧版本留下的退出状态。当前版本不再提供提前退出入口。';
+    return '历史退出状态';
   }
 
-  return '设置学习时长、番茄钟和休息时间后开始。';
+  return '设置节奏后开始';
 }
 
 function reminderKey(studyState: StudyModeState) {
@@ -614,6 +581,7 @@ function reminderKey(studyState: StudyModeState) {
     studyState.status,
     studyState.phase,
     studyState.cycle_index,
+    studyState.break_kind,
   ].join(':');
 }
 
@@ -628,14 +596,14 @@ function buildReminder(studyState: StudyModeState) {
   if (studyState.status === 'active' && studyState.phase === 'awaiting_break') {
     return {
       title: '番茄钟结束',
-      body: '本轮已经到点。请确认开始休息；未确认前学习时间会继续累计。',
+      body: `本轮已经到点。确认后进入${nextBreakLabel(studyState)}；未确认前学习时间继续累计。`,
     };
   }
 
   if (studyState.status === 'active' && studyState.phase === 'break') {
     return {
-      title: '休息开始',
-      body: `休息 ${formatDuration(studyState.break_seconds)}，结束后自动进入下一轮番茄钟。`,
+      title: `${breakKindLabel(studyState.break_kind)}开始`,
+      body: `${formatDuration(studyState.effective_break_seconds)} 后自动进入下一轮番茄钟。`,
     };
   }
 
@@ -646,14 +614,13 @@ function buildReminder(studyState: StudyModeState) {
     };
   }
 
-  if (studyState.status === 'emergency_exited' || studyState.phase === 'emergency_exited') {
-    return {
-      title: '学习模式已退出',
-      body: '这是旧版本兼容状态。当前版本学习模式只能自然完成。',
-    };
-  }
-
   return null;
+}
+
+function foregroundSummary(check: FocusAppCheck) {
+  const action = check.match_result.allowed ? '已放行' : '已拦截';
+  const title = check.foreground_app.window_title || '无窗口标题';
+  return `${action} · ${check.foreground_app.process_name} · ${title}`;
 }
 
 function ProgressBar({ accent = false, label, value }: { accent?: boolean; label: string; value: number }) {
@@ -674,6 +641,15 @@ function Metric({ icon: Icon, label, value }: { icon: typeof Timer; label: strin
   return (
     <article className="metric-card">
       <Icon size={18} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function CoreFact({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="core-fact">
       <span>{label}</span>
       <strong>{value}</strong>
     </article>
@@ -723,15 +699,15 @@ function PresetStrip({
 }) {
   return (
     <div className="preset-strip">
-      {items.map((minutes) => (
+      {items.map((value) => (
         <button
-          className={selected === minutes ? 'chip active' : 'chip'}
+          className={selected === value ? 'chip active' : 'chip'}
           disabled={disabled}
-          key={`${prefix}-${minutes}`}
-          onClick={() => onSelect(minutes)}
+          key={`${prefix}-${value}`}
+          onClick={() => onSelect(value)}
           type="button"
         >
-          {prefix}{minutes}{suffix}
+          {prefix}{value}{suffix}
         </button>
       ))}
     </div>

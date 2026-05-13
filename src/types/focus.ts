@@ -60,6 +60,10 @@ export type StudyModeState = {
   planned_seconds: number;
   focus_seconds: number;
   break_seconds: number;
+  long_break_seconds: number;
+  long_break_interval: number;
+  effective_break_seconds: number;
+  break_kind: 'short' | 'long';
   cycle_index: number;
   started_at: string | null;
   phase_started_at: string | null;

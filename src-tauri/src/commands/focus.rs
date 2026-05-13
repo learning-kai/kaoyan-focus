@@ -41,6 +41,10 @@ pub struct StudyModeState {
     pub planned_seconds: i64,
     pub focus_seconds: i64,
     pub break_seconds: i64,
+    pub long_break_seconds: i64,
+    pub long_break_interval: i64,
+    pub effective_break_seconds: i64,
+    pub break_kind: String,
     pub cycle_index: i64,
     pub started_at: Option<String>,
     pub phase_started_at: Option<String>,
@@ -61,6 +65,8 @@ struct StudyModeRecord {
     planned_seconds: i64,
     focus_seconds: i64,
     break_seconds: i64,
+    long_break_seconds: i64,
+    long_break_interval: i64,
     phase: String,
     cycle_index: i64,
     started_at: String,
@@ -96,6 +102,8 @@ pub fn start_study_mode(
     planned_seconds: i64,
     focus_seconds: i64,
     break_seconds: i64,
+    long_break_seconds: i64,
+    long_break_interval: i64,
     mode: String,
     subject_id: Option<i64>,
 ) -> Result<StudyModeState, String> {
@@ -108,7 +116,15 @@ pub fn start_study_mode(
     }
 
     if break_seconds <= 0 {
-        return Err("休息时长必须大于 0 秒".to_string());
+        return Err("短休息时长必须大于 0 秒".to_string());
+    }
+
+    if long_break_seconds <= 0 {
+        return Err("长休息时长必须大于 0 秒".to_string());
+    }
+
+    if long_break_interval <= 0 {
+        return Err("长休息间隔必须大于 0".to_string());
     }
 
     if mode != "normal" && mode != "strict" {
@@ -131,6 +147,8 @@ pub fn start_study_mode(
               planned_seconds,
               focus_seconds,
               break_seconds,
+              long_break_seconds,
+              long_break_interval,
               phase,
               cycle_index,
               started_at,
@@ -139,7 +157,7 @@ pub fn start_study_mode(
               status,
               created_at,
               updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, 'focus', 1, ?6, ?6, ?7, 'active', ?6, ?6)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'focus', 1, ?8, ?8, ?9, 'active', ?8, ?8)
             ",
             params![
                 mode,
@@ -147,6 +165,8 @@ pub fn start_study_mode(
                 planned_seconds,
                 focus_seconds,
                 break_seconds,
+                long_break_seconds,
+                long_break_interval,
                 now,
                 session.id
             ],
@@ -723,7 +743,7 @@ fn advance_study_mode(app: &AppHandle, state: &AppState) -> Result<StudyModeStat
         "awaiting_break" => {}
         "break" => {
             let phase_elapsed_seconds = seconds_since(&record.phase_started_at, now)?;
-            if phase_elapsed_seconds >= record.break_seconds {
+            if phase_elapsed_seconds >= effective_break_seconds(&record) {
                 let session = insert_focus_session(
                     &connection,
                     record.focus_seconds,
@@ -826,6 +846,10 @@ fn idle_study_mode_state() -> StudyModeState {
         planned_seconds: 0,
         focus_seconds: 0,
         break_seconds: 0,
+        long_break_seconds: 0,
+        long_break_interval: 4,
+        effective_break_seconds: 0,
+        break_kind: "short".to_string(),
         cycle_index: 0,
         started_at: None,
         phase_started_at: None,
@@ -860,10 +884,12 @@ fn study_mode_record_to_state(
     } else {
         0
     };
+    let break_kind = break_kind_for_cycle(record.cycle_index, record.long_break_interval);
+    let effective_break_seconds = effective_break_seconds(record);
     let phase_remaining_seconds = match record.phase.as_str() {
         "focus" => (record.focus_seconds - phase_elapsed_seconds).max(0),
         "awaiting_break" => 0,
-        "break" => (record.break_seconds - phase_elapsed_seconds).max(0),
+        "break" => (effective_break_seconds - phase_elapsed_seconds).max(0),
         _ => 0,
     };
     let focus_enforcement_active = record.status == "active"
@@ -879,6 +905,10 @@ fn study_mode_record_to_state(
         planned_seconds: record.planned_seconds,
         focus_seconds: record.focus_seconds,
         break_seconds: record.break_seconds,
+        long_break_seconds: record.long_break_seconds,
+        long_break_interval: record.long_break_interval,
+        effective_break_seconds,
+        break_kind: break_kind.to_string(),
         cycle_index: record.cycle_index,
         started_at: Some(record.started_at.clone()),
         phase_started_at: Some(record.phase_started_at.clone()),
@@ -897,6 +927,7 @@ fn get_active_study_mode_record(connection: &Connection) -> Result<Option<StudyM
         .query_row(
             "
             SELECT id, mode, subject_id, planned_seconds, focus_seconds, break_seconds,
+                   long_break_seconds, long_break_interval,
                    phase, cycle_index, started_at, phase_started_at, ended_at,
                    current_session_id, status
             FROM study_modes
@@ -916,6 +947,7 @@ fn get_latest_study_mode_record(connection: &Connection) -> Result<Option<StudyM
         .query_row(
             "
             SELECT id, mode, subject_id, planned_seconds, focus_seconds, break_seconds,
+                   long_break_seconds, long_break_interval,
                    phase, cycle_index, started_at, phase_started_at, ended_at,
                    current_session_id, status
             FROM study_modes
@@ -934,6 +966,7 @@ fn get_study_mode_record_by_id(connection: &Connection, id: i64) -> Result<Study
         .query_row(
             "
             SELECT id, mode, subject_id, planned_seconds, focus_seconds, break_seconds,
+                   long_break_seconds, long_break_interval,
                    phase, cycle_index, started_at, phase_started_at, ended_at,
                    current_session_id, status
             FROM study_modes
@@ -1081,6 +1114,22 @@ fn get_focus_session_by_id(connection: &Connection, session_id: i64) -> Result<F
         .ok_or_else(|| "专注记录不存在".to_string())
 }
 
+fn break_kind_for_cycle(cycle_index: i64, long_break_interval: i64) -> &'static str {
+    if long_break_interval > 0 && cycle_index > 0 && cycle_index % long_break_interval == 0 {
+        "long"
+    } else {
+        "short"
+    }
+}
+
+fn effective_break_seconds(record: &StudyModeRecord) -> i64 {
+    if break_kind_for_cycle(record.cycle_index, record.long_break_interval) == "long" {
+        record.long_break_seconds
+    } else {
+        record.break_seconds
+    }
+}
+
 fn row_to_study_mode_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<StudyModeRecord> {
     Ok(StudyModeRecord {
         id: row.get(0)?,
@@ -1089,13 +1138,15 @@ fn row_to_study_mode_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<StudyMo
         planned_seconds: row.get(3)?,
         focus_seconds: row.get(4)?,
         break_seconds: row.get(5)?,
-        phase: row.get(6)?,
-        cycle_index: row.get(7)?,
-        started_at: row.get(8)?,
-        phase_started_at: row.get(9)?,
-        ended_at: row.get(10)?,
-        current_session_id: row.get(11)?,
-        status: row.get(12)?,
+        long_break_seconds: row.get(6)?,
+        long_break_interval: row.get(7)?,
+        phase: row.get(8)?,
+        cycle_index: row.get(9)?,
+        started_at: row.get(10)?,
+        phase_started_at: row.get(11)?,
+        ended_at: row.get(12)?,
+        current_session_id: row.get(13)?,
+        status: row.get(14)?,
     })
 }
 

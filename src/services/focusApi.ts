@@ -17,6 +17,8 @@ export function startStudyMode(
   plannedSeconds: number,
   focusSeconds: number,
   breakSeconds: number,
+  longBreakSeconds: number,
+  longBreakInterval: number,
   mode: FocusMode,
   subjectId?: number | null,
 ): Promise<StudyModeState> {
@@ -24,6 +26,8 @@ export function startStudyMode(
     plannedSeconds,
     focusSeconds,
     breakSeconds,
+    longBreakSeconds,
+    longBreakInterval,
     mode,
     subjectId,
   });

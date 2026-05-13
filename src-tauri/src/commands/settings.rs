@@ -8,6 +8,8 @@ const DEFAULT_FOCUS_MINUTES_KEY: &str = "default_focus_minutes";
 const DEFAULT_STUDY_MINUTES_KEY: &str = "default_study_minutes";
 const DEFAULT_FOCUS_MODE_KEY: &str = "default_focus_mode";
 const BREAK_MINUTES_KEY: &str = "break_minutes";
+const LONG_BREAK_MINUTES_KEY: &str = "long_break_minutes";
+const LONG_BREAK_INTERVAL_KEY: &str = "long_break_interval";
 const EMERGENCY_COOLDOWN_SECONDS_KEY: &str = "emergency_cooldown_seconds";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,6 +17,8 @@ pub struct AppSettings {
     pub default_study_minutes: i64,
     pub default_focus_minutes: i64,
     pub break_minutes: i64,
+    pub long_break_minutes: i64,
+    pub long_break_interval: i64,
     pub default_focus_mode: String,
     pub emergency_cooldown_seconds: i64,
 }
@@ -31,6 +35,8 @@ impl Default for AppSettings {
             default_study_minutes: 120,
             default_focus_minutes: 25,
             break_minutes: 5,
+            long_break_minutes: 15,
+            long_break_interval: 4,
             default_focus_mode: "normal".to_string(),
             emergency_cooldown_seconds: 60,
         }
@@ -52,6 +58,18 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
         default_focus_minutes: get_i64_setting(&connection, DEFAULT_FOCUS_MINUTES_KEY, defaults.default_focus_minutes)?
             .clamp(1, 120),
         break_minutes: get_i64_setting(&connection, BREAK_MINUTES_KEY, defaults.break_minutes)?.clamp(1, 60),
+        long_break_minutes: get_i64_setting(
+            &connection,
+            LONG_BREAK_MINUTES_KEY,
+            defaults.long_break_minutes,
+        )?
+        .clamp(1, 120),
+        long_break_interval: get_i64_setting(
+            &connection,
+            LONG_BREAK_INTERVAL_KEY,
+            defaults.long_break_interval,
+        )?
+        .clamp(1, 12),
         default_focus_mode: normalize_mode(&get_string_setting(
             &connection,
             DEFAULT_FOCUS_MODE_KEY,
@@ -73,6 +91,8 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         default_study_minutes: settings.default_study_minutes.clamp(1, 720),
         default_focus_minutes: settings.default_focus_minutes.clamp(1, 120),
         break_minutes: settings.break_minutes.clamp(1, 60),
+        long_break_minutes: settings.long_break_minutes.clamp(1, 120),
+        long_break_interval: settings.long_break_interval.clamp(1, 12),
         default_focus_mode: normalize_mode(&settings.default_focus_mode),
         emergency_cooldown_seconds: settings.emergency_cooldown_seconds.clamp(0, 300),
     };
@@ -94,6 +114,18 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         BREAK_MINUTES_KEY,
         &normalized.break_minutes.to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        LONG_BREAK_MINUTES_KEY,
+        &normalized.long_break_minutes.to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        LONG_BREAK_INTERVAL_KEY,
+        &normalized.long_break_interval.to_string(),
         &now,
     )?;
     set_setting(

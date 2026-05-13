@@ -35,6 +35,8 @@ const defaultSettings: AppSettings = {
   default_study_minutes: 120,
   default_focus_minutes: 25,
   break_minutes: 5,
+  long_break_minutes: 15,
+  long_break_interval: 4,
   default_focus_mode: 'normal',
   emergency_cooldown_seconds: 60,
 };
@@ -253,12 +255,12 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
   }, [settingsLocked]);
 
   return (
-    <section className="page-shell">
-      <header className="page-header">
+    <section className="page-shell settings-command-shell">
+      <header className="page-header settings-hero">
         <div>
-          <p className="eyebrow">设置 / 本地持久化</p>
-          <h2>应用设置</h2>
-          <p>配置默认学习参数、WebDAV 数据同步、更新渠道和 Windows 前台检测能力。</p>
+          <p className="eyebrow">Settings</p>
+          <h2>节奏与数据控制</h2>
+          <p>默认参数会用于下一次学习模式；学习运行时所有配置入口保持锁定。</p>
         </div>
         <button className="secondary-action" onClick={() => void initializeSettingsPage()} type="button">
           <RefreshCw size={17} />
@@ -270,17 +272,17 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
       {savedMessage && <p className="alert success">{savedMessage}</p>}
       {settingsLocked && <p className="alert neutral">学习模式正在运行，全部配置改动已锁定；当前页面只允许查看状态。</p>}
 
-      <div className="content-grid two">
-        <section className="panel">
+      <div className="settings-layout">
+        <section className="settings-section rhythm-section">
           <div className="panel-title">
             <div>
-              <p className="eyebrow">Defaults</p>
-              <h3>默认学习参数</h3>
+              <p className="eyebrow">Rhythm</p>
+              <h3>学习节奏</h3>
             </div>
             <Settings2 size={20} />
           </div>
 
-          <div className="settings-panel">
+          <div className="rhythm-grid">
             <SettingNumber
               label="学习模式时长"
               max={720}
@@ -300,16 +302,35 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
               value={settings.default_focus_minutes}
             />
             <SettingNumber
-              label="休息时长"
+              label="短休息"
               max={60}
               min={1}
               disabled={settingsLocked}
               onChange={(value) => updateSettings({ break_minutes: value })}
-              text="本人确认开始休息后的倒计时分钟数。"
+              text="普通番茄轮次结束后的休息分钟数。"
               value={settings.break_minutes}
             />
+            <SettingNumber
+              label="长休息"
+              max={120}
+              min={1}
+              disabled={settingsLocked}
+              onChange={(value) => updateSettings({ long_break_minutes: value })}
+              text="到达长休息轮次后的休息分钟数。"
+              value={settings.long_break_minutes}
+            />
+            <SettingNumber
+              label="长休间隔"
+              max={12}
+              min={1}
+              disabled={settingsLocked}
+              onChange={(value) => updateSettings({ long_break_interval: value })}
+              text="每几个番茄钟进入一次长休息。"
+              value={settings.long_break_interval}
+              unit="轮"
+            />
 
-            <div className="setting-row">
+            <div className="setting-row mode-setting">
               <div>
                 <strong>默认专注模式</strong>
                 <p>普通模式更轻量，强制模式会保持更严格的学习约束。</p>
@@ -335,13 +356,19 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
             </div>
           </div>
 
-          <button className="primary-action" disabled={saving || settingsLocked} onClick={() => void handleSaveSettings()} type="button">
-            <Save size={18} />
-            {saving ? '保存中' : '保存设置'}
-          </button>
+          <div className="settings-save-row">
+            <div>
+              <span>当前默认节奏</span>
+              <strong>{settings.default_focus_minutes} / {settings.break_minutes} / {settings.long_break_minutes} 分钟，{settings.long_break_interval} 轮长休</strong>
+            </div>
+            <button className="primary-action" disabled={saving || settingsLocked} onClick={() => void handleSaveSettings()} type="button">
+              <Save size={18} />
+              {saving ? '保存中' : '保存设置'}
+            </button>
+          </div>
         </section>
 
-        <section className="panel">
+        <section className="settings-section">
           <div className="panel-title">
             <div>
               <p className="eyebrow">WebDAV</p>
@@ -409,12 +436,12 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
         </section>
       </div>
 
-      <div className="content-grid two">
-        <section className="panel">
+      <div className="settings-layout lower">
+        <section className="settings-section">
           <div className="panel-title">
             <div>
-              <p className="eyebrow">System</p>
-              <h3>系统状态</h3>
+              <p className="eyebrow">Rules</p>
+              <h3>强制规则</h3>
             </div>
             <HardDrive size={20} />
           </div>
@@ -433,7 +460,7 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
           )}
         </section>
 
-        <section className="panel">
+        <section className="settings-section">
           <div className="panel-title">
             <div>
               <p className="eyebrow">Update</p>
@@ -457,7 +484,7 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
         </section>
       </div>
 
-      <section className="panel">
+      <section className="settings-section">
         <div className="panel-title">
           <div>
             <p className="eyebrow">Foreground</p>
@@ -503,6 +530,7 @@ function SettingNumber({
   min,
   onChange,
   text,
+  unit = '分钟',
   value,
 }: {
   disabled: boolean;
@@ -511,23 +539,35 @@ function SettingNumber({
   min: number;
   onChange: (value: number) => void;
   text: string;
+  unit?: string;
   value: number;
 }) {
+  function step(delta: number) {
+    onChange(Math.min(max, Math.max(min, value + delta)));
+  }
+
   return (
-    <div className="setting-row">
+    <div className="setting-row rhythm-card">
       <div>
         <strong>{label}</strong>
         <p>{text}</p>
       </div>
-      <input
-        className="number-input"
-        disabled={disabled}
-        max={max}
-        min={min}
-        onChange={(event) => onChange(Number(event.target.value) || min)}
-        type="number"
-        value={value}
-      />
+      <div className="stepper-control">
+        <button disabled={disabled || value <= min} onClick={() => step(-1)} type="button">-</button>
+        <label>
+          <input
+            className="number-input"
+            disabled={disabled}
+            max={max}
+            min={min}
+            onChange={(event) => onChange(Math.min(max, Math.max(min, Number(event.target.value) || min)))}
+            type="number"
+            value={value}
+          />
+          <span>{unit}</span>
+        </label>
+        <button disabled={disabled || value >= max} onClick={() => step(1)} type="button">+</button>
+      </div>
     </div>
   );
 }
