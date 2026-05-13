@@ -30,13 +30,13 @@ const pages: Record<AppPage, PageMeta> = {
   },
   stats: {
     title: '统计',
-    description: '学习与干扰记录',
+    description: '学习记录与干扰',
     icon: BarChart3,
     component: <StatsPage />,
   },
   settings: {
     title: '设置',
-    description: '默认参数与更新',
+    description: '节奏、同步与更新',
     icon: Settings,
     component: <SettingsPage />,
   },

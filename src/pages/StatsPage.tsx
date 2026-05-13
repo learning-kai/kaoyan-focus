@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { BarChart3, CalendarDays, Clock3, Pencil, ShieldAlert, TimerReset } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { BarChart3, CalendarDays, Clock3, Pencil, RefreshCw, ShieldAlert, TimerReset } from 'lucide-react';
 import { getFocusStatsSummary, listFocusSessions, listSubjects, updateFocusSessionSubject } from '../services/focusApi';
 import { listInterruptionSummary } from '../services/monitorApi';
 import type { FocusSession, FocusStatsSummary, Subject } from '../types/focus';
@@ -22,6 +22,8 @@ export default function StatsPage() {
   const [savingSessionId, setSavingSessionId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const subjectNameMap = useMemo(() => new Map(subjects.map((subject) => [subject.id, subject.name])), [subjects]);
 
   useEffect(() => {
     void refreshStats();
@@ -64,15 +66,15 @@ export default function StatsPage() {
   }
 
   return (
-    <section className="page-shell">
+    <section className="page-shell stats-shell">
       <header className="page-header">
         <div>
-          <p className="eyebrow">统计 / 本地记录</p>
+          <p className="eyebrow">Local Analytics</p>
           <h2>学习统计</h2>
           <p>按今日、本周、本月和科目汇总本地专注记录，同时保留非白名单干扰排行。</p>
         </div>
         <button className="secondary-action" onClick={() => void refreshStats()} type="button">
-          <TimerReset size={17} />
+          <RefreshCw size={17} />
           刷新
         </button>
       </header>
@@ -80,31 +82,15 @@ export default function StatsPage() {
       {error && <p className="alert error">{error}</p>}
       {message && <p className="alert success">{message}</p>}
 
-      <div className="stats-grid four">
-        <article className="metric-card large">
-          <Clock3 size={20} />
-          <span>今日学习</span>
-          <strong>{formatStudyTime(stats?.today_seconds ?? 0)}</strong>
-        </article>
-        <article className="metric-card large">
-          <CalendarDays size={20} />
-          <span>本周学习</span>
-          <strong>{formatStudyTime(stats?.week_seconds ?? 0)}</strong>
-        </article>
-        <article className="metric-card large">
-          <BarChart3 size={20} />
-          <span>本月学习</span>
-          <strong>{formatStudyTime(stats?.month_seconds ?? 0)}</strong>
-        </article>
-        <article className="metric-card large danger">
-          <ShieldAlert size={20} />
-          <span>累计干扰</span>
-          <strong>{stats?.interruption_count ?? 0} 次</strong>
-        </article>
+      <div className="stats-hero-grid">
+        <MetricCard icon={Clock3} label="今日学习" value={formatStudyTime(stats?.today_seconds ?? 0)} />
+        <MetricCard icon={CalendarDays} label="本周学习" value={formatStudyTime(stats?.week_seconds ?? 0)} />
+        <MetricCard icon={BarChart3} label="本月学习" value={formatStudyTime(stats?.month_seconds ?? 0)} />
+        <MetricCard danger icon={ShieldAlert} label="累计干扰" value={`${stats?.interruption_count ?? 0} 次`} />
       </div>
 
-      <div className="content-grid two">
-        <section className="panel">
+      <div className="stats-board">
+        <section className="command-panel">
           <div className="panel-title">
             <div>
               <p className="eyebrow">Interruptions</p>
@@ -119,7 +105,7 @@ export default function StatsPage() {
               <p>专注期间检测到非白名单应用后，这里会显示最常打断你的软件。</p>
             </div>
           ) : (
-            <div className="list-card">
+            <div className="rule-list">
               {interruptions.map((item) => (
                 <article className="list-row interruption-row" key={item.process_name}>
                   <div className="row-main">
@@ -138,7 +124,7 @@ export default function StatsPage() {
           )}
         </section>
 
-        <section className="panel">
+        <section className="command-panel">
           <div className="panel-title">
             <div>
               <p className="eyebrow">Subjects</p>
@@ -153,25 +139,31 @@ export default function StatsPage() {
               <p>开始一次带科目的专注后，这里会显示各科累计学习时长。</p>
             </div>
           ) : (
-            <div className="list-card">
-              {stats.subjects.map((item) => (
-                <article className="list-row subject-stat-row" key={item.subject.id}>
-                  <div className="row-main">
-                    <span className="subject-dot" style={{ backgroundColor: item.subject.color ?? '#94a3b8' }} />
+            <div className="subject-bars">
+              {stats.subjects.map((item) => {
+                const maxSeconds = Math.max(...stats.subjects.map((subject) => subject.total_seconds), 1);
+                const width = Math.max(6, (item.total_seconds / maxSeconds) * 100);
+
+                return (
+                  <article className="subject-stat-row" key={item.subject.id}>
                     <div>
+                      <span className="subject-dot" style={{ backgroundColor: item.subject.color ?? '#8fb5ff' }} />
                       <strong>{item.subject.name}</strong>
-                      <p>{item.subject.enabled ? '已启用' : '已停用'}</p>
+                      <small>{item.subject.enabled ? '已启用' : '已停用'}</small>
                     </div>
-                  </div>
-                  <strong>{formatStudyTime(item.total_seconds)}</strong>
-                </article>
-              ))}
+                    <div className="subject-bar">
+                      <i style={{ width: `${width}%`, backgroundColor: item.subject.color ?? '#8fb5ff' }} />
+                    </div>
+                    <strong>{formatStudyTime(item.total_seconds)}</strong>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
       </div>
 
-      <section className="panel">
+      <section className="command-panel">
         <div className="panel-title">
           <div>
             <p className="eyebrow">Records</p>
@@ -186,19 +178,20 @@ export default function StatsPage() {
             <p>完成一次番茄钟后，可以在这里补改科目。</p>
           </div>
         ) : (
-          <div className="list-card">
+          <div className="records-table">
             {sessions.map((session) => (
-              <article className="list-row session-edit-row" key={session.id}>
-                <div className="row-main">
-                  <span className="row-icon enabled"><Clock3 size={18} /></span>
+              <article className="record-row" key={session.id}>
+                <div className="record-time">
+                  <span className="row-icon enabled"><TimerReset size={18} /></span>
                   <div>
                     <strong>{formatStudyTime(session.actual_seconds || session.planned_seconds)}</strong>
-                    <p>{new Date(session.started_at).toLocaleString()} · {sessionStatusLabel(session.status)}</p>
+                    <p>{new Date(session.started_at).toLocaleString()} / {sessionStatusLabel(session.status)}</p>
                   </div>
                 </div>
-                <label className="session-subject-select">
-                  <span>科目</span>
+                <div className="record-subject">
+                  <span>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</span>
                   <select
+                    aria-label="修改记录科目"
                     className="select-input"
                     disabled={savingSessionId === session.id}
                     onChange={(event) => void handleSubjectChange(session.id, event.target.value)}
@@ -209,13 +202,33 @@ export default function StatsPage() {
                       <option key={subject.id} value={subject.id}>{subject.name}</option>
                     ))}
                   </select>
-                </label>
+                </div>
               </article>
             ))}
           </div>
         )}
       </section>
     </section>
+  );
+}
+
+function MetricCard({
+  danger = false,
+  icon: Icon,
+  label,
+  value,
+}: {
+  danger?: boolean;
+  icon: typeof Clock3;
+  label: string;
+  value: string;
+}) {
+  return (
+    <article className={danger ? 'metric-card large danger' : 'metric-card large'}>
+      <Icon size={20} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
   );
 }
 

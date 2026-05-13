@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from 'react';
-import { BookOpenCheck } from 'lucide-react';
+import { BookOpenCheck, CircleDot, Lock, MonitorUp } from 'lucide-react';
 import type { PageMeta } from '../App';
 import type { AppPage } from '../types/navigation';
 
@@ -10,6 +10,8 @@ type LayoutProps = PropsWithChildren<{
 }>;
 
 export default function Layout({ activePage, pages, onNavigate, children }: LayoutProps) {
+  const activeMeta = pages[activePage];
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -19,7 +21,7 @@ export default function Layout({ activePage, pages, onNavigate, children }: Layo
           </span>
           <div>
             <h1>考研专注</h1>
-            <p>Windows 学习约束控制台</p>
+            <p>Study Console</p>
           </div>
         </div>
 
@@ -29,12 +31,13 @@ export default function Layout({ activePage, pages, onNavigate, children }: Layo
 
             return (
               <button
+                aria-current={page === activePage ? 'page' : undefined}
                 className={page === activePage ? 'nav-item active' : 'nav-item'}
                 key={page}
                 onClick={() => onNavigate(page)}
                 type="button"
               >
-                <Icon size={18} />
+                <Icon size={19} />
                 <span>
                   <strong>{pages[page].title}</strong>
                   <small>{pages[page].description}</small>
@@ -46,11 +49,26 @@ export default function Layout({ activePage, pages, onNavigate, children }: Layo
 
         <div className="sidebar-foot">
           <span className="status-dot" />
-          <span>本地数据与后台托盘运行</span>
+          <div>
+            <strong>后台待命</strong>
+            <span>托盘运行 / 本地数据</span>
+          </div>
         </div>
       </aside>
 
-      <main className="main-panel">{children}</main>
+      <main className="main-panel">
+        <div className="top-strip">
+          <div className="top-strip-title">
+            <CircleDot size={14} />
+            <span>{activeMeta.title}</span>
+          </div>
+          <div className="top-strip-status">
+            <span><MonitorUp size={14} /> Windows 桌面</span>
+            <span><Lock size={14} /> 学习中自动锁定配置</span>
+          </div>
+        </div>
+        {children}
+      </main>
     </div>
   );
 }

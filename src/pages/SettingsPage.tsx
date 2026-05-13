@@ -70,9 +70,23 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
 
+  const settingsLocked = isStudyModeLocked(studyState);
+
   useEffect(() => {
     void initializeSettingsPage();
   }, []);
+
+  useEffect(() => {
+    if (!settingsLocked) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshStudyState();
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [settingsLocked]);
 
   async function initializeSettingsPage() {
     await Promise.all([refreshStudyState(), refreshSettings(), refreshDataLocation(), refreshWebDavSettings()]);
@@ -240,25 +254,11 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
     }
   }
 
-  const settingsLocked = isStudyModeLocked(studyState);
-
-  useEffect(() => {
-    if (!settingsLocked) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      void refreshStudyState();
-    }, 5000);
-
-    return () => window.clearInterval(intervalId);
-  }, [settingsLocked]);
-
   return (
-    <section className="page-shell settings-command-shell">
-      <header className="page-header settings-hero">
+    <section className="page-shell settings-shell">
+      <header className="page-header">
         <div>
-          <p className="eyebrow">Settings</p>
+          <p className="eyebrow">System Console</p>
           <h2>节奏与数据控制</h2>
           <p>默认参数会用于下一次学习模式；学习运行时所有配置入口保持锁定。</p>
         </div>
@@ -272,103 +272,103 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
       {savedMessage && <p className="alert success">{savedMessage}</p>}
       {settingsLocked && <p className="alert neutral">学习模式正在运行，全部配置改动已锁定；当前页面只允许查看状态。</p>}
 
-      <div className="settings-layout">
-        <section className="settings-section rhythm-section">
-          <div className="panel-title">
+      <section className="command-panel rhythm-section">
+        <div className="panel-title">
+          <div>
+            <p className="eyebrow">Rhythm</p>
+            <h3>学习节奏</h3>
+          </div>
+          <Settings2 size={20} />
+        </div>
+
+        <div className="rhythm-grid">
+          <SettingNumber
+            label="学习模式时长"
+            max={720}
+            min={1}
+            disabled={settingsLocked}
+            onChange={(value) => updateSettings({ default_study_minutes: value })}
+            text="进入学习模式后的总约束时间。"
+            value={settings.default_study_minutes}
+          />
+          <SettingNumber
+            label="番茄专注时长"
+            max={120}
+            min={1}
+            disabled={settingsLocked}
+            onChange={(value) => updateSettings({ default_focus_minutes: value })}
+            text="学习模式内每轮番茄钟的专注分钟数。"
+            value={settings.default_focus_minutes}
+          />
+          <SettingNumber
+            label="短休息"
+            max={60}
+            min={1}
+            disabled={settingsLocked}
+            onChange={(value) => updateSettings({ break_minutes: value })}
+            text="普通番茄轮次结束后的休息分钟数。"
+            value={settings.break_minutes}
+          />
+          <SettingNumber
+            label="长休息"
+            max={120}
+            min={1}
+            disabled={settingsLocked}
+            onChange={(value) => updateSettings({ long_break_minutes: value })}
+            text="到达长休息轮次后的休息分钟数。"
+            value={settings.long_break_minutes}
+          />
+          <SettingNumber
+            label="长休间隔"
+            max={12}
+            min={1}
+            disabled={settingsLocked}
+            onChange={(value) => updateSettings({ long_break_interval: value })}
+            text="每几个番茄钟进入一次长休息。"
+            value={settings.long_break_interval}
+            unit="轮"
+          />
+
+          <div className="setting-row mode-setting">
             <div>
-              <p className="eyebrow">Rhythm</p>
-              <h3>学习节奏</h3>
+              <strong>默认专注模式</strong>
+              <p>普通模式更轻量，强制模式会保持更严格的学习约束。</p>
             </div>
-            <Settings2 size={20} />
-          </div>
-
-          <div className="rhythm-grid">
-            <SettingNumber
-              label="学习模式时长"
-              max={720}
-              min={1}
-              disabled={settingsLocked}
-              onChange={(value) => updateSettings({ default_study_minutes: value })}
-              text="进入学习模式后的总约束时间。"
-              value={settings.default_study_minutes}
-            />
-            <SettingNumber
-              label="番茄专注时长"
-              max={120}
-              min={1}
-              disabled={settingsLocked}
-              onChange={(value) => updateSettings({ default_focus_minutes: value })}
-              text="学习模式内每轮番茄钟的专注分钟数。"
-              value={settings.default_focus_minutes}
-            />
-            <SettingNumber
-              label="短休息"
-              max={60}
-              min={1}
-              disabled={settingsLocked}
-              onChange={(value) => updateSettings({ break_minutes: value })}
-              text="普通番茄轮次结束后的休息分钟数。"
-              value={settings.break_minutes}
-            />
-            <SettingNumber
-              label="长休息"
-              max={120}
-              min={1}
-              disabled={settingsLocked}
-              onChange={(value) => updateSettings({ long_break_minutes: value })}
-              text="到达长休息轮次后的休息分钟数。"
-              value={settings.long_break_minutes}
-            />
-            <SettingNumber
-              label="长休间隔"
-              max={12}
-              min={1}
-              disabled={settingsLocked}
-              onChange={(value) => updateSettings({ long_break_interval: value })}
-              text="每几个番茄钟进入一次长休息。"
-              value={settings.long_break_interval}
-              unit="轮"
-            />
-
-            <div className="setting-row mode-setting">
-              <div>
-                <strong>默认专注模式</strong>
-                <p>普通模式更轻量，强制模式会保持更严格的学习约束。</p>
-              </div>
-              <div className="segmented-control">
-                <button
-                  className={settings.default_focus_mode === 'normal' ? 'active' : ''}
-                  disabled={settingsLocked}
-                  onClick={() => updateSettings({ default_focus_mode: 'normal' })}
-                  type="button"
-                >
-                  普通
-                </button>
-                <button
-                  className={settings.default_focus_mode === 'strict' ? 'active' : ''}
-                  disabled={settingsLocked}
-                  onClick={() => updateSettings({ default_focus_mode: 'strict' })}
-                  type="button"
-                >
-                  强制
-                </button>
-              </div>
+            <div className="segmented-control">
+              <button
+                className={settings.default_focus_mode === 'normal' ? 'active' : ''}
+                disabled={settingsLocked}
+                onClick={() => updateSettings({ default_focus_mode: 'normal' })}
+                type="button"
+              >
+                普通
+              </button>
+              <button
+                className={settings.default_focus_mode === 'strict' ? 'active' : ''}
+                disabled={settingsLocked}
+                onClick={() => updateSettings({ default_focus_mode: 'strict' })}
+                type="button"
+              >
+                强制
+              </button>
             </div>
           </div>
+        </div>
 
-          <div className="settings-save-row">
-            <div>
-              <span>当前默认节奏</span>
-              <strong>{settings.default_focus_minutes} / {settings.break_minutes} / {settings.long_break_minutes} 分钟，{settings.long_break_interval} 轮长休</strong>
-            </div>
-            <button className="primary-action" disabled={saving || settingsLocked} onClick={() => void handleSaveSettings()} type="button">
-              <Save size={18} />
-              {saving ? '保存中' : '保存设置'}
-            </button>
+        <div className="settings-save-row">
+          <div>
+            <span>当前默认节奏</span>
+            <strong>{settings.default_focus_minutes} / {settings.break_minutes} / {settings.long_break_minutes} 分钟，每 {settings.long_break_interval} 轮长休</strong>
           </div>
-        </section>
+          <button className="primary-action" disabled={saving || settingsLocked} onClick={() => void handleSaveSettings()} type="button">
+            <Save size={18} />
+            {saving ? '保存中' : '保存设置'}
+          </button>
+        </div>
+      </section>
 
-        <section className="settings-section">
+      <div className="settings-grid">
+        <section className="command-panel">
           <div className="panel-title">
             <div>
               <p className="eyebrow">WebDAV</p>
@@ -379,37 +379,49 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
           <p className="panel-copy">填写 WebDAV 地址和账号后，可以把本机 SQLite 数据库上传到云端，或从云端恢复到本机。</p>
 
           <div className="form-stack">
-            <input
-              className="text-input"
-              disabled={settingsLocked}
-              onChange={(event) => updateWebDavSettings({ url: event.target.value })}
-              placeholder="WebDAV 地址，例如 https://dav.example.com/remote.php/dav/files/me"
-              value={webDavSettings.url}
-            />
+            <label className="field-block">
+              <span>WebDAV 地址</span>
+              <input
+                className="text-input"
+                disabled={settingsLocked}
+                onChange={(event) => updateWebDavSettings({ url: event.target.value })}
+                placeholder="https://dav.example.com/remote.php/dav/files/me"
+                value={webDavSettings.url}
+              />
+            </label>
             <div className="inline-fields">
-              <input
-                className="text-input"
-                disabled={settingsLocked}
-                onChange={(event) => updateWebDavSettings({ username: event.target.value })}
-                placeholder="用户名"
-                value={webDavSettings.username}
-              />
-              <input
-                className="text-input"
-                disabled={settingsLocked}
-                onChange={(event) => updateWebDavSettings({ password: event.target.value })}
-                placeholder="密码或应用密码"
-                type="password"
-                value={webDavSettings.password}
-              />
+              <label className="field-block">
+                <span>用户名</span>
+                <input
+                  className="text-input"
+                  disabled={settingsLocked}
+                  onChange={(event) => updateWebDavSettings({ username: event.target.value })}
+                  placeholder="用户名"
+                  value={webDavSettings.username}
+                />
+              </label>
+              <label className="field-block">
+                <span>密码</span>
+                <input
+                  className="text-input"
+                  disabled={settingsLocked}
+                  onChange={(event) => updateWebDavSettings({ password: event.target.value })}
+                  placeholder="密码或应用密码"
+                  type="password"
+                  value={webDavSettings.password}
+                />
+              </label>
             </div>
-            <input
-              className="text-input"
-              disabled={settingsLocked}
-              onChange={(event) => updateWebDavSettings({ remote_path: event.target.value })}
-              placeholder="远端文件路径"
-              value={webDavSettings.remote_path}
-            />
+            <label className="field-block">
+              <span>远端文件路径</span>
+              <input
+                className="text-input"
+                disabled={settingsLocked}
+                onChange={(event) => updateWebDavSettings({ remote_path: event.target.value })}
+                placeholder="kaoyan-focus/kaoyan-focus.sqlite3"
+                value={webDavSettings.remote_path}
+              />
+            </label>
           </div>
 
           {lastAutoSyncMessage && <p className="alert neutral">启动自动同步：{lastAutoSyncMessage}</p>}
@@ -432,12 +444,9 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
               从云端恢复
             </button>
           </div>
-          {settingsLocked && <p className="alert neutral">当前学习模式正在运行，暂时不能修改 WebDAV 配置或恢复数据库。</p>}
         </section>
-      </div>
 
-      <div className="settings-layout lower">
-        <section className="settings-section">
+        <section className="command-panel">
           <div className="panel-title">
             <div>
               <p className="eyebrow">Rules</p>
@@ -459,8 +468,10 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
             </div>
           )}
         </section>
+      </div>
 
-        <section className="settings-section">
+      <div className="settings-grid lower">
+        <section className="command-panel">
           <div className="panel-title">
             <div>
               <p className="eyebrow">Update</p>
@@ -482,31 +493,31 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
             </button>
           </div>
         </section>
+
+        <section className="command-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Foreground</p>
+              <h3>前台应用检测</h3>
+            </div>
+            <MonitorDot size={20} />
+          </div>
+          <p className="panel-copy">用于验证 Windows API 能否识别当前正在使用的窗口和进程。</p>
+          <button className="secondary-action" disabled={loading} onClick={() => void handleDetectForegroundApp()} type="button">
+            <Activity size={17} />
+            {loading ? '检测中' : '检测当前应用'}
+          </button>
+
+          {foregroundApp && (
+            <div className="details-card stacked">
+              <Detail label="进程名" value={foregroundApp.process_name} />
+              <Detail label="进程 ID" value={String(foregroundApp.process_id)} />
+              <Detail label="窗口标题" value={foregroundApp.window_title || '无标题'} />
+              <Detail label="进程路径" value={foregroundApp.process_path || '无法读取'} />
+            </div>
+          )}
+        </section>
       </div>
-
-      <section className="settings-section">
-        <div className="panel-title">
-          <div>
-            <p className="eyebrow">Foreground</p>
-            <h3>前台应用检测</h3>
-          </div>
-          <MonitorDot size={20} />
-        </div>
-        <p className="panel-copy">用于验证 Windows API 能否识别当前正在使用的窗口和进程。</p>
-        <button className="secondary-action" disabled={loading} onClick={() => void handleDetectForegroundApp()} type="button">
-          <Activity size={17} />
-          {loading ? '检测中' : '检测当前应用'}
-        </button>
-
-        {foregroundApp && (
-          <div className="details-card stacked">
-            <Detail label="进程名" value={foregroundApp.process_name} />
-            <Detail label="进程 ID" value={String(foregroundApp.process_id)} />
-            <Detail label="窗口标题" value={foregroundApp.window_title || '无标题'} />
-            <Detail label="进程路径" value={foregroundApp.process_path || '无法读取'} />
-          </div>
-        )}
-      </section>
     </section>
   );
 }
@@ -553,7 +564,7 @@ function SettingNumber({
         <p>{text}</p>
       </div>
       <div className="stepper-control">
-        <button disabled={disabled || value <= min} onClick={() => step(-1)} type="button">-</button>
+        <button aria-label={`${label}减少`} disabled={disabled || value <= min} onClick={() => step(-1)} type="button">-</button>
         <label>
           <input
             className="number-input"
@@ -566,7 +577,7 @@ function SettingNumber({
           />
           <span>{unit}</span>
         </label>
-        <button disabled={disabled || value >= max} onClick={() => step(1)} type="button">+</button>
+        <button aria-label={`${label}增加`} disabled={disabled || value >= max} onClick={() => step(1)} type="button">+</button>
       </div>
     </div>
   );

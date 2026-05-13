@@ -34,6 +34,7 @@ export default function WhitelistPage() {
 
   const enabledCount = apps.filter((app) => app.enabled).length;
   const websiteCount = apps.filter((app) => app.match_type === 'website_domain').length;
+  const appCount = apps.length - websiteCount;
   const whitelistLocked = isStudyModeLocked(studyState);
   const canCreate = !whitelistLocked
     && name.trim().length > 0
@@ -42,6 +43,18 @@ export default function WhitelistPage() {
   useEffect(() => {
     void initializeWhitelistPage();
   }, []);
+
+  useEffect(() => {
+    if (!whitelistLocked) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshStudyState();
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [whitelistLocked]);
 
   async function initializeWhitelistPage() {
     await Promise.all([refreshApps(), refreshStudyState()]);
@@ -132,7 +145,7 @@ export default function WhitelistPage() {
     try {
       setError(null);
       const displayName = blockedApp.process_name.replace(/\.exe$/i, '');
-      await createWhitelistApp(displayName, blockedApp.process_name, '从最近干扰记录加入', blockedApp.process_path);
+      await createWhitelistApp(displayName, blockedApp.process_name, '从最近拦截记录加入', blockedApp.process_path);
       setBlockedPickerOpen(false);
       await refreshApps();
       await refreshRecentBlockedApps();
@@ -161,30 +174,22 @@ export default function WhitelistPage() {
     }
   }
 
-  useEffect(() => {
-    if (!whitelistLocked) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      void refreshStudyState();
-    }, 5000);
-
-    return () => window.clearInterval(intervalId);
-  }, [whitelistLocked]);
-
   return (
-    <section className="page-shell">
+    <section className="page-shell whitelist-shell">
       <header className="page-header">
         <div>
-          <p className="eyebrow">白名单 / 强制执行</p>
+          <p className="eyebrow">Allowlist Control</p>
           <h2>软件与网站白名单</h2>
-          <p>学习阶段只放行必要工具。网站识别沿用浏览器窗口标题方案，后台监控会在学习中持续执行。</p>
+          <p>学习阶段只放行必要工具。网站规则沿用浏览器窗口标题识别，后台监控会持续关闭非白名单软件或网站。</p>
         </div>
         <div className="header-metrics">
           <article>
             <span>启用</span>
             <strong>{enabledCount}</strong>
+          </article>
+          <article>
+            <span>软件</span>
+            <strong>{appCount}</strong>
           </article>
           <article>
             <span>网站</span>
@@ -196,12 +201,12 @@ export default function WhitelistPage() {
       {error && <p className="alert error">{error}</p>}
       {whitelistLocked && <p className="alert neutral">学习模式正在运行，白名单配置已锁定；当前页面只允许查看规则和记录。</p>}
 
-      <div className="content-grid two">
-        <section className="panel">
+      <div className="whitelist-workbench">
+        <section className="command-panel add-rule-panel">
           <div className="panel-title">
             <div>
-              <p className="eyebrow">Add</p>
-              <h3>添加白名单</h3>
+              <p className="eyebrow">Add Rule</p>
+              <h3>加入白名单</h3>
             </div>
             <ListPlus size={20} />
           </div>
@@ -218,31 +223,43 @@ export default function WhitelistPage() {
           </div>
 
           <div className="form-stack">
-            <input
-              className="text-input"
-              disabled={whitelistLocked}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={entryType === 'website' ? '网站名称，例如 中国大学 MOOC' : '软件名称，例如 Anki'}
-              value={name}
-            />
+            <label className="field-block">
+              <span>{entryType === 'website' ? '网站名称' : '软件名称'}</span>
+              <input
+                className="text-input"
+                disabled={whitelistLocked}
+                onChange={(event) => setName(event.target.value)}
+                placeholder={entryType === 'website' ? '例如：中国大学 MOOC' : '例如：Anki'}
+                value={name}
+              />
+            </label>
             {entryType === 'website' ? (
-              <input
-                className="text-input"
-                disabled={whitelistLocked}
-                onChange={(event) => setDomain(event.target.value)}
-                placeholder="域名，例如 icourse163.org"
-                value={domain}
-              />
+              <label className="field-block">
+                <span>域名关键词</span>
+                <input
+                  className="text-input"
+                  disabled={whitelistLocked}
+                  onChange={(event) => setDomain(event.target.value)}
+                  placeholder="例如：icourse163.org"
+                  value={domain}
+                />
+              </label>
             ) : (
-              <input
-                className="text-input"
-                disabled={whitelistLocked}
-                onChange={(event) => setProcessName(event.target.value)}
-                placeholder="进程名，例如 anki.exe"
-                value={processName}
-              />
+              <label className="field-block">
+                <span>进程名</span>
+                <input
+                  className="text-input"
+                  disabled={whitelistLocked}
+                  onChange={(event) => setProcessName(event.target.value)}
+                  placeholder="例如：anki.exe"
+                  value={processName}
+                />
+              </label>
             )}
-            <input className="text-input" disabled={whitelistLocked} onChange={(event) => setNote(event.target.value)} placeholder="备注，可选" value={note} />
+            <label className="field-block">
+              <span>备注</span>
+              <input className="text-input" disabled={whitelistLocked} onChange={(event) => setNote(event.target.value)} placeholder="可选" value={note} />
+            </label>
             <button className="primary-action" disabled={!canCreate || loading} onClick={() => void handleCreate()} type="button">
               <ListPlus size={18} />
               {loading ? '添加中' : '加入白名单'}
@@ -251,7 +268,7 @@ export default function WhitelistPage() {
           {processPath && <p className="path-hint">已选择路径：{processPath}</p>}
         </section>
 
-        <section className="panel">
+        <section className="command-panel source-panel">
           <div className="panel-title">
             <div>
               <p className="eyebrow">Sources</p>
@@ -260,8 +277,8 @@ export default function WhitelistPage() {
             <Search size={20} />
           </div>
 
-          <div className="tool-grid single">
-            <div className="tool-card">
+          <div className="source-actions">
+            <article className="tool-row">
               <div>
                 <h4>从运行进程选择</h4>
                 <p>适合把当前打开的阅读器、词典、笔记软件快速加入白名单。</p>
@@ -270,26 +287,29 @@ export default function WhitelistPage() {
                 <FolderSearch size={17} />
                 {processLoading ? '读取中' : '读取进程'}
               </button>
-            </div>
+            </article>
 
-            <div className="tool-card">
+            <article className="tool-row">
               <div>
-                <h4>最近干扰记录</h4>
+                <h4>最近拦截记录</h4>
                 <p>把误判或临时需要的软件从拦截记录中一键放行。</p>
               </div>
               <button className="secondary-action" disabled={blockedLoading} onClick={() => void handleLoadRecentBlockedApps()} type="button">
                 <History size={17} />
                 {blockedLoading ? '读取中' : '查看记录'}
               </button>
-            </div>
+            </article>
           </div>
         </section>
       </div>
 
       {processPickerOpen && (
-        <section className="panel picker-panel">
+        <section className="command-panel picker-panel">
           <div className="panel-title">
-            <h3>选择运行进程</h3>
+            <div>
+              <p className="eyebrow">Processes</p>
+              <h3>选择运行进程</h3>
+            </div>
             <button className="ghost-action" onClick={() => setProcessPickerOpen(false)} type="button">收起</button>
           </div>
           {runningProcesses.length === 0 ? (
@@ -308,13 +328,16 @@ export default function WhitelistPage() {
       )}
 
       {blockedPickerOpen && (
-        <section className="panel picker-panel">
+        <section className="command-panel picker-panel">
           <div className="panel-title">
-            <h3>最近干扰记录</h3>
+            <div>
+              <p className="eyebrow">Blocked</p>
+              <h3>最近拦截记录</h3>
+            </div>
             <button className="ghost-action" onClick={() => setBlockedPickerOpen(false)} type="button">收起</button>
           </div>
           {recentBlockedApps.length === 0 ? (
-            <p className="empty-state compact">暂无可加入的干扰记录。</p>
+            <p className="empty-state compact">暂无可加入的拦截记录。</p>
           ) : (
             <div className="process-picker">
               {recentBlockedApps.map((blockedApp) => (
@@ -323,7 +346,7 @@ export default function WhitelistPage() {
                     <strong>{blockedApp.process_name}</strong>
                     <span>{blockedApp.window_title || '无窗口标题'}</span>
                     <span>{blockedApp.process_path ?? '无法读取路径'}</span>
-                    <span>最近：{new Date(blockedApp.last_blocked_at).toLocaleString()} · {blockedApp.blocked_count} 次</span>
+                    <span>最近：{new Date(blockedApp.last_blocked_at).toLocaleString()} / {blockedApp.blocked_count} 次</span>
                   </div>
                   <button className="secondary-action compact-button" disabled={whitelistLocked} onClick={() => void handleAddBlockedApp(blockedApp)} type="button">
                     加入
@@ -335,7 +358,7 @@ export default function WhitelistPage() {
         </section>
       )}
 
-      <section className="panel">
+      <section className="command-panel">
         <div className="panel-title">
           <div>
             <p className="eyebrow">Rules</p>
@@ -350,7 +373,7 @@ export default function WhitelistPage() {
             <p>先添加常用学习软件，例如 Word、PDF 阅读器、Anki、词典或必要学习网站。</p>
           </div>
         ) : (
-          <div className="list-card">
+          <div className="rule-list">
             {apps.map((app) => (
               <article className="list-row whitelist-row" key={app.id}>
                 <div className="row-main">
