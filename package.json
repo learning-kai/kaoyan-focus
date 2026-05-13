@@ -1,7 +1,7 @@
 {
   "name": "kaoyan-focus",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,7 @@
     "tauri": "tauri",
     "release:win": "tauri build --bundles nsis",
     "release:win:update": "node scripts/release-win-update.mjs",
-    "release:metadata": "node scripts/generate-latest-json.mjs \"src-tauri/target/release/bundle/nsis/考研专注_0.1.2_x64-setup.exe\" \"https://github.com/OWNER/REPO/releases/latest/download\""
+    "release:metadata": "node scripts/generate-latest-json.mjs \"src-tauri/target/release/bundle/nsis/考研专注_0.1.3_x64-setup.exe\" \"https://github.com/OWNER/REPO/releases/latest/download\""
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   BellRing,
@@ -59,6 +59,8 @@ const phaseLabel: Record<StudyModePhase, string> = {
   emergency_exited: '已退出（历史）',
 };
 
+let reminderBaselineKey: string | null = null;
+
 function formatSeconds(totalSeconds: number) {
   const safeSeconds = Math.max(totalSeconds, 0);
   const hours = Math.floor(safeSeconds / 3600);
@@ -118,8 +120,6 @@ export default function FocusPage() {
   const [error, setError] = useState<string | null>(null);
   const [monitorError, setMonitorError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const lastReminderKeyRef = useRef<string | null>(null);
-  const initializedReminderRef = useRef(false);
 
   const active = studyState.status === 'active';
   const controlsDisabled = active;
@@ -176,18 +176,17 @@ export default function FocusPage() {
   }, [currentSession?.id, studyState.focus_enforcement_active]);
 
   useEffect(() => {
-    if (!initializedReminderRef.current) {
-      initializedReminderRef.current = true;
-      lastReminderKeyRef.current = reminderKey(studyState);
+    if (reminderBaselineKey === null) {
+      reminderBaselineKey = reminderKey(studyState);
       return;
     }
 
     const key = reminderKey(studyState);
-    if (key === lastReminderKeyRef.current) {
+    if (key === reminderBaselineKey) {
       return;
     }
 
-    lastReminderKeyRef.current = key;
+    reminderBaselineKey = key;
     const reminder = buildReminder(studyState);
     if (reminder) {
       void notifyStudyReminder(reminder);
@@ -198,6 +197,7 @@ export default function FocusPage() {
     try {
       setError(null);
       const [settings, state] = await Promise.all([getAppSettings(), getStudyModeState()]);
+      reminderBaselineKey = reminderKey(state);
       setStudyState(state);
 
       if (state.status !== 'active') {
@@ -268,7 +268,7 @@ export default function FocusPage() {
       );
       setStudyState(nextState);
       setNotice('学习模式已开始。关闭窗口会进入托盘，后台仍会计时并执行白名单。');
-      lastReminderKeyRef.current = reminderKey(nextState);
+      reminderBaselineKey = reminderKey(nextState);
       void notifyStudyReminder({
         title: '学习模式已开始',
         body: `第 ${nextState.cycle_index} 轮番茄钟开始，保持专注。`,
@@ -287,7 +287,7 @@ export default function FocusPage() {
       const nextState = await confirmStudyBreak();
       setStudyState(nextState);
       setNotice('休息已开始。休息结束后会自动进入下一轮番茄钟。');
-      lastReminderKeyRef.current = reminderKey(nextState);
+      reminderBaselineKey = reminderKey(nextState);
       void notifyStudyReminder({
         title: '休息开始',
         body: `休息 ${formatDuration(nextState.break_seconds)}，到点后自动进入下一轮番茄钟。`,
@@ -296,6 +296,94 @@ export default function FocusPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
+  }
+
+  if (active) {
+    return (
+      <section className="page-shell focus-minimal-shell">
+        <header className="page-header minimal-header">
+          <div>
+            <p className="eyebrow">学习模式运行中</p>
+            <h2>{phaseLabel[studyState.phase]}</h2>
+            <p>设置与白名单已锁定。窗口可隐藏到托盘，后台继续计时并执行学习约束。</p>
+          </div>
+          <div className={`phase-badge phase-${studyState.phase}`}>
+            <span>{selectedSubjectName ?? '未指定科目'}</span>
+            <strong>第 {studyState.cycle_index} 轮</strong>
+          </div>
+        </header>
+
+        {error && <p className="alert error">{error}</p>}
+        {notice && <p className="alert success">{notice}</p>}
+        {monitorError && <p className="alert error">前台检测失败：{monitorError}</p>}
+
+        <section className={`minimal-timer phase-${studyState.phase}`}>
+          <div className="minimal-timer-main">
+            <span className="minimal-phase">{studyState.phase === 'awaiting_break' ? '等待确认休息' : '当前阶段'}</span>
+            <strong>{timerValue}</strong>
+            <p>{buildPhaseMessage(studyState)}</p>
+          </div>
+
+          <div className="minimal-actions">
+            {studyState.phase === 'awaiting_break' ? (
+              <button className="primary-action" onClick={handleConfirmBreak} type="button">
+                <Coffee size={18} />
+                确认开始休息
+              </button>
+            ) : (
+              <button className="secondary-action" onClick={refreshStudyState} type="button">
+                <RefreshCw size={18} />
+                刷新状态
+              </button>
+            )}
+          </div>
+        </section>
+
+        <div className="minimal-progress-panel">
+          <ProgressBar label="学习总进度" value={totalProgress} />
+          <ProgressBar label="当前阶段进度" value={phaseProgress} accent />
+        </div>
+
+        <div className="minimal-metric-grid">
+          <Metric icon={Timer} label="总剩余" value={formatSeconds(studyState.study_remaining_seconds)} />
+          <Metric icon={Activity} label="已累计" value={formatSeconds(studyState.study_elapsed_seconds)} />
+          <Metric icon={Coffee} label="休息时长" value={formatDuration(studyState.break_seconds)} />
+          <Metric
+            icon={ShieldCheck}
+            label="白名单执行"
+            value={studyState.focus_enforcement_active ? '运行中' : '休息暂停'}
+          />
+        </div>
+
+        <section className="panel minimal-monitor-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Monitor</p>
+              <h3>前台监控</h3>
+            </div>
+            <Gauge size={20} />
+          </div>
+          {latestAppCheck ? (
+            <div className={latestAppCheck.match_result.allowed ? 'monitor-card allowed' : 'monitor-card blocked'}>
+              <div>
+                <span>{latestAppCheck.match_result.allowed ? '已放行' : '已拦截'}</span>
+                <strong>{latestAppCheck.foreground_app.process_name}</strong>
+                <p>{latestAppCheck.foreground_app.window_title || '无窗口标题'}</p>
+                {latestAppCheck.match_result.detected_domain && <p>识别网站：{latestAppCheck.match_result.detected_domain}</p>}
+              </div>
+              <div className="monitor-count">
+                <span>累计拦截</span>
+                <strong>{latestAppCheck.interruption_count}</strong>
+              </div>
+            </div>
+          ) : (
+            <div className="empty-state compact">
+              学习和等待休息阶段会持续检查前台窗口；休息阶段暂停强制关闭。
+            </div>
+          )}
+        </section>
+      </section>
+    );
   }
 
   return (

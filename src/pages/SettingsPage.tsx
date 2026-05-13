@@ -13,8 +13,9 @@ import {
   ShieldCheck,
   UploadCloud,
 } from 'lucide-react';
-import { listFocusSessions } from '../services/focusApi';
+import { getStudyModeState } from '../services/focusApi';
 import { getCurrentForegroundApp } from '../services/monitorApi';
+import { isStudyModeLocked } from '../services/studyModeLock';
 import {
   downloadDatabaseFromWebDav,
   getAppDataLocation,
@@ -26,7 +27,7 @@ import {
   uploadDatabaseToWebDav,
 } from '../services/settingsApi';
 import { checkForAppUpdate, installAppUpdate, type AppUpdate } from '../services/updateApi';
-import type { FocusSession } from '../types/focus';
+import type { StudyModeState } from '../types/focus';
 import type { ForegroundApp } from '../types/monitor';
 import type { AppSettings, WebDavSettings } from '../types/settings';
 
@@ -45,9 +46,13 @@ const defaultWebDavSettings: WebDavSettings = {
   remote_path: 'kaoyan-focus/kaoyan-focus.sqlite3',
 };
 
-export default function SettingsPage() {
+type SettingsPageProps = {
+  lastAutoSyncMessage?: string | null;
+};
+
+export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPageProps) {
   const [foregroundApp, setForegroundApp] = useState<ForegroundApp | null>(null);
-  const [latestSession, setLatestSession] = useState<FocusSession | null>(null);
+  const [studyState, setStudyState] = useState<StudyModeState | null>(null);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [webDavSettings, setWebDavSettings] = useState<WebDavSettings>(defaultWebDavSettings);
   const [dataLocation, setDataLocation] = useState<string | null>(null);
@@ -68,13 +73,12 @@ export default function SettingsPage() {
   }, []);
 
   async function initializeSettingsPage() {
-    await Promise.all([refreshFocusState(), refreshSettings(), refreshDataLocation(), refreshWebDavSettings()]);
+    await Promise.all([refreshStudyState(), refreshSettings(), refreshDataLocation(), refreshWebDavSettings()]);
   }
 
-  async function refreshFocusState() {
+  async function refreshStudyState() {
     try {
-      const sessions = await listFocusSessions();
-      setLatestSession(sessions[0] ?? null);
+      setStudyState(await getStudyModeState());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -183,7 +187,7 @@ export default function SettingsPage() {
       setLoading(true);
       setError(null);
       setForegroundApp(await getCurrentForegroundApp());
-      await refreshFocusState();
+      await refreshStudyState();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -234,7 +238,19 @@ export default function SettingsPage() {
     }
   }
 
-  const focusRunning = latestSession?.status === 'running';
+  const settingsLocked = isStudyModeLocked(studyState);
+
+  useEffect(() => {
+    if (!settingsLocked) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshStudyState();
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [settingsLocked]);
 
   return (
     <section className="page-shell">
@@ -252,6 +268,7 @@ export default function SettingsPage() {
 
       {error && <p className="alert error">{error}</p>}
       {savedMessage && <p className="alert success">{savedMessage}</p>}
+      {settingsLocked && <p className="alert neutral">学习模式正在运行，全部配置改动已锁定；当前页面只允许查看状态。</p>}
 
       <div className="content-grid two">
         <section className="panel">
@@ -268,6 +285,7 @@ export default function SettingsPage() {
               label="学习模式时长"
               max={720}
               min={1}
+              disabled={settingsLocked}
               onChange={(value) => updateSettings({ default_study_minutes: value })}
               text="进入学习模式后的总约束时间。"
               value={settings.default_study_minutes}
@@ -276,6 +294,7 @@ export default function SettingsPage() {
               label="番茄专注时长"
               max={120}
               min={1}
+              disabled={settingsLocked}
               onChange={(value) => updateSettings({ default_focus_minutes: value })}
               text="学习模式内每轮番茄钟的专注分钟数。"
               value={settings.default_focus_minutes}
@@ -284,6 +303,7 @@ export default function SettingsPage() {
               label="休息时长"
               max={60}
               min={1}
+              disabled={settingsLocked}
               onChange={(value) => updateSettings({ break_minutes: value })}
               text="本人确认开始休息后的倒计时分钟数。"
               value={settings.break_minutes}
@@ -297,6 +317,7 @@ export default function SettingsPage() {
               <div className="segmented-control">
                 <button
                   className={settings.default_focus_mode === 'normal' ? 'active' : ''}
+                  disabled={settingsLocked}
                   onClick={() => updateSettings({ default_focus_mode: 'normal' })}
                   type="button"
                 >
@@ -304,6 +325,7 @@ export default function SettingsPage() {
                 </button>
                 <button
                   className={settings.default_focus_mode === 'strict' ? 'active' : ''}
+                  disabled={settingsLocked}
                   onClick={() => updateSettings({ default_focus_mode: 'strict' })}
                   type="button"
                 >
@@ -313,7 +335,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <button className="primary-action" disabled={saving} onClick={() => void handleSaveSettings()} type="button">
+          <button className="primary-action" disabled={saving || settingsLocked} onClick={() => void handleSaveSettings()} type="button">
             <Save size={18} />
             {saving ? '保存中' : '保存设置'}
           </button>
@@ -332,6 +354,7 @@ export default function SettingsPage() {
           <div className="form-stack">
             <input
               className="text-input"
+              disabled={settingsLocked}
               onChange={(event) => updateWebDavSettings({ url: event.target.value })}
               placeholder="WebDAV 地址，例如 https://dav.example.com/remote.php/dav/files/me"
               value={webDavSettings.url}
@@ -339,12 +362,14 @@ export default function SettingsPage() {
             <div className="inline-fields">
               <input
                 className="text-input"
+                disabled={settingsLocked}
                 onChange={(event) => updateWebDavSettings({ username: event.target.value })}
                 placeholder="用户名"
                 value={webDavSettings.username}
               />
               <input
                 className="text-input"
+                disabled={settingsLocked}
                 onChange={(event) => updateWebDavSettings({ password: event.target.value })}
                 placeholder="密码或应用密码"
                 type="password"
@@ -353,32 +378,34 @@ export default function SettingsPage() {
             </div>
             <input
               className="text-input"
+              disabled={settingsLocked}
               onChange={(event) => updateWebDavSettings({ remote_path: event.target.value })}
               placeholder="远端文件路径"
               value={webDavSettings.remote_path}
             />
           </div>
 
+          {lastAutoSyncMessage && <p className="alert neutral">启动自动同步：{lastAutoSyncMessage}</p>}
           {webDavMessage && <p className="alert success">{webDavMessage}</p>}
           <div className="row-actions">
-            <button className="secondary-action" disabled={webDavBusy} onClick={() => void handleSaveWebDavSettings()} type="button">
+            <button className="secondary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleSaveWebDavSettings()} type="button">
               <Save size={17} />
               保存
             </button>
-            <button className="secondary-action" disabled={webDavBusy} onClick={() => void handleTestWebDav()} type="button">
+            <button className="secondary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleTestWebDav()} type="button">
               <Cloud size={17} />
               测试连接
             </button>
-            <button className="primary-action" disabled={webDavBusy} onClick={() => void handleUploadWebDav()} type="button">
+            <button className="primary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleUploadWebDav()} type="button">
               <UploadCloud size={17} />
               上传本机数据
             </button>
-            <button className="secondary-action" disabled={webDavBusy || focusRunning} onClick={() => void handleDownloadWebDav()} type="button">
+            <button className="secondary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleDownloadWebDav()} type="button">
               <Download size={17} />
               从云端恢复
             </button>
           </div>
-          {focusRunning && <p className="alert neutral">当前有进行中的专注，暂时不能从云端恢复数据库。</p>}
+          {settingsLocked && <p className="alert neutral">当前学习模式正在运行，暂时不能修改 WebDAV 配置或恢复数据库。</p>}
         </section>
       </div>
 
@@ -393,7 +420,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="settings-list">
-            <Capability enabled={focusRunning} icon={BellRing} text="专注期间关闭窗口时最小化到托盘" />
+            <Capability enabled={settingsLocked} icon={BellRing} text="学习期间关闭窗口时最小化到托盘" />
             <Capability enabled icon={ShieldCheck} text="记录非白名单应用干扰事件" />
             <Capability enabled={Boolean(dataLocation)} icon={Database} text="SQLite 本地数据目录可用" />
           </div>
@@ -418,11 +445,11 @@ export default function SettingsPage() {
           {updateMessage && <p className="alert neutral">{updateMessage}</p>}
           {updateProgress !== null && <p className="alert neutral">下载进度 {updateProgress}%</p>}
           <div className="row-actions">
-            <button className="secondary-action" disabled={checkingUpdate || installingUpdate} onClick={() => void handleCheckUpdate()} type="button">
+            <button className="secondary-action" disabled={checkingUpdate || installingUpdate || settingsLocked} onClick={() => void handleCheckUpdate()} type="button">
               <RefreshCw size={17} />
               {checkingUpdate ? '检查中' : '检查更新'}
             </button>
-            <button className="primary-action" disabled={availableUpdate === null || installingUpdate} onClick={() => void handleInstallUpdate()} type="button">
+            <button className="primary-action" disabled={availableUpdate === null || installingUpdate || settingsLocked} onClick={() => void handleInstallUpdate()} type="button">
               <Download size={17} />
               {installingUpdate ? '安装中' : '下载并安装'}
             </button>
@@ -470,6 +497,7 @@ function formatBytes(bytes: number) {
 }
 
 function SettingNumber({
+  disabled,
   label,
   max,
   min,
@@ -477,6 +505,7 @@ function SettingNumber({
   text,
   value,
 }: {
+  disabled: boolean;
   label: string;
   max: number;
   min: number;
@@ -492,6 +521,7 @@ function SettingNumber({
       </div>
       <input
         className="number-input"
+        disabled={disabled}
         max={max}
         min={min}
         onChange={(event) => onChange(Number(event.target.value) || min)}

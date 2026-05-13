@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FolderSearch, Globe2, History, ListPlus, Power, PowerOff, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { getStudyModeState } from '../services/focusApi';
+import { isStudyModeLocked } from '../services/studyModeLock';
 import {
   createWhitelistApp,
   createWhitelistWebsite,
@@ -9,6 +11,7 @@ import {
   listWhitelistApps,
   setWhitelistAppEnabled,
 } from '../services/whitelistApi';
+import type { StudyModeState } from '../types/focus';
 import type { RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
 
 export default function WhitelistPage() {
@@ -27,14 +30,30 @@ export default function WhitelistPage() {
   const [loading, setLoading] = useState(false);
   const [processLoading, setProcessLoading] = useState(false);
   const [blockedLoading, setBlockedLoading] = useState(false);
+  const [studyState, setStudyState] = useState<StudyModeState | null>(null);
 
   const enabledCount = apps.filter((app) => app.enabled).length;
   const websiteCount = apps.filter((app) => app.match_type === 'website_domain').length;
-  const canCreate = name.trim().length > 0 && (entryType === 'website' ? domain.trim().length > 0 : processName.trim().length > 0);
+  const whitelistLocked = isStudyModeLocked(studyState);
+  const canCreate = !whitelistLocked
+    && name.trim().length > 0
+    && (entryType === 'website' ? domain.trim().length > 0 : processName.trim().length > 0);
 
   useEffect(() => {
-    void refreshApps();
+    void initializeWhitelistPage();
   }, []);
+
+  async function initializeWhitelistPage() {
+    await Promise.all([refreshApps(), refreshStudyState()]);
+  }
+
+  async function refreshStudyState() {
+    try {
+      setStudyState(await getStudyModeState());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
 
   async function refreshApps() {
     try {
@@ -142,6 +161,18 @@ export default function WhitelistPage() {
     }
   }
 
+  useEffect(() => {
+    if (!whitelistLocked) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshStudyState();
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [whitelistLocked]);
+
   return (
     <section className="page-shell">
       <header className="page-header">
@@ -163,6 +194,7 @@ export default function WhitelistPage() {
       </header>
 
       {error && <p className="alert error">{error}</p>}
+      {whitelistLocked && <p className="alert neutral">学习模式正在运行，白名单配置已锁定；当前页面只允许查看规则和记录。</p>}
 
       <div className="content-grid two">
         <section className="panel">
@@ -175,11 +207,11 @@ export default function WhitelistPage() {
           </div>
 
           <div className="segmented-control">
-            <button className={entryType === 'app' ? 'active' : ''} onClick={() => setEntryType('app')} type="button">
+            <button className={entryType === 'app' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setEntryType('app')} type="button">
               <ShieldCheck size={16} />
               软件
             </button>
-            <button className={entryType === 'website' ? 'active' : ''} onClick={() => setEntryType('website')} type="button">
+            <button className={entryType === 'website' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setEntryType('website')} type="button">
               <Globe2 size={16} />
               网站
             </button>
@@ -188,6 +220,7 @@ export default function WhitelistPage() {
           <div className="form-stack">
             <input
               className="text-input"
+              disabled={whitelistLocked}
               onChange={(event) => setName(event.target.value)}
               placeholder={entryType === 'website' ? '网站名称，例如 中国大学 MOOC' : '软件名称，例如 Anki'}
               value={name}
@@ -195,6 +228,7 @@ export default function WhitelistPage() {
             {entryType === 'website' ? (
               <input
                 className="text-input"
+                disabled={whitelistLocked}
                 onChange={(event) => setDomain(event.target.value)}
                 placeholder="域名，例如 icourse163.org"
                 value={domain}
@@ -202,12 +236,13 @@ export default function WhitelistPage() {
             ) : (
               <input
                 className="text-input"
+                disabled={whitelistLocked}
                 onChange={(event) => setProcessName(event.target.value)}
                 placeholder="进程名，例如 anki.exe"
                 value={processName}
               />
             )}
-            <input className="text-input" onChange={(event) => setNote(event.target.value)} placeholder="备注，可选" value={note} />
+            <input className="text-input" disabled={whitelistLocked} onChange={(event) => setNote(event.target.value)} placeholder="备注，可选" value={note} />
             <button className="primary-action" disabled={!canCreate || loading} onClick={() => void handleCreate()} type="button">
               <ListPlus size={18} />
               {loading ? '添加中' : '加入白名单'}
@@ -231,7 +266,7 @@ export default function WhitelistPage() {
                 <h4>从运行进程选择</h4>
                 <p>适合把当前打开的阅读器、词典、笔记软件快速加入白名单。</p>
               </div>
-              <button className="secondary-action" disabled={processLoading} onClick={() => void handleLoadRunningProcesses()} type="button">
+              <button className="secondary-action" disabled={processLoading || whitelistLocked} onClick={() => void handleLoadRunningProcesses()} type="button">
                 <FolderSearch size={17} />
                 {processLoading ? '读取中' : '读取进程'}
               </button>
@@ -262,7 +297,7 @@ export default function WhitelistPage() {
           ) : (
             <div className="process-picker">
               {runningProcesses.map((process) => (
-                <button className="process-option" key={`${process.process_name}-${process.process_id}`} onClick={() => handleSelectProcess(process)} type="button">
+                <button className="process-option" disabled={whitelistLocked} key={`${process.process_name}-${process.process_id}`} onClick={() => handleSelectProcess(process)} type="button">
                   <strong>{process.process_name}</strong>
                   <span>{process.process_path ?? '无法读取路径'}</span>
                 </button>
@@ -290,7 +325,7 @@ export default function WhitelistPage() {
                     <span>{blockedApp.process_path ?? '无法读取路径'}</span>
                     <span>最近：{new Date(blockedApp.last_blocked_at).toLocaleString()} · {blockedApp.blocked_count} 次</span>
                   </div>
-                  <button className="secondary-action compact-button" onClick={() => void handleAddBlockedApp(blockedApp)} type="button">
+                  <button className="secondary-action compact-button" disabled={whitelistLocked} onClick={() => void handleAddBlockedApp(blockedApp)} type="button">
                     加入
                   </button>
                 </div>
@@ -330,11 +365,11 @@ export default function WhitelistPage() {
                   </div>
                 </div>
                 <div className="row-actions">
-                  <button className={app.enabled ? 'small-action enabled' : 'small-action'} onClick={() => void handleToggle(app)} type="button">
+                  <button className={app.enabled ? 'small-action enabled' : 'small-action'} disabled={whitelistLocked} onClick={() => void handleToggle(app)} type="button">
                     {app.enabled ? <Power size={15} /> : <PowerOff size={15} />}
                     {app.enabled ? '启用中' : '已停用'}
                   </button>
-                  <button className="small-action danger" onClick={() => void handleDelete(app.id)} type="button">
+                  <button className="small-action danger" disabled={whitelistLocked} onClick={() => void handleDelete(app.id)} type="button">
                     <Trash2 size={15} />
                     删除
                   </button>

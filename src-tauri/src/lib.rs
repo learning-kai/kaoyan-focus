@@ -148,6 +148,7 @@ pub fn run() {
             commands::sync::test_webdav_connection,
             commands::sync::upload_database_to_webdav,
             commands::sync::download_database_from_webdav,
+            commands::sync::auto_sync_webdav_database,
             commands::whitelist::create_whitelist_app,
             commands::whitelist::create_whitelist_website,
             commands::whitelist::list_recent_blocked_apps,

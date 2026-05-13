@@ -5,10 +5,10 @@ use std::{
 };
 
 use crate::storage::db::open_database;
-use chrono::Utc;
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use reqwest::{
     blocking::Client,
-    header::{HeaderMap, HeaderValue, CONTENT_LENGTH, CONTENT_TYPE},
+    header::{HeaderMap, HeaderValue, CONTENT_LENGTH, CONTENT_TYPE, LAST_MODIFIED},
     Method, StatusCode, Url,
 };
 use rusqlite::{Connection, OptionalExtension};
@@ -48,6 +48,25 @@ pub struct WebDavSyncResult {
     pub remote_url: String,
     pub bytes: u64,
     pub backup_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WebDavAutoSyncResult {
+    pub status: String,
+    pub message: String,
+    pub direction: Option<String>,
+    pub skipped_reason: Option<String>,
+    pub synced_at: String,
+    pub remote_url: Option<String>,
+    pub bytes: u64,
+    pub backup_path: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct RemoteFileMetadata {
+    exists: bool,
+    size: Option<u64>,
+    last_modified: Option<DateTime<Utc>>,
 }
 
 #[tauri::command]
@@ -201,6 +220,112 @@ pub fn download_database_from_webdav(app: AppHandle, settings: WebDavSettings) -
     })
 }
 
+#[tauri::command]
+pub fn auto_sync_webdav_database(app: AppHandle) -> Result<WebDavAutoSyncResult, String> {
+    let settings = get_webdav_settings(app.clone())?;
+    if settings.url.trim().is_empty() {
+        return Ok(skipped_auto_sync(
+            "webdav_not_configured",
+            "未配置 WebDAV，已跳过启动自动同步。",
+            None,
+        ));
+    }
+
+    let normalized = normalize_settings(settings)?;
+    let local_database_path = database_path(&app)?;
+    if has_active_runtime(&local_database_path)? {
+        return Ok(skipped_auto_sync(
+            "study_mode_active",
+            "学习模式正在运行，已跳过 WebDAV 自动同步。",
+            Some(remote_file_url(&normalized)?.to_string()),
+        ));
+    }
+
+    let local_modified = match local_database_modified_at(&local_database_path) {
+        Ok(value) => value,
+        Err(message) => {
+            return Ok(skipped_auto_sync(
+                "local_timestamp_unavailable",
+                &message,
+                Some(remote_file_url(&normalized)?.to_string()),
+            ));
+        }
+    };
+
+    let client = webdav_client()?;
+    let remote_url = remote_file_url(&normalized)?;
+    let remote_metadata = fetch_remote_file_metadata(&client, &remote_url, &normalized)?;
+
+    if !remote_metadata.exists {
+        let upload_result = upload_database_to_webdav(app, normalized)?;
+        return Ok(WebDavAutoSyncResult {
+            status: "synced".to_string(),
+            message: "远端同步文件不存在，已上传本地数据库。".to_string(),
+            direction: Some("upload".to_string()),
+            skipped_reason: None,
+            synced_at: Utc::now().to_rfc3339(),
+            remote_url: Some(upload_result.remote_url),
+            bytes: upload_result.bytes,
+            backup_path: None,
+        });
+    }
+
+    let Some(remote_modified) = remote_metadata.last_modified else {
+        return Ok(skipped_auto_sync(
+            "remote_timestamp_unavailable",
+            "远端未返回 Last-Modified，无法安全判断同步方向，已跳过自动同步。",
+            Some(remote_url.to_string()),
+        ));
+    };
+
+    let tolerance = ChronoDuration::seconds(2);
+    if remote_modified > local_modified + tolerance {
+        let download_result = download_database_from_webdav(app.clone(), normalized.clone())?;
+        let upload_result = upload_database_to_webdav(app, normalized)?;
+        return Ok(WebDavAutoSyncResult {
+            status: "synced".to_string(),
+            message: "远端数据更新，已下载、校验、备份本地数据库并回传同步。".to_string(),
+            direction: Some("download_upload".to_string()),
+            skipped_reason: None,
+            synced_at: Utc::now().to_rfc3339(),
+            remote_url: Some(upload_result.remote_url),
+            bytes: upload_result.bytes,
+            backup_path: download_result.backup_path,
+        });
+    }
+
+    if local_modified > remote_modified + tolerance {
+        let upload_result = upload_database_to_webdav(app, normalized)?;
+        return Ok(WebDavAutoSyncResult {
+            status: "synced".to_string(),
+            message: "本地数据更新，已上传到 WebDAV。".to_string(),
+            direction: Some("upload".to_string()),
+            skipped_reason: None,
+            synced_at: Utc::now().to_rfc3339(),
+            remote_url: Some(upload_result.remote_url),
+            bytes: upload_result.bytes,
+            backup_path: None,
+        });
+    }
+
+    Ok(WebDavAutoSyncResult {
+        status: "skipped".to_string(),
+        message: format!(
+            "本地与远端时间接近，未执行自动同步。远端大小：{}。",
+            remote_metadata
+                .size
+                .map(format_bytes)
+                .unwrap_or_else(|| "未知".to_string())
+        ),
+        direction: None,
+        skipped_reason: Some("up_to_date".to_string()),
+        synced_at: Utc::now().to_rfc3339(),
+        remote_url: Some(remote_url.to_string()),
+        bytes: 0,
+        backup_path: None,
+    })
+}
+
 fn normalize_settings(settings: WebDavSettings) -> Result<WebDavSettings, String> {
     let url = settings.url.trim().trim_end_matches('/').to_string();
     let username = settings.username.trim().to_string();
@@ -318,8 +443,16 @@ fn validate_sqlite_database(path: &Path) -> Result<(), String> {
 }
 
 fn ensure_no_active_runtime(path: &Path) -> Result<(), String> {
+    if has_active_runtime(path)? {
+        return Err("当前有进行中的学习模式，请等本次学习自然完成后再从 WebDAV 恢复数据。".to_string());
+    }
+
+    Ok(())
+}
+
+fn has_active_runtime(path: &Path) -> Result<bool, String> {
     if !path.exists() {
-        return Ok(());
+        return Ok(false);
     }
 
     let connection = open_database(path)?;
@@ -338,11 +471,7 @@ fn ensure_no_active_runtime(path: &Path) -> Result<(), String> {
         )
         .map_err(|error| error.to_string())?;
 
-    if active_study_modes > 0 || running_sessions > 0 {
-        return Err("当前有进行中的学习模式，请等本次学习自然完成后再从 WebDAV 恢复数据。".to_string());
-    }
-
-    Ok(())
+    Ok(active_study_modes > 0 || running_sessions > 0)
 }
 
 fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -397,6 +526,84 @@ fn content_length(headers: &HeaderMap) -> Option<u64> {
         .get(CONTENT_LENGTH)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<u64>().ok())
+}
+
+fn fetch_remote_file_metadata(
+    client: &Client,
+    remote_url: &Url,
+    settings: &WebDavSettings,
+) -> Result<RemoteFileMetadata, String> {
+    let response = webdav_request(client, Method::HEAD, remote_url.clone(), settings)
+        .send()
+        .map_err(|error| format!("读取 WebDAV 远端状态失败：{error}"))?;
+
+    if response.status() == StatusCode::NOT_FOUND {
+        return Ok(RemoteFileMetadata {
+            exists: false,
+            size: None,
+            last_modified: None,
+        });
+    }
+
+    if response.status() == StatusCode::METHOD_NOT_ALLOWED {
+        return Ok(RemoteFileMetadata {
+            exists: true,
+            size: None,
+            last_modified: None,
+        });
+    }
+
+    if !response.status().is_success() {
+        return Err(format!("读取 WebDAV 远端状态失败，返回状态：{}", response.status().as_u16()));
+    }
+
+    let headers = response.headers().clone();
+    Ok(RemoteFileMetadata {
+        exists: true,
+        size: content_length(&headers),
+        last_modified: parse_last_modified(&headers),
+    })
+}
+
+fn parse_last_modified(headers: &HeaderMap) -> Option<DateTime<Utc>> {
+    headers
+        .get(LAST_MODIFIED)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| DateTime::parse_from_rfc2822(value).ok())
+        .map(|value| value.with_timezone(&Utc))
+}
+
+fn local_database_modified_at(path: &Path) -> Result<DateTime<Utc>, String> {
+    let modified = fs::metadata(path)
+        .map_err(|error| format!("读取本地数据库时间失败：{error}"))?
+        .modified()
+        .map_err(|error| format!("读取本地数据库修改时间失败：{error}"))?;
+    Ok(modified.into())
+}
+
+fn skipped_auto_sync(reason: &str, message: &str, remote_url: Option<String>) -> WebDavAutoSyncResult {
+    WebDavAutoSyncResult {
+        status: "skipped".to_string(),
+        message: message.to_string(),
+        direction: None,
+        skipped_reason: Some(reason.to_string()),
+        synced_at: Utc::now().to_rfc3339(),
+        remote_url,
+        bytes: 0,
+        backup_path: None,
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+
+    if bytes < 1024 * 1024 {
+        return format!("{:.1} KB", bytes as f64 / 1024.0);
+    }
+
+    format!("{:.1} MB", bytes as f64 / 1024.0 / 1024.0)
 }
 
 fn header_string(headers: &HeaderMap, name: &str) -> Option<String> {

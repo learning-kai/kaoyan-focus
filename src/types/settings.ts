@@ -33,3 +33,14 @@ export type WebDavSyncResult = {
   bytes: number;
   backup_path: string | null;
 };
+
+export type WebDavAutoSyncResult = {
+  status: 'synced' | 'skipped';
+  message: string;
+  direction: 'upload' | 'download_upload' | null;
+  skipped_reason: string | null;
+  synced_at: string;
+  remote_url: string | null;
+  bytes: number;
+  backup_path: string | null;
+};
