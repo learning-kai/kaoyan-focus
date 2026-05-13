@@ -7,6 +7,7 @@ import {
   Coffee,
   Gauge,
   Leaf,
+  Pause,
   Play,
   RefreshCw,
   ShieldCheck,
@@ -18,7 +19,10 @@ import {
   getStudyModeState,
   listFocusSessions,
   listSubjects,
+  pauseStudyMode,
+  resumeStudyMode,
   startStudyMode,
+  updateStudyModeSubject,
 } from '../services/focusApi';
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
@@ -48,6 +52,7 @@ const idleStudyState: StudyModeState = {
   cycle_index: 0,
   started_at: null,
   phase_started_at: null,
+  paused_at: null,
   ended_at: null,
   current_session: null,
   study_elapsed_seconds: 0,
@@ -55,6 +60,7 @@ const idleStudyState: StudyModeState = {
   phase_elapsed_seconds: 0,
   phase_remaining_seconds: 0,
   focus_enforcement_active: false,
+  is_paused: false,
 };
 
 const phaseLabel: Record<StudyModePhase, string> = {
@@ -141,6 +147,7 @@ export default function FocusPage() {
 
   const active = studyState.status === 'active';
   const controlsDisabled = active;
+  const canPause = active && (studyState.phase === 'focus' || studyState.phase === 'awaiting_break');
   const currentSession = studyState.current_session;
   const subjectNameMap = useMemo(() => new Map(subjects.map((subject) => [subject.id, subject.name])), [subjects]);
   const displayedSubjectId = active ? studyState.subject_id : selectedSubjectId;
@@ -150,7 +157,9 @@ export default function FocusPage() {
     : studyState.phase === 'awaiting_break'
       ? formatSeconds(studyState.phase_elapsed_seconds)
       : formatSeconds(studyState.phase_remaining_seconds);
-  const activeClockLabel = studyState.phase === 'awaiting_break' ? '已继续学习' : '阶段倒计时';
+  const activeClockLabel = studyState.is_paused
+    ? '已暂停'
+    : studyState.phase === 'awaiting_break' ? '已继续学习' : '阶段倒计时';
   const totalProgress = studyState.planned_seconds > 0
     ? Math.min((studyState.study_elapsed_seconds / studyState.planned_seconds) * 100, 100)
     : 0;
@@ -323,16 +332,41 @@ export default function FocusPage() {
     }
   }
 
+  async function handleTogglePause() {
+    try {
+      setError(null);
+      const nextState = studyState.is_paused ? await resumeStudyMode() : await pauseStudyMode();
+      setStudyState(nextState);
+      setNotice(nextState.is_paused ? '已暂停计时，白名单仍在执行。' : '已继续学习计时。');
+      reminderBaselineKey = reminderKey(nextState);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function handleActiveSubjectChange(value: string) {
+    try {
+      setError(null);
+      const subjectId = value ? Number(value) : null;
+      const nextState = await updateStudyModeSubject(subjectId);
+      setStudyState(nextState);
+      setNotice('本次学习科目已更新。');
+      await refreshDashboard();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
   if (active) {
     return (
-      <section className={`page-shell pomodoro-shell phase-${studyState.phase}`}>
+      <section className={`page-shell pomodoro-shell phase-${studyState.phase}${studyState.is_paused ? ' is-paused' : ''}`}>
         {error && <p className="alert error">{error}</p>}
         {notice && <p className="alert success">{notice}</p>}
         {monitorError && <p className="alert error">前台检测失败：{monitorError}</p>}
 
         <div className="pomodoro-focus">
           <div className="pomodoro-topline">
-            <span>{phaseLabel[studyState.phase]}</span>
+            <span>{studyState.is_paused ? '已暂停' : phaseLabel[studyState.phase]}</span>
             <span>{selectedSubjectName ?? '未指定科目'}</span>
           </div>
 
@@ -354,9 +388,26 @@ export default function FocusPage() {
             <CoreFact label="白名单" value={studyState.focus_enforcement_active ? '强制执行中' : '休息中暂停'} />
           </div>
 
+          <div className="pomodoro-live-controls">
+            <label className="pomodoro-subject-control">
+              <span>当前科目</span>
+              <select
+                className="select-input"
+                disabled={subjects.length === 0}
+                onChange={(event) => void handleActiveSubjectChange(event.target.value)}
+                value={studyState.subject_id ?? ''}
+              >
+                <option value="">未指定</option>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>{subject.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <div className="pomodoro-actions">
             {studyState.phase === 'awaiting_break' ? (
-              <button className="primary-action" onClick={handleConfirmBreak} type="button">
+              <button className="primary-action" disabled={studyState.is_paused} onClick={handleConfirmBreak} type="button">
                 <Coffee size={18} />
                 确认开始{breakKindLabel(studyState.break_kind)}
               </button>
@@ -364,6 +415,12 @@ export default function FocusPage() {
               <button className="secondary-action" onClick={refreshStudyState} type="button">
                 <RefreshCw size={18} />
                 刷新状态
+              </button>
+            )}
+            {canPause && (
+              <button className={studyState.is_paused ? 'primary-action pause-action' : 'secondary-action pause-action'} onClick={handleTogglePause} type="button">
+                {studyState.is_paused ? <Play size={18} /> : <Pause size={18} />}
+                {studyState.is_paused ? '继续' : '暂停'}
               </button>
             )}
           </div>
@@ -552,6 +609,10 @@ function nextBreakLabel(studyState: StudyModeState) {
 }
 
 function buildPhaseMessage(studyState: StudyModeState) {
+  if (studyState.is_paused) {
+    return '计时已暂停，白名单仍在强制执行';
+  }
+
   if (studyState.phase === 'focus') {
     return `第 ${studyState.cycle_index} 轮番茄钟进行中`;
   }
@@ -582,6 +643,7 @@ function reminderKey(studyState: StudyModeState) {
     studyState.phase,
     studyState.cycle_index,
     studyState.break_kind,
+    studyState.is_paused ? 'paused' : 'running',
   ].join(':');
 }
 

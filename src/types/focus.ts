@@ -67,6 +67,7 @@ export type StudyModeState = {
   cycle_index: number;
   started_at: string | null;
   phase_started_at: string | null;
+  paused_at: string | null;
   ended_at: string | null;
   current_session: FocusSession | null;
   study_elapsed_seconds: number;
@@ -74,4 +75,5 @@ export type StudyModeState = {
   phase_elapsed_seconds: number;
   phase_remaining_seconds: number;
   focus_enforcement_active: boolean;
+  is_paused: boolean;
 };

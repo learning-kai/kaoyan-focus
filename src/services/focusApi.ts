@@ -41,6 +41,18 @@ export function confirmStudyBreak(): Promise<StudyModeState> {
   return invokeCommand<StudyModeState>('confirm_study_break');
 }
 
+export function pauseStudyMode(): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('pause_study_mode');
+}
+
+export function resumeStudyMode(): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('resume_study_mode');
+}
+
+export function updateStudyModeSubject(subjectId: number | null): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('update_study_mode_subject', { subjectId });
+}
+
 export function setStudyModeActive(active: boolean): Promise<void> {
   return invokeCommand<void>('set_study_mode_active', { active });
 }

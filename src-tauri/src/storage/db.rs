@@ -45,6 +45,9 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               cycle_index INTEGER NOT NULL DEFAULT 1,
               started_at TEXT NOT NULL,
               phase_started_at TEXT NOT NULL,
+              paused_at TEXT,
+              total_paused_seconds INTEGER NOT NULL DEFAULT 0,
+              phase_paused_seconds INTEGER NOT NULL DEFAULT 0,
               ended_at TEXT,
               current_session_id INTEGER,
               status TEXT NOT NULL DEFAULT 'active',
@@ -107,6 +110,19 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "study_modes",
         "long_break_interval",
         "INTEGER NOT NULL DEFAULT 4",
+    )?;
+    add_column_if_missing(connection, "study_modes", "paused_at", "TEXT")?;
+    add_column_if_missing(
+        connection,
+        "study_modes",
+        "total_paused_seconds",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    add_column_if_missing(
+        connection,
+        "study_modes",
+        "phase_paused_seconds",
+        "INTEGER NOT NULL DEFAULT 0",
     )?;
 
     Ok(())

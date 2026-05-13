@@ -594,6 +594,12 @@ svg {
     radial-gradient(circle at 50% 18%, rgba(176, 104, 36, 0.13), transparent 34%);
 }
 
+.pomodoro-shell.is-paused {
+  background:
+    linear-gradient(135deg, rgba(255, 250, 242, 0.9), rgba(231, 237, 229, 0.78)),
+    radial-gradient(circle at 50% 18%, rgba(25, 35, 55, 0.1), transparent 34%);
+}
+
 .pomodoro-focus {
   display: grid;
   gap: 20px;
@@ -655,6 +661,36 @@ svg {
 .pomodoro-actions {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pomodoro-live-controls {
+  display: flex;
+  justify-content: center;
+  width: min(100%, 380px);
+}
+
+.pomodoro-subject-control {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(224, 216, 201, 0.78);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.pomodoro-subject-control span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.pause-action {
+  min-width: 112px;
 }
 
 .progress-stack {
@@ -1415,5 +1451,10 @@ svg {
   .session-subject-select {
     width: 100%;
     min-width: 0;
+  }
+
+  .pomodoro-subject-control {
+    grid-template-columns: minmax(0, 1fr);
+    text-align: left;
   }
 }
