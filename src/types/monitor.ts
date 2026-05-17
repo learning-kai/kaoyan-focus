@@ -3,6 +3,7 @@ export type ForegroundApp = {
   process_name: string;
   process_path: string | null;
   window_title: string;
+  browser_url?: string | null;
 };
 
 export type RunningProcess = {

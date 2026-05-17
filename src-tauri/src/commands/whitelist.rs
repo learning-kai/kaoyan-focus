@@ -1,7 +1,9 @@
 use crate::{
     storage::db::open_database,
     whitelist::app::WhitelistApp,
-    windows::running_processes::{list_running_processes as read_running_processes, RunningProcess},
+    windows::running_processes::{
+        list_running_processes as read_running_processes, RunningProcess,
+    },
 };
 use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
@@ -105,6 +107,7 @@ pub fn create_whitelist_website(
     note: Option<String>,
 ) -> Result<WhitelistApp, String> {
     let name = name.trim();
+    let launch_url = website_launch_url(&domain);
     let domain = normalize_domain(&domain);
 
     if name.is_empty() {
@@ -117,21 +120,46 @@ pub fn create_whitelist_website(
 
     let now = Utc::now().to_rfc3339();
     let connection = open_database(&database_path(&app)?)?;
-    let existing_id = connection
-        .query_row(
-            "
-            SELECT id
-            FROM whitelist_apps
-            WHERE match_type = 'website_domain'
-              AND lower(process_name) = lower(?1)
-            ORDER BY id DESC
-            LIMIT 1
-            ",
-            params![domain],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
+    let is_specific_url = launch_url
+        .as_deref()
+        .is_some_and(website_url_has_specific_path);
+    let existing_id = if is_specific_url {
+        connection
+            .query_row(
+                "
+                SELECT id
+                FROM whitelist_apps
+                WHERE match_type = 'website_domain'
+                  AND path = ?1
+                ORDER BY id DESC
+                LIMIT 1
+                ",
+                params![launch_url.as_deref()],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+    } else {
+        connection
+            .query_row(
+                "
+                SELECT id
+                FROM whitelist_apps
+                WHERE match_type = 'website_domain'
+                  AND lower(process_name) = lower(?1)
+                  AND (
+                    path IS NULL
+                    OR path = ''
+                    OR lower(path) = lower(?2)
+                  )
+                ORDER BY id DESC
+                LIMIT 1
+                ",
+                params![domain, launch_url.as_deref()],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+    }
+    .map_err(|error| error.to_string())?;
 
     if let Some(existing_id) = existing_id {
         connection
@@ -139,12 +167,13 @@ pub fn create_whitelist_website(
                 "
                 UPDATE whitelist_apps
                 SET name = ?1,
-                    note = ?2,
+                    path = ?2,
+                    note = ?3,
                     enabled = 1,
-                    updated_at = ?3
-                WHERE id = ?4
+                    updated_at = ?4
+                WHERE id = ?5
                 ",
-                params![name, note, now, existing_id],
+                params![name, launch_url, note, now, existing_id],
             )
             .map_err(|error| error.to_string())?;
 
@@ -163,9 +192,9 @@ pub fn create_whitelist_website(
               enabled,
               created_at,
               updated_at
-            ) VALUES (?1, ?2, NULL, 'website_domain', ?3, 1, ?4, ?4)
+            ) VALUES (?1, ?2, ?3, 'website_domain', ?4, 1, ?5, ?5)
             ",
-            params![name, domain, note, now],
+            params![name, domain, launch_url, note, now],
         )
         .map_err(|error| error.to_string())?;
 
@@ -252,17 +281,71 @@ pub fn list_recent_blocked_apps(app: AppHandle) -> Result<Vec<RecentBlockedApp>,
 }
 
 fn normalize_domain(value: &str) -> String {
-    value
+    let trimmed = value
         .trim()
         .trim_start_matches("http://")
         .trim_start_matches("https://")
-        .trim_start_matches("www.")
+        .trim_start_matches("//");
+    let host = trimmed
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .rsplit('@')
+        .next()
+        .unwrap_or_default()
+        .split(':')
+        .next()
+        .unwrap_or_default();
+
+    host.trim_start_matches("www.")
+        .trim_start_matches("*.")
+        .trim_end_matches('.')
         .trim_end_matches('/')
         .to_ascii_lowercase()
 }
 
+fn website_launch_url(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        Some(trimmed.to_string())
+    } else {
+        Some(format!("https://{}", trimmed.trim_start_matches("//")))
+    }
+}
+
+fn website_url_has_specific_path(value: &str) -> bool {
+    let trimmed = value.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let scheme_length = if lower.starts_with("http://") {
+        "http://".len()
+    } else if lower.starts_with("https://") {
+        "https://".len()
+    } else {
+        0
+    };
+    let without_scheme = &trimmed[scheme_length..];
+    let Some(path_start) = without_scheme.find(['/', '?', '#']) else {
+        return false;
+    };
+    let path = without_scheme[path_start..]
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("/")
+        .trim_end_matches('/');
+
+    !path.is_empty() && path != "/"
+}
+
 #[tauri::command]
-pub fn set_whitelist_app_enabled(app: AppHandle, id: i64, enabled: bool) -> Result<WhitelistApp, String> {
+pub fn set_whitelist_app_enabled(
+    app: AppHandle,
+    id: i64,
+    enabled: bool,
+) -> Result<WhitelistApp, String> {
     let now = Utc::now().to_rfc3339();
     let connection = open_database(&database_path(&app)?)?;
 
@@ -298,7 +381,10 @@ fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
         .join("kaoyan-focus.sqlite3"))
 }
 
-fn get_whitelist_app_by_id(connection: &rusqlite::Connection, id: i64) -> Result<WhitelistApp, String> {
+fn get_whitelist_app_by_id(
+    connection: &rusqlite::Connection,
+    id: i64,
+) -> Result<WhitelistApp, String> {
     connection
         .query_row(
             "

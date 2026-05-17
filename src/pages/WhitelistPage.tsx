@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { FolderSearch, Globe2, History, ListPlus, Power, PowerOff, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { ExternalLink, FolderSearch, Globe2, History, ListPlus, Power, PowerOff, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { getStudyModeState } from '../services/focusApi';
 import { isStudyModeLocked } from '../services/studyModeLock';
+import { openExternalUrl } from '../services/systemApi';
 import {
   createWhitelistApp,
   createWhitelistWebsite,
@@ -14,9 +15,20 @@ import {
 import type { StudyModeState } from '../types/focus';
 import type { RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
 
+type WhitelistEntryType = 'app' | 'website';
+
+function websiteUrlFromRule(rule: string) {
+  const trimmed = rule.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed.replace(/^\*+\./, '').replace(/^\/+/, '')}`;
+}
+
 export default function WhitelistPage() {
   const [apps, setApps] = useState<WhitelistApp[]>([]);
-  const [entryType, setEntryType] = useState<'app' | 'website'>('app');
+  const [entryType, setEntryType] = useState<WhitelistEntryType>('app');
   const [name, setName] = useState('');
   const [processName, setProcessName] = useState('');
   const [domain, setDomain] = useState('');
@@ -77,6 +89,10 @@ export default function WhitelistPage() {
   }
 
   async function handleCreate() {
+    if (whitelistLocked) {
+      return;
+    }
+
     try {
       setError(null);
       setLoading(true);
@@ -108,6 +124,10 @@ export default function WhitelistPage() {
   }
 
   async function handleLoadRunningProcesses() {
+    if (whitelistLocked) {
+      return;
+    }
+
     try {
       setError(null);
       setProcessLoading(true);
@@ -121,6 +141,10 @@ export default function WhitelistPage() {
   }
 
   async function handleLoadRecentBlockedApps() {
+    if (whitelistLocked) {
+      return;
+    }
+
     try {
       setError(null);
       setBlockedLoading(true);
@@ -134,6 +158,10 @@ export default function WhitelistPage() {
   }
 
   function handleSelectProcess(process: RunningProcess) {
+    if (whitelistLocked) {
+      return;
+    }
+
     const displayName = process.process_name.replace(/\.exe$/i, '');
     setName(displayName);
     setProcessName(process.process_name);
@@ -142,6 +170,10 @@ export default function WhitelistPage() {
   }
 
   async function handleAddBlockedApp(blockedApp: RecentBlockedApp) {
+    if (whitelistLocked) {
+      return;
+    }
+
     try {
       setError(null);
       const displayName = blockedApp.process_name.replace(/\.exe$/i, '');
@@ -155,6 +187,10 @@ export default function WhitelistPage() {
   }
 
   async function handleToggle(app: WhitelistApp) {
+    if (whitelistLocked) {
+      return;
+    }
+
     try {
       setError(null);
       await setWhitelistAppEnabled(app.id, !app.enabled);
@@ -165,10 +201,23 @@ export default function WhitelistPage() {
   }
 
   async function handleDelete(id: number) {
+    if (whitelistLocked) {
+      return;
+    }
+
     try {
       setError(null);
       await deleteWhitelistApp(id);
       await refreshApps();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function handleOpenWebsite(app: WhitelistApp) {
+    try {
+      setError(null);
+      await openExternalUrl(websiteUrlFromRule(app.path?.trim() || app.process_name));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -388,6 +437,12 @@ export default function WhitelistPage() {
                   </div>
                 </div>
                 <div className="row-actions">
+                  {app.match_type === 'website_domain' && (
+                    <button className="small-action" onClick={() => void handleOpenWebsite(app)} type="button">
+                      <ExternalLink size={15} />
+                      打开
+                    </button>
+                  )}
                   <button className={app.enabled ? 'small-action enabled' : 'small-action'} disabled={whitelistLocked} onClick={() => void handleToggle(app)} type="button">
                     {app.enabled ? <Power size={15} /> : <PowerOff size={15} />}
                     {app.enabled ? '启用中' : '已停用'}

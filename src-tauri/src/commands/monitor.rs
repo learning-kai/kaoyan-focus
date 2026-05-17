@@ -4,13 +4,13 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 use crate::{
-    AppState,
     storage::db::open_database,
-    whitelist::matcher::{is_foreground_app_allowed, WhitelistMatchResult},
+    whitelist::matcher::{is_foreground_app_allowed, WebsiteWhitelistRule, WhitelistMatchResult},
     windows::{
         foreground::{get_foreground_app, ForegroundApp},
         window_control::close_window,
     },
+    AppState,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -53,8 +53,12 @@ pub fn check_focus_foreground_app_for_session(
     let foreground_app = get_foreground_app()?;
     let connection = open_database(&database_path(app)?)?;
     let whitelist_process_names = enabled_whitelist_process_names(&connection)?;
-    let whitelist_domains = enabled_whitelist_domains(&connection)?;
-    let match_result = is_foreground_app_allowed(&foreground_app, &whitelist_process_names, &whitelist_domains);
+    let whitelist_websites = enabled_whitelist_websites(&connection)?;
+    let match_result = is_foreground_app_allowed(
+        &foreground_app,
+        &whitelist_process_names,
+        &whitelist_websites,
+    );
     let mut action_taken = None;
     let mut close_error = None;
 
@@ -197,7 +201,9 @@ fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
         .join("kaoyan-focus.sqlite3"))
 }
 
-fn enabled_whitelist_process_names(connection: &rusqlite::Connection) -> Result<Vec<String>, String> {
+fn enabled_whitelist_process_names(
+    connection: &rusqlite::Connection,
+) -> Result<Vec<String>, String> {
     let mut statement = connection
         .prepare("SELECT process_name FROM whitelist_apps WHERE enabled = 1 AND match_type = 'process_name'")
         .map_err(|error| error.to_string())?;
@@ -211,16 +217,32 @@ fn enabled_whitelist_process_names(connection: &rusqlite::Connection) -> Result<
     Ok(process_names)
 }
 
-fn enabled_whitelist_domains(connection: &rusqlite::Connection) -> Result<Vec<String>, String> {
+fn enabled_whitelist_websites(
+    connection: &rusqlite::Connection,
+) -> Result<Vec<WebsiteWhitelistRule>, String> {
     let mut statement = connection
-        .prepare("SELECT process_name FROM whitelist_apps WHERE enabled = 1 AND match_type = 'website_domain'")
+        .prepare("SELECT process_name, path FROM whitelist_apps WHERE enabled = 1 AND match_type = 'website_domain'")
         .map_err(|error| error.to_string())?;
 
-    let domains = statement
-        .query_map([], |row| row.get::<_, String>(0))
+    let websites = statement
+        .query_map([], |row| {
+            let domain = row.get::<_, String>(0)?;
+            let launch_url = row.get::<_, Option<String>>(1)?;
+            let launch_url = launch_url.or_else(|| legacy_specific_url(&domain));
+            Ok(WebsiteWhitelistRule { domain, launch_url })
+        })
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
 
-    Ok(domains)
+    Ok(websites)
+}
+
+fn legacy_specific_url(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.contains('/') {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
 }

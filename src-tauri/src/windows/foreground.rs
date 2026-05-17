@@ -10,6 +10,8 @@ use windows::Win32::{
     },
 };
 
+use super::browser_url::read_browser_url;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ForegroundApp {
     #[serde(skip)]
@@ -18,6 +20,7 @@ pub struct ForegroundApp {
     pub process_name: String,
     pub process_path: Option<String>,
     pub window_title: String,
+    pub browser_url: Option<String>,
 }
 
 impl ForegroundApp {
@@ -49,6 +52,11 @@ pub fn get_foreground_app() -> Result<ForegroundApp, String> {
         .and_then(|name| name.to_str())
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| format!("pid-{process_id}"));
+    let browser_url = if is_supported_browser_process(&process_name) {
+        read_browser_url(window)
+    } else {
+        None
+    };
 
     Ok(ForegroundApp {
         window,
@@ -56,7 +64,21 @@ pub fn get_foreground_app() -> Result<ForegroundApp, String> {
         process_name,
         process_path,
         window_title,
+        browser_url,
     })
+}
+
+fn is_supported_browser_process(process_name: &str) -> bool {
+    matches!(
+        process_name.to_ascii_lowercase().as_str(),
+        "chrome.exe"
+            | "msedge.exe"
+            | "firefox.exe"
+            | "brave.exe"
+            | "opera.exe"
+            | "vivaldi.exe"
+            | "iexplore.exe"
+    )
 }
 
 fn read_window_title(window: HWND) -> String {

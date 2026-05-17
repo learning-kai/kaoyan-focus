@@ -20,16 +20,21 @@ import {
   downloadDatabaseFromWebDav,
   getAppDataLocation,
   getAppSettings,
+  getObjectStorageSettings,
   getWebDavSettings,
   saveAppSettings,
+  saveObjectStorageSettings,
   saveWebDavSettings,
+  testObjectStorageConnection,
   testWebDavConnection,
+  downloadDatabaseFromObjectStorage,
   uploadDatabaseToWebDav,
+  uploadDatabaseToObjectStorage,
 } from '../services/settingsApi';
 import { checkForAppUpdate, installAppUpdate, type AppUpdate } from '../services/updateApi';
 import type { StudyModeState } from '../types/focus';
 import type { ForegroundApp } from '../types/monitor';
-import type { AppSettings, WebDavSettings } from '../types/settings';
+import type { AppSettings, AppTheme, ObjectStorageSettings, SyncBackend, WebDavSettings } from '../types/settings';
 
 const defaultSettings: AppSettings = {
   default_study_minutes: 120,
@@ -38,35 +43,54 @@ const defaultSettings: AppSettings = {
   long_break_minutes: 15,
   long_break_interval: 4,
   default_focus_mode: 'normal',
+  ui_theme: 'dark',
+  sync_backend: 'webdav',
   emergency_cooldown_seconds: 60,
+  checklist_category_names: '{"politics":"政治","english":"英语","math":"数学","major":"专业课","general":"通用"}',
 };
 
 const defaultWebDavSettings: WebDavSettings = {
+  enabled: true,
   url: '',
   username: '',
   password: '',
   remote_path: 'kaoyan-focus/kaoyan-focus.sqlite3',
 };
 
-type SettingsPageProps = {
-  lastAutoSyncMessage?: string | null;
+const defaultObjectStorageSettings: ObjectStorageSettings = {
+  enabled: false,
+  endpoint: '',
+  bucket: '',
+  access_key_id: '',
+  secret_access_key: '',
+  region: '',
+  object_key: 'study-sync.json',
 };
 
-export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPageProps) {
+type SettingsPageProps = {
+  lastAutoSyncMessage?: string | null;
+  theme?: AppTheme;
+  onThemeChange?: (theme: AppTheme) => void;
+};
+
+export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark', onThemeChange = () => {} }: SettingsPageProps) {
   const [foregroundApp, setForegroundApp] = useState<ForegroundApp | null>(null);
   const [studyState, setStudyState] = useState<StudyModeState | null>(null);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [webDavSettings, setWebDavSettings] = useState<WebDavSettings>(defaultWebDavSettings);
+  const [objectStorageSettings, setObjectStorageSettings] = useState<ObjectStorageSettings>(defaultObjectStorageSettings);
   const [dataLocation, setDataLocation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [webDavMessage, setWebDavMessage] = useState<string | null>(null);
+  const [objectStorageMessage, setObjectStorageMessage] = useState<string | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<AppUpdate | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [updateProgress, setUpdateProgress] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [webDavBusy, setWebDavBusy] = useState(false);
+  const [objectStorageBusy, setObjectStorageBusy] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
 
@@ -75,6 +99,10 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
   useEffect(() => {
     void initializeSettingsPage();
   }, []);
+
+  useEffect(() => {
+    setSettings((current) => ({ ...current, ui_theme: theme }));
+  }, [theme]);
 
   useEffect(() => {
     if (!settingsLocked) {
@@ -89,7 +117,13 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
   }, [settingsLocked]);
 
   async function initializeSettingsPage() {
-    await Promise.all([refreshStudyState(), refreshSettings(), refreshDataLocation(), refreshWebDavSettings()]);
+    await Promise.all([
+      refreshStudyState(),
+      refreshSettings(),
+      refreshDataLocation(),
+      refreshWebDavSettings(),
+      refreshObjectStorageSettings(),
+    ]);
   }
 
   async function refreshStudyState() {
@@ -103,7 +137,8 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
   async function refreshSettings() {
     try {
       setError(null);
-      setSettings(await getAppSettings());
+      const nextSettings = await getAppSettings();
+      setSettings({ ...nextSettings, ui_theme: theme });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -113,6 +148,15 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
     try {
       setError(null);
       setWebDavSettings(await getWebDavSettings());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function refreshObjectStorageSettings() {
+    try {
+      setError(null);
+      setObjectStorageSettings(await getObjectStorageSettings());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -133,8 +177,9 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
       setSaving(true);
       setError(null);
       setSavedMessage(null);
-      const saved = await saveAppSettings(settings);
+      const saved = await saveAppSettings({ ...settings, ui_theme: theme });
       setSettings(saved);
+      onThemeChange(saved.ui_theme);
       setSavedMessage('设置已保存，下次进入专注页会自动使用。');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -175,6 +220,40 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
     await initializeSettingsPage();
   }
 
+  async function handleSaveObjectStorageSettings() {
+    await runObjectStorageAction(async () => {
+      const saved = await saveObjectStorageSettings(objectStorageSettings);
+      setObjectStorageSettings(saved);
+      return '对象存储配置已保存。';
+    });
+  }
+
+  async function handleTestObjectStorage() {
+    await runObjectStorageAction(async () => {
+      const status = await testObjectStorageConnection(objectStorageSettings);
+      return status.object_exists
+        ? `${status.message} 远端大小 ${status.object_size ? formatBytes(status.object_size) : '未知'}。`
+        : status.message;
+    });
+  }
+
+  async function handleUploadObjectStorage() {
+    await runObjectStorageAction(async () => {
+      const result = await uploadDatabaseToObjectStorage(objectStorageSettings);
+      return `${result.message} 上传 ${formatBytes(result.bytes)}。`;
+    });
+  }
+
+  async function handleDownloadObjectStorage() {
+    await runObjectStorageAction(async () => {
+      const result = await downloadDatabaseFromObjectStorage(objectStorageSettings);
+      return result.backup_path
+        ? `${result.message} 备份路径：${result.backup_path}`
+        : result.message;
+    });
+    await initializeSettingsPage();
+  }
+
   async function runWebDavAction(action: () => Promise<string>) {
     try {
       setWebDavBusy(true);
@@ -188,6 +267,19 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
     }
   }
 
+  async function runObjectStorageAction(action: () => Promise<string>) {
+    try {
+      setObjectStorageBusy(true);
+      setError(null);
+      setObjectStorageMessage(null);
+      setObjectStorageMessage(await action());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setObjectStorageBusy(false);
+    }
+  }
+
   function updateSettings(patch: Partial<AppSettings>) {
     setSavedMessage(null);
     setSettings((current) => ({ ...current, ...patch }));
@@ -197,6 +289,18 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
     setWebDavMessage(null);
     setWebDavSettings((current) => ({ ...current, ...patch }));
   }
+
+  function updateObjectStorageSettings(patch: Partial<ObjectStorageSettings>) {
+    setObjectStorageMessage(null);
+    setObjectStorageSettings((current) => ({ ...current, ...patch }));
+  }
+
+  function updateSyncBackend(sync_backend: SyncBackend) {
+    updateSettings({ sync_backend });
+  }
+
+  const webDavActionDisabled = webDavBusy || settingsLocked || !webDavSettings.enabled;
+  const objectStorageActionDisabled = objectStorageBusy || settingsLocked || !objectStorageSettings.enabled;
 
   async function handleDetectForegroundApp() {
     try {
@@ -282,52 +386,11 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
         </div>
 
         <div className="rhythm-grid">
-          <SettingNumber
-            label="学习模式时长"
-            max={720}
-            min={1}
-            disabled={settingsLocked}
-            onChange={(value) => updateSettings({ default_study_minutes: value })}
-            text="进入学习模式后的总约束时间。"
-            value={settings.default_study_minutes}
-          />
-          <SettingNumber
-            label="番茄专注时长"
-            max={120}
-            min={1}
-            disabled={settingsLocked}
-            onChange={(value) => updateSettings({ default_focus_minutes: value })}
-            text="学习模式内每轮番茄钟的专注分钟数。"
-            value={settings.default_focus_minutes}
-          />
-          <SettingNumber
-            label="短休息"
-            max={60}
-            min={1}
-            disabled={settingsLocked}
-            onChange={(value) => updateSettings({ break_minutes: value })}
-            text="普通番茄轮次结束后的休息分钟数。"
-            value={settings.break_minutes}
-          />
-          <SettingNumber
-            label="长休息"
-            max={120}
-            min={1}
-            disabled={settingsLocked}
-            onChange={(value) => updateSettings({ long_break_minutes: value })}
-            text="到达长休息轮次后的休息分钟数。"
-            value={settings.long_break_minutes}
-          />
-          <SettingNumber
-            label="长休间隔"
-            max={12}
-            min={1}
-            disabled={settingsLocked}
-            onChange={(value) => updateSettings({ long_break_interval: value })}
-            text="每几个番茄钟进入一次长休息。"
-            value={settings.long_break_interval}
-            unit="轮"
-          />
+          <SettingNumber label="学习模式时长" max={720} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_study_minutes: value })} text="进入学习模式后的总约束时间。" value={settings.default_study_minutes} />
+          <SettingNumber label="番茄专注时长" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_focus_minutes: value })} text="学习模式内每轮番茄钟的专注分钟数。" value={settings.default_focus_minutes} />
+          <SettingNumber label="短休息" max={60} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ break_minutes: value })} text="普通番茄轮次结束后的休息分钟数。" value={settings.break_minutes} />
+          <SettingNumber label="长休息" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_minutes: value })} text="到达长休息轮次后的休息分钟数。" value={settings.long_break_minutes} />
+          <SettingNumber label="长休间隔" max={12} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_interval: value })} text="每几个番茄钟进入一次长休息。" value={settings.long_break_interval} unit="轮" />
 
           <div className="setting-row mode-setting">
             <div>
@@ -335,30 +398,47 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
               <p>普通模式更轻量，强制模式会保持更严格的学习约束。</p>
             </div>
             <div className="segmented-control">
-              <button
-                className={settings.default_focus_mode === 'normal' ? 'active' : ''}
-                disabled={settingsLocked}
-                onClick={() => updateSettings({ default_focus_mode: 'normal' })}
-                type="button"
-              >
-                普通
-              </button>
-              <button
-                className={settings.default_focus_mode === 'strict' ? 'active' : ''}
-                disabled={settingsLocked}
-                onClick={() => updateSettings({ default_focus_mode: 'strict' })}
-                type="button"
-              >
-                强制
-              </button>
+              <button className={settings.default_focus_mode === 'normal' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ default_focus_mode: 'normal' })} type="button">普通</button>
+              <button className={settings.default_focus_mode === 'strict' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ default_focus_mode: 'strict' })} type="button">强制</button>
+            </div>
+          </div>
+
+          <div className="setting-row mode-setting">
+            <div>
+              <strong>界面配色</strong>
+              <p>黑色保留当前暗色界面，白色切换为磨砂玻璃风格。</p>
+            </div>
+            <div className="segmented-control">
+              <button className={theme === 'dark' ? 'active' : ''} disabled={settingsLocked} onClick={() => { onThemeChange('dark'); updateSettings({ ui_theme: 'dark' }); }} type="button">黑色</button>
+              <button className={theme === 'light' ? 'active' : ''} disabled={settingsLocked} onClick={() => { onThemeChange('light'); updateSettings({ ui_theme: 'light' }); }} type="button">白色磨砂</button>
+            </div>
+          </div>
+
+          <div className="setting-row mode-setting">
+            <div>
+              <strong>云同步方式</strong>
+              <p>WebDAV 保持默认；对象存储用于 Cloudflare R2、MinIO 或其他 S3 兼容服务。</p>
+            </div>
+            <div className="segmented-control">
+              <button className={settings.sync_backend === 'webdav' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSyncBackend('webdav')} type="button">WebDAV</button>
+              <button className={settings.sync_backend === 'object_storage' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSyncBackend('object_storage')} type="button">对象存储</button>
             </div>
           </div>
         </div>
 
         <div className="settings-save-row">
-          <div>
+          <div className="settings-save-copy">
             <span>当前默认节奏</span>
-            <strong>{settings.default_focus_minutes} / {settings.break_minutes} / {settings.long_break_minutes} 分钟，每 {settings.long_break_interval} 轮长休</strong>
+            <strong>
+              <b>{settings.default_focus_minutes}</b>
+              <small>专注</small>
+              <b>{settings.break_minutes}</b>
+              <small>短休</small>
+              <b>{settings.long_break_minutes}</b>
+              <small>长休</small>
+              <b>{settings.long_break_interval}</b>
+              <small>轮一次</small>
+            </strong>
           </div>
           <button className="primary-action" disabled={saving || settingsLocked} onClick={() => void handleSaveSettings()} type="button">
             <Save size={18} />
@@ -378,71 +458,108 @@ export default function SettingsPage({ lastAutoSyncMessage = null }: SettingsPag
           </div>
           <p className="panel-copy">填写 WebDAV 地址和账号后，可以把本机 SQLite 数据库上传到云端，或从云端恢复到本机。</p>
 
+          <label className="capability-row sync-toggle-row">
+            <Cloud size={17} />
+            <input
+              checked={webDavSettings.enabled}
+              disabled={settingsLocked}
+              onChange={(event) => updateWebDavSettings({ enabled: event.target.checked })}
+              type="checkbox"
+            />
+            <span>启用 WebDAV 同步</span>
+          </label>
+
           <div className="form-stack">
             <label className="field-block">
               <span>WebDAV 地址</span>
-              <input
-                className="text-input"
-                disabled={settingsLocked}
-                onChange={(event) => updateWebDavSettings({ url: event.target.value })}
-                placeholder="https://dav.example.com/remote.php/dav/files/me"
-                value={webDavSettings.url}
-              />
+              <input className="text-input" disabled={settingsLocked} onChange={(event) => updateWebDavSettings({ url: event.target.value })} placeholder="https://dav.example.com/remote.php/dav/files/me" value={webDavSettings.url} />
             </label>
             <div className="inline-fields">
               <label className="field-block">
                 <span>用户名</span>
-                <input
-                  className="text-input"
-                  disabled={settingsLocked}
-                  onChange={(event) => updateWebDavSettings({ username: event.target.value })}
-                  placeholder="用户名"
-                  value={webDavSettings.username}
-                />
+                <input className="text-input" disabled={settingsLocked} onChange={(event) => updateWebDavSettings({ username: event.target.value })} placeholder="用户名" value={webDavSettings.username} />
               </label>
               <label className="field-block">
                 <span>密码</span>
-                <input
-                  className="text-input"
-                  disabled={settingsLocked}
-                  onChange={(event) => updateWebDavSettings({ password: event.target.value })}
-                  placeholder="密码或应用密码"
-                  type="password"
-                  value={webDavSettings.password}
-                />
+                <input className="text-input" disabled={settingsLocked} onChange={(event) => updateWebDavSettings({ password: event.target.value })} placeholder="密码或应用密码" type="password" value={webDavSettings.password} />
               </label>
             </div>
             <label className="field-block">
               <span>远端文件路径</span>
-              <input
-                className="text-input"
-                disabled={settingsLocked}
-                onChange={(event) => updateWebDavSettings({ remote_path: event.target.value })}
-                placeholder="kaoyan-focus/kaoyan-focus.sqlite3"
-                value={webDavSettings.remote_path}
-              />
+              <input className="text-input" disabled={settingsLocked} onChange={(event) => updateWebDavSettings({ remote_path: event.target.value })} placeholder="kaoyan-focus/kaoyan-focus.sqlite3" value={webDavSettings.remote_path} />
             </label>
           </div>
 
           {lastAutoSyncMessage && <p className="alert neutral">启动自动同步：{lastAutoSyncMessage}</p>}
+          {!webDavSettings.enabled && <p className="alert neutral">WebDAV 同步已关闭，保存配置后不会参与启动自动同步。</p>}
           {webDavMessage && <p className="alert success">{webDavMessage}</p>}
           <div className="row-actions">
-            <button className="secondary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleSaveWebDavSettings()} type="button">
-              <Save size={17} />
-              保存
-            </button>
-            <button className="secondary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleTestWebDav()} type="button">
-              <Cloud size={17} />
-              测试连接
-            </button>
-            <button className="primary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleUploadWebDav()} type="button">
-              <UploadCloud size={17} />
-              上传本机数据
-            </button>
-            <button className="secondary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleDownloadWebDav()} type="button">
-              <Download size={17} />
-              从云端恢复
-            </button>
+            <button className="secondary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleSaveWebDavSettings()} type="button"><Save size={17} />保存</button>
+            <button className="secondary-action" disabled={webDavActionDisabled} onClick={() => void handleTestWebDav()} type="button"><Cloud size={17} />测试连接</button>
+            <button className="primary-action" disabled={webDavActionDisabled} onClick={() => void handleUploadWebDav()} type="button"><UploadCloud size={17} />上传本机数据</button>
+            <button className="secondary-action" disabled={webDavActionDisabled} onClick={() => void handleDownloadWebDav()} type="button"><Download size={17} />从云端恢复</button>
+          </div>
+        </section>
+
+        <section className="command-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">S3 / R2</p>
+              <h3>对象存储同步</h3>
+            </div>
+            <Cloud size={20} />
+          </div>
+          <p className="panel-copy">填写 Cloudflare R2 或 S3 兼容对象存储信息后，应用会使用共享 JSON 数据包与手机端同步。</p>
+
+          <label className="capability-row sync-toggle-row">
+            <Cloud size={17} />
+            <input
+              checked={objectStorageSettings.enabled}
+              disabled={settingsLocked}
+              onChange={(event) => updateObjectStorageSettings({ enabled: event.target.checked })}
+              type="checkbox"
+            />
+            <span>启用对象存储同步</span>
+          </label>
+
+          <div className="form-stack">
+            <label className="field-block">
+              <span>Endpoint</span>
+              <input className="text-input" disabled={settingsLocked} onChange={(event) => updateObjectStorageSettings({ endpoint: event.target.value })} placeholder="https://<account-id>.r2.cloudflarestorage.com" value={objectStorageSettings.endpoint} />
+            </label>
+            <div className="inline-fields">
+              <label className="field-block">
+                <span>Bucket</span>
+                <input className="text-input" disabled={settingsLocked} onChange={(event) => updateObjectStorageSettings({ bucket: event.target.value })} placeholder="kaoyan-focus" value={objectStorageSettings.bucket} />
+              </label>
+              <label className="field-block">
+                <span>Region</span>
+                <input className="text-input" disabled={settingsLocked} onChange={(event) => updateObjectStorageSettings({ region: event.target.value })} placeholder="auto" value={objectStorageSettings.region} />
+              </label>
+            </div>
+            <div className="inline-fields">
+              <label className="field-block">
+                <span>Access Key ID</span>
+                <input className="text-input" disabled={settingsLocked} onChange={(event) => updateObjectStorageSettings({ access_key_id: event.target.value })} placeholder="由对象存储控制台生成" value={objectStorageSettings.access_key_id} />
+              </label>
+              <label className="field-block">
+                <span>Secret Access Key</span>
+                <input className="text-input" disabled={settingsLocked} onChange={(event) => updateObjectStorageSettings({ secret_access_key: event.target.value })} placeholder="只保存在本机数据库" type="password" value={objectStorageSettings.secret_access_key} />
+              </label>
+            </div>
+            <label className="field-block">
+              <span>Object Key</span>
+              <input className="text-input" disabled={settingsLocked} onChange={(event) => updateObjectStorageSettings({ object_key: event.target.value })} placeholder="study-sync.json" value={objectStorageSettings.object_key} />
+            </label>
+          </div>
+
+          {objectStorageMessage && <p className="alert success">{objectStorageMessage}</p>}
+          {!objectStorageSettings.enabled && <p className="alert neutral">对象存储同步已关闭，保存配置后不会参与启动自动同步。</p>}
+          <div className="row-actions">
+            <button className="secondary-action" disabled={objectStorageBusy || settingsLocked} onClick={() => void handleSaveObjectStorageSettings()} type="button"><Save size={17} />保存</button>
+            <button className="secondary-action" disabled={objectStorageActionDisabled} onClick={() => void handleTestObjectStorage()} type="button"><Cloud size={17} />测试连接</button>
+            <button className="primary-action" disabled={objectStorageActionDisabled} onClick={() => void handleUploadObjectStorage()} type="button"><UploadCloud size={17} />上传本机数据</button>
+            <button className="secondary-action" disabled={objectStorageActionDisabled} onClick={() => void handleDownloadObjectStorage()} type="button"><Download size={17} />从云端恢复</button>
           </div>
         </section>
 

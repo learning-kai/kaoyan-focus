@@ -1,4 +1,16 @@
-import type { AppSettings, WebDavAutoSyncResult, WebDavSettings, WebDavStatus, WebDavSyncResult } from '../types/settings';
+import type {
+  AppSettings,
+  ObjectStorageAutoSyncResult,
+  ObjectStorageSettings,
+  ObjectStorageStatus,
+  ObjectStorageSyncResult,
+  WebDavAutoSyncResult,
+  WebDavSettings,
+  WebDavStatus,
+  WebDavSyncResult,
+} from '../types/settings';
+
+export const STUDY_SYNC_STATE_CHANGED_EVENT = 'study-sync-state-changed';
 
 export type AppDataLocation = {
   app_data_dir: string;
@@ -44,4 +56,37 @@ export function downloadDatabaseFromWebDav(settings: WebDavSettings): Promise<We
 
 export function autoSyncWebDavDatabase(): Promise<WebDavAutoSyncResult> {
   return invokeCommand<WebDavAutoSyncResult>('auto_sync_webdav_database');
+}
+
+export function getObjectStorageSettings(): Promise<ObjectStorageSettings> {
+  return invokeCommand<ObjectStorageSettings>('get_object_storage_settings');
+}
+
+export function saveObjectStorageSettings(settings: ObjectStorageSettings): Promise<ObjectStorageSettings> {
+  return invokeCommand<ObjectStorageSettings>('save_object_storage_settings', { settings });
+}
+
+export function testObjectStorageConnection(settings: ObjectStorageSettings): Promise<ObjectStorageStatus> {
+  return invokeCommand<ObjectStorageStatus>('test_object_storage_connection', { settings });
+}
+
+export function uploadDatabaseToObjectStorage(settings: ObjectStorageSettings): Promise<ObjectStorageSyncResult> {
+  return invokeCommand<ObjectStorageSyncResult>('upload_database_to_object_storage', { settings });
+}
+
+export function downloadDatabaseFromObjectStorage(settings: ObjectStorageSettings): Promise<ObjectStorageSyncResult> {
+  return invokeCommand<ObjectStorageSyncResult>('download_database_from_object_storage', { settings });
+}
+
+export function autoSyncObjectStorageDatabase(): Promise<ObjectStorageAutoSyncResult> {
+  return invokeCommand<ObjectStorageAutoSyncResult>('auto_sync_object_storage_database');
+}
+
+export async function autoSyncConfiguredDatabase(): Promise<WebDavAutoSyncResult | ObjectStorageAutoSyncResult> {
+  const settings = await getAppSettings();
+  if (settings.sync_backend === 'object_storage') {
+    return autoSyncObjectStorageDatabase();
+  }
+
+  return autoSyncWebDavDatabase();
 }

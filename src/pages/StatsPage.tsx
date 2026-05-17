@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, Clock3, Pencil, RefreshCw, ShieldAlert, TimerReset } from 'lucide-react';
-import { getFocusStatsSummary, listFocusSessions, listSubjects, updateFocusSessionSubject } from '../services/focusApi';
+import { BarChart3, CalendarDays, Clock3, Pencil, RefreshCw, ShieldAlert, TimerReset, Trash2 } from 'lucide-react';
+import { deleteFocusSession, getFocusStatsSummary, listFocusSessions, listSubjects, updateFocusSessionSubject } from '../services/focusApi';
 import { listInterruptionSummary } from '../services/monitorApi';
 import type { FocusSession, FocusStatsSummary, Subject } from '../types/focus';
 import type { InterruptionSummary } from '../types/monitor';
@@ -20,6 +20,7 @@ export default function StatsPage() {
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [savingSessionId, setSavingSessionId] = useState<number | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +63,25 @@ export default function StatsPage() {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setSavingSessionId(null);
+    }
+  }
+
+  async function handleDeleteSession(sessionId: number) {
+    if (!window.confirm('确定删除这条学习记录吗？删除后统计会同步更新。')) {
+      return;
+    }
+
+    try {
+      setDeletingSessionId(sessionId);
+      setError(null);
+      setMessage(null);
+      await deleteFocusSession(sessionId);
+      await refreshStats();
+      setMessage('学习记录已删除。');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setDeletingSessionId(null);
     }
   }
 
@@ -190,18 +210,29 @@ export default function StatsPage() {
                 </div>
                 <div className="record-subject">
                   <span>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</span>
-                  <select
-                    aria-label="修改记录科目"
-                    className="select-input"
-                    disabled={savingSessionId === session.id}
-                    onChange={(event) => void handleSubjectChange(session.id, event.target.value)}
-                    value={session.subject_id ?? ''}
-                  >
-                    <option value="">未指定</option>
-                    {subjects.map((subject) => (
-                      <option key={subject.id} value={subject.id}>{subject.name}</option>
-                    ))}
-                  </select>
+                  <div className="record-subject-actions">
+                    <select
+                      aria-label="修改记录科目"
+                      className="select-input"
+                      disabled={savingSessionId === session.id || deletingSessionId === session.id}
+                      onChange={(event) => void handleSubjectChange(session.id, event.target.value)}
+                      value={session.subject_id ?? ''}
+                    >
+                      <option value="">未指定</option>
+                      {subjects.map((subject) => (
+                        <option key={subject.id} value={subject.id}>{subject.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="small-action danger"
+                      disabled={deletingSessionId === session.id || savingSessionId === session.id}
+                      onClick={() => void handleDeleteSession(session.id)}
+                      type="button"
+                    >
+                      <Trash2 size={15} />
+                      删除记录
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}

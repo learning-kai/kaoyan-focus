@@ -35,7 +35,11 @@ pub fn list_running_processes() -> Result<Vec<RunningProcess>, String> {
         .filter_map(read_running_process)
         .collect::<Vec<_>>();
 
-    processes.sort_by(|left, right| left.process_name.cmp(&right.process_name).then(left.process_id.cmp(&right.process_id)));
+    processes.sort_by(|left, right| {
+        left.process_name
+            .cmp(&right.process_name)
+            .then(left.process_id.cmp(&right.process_id))
+    });
     processes.dedup_by(|left, right| left.process_name.eq_ignore_ascii_case(&right.process_name));
     Ok(processes)
 }
@@ -66,7 +70,13 @@ fn read_process_path(process_id: u32) -> Option<String> {
 
     let result = std::env::current_exe().ok();
     let mut buffer = vec![0u16; 32768];
-    let copied = unsafe { windows::Win32::System::ProcessStatus::K32GetModuleFileNameExW(Some(handle), None, &mut buffer) };
+    let copied = unsafe {
+        windows::Win32::System::ProcessStatus::K32GetModuleFileNameExW(
+            Some(handle),
+            None,
+            &mut buffer,
+        )
+    };
     unsafe {
         let _ = CloseHandle(handle);
     }
@@ -77,7 +87,10 @@ fn read_process_path(process_id: u32) -> Option<String> {
 
     let process_path = String::from_utf16_lossy(&buffer[..copied as usize]);
     if let Some(current_exe) = result {
-        if current_exe.to_string_lossy().eq_ignore_ascii_case(&process_path) {
+        if current_exe
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&process_path)
+        {
             return None;
         }
     }

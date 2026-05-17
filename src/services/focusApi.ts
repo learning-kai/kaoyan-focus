@@ -53,6 +53,10 @@ export function updateStudyModeSubject(subjectId: number | null): Promise<StudyM
   return invokeCommand<StudyModeState>('update_study_mode_subject', { subjectId });
 }
 
+export function resetStudyMode(): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('reset_study_mode');
+}
+
 export function setStudyModeActive(active: boolean): Promise<void> {
   return invokeCommand<void>('set_study_mode_active', { active });
 }
@@ -84,6 +88,12 @@ export function recoverActiveFocusSession(): Promise<FocusSessionRecovery | null
 
 export function listFocusSessions(): Promise<FocusSession[]> {
   return invokeCommand<FocusSession[]>('list_focus_sessions');
+}
+
+export function deleteFocusSession(sessionId: number): Promise<void> {
+  return invokeCommand<void>('delete_focus_session', {
+    sessionId,
+  });
 }
 
 export function updateFocusSessionSubject(sessionId: number, subjectId: number | null): Promise<FocusSession> {
