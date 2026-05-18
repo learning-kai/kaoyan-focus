@@ -1,1 +1,1 @@
-export type AppPage = 'focus' | 'checklist' | 'whitelist' | 'stats' | 'settings';
+export type AppPage = 'focus' | 'checklist' | 'schedule' | 'whitelist' | 'stats' | 'settings';

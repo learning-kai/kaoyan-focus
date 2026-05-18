@@ -1,13 +1,16 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { BarChart3, ClipboardList, Settings, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarDays, ClipboardList, Settings, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
 import Layout from './components/Layout';
 import FocusPage from './pages/FocusPage';
 import ChecklistPage from './pages/ChecklistPage';
+import SchedulePage from './pages/SchedulePage';
 import WhitelistPage from './pages/WhitelistPage';
 import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage';
+import { notifyStudyReminder } from './services/alertApi';
 import { getStudyModeState } from './services/focusApi';
+import { getSchedulePageData } from './services/scheduleApi';
 import { STUDY_SYNC_STATE_CHANGED_EVENT, autoSyncConfiguredDatabase, getAppSettings, saveAppSettings } from './services/settingsApi';
 import type { AppPage } from './types/navigation';
 import { applyTheme, bootstrapTheme, storeTheme } from './theme';
@@ -16,6 +19,8 @@ import type { AppTheme } from './types/settings';
 const AUTO_SYNC_STARTUP_DELAY_MS = 5000;
 const AUTO_SYNC_INTERVAL_MS = 3 * 60 * 1000;
 const ACTIVE_AUTO_SYNC_INTERVAL_MS = 30 * 1000;
+const SCHEDULE_REMINDER_INTERVAL_MS = 30 * 1000;
+const SCHEDULE_REMINDER_LOOKBACK_MINUTES = 1;
 const SILENT_AUTO_SYNC_SKIP_REASONS = new Set([
   'webdav_not_configured',
   'webdav_disabled',
@@ -23,6 +28,16 @@ const SILENT_AUTO_SYNC_SKIP_REASONS = new Set([
   'object_storage_disabled',
   'study_mode_active',
 ]);
+
+function todayString() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function currentMinuteOfDay() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
 
 export type PageMeta = {
   title: string;
@@ -40,9 +55,15 @@ const pages: Record<AppPage, PageMeta> = {
   },
   checklist: {
     title: '清单',
-    description: '阶段计划与今日执行',
+    description: '五类待办与今日任务',
     icon: ClipboardList,
     component: <ChecklistPage />,
+  },
+  schedule: {
+    title: '课表',
+    description: '今日安排与本周视图',
+    icon: CalendarDays,
+    component: <SchedulePage />,
   },
   whitelist: {
     title: '白名单',
@@ -152,6 +173,53 @@ export default function App() {
 
     return () => {
       unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    const remindedKeys = new Set<string>();
+
+    async function checkScheduleReminders() {
+      try {
+        const date = todayString();
+        const nowMinute = currentMinuteOfDay();
+        const pageData = await getSchedulePageData(date);
+        if (disposed) return;
+
+        for (const block of pageData.day_blocks) {
+          if (block.status === 'completed') continue;
+          const distance = nowMinute - block.start_minute;
+          if (distance < 0 || distance > SCHEDULE_REMINDER_LOOKBACK_MINUTES) continue;
+
+          const key = `${block.id}:${block.schedule_date}:${block.start_minute}`;
+          if (remindedKeys.has(key)) continue;
+          remindedKeys.add(key);
+
+          void notifyStudyReminder({
+            title: '课表时间到了',
+            body: `${block.title} 已到开始时间，可以回到课表一键开始专注。`,
+          });
+        }
+
+        for (const key of [...remindedKeys]) {
+          if (!key.includes(`:${date}:`)) {
+            remindedKeys.delete(key);
+          }
+        }
+      } catch {
+        // Schedule reminders are best-effort and should never interrupt the app.
+      }
+    }
+
+    void checkScheduleReminders();
+    const intervalId = window.setInterval(() => {
+      void checkScheduleReminders();
+    }, SCHEDULE_REMINDER_INTERVAL_MS);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
     };
   }, []);
 

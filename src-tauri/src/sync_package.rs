@@ -12,6 +12,8 @@ const ENTITY_FOCUS_SESSION: &str = "focus_session";
 const ENTITY_APP_EVENT: &str = "app_event";
 const ENTITY_CHECKLIST_TASK: &str = "checklist_task";
 const ENTITY_TODAY_PLAN_ITEM: &str = "today_plan_item";
+const ENTITY_SCHEDULE_BLOCK: &str = "schedule_block";
+const ENTITY_SCHEDULE_TEMPLATE: &str = "schedule_template";
 const DEFAULT_SUBJECT_SYNC_IDS: [&str; 4] = ["subject-1", "subject-2", "subject-3", "subject-4"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +34,10 @@ pub struct SharedSyncPayload {
     pub checklist_tasks: Vec<SharedChecklistTask>,
     #[serde(default)]
     pub today_plan_items: Vec<SharedTodayPlanItem>,
+    #[serde(default)]
+    pub schedule_blocks: Vec<SharedScheduleBlock>,
+    #[serde(default)]
+    pub schedule_templates: Vec<SharedScheduleTemplate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +89,8 @@ pub struct SharedStudyMode {
     pub current_break_type: Option<String>,
     pub ended_at: Option<i64>,
     pub current_session_sync_id: Option<String>,
+    pub schedule_block_sync_id: Option<String>,
+    pub today_plan_item_sync_id: Option<String>,
     pub status: Option<String>,
     pub finish_reason: Option<String>,
     pub created_at: Option<i64>,
@@ -107,6 +115,8 @@ pub struct SharedFocusSession {
     pub emergency_exit_count: Option<i64>,
     pub paused_seconds: Option<i64>,
     pub followed_by_break_type: Option<String>,
+    pub schedule_block_sync_id: Option<String>,
+    pub today_plan_item_sync_id: Option<String>,
     pub created_at: Option<i64>,
     pub updated_at: i64,
     pub deleted_at: Option<i64>,
@@ -161,6 +171,44 @@ pub struct SharedTodayPlanItem {
     pub deleted_at: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedScheduleBlock {
+    pub sync_id: String,
+    pub schedule_date: Option<String>,
+    pub title: Option<String>,
+    pub note: Option<String>,
+    pub category_key: Option<String>,
+    pub subject_sync_id: Option<String>,
+    pub source_today_item_sync_id: Option<String>,
+    pub template_sync_id: Option<String>,
+    pub start_minute: Option<i64>,
+    pub end_minute: Option<i64>,
+    pub status: Option<String>,
+    pub linked_study_mode_sync_id: Option<String>,
+    pub linked_focus_session_sync_id: Option<String>,
+    pub created_at: Option<i64>,
+    pub updated_at: i64,
+    pub deleted_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedScheduleTemplate {
+    pub sync_id: String,
+    pub title: Option<String>,
+    pub note: Option<String>,
+    pub category_key: Option<String>,
+    pub subject_sync_id: Option<String>,
+    pub weekdays: Option<Vec<i64>>,
+    pub start_minute: Option<i64>,
+    pub end_minute: Option<i64>,
+    pub enabled: Option<bool>,
+    pub created_at: Option<i64>,
+    pub updated_at: i64,
+    pub deleted_at: Option<i64>,
+}
+
 #[derive(Debug, Clone)]
 struct SyncMetaRow {
     local_id: i64,
@@ -197,6 +245,8 @@ struct DesktopStudyModeRow {
     phase_paused_seconds: i64,
     ended_at: Option<String>,
     current_session_id: Option<i64>,
+    schedule_block_id: Option<i64>,
+    today_plan_item_id: Option<i64>,
     status: String,
     finish_reason: Option<String>,
     created_at: String,
@@ -218,6 +268,8 @@ struct DesktopFocusSessionRow {
     emergency_exit_count: i64,
     paused_seconds: i64,
     followed_by_break_type: Option<String>,
+    schedule_block_id: Option<i64>,
+    today_plan_item_id: Option<i64>,
     created_at: String,
     updated_at: String,
 }
@@ -263,6 +315,40 @@ struct DesktopTodayPlanItemRow {
     updated_at: String,
 }
 
+#[derive(Debug, Clone)]
+struct DesktopScheduleBlockRow {
+    id: i64,
+    schedule_date: String,
+    title: String,
+    note: Option<String>,
+    category_key: String,
+    subject_id: Option<i64>,
+    source_today_item_id: Option<i64>,
+    template_id: Option<i64>,
+    start_minute: i64,
+    end_minute: i64,
+    status: String,
+    linked_study_mode_id: Option<i64>,
+    linked_focus_session_id: Option<i64>,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Clone)]
+struct DesktopScheduleTemplateRow {
+    id: i64,
+    title: String,
+    note: Option<String>,
+    category_key: String,
+    subject_id: Option<i64>,
+    weekdays: String,
+    start_minute: i64,
+    end_minute: i64,
+    enabled: bool,
+    created_at: String,
+    updated_at: String,
+}
+
 pub fn export_shared_sync_payload(
     connection: &Connection,
     device_id: String,
@@ -278,6 +364,8 @@ pub fn export_shared_sync_payload(
         app_events: export_app_events(connection)?,
         checklist_tasks: export_checklist_tasks(connection)?,
         today_plan_items: export_today_plan_items(connection)?,
+        schedule_blocks: export_schedule_blocks(connection)?,
+        schedule_templates: export_schedule_templates(connection)?,
     })
 }
 
@@ -333,6 +421,18 @@ pub fn merge_shared_sync_payloads(
             |item| item.sync_id.as_str(),
             |item| item.updated_at,
         ),
+        schedule_blocks: merge_latest_by_sync_id(
+            &local.schedule_blocks,
+            &remote.schedule_blocks,
+            |item| item.sync_id.as_str(),
+            |item| item.updated_at,
+        ),
+        schedule_templates: merge_latest_by_sync_id(
+            &local.schedule_templates,
+            &remote.schedule_templates,
+            |item| item.sync_id.as_str(),
+            |item| item.updated_at,
+        ),
     }
 }
 
@@ -376,11 +476,14 @@ pub fn import_shared_sync_payload(
         .transaction()
         .map_err(|error| error.to_string())?;
     import_subjects(&transaction, &payload.subjects)?;
-    import_focus_sessions(&transaction, &payload.focus_sessions)?;
-    import_study_modes(&transaction, &payload.study_modes)?;
-    import_app_events(&transaction, &payload.app_events)?;
     import_checklist_tasks(&transaction, &payload.checklist_tasks)?;
     import_today_plan_items(&transaction, &payload.today_plan_items)?;
+    import_schedule_templates(&transaction, &payload.schedule_templates)?;
+    import_schedule_blocks(&transaction, &payload.schedule_blocks)?;
+    import_focus_sessions(&transaction, &payload.focus_sessions)?;
+    import_study_modes(&transaction, &payload.study_modes)?;
+    import_schedule_blocks(&transaction, &payload.schedule_blocks)?;
+    import_app_events(&transaction, &payload.app_events)?;
     resolve_local_active_conflicts(&transaction)?;
     transaction.commit().map_err(|error| error.to_string())
 }
@@ -651,6 +754,16 @@ fn export_study_modes(connection: &Connection) -> Result<Vec<SharedStudyMode>, S
                     .ok()
                     .flatten()
             }),
+            schedule_block_sync_id: row.schedule_block_id.and_then(|block_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_SCHEDULE_BLOCK, Some(block_id))
+                    .ok()
+                    .flatten()
+            }),
+            today_plan_item_sync_id: row.today_plan_item_id.and_then(|today_item_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_TODAY_PLAN_ITEM, Some(today_item_id))
+                    .ok()
+                    .flatten()
+            }),
             status: Some(to_shared_study_status(&row.status).to_string()),
             finish_reason: row.finish_reason,
             created_at: Some(parse_rfc3339_millis(&row.created_at)?),
@@ -700,6 +813,16 @@ fn export_focus_sessions(connection: &Connection) -> Result<Vec<SharedFocusSessi
             emergency_exit_count: Some(row.emergency_exit_count),
             paused_seconds: Some(row.paused_seconds),
             followed_by_break_type: row.followed_by_break_type,
+            schedule_block_sync_id: row.schedule_block_id.and_then(|block_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_SCHEDULE_BLOCK, Some(block_id))
+                    .ok()
+                    .flatten()
+            }),
+            today_plan_item_sync_id: row.today_plan_item_id.and_then(|today_item_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_TODAY_PLAN_ITEM, Some(today_item_id))
+                    .ok()
+                    .flatten()
+            }),
             created_at: Some(parse_rfc3339_millis(&row.created_at)?),
             updated_at,
             deleted_at: None,
@@ -822,6 +945,114 @@ fn export_today_plan_items(connection: &Connection) -> Result<Vec<SharedTodayPla
     Ok(payload)
 }
 
+fn export_schedule_blocks(connection: &Connection) -> Result<Vec<SharedScheduleBlock>, String> {
+    let rows = load_schedule_block_rows(connection)?;
+    let mut payload = Vec::new();
+    for row in rows {
+        let updated_at = parse_rfc3339_millis(&row.updated_at)?;
+        let sync_id = resolve_or_create_sync_id(
+            connection,
+            ENTITY_SCHEDULE_BLOCK,
+            row.id,
+            None,
+            updated_at,
+        )?;
+        if get_sync_meta_by_sync_id(connection, &sync_id)?
+            .and_then(|item| item.deleted_at)
+            .is_some()
+        {
+            continue;
+        }
+
+        payload.push(SharedScheduleBlock {
+            sync_id,
+            schedule_date: Some(row.schedule_date),
+            title: Some(row.title),
+            note: row.note,
+            category_key: Some(row.category_key),
+            subject_sync_id: row.subject_id.and_then(|subject_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
+                    .ok()
+                    .flatten()
+            }),
+            source_today_item_sync_id: row.source_today_item_id.and_then(|today_item_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_TODAY_PLAN_ITEM, Some(today_item_id))
+                    .ok()
+                    .flatten()
+            }),
+            template_sync_id: row.template_id.and_then(|template_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_SCHEDULE_TEMPLATE, Some(template_id))
+                    .ok()
+                    .flatten()
+            }),
+            start_minute: Some(row.start_minute),
+            end_minute: Some(row.end_minute),
+            status: Some(row.status),
+            linked_study_mode_sync_id: row.linked_study_mode_id.and_then(|study_mode_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_STUDY_MODE, Some(study_mode_id))
+                    .ok()
+                    .flatten()
+            }),
+            linked_focus_session_sync_id: row.linked_focus_session_id.and_then(|session_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_FOCUS_SESSION, Some(session_id))
+                    .ok()
+                    .flatten()
+            }),
+            created_at: Some(parse_rfc3339_millis(&row.created_at)?),
+            updated_at,
+            deleted_at: None,
+        });
+    }
+
+    payload.extend(export_tombstones(connection, ENTITY_SCHEDULE_BLOCK)?);
+    Ok(payload)
+}
+
+fn export_schedule_templates(
+    connection: &Connection,
+) -> Result<Vec<SharedScheduleTemplate>, String> {
+    let rows = load_schedule_template_rows(connection)?;
+    let mut payload = Vec::new();
+    for row in rows {
+        let updated_at = parse_rfc3339_millis(&row.updated_at)?;
+        let sync_id = resolve_or_create_sync_id(
+            connection,
+            ENTITY_SCHEDULE_TEMPLATE,
+            row.id,
+            None,
+            updated_at,
+        )?;
+        if get_sync_meta_by_sync_id(connection, &sync_id)?
+            .and_then(|item| item.deleted_at)
+            .is_some()
+        {
+            continue;
+        }
+
+        payload.push(SharedScheduleTemplate {
+            sync_id,
+            title: Some(row.title),
+            note: row.note,
+            category_key: Some(row.category_key),
+            subject_sync_id: row.subject_id.and_then(|subject_id| {
+                resolve_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
+                    .ok()
+                    .flatten()
+            }),
+            weekdays: Some(parse_weekdays_json(&row.weekdays)),
+            start_minute: Some(row.start_minute),
+            end_minute: Some(row.end_minute),
+            enabled: Some(row.enabled),
+            created_at: Some(parse_rfc3339_millis(&row.created_at)?),
+            updated_at,
+            deleted_at: None,
+        });
+    }
+
+    payload.extend(export_tombstones(connection, ENTITY_SCHEDULE_TEMPLATE)?);
+    Ok(payload)
+}
+
 fn export_tombstones<T>(connection: &Connection, entity_type: &str) -> Result<Vec<T>, String>
 where
     T: From<DeletedPayload>,
@@ -893,6 +1124,8 @@ impl From<DeletedPayload> for SharedStudyMode {
             current_break_type: None,
             ended_at: None,
             current_session_sync_id: None,
+            schedule_block_sync_id: None,
+            today_plan_item_sync_id: None,
             status: None,
             finish_reason: None,
             created_at: None,
@@ -919,6 +1152,8 @@ impl From<DeletedPayload> for SharedFocusSession {
             emergency_exit_count: None,
             paused_seconds: None,
             followed_by_break_type: None,
+            schedule_block_sync_id: None,
+            today_plan_item_sync_id: None,
             created_at: None,
             updated_at: value.deleted_at.unwrap_or_default(),
             deleted_at: value.deleted_at,
@@ -974,6 +1209,48 @@ impl From<DeletedPayload> for SharedTodayPlanItem {
             sort_order: None,
             completed: None,
             synced_source_completion: None,
+            created_at: None,
+            updated_at: value.deleted_at.unwrap_or_default(),
+            deleted_at: value.deleted_at,
+        }
+    }
+}
+
+impl From<DeletedPayload> for SharedScheduleBlock {
+    fn from(value: DeletedPayload) -> Self {
+        Self {
+            sync_id: value.sync_id,
+            schedule_date: None,
+            title: None,
+            note: None,
+            category_key: None,
+            subject_sync_id: None,
+            source_today_item_sync_id: None,
+            template_sync_id: None,
+            start_minute: None,
+            end_minute: None,
+            status: None,
+            linked_study_mode_sync_id: None,
+            linked_focus_session_sync_id: None,
+            created_at: None,
+            updated_at: value.deleted_at.unwrap_or_default(),
+            deleted_at: value.deleted_at,
+        }
+    }
+}
+
+impl From<DeletedPayload> for SharedScheduleTemplate {
+    fn from(value: DeletedPayload) -> Self {
+        Self {
+            sync_id: value.sync_id,
+            title: None,
+            note: None,
+            category_key: None,
+            subject_sync_id: None,
+            weekdays: None,
+            start_minute: None,
+            end_minute: None,
+            enabled: None,
             created_at: None,
             updated_at: value.deleted_at.unwrap_or_default(),
             deleted_at: value.deleted_at,
@@ -1057,6 +1334,16 @@ fn import_study_modes(connection: &Connection, items: &[SharedStudyMode]) -> Res
             ENTITY_FOCUS_SESSION,
             item.current_session_sync_id.as_deref(),
         )?;
+        let schedule_block_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_SCHEDULE_BLOCK,
+            item.schedule_block_sync_id.as_deref(),
+        )?;
+        let today_plan_item_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_TODAY_PLAN_ITEM,
+            item.today_plan_item_sync_id.as_deref(),
+        )?;
         let created_at = millis_to_rfc3339(item.created_at.unwrap_or(item.updated_at));
         let updated_at = millis_to_rfc3339(item.updated_at);
         let desktop_status = to_desktop_study_status(status);
@@ -1096,6 +1383,8 @@ fn import_study_modes(connection: &Connection, items: &[SharedStudyMode]) -> Res
                 .as_ref()
                 .map(|value| millis_to_rfc3339(*value)),
             current_session_id,
+            schedule_block_id,
+            today_plan_item_id,
             desktop_status,
             item.finish_reason.clone(),
             &created_at,
@@ -1138,6 +1427,16 @@ fn import_focus_sessions(
             ENTITY_SUBJECT,
             item.subject_sync_id.as_deref(),
         )?;
+        let schedule_block_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_SCHEDULE_BLOCK,
+            item.schedule_block_sync_id.as_deref(),
+        )?;
+        let today_plan_item_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_TODAY_PLAN_ITEM,
+            item.today_plan_item_sync_id.as_deref(),
+        )?;
         let created_at = millis_to_rfc3339(item.created_at.unwrap_or(item.updated_at));
         let updated_at = millis_to_rfc3339(item.updated_at);
 
@@ -1158,6 +1457,8 @@ fn import_focus_sessions(
             item.emergency_exit_count.unwrap_or(0),
             item.paused_seconds.unwrap_or(0),
             item.followed_by_break_type.clone(),
+            schedule_block_id,
+            today_plan_item_id,
             &created_at,
             &updated_at,
         )?;
@@ -1333,6 +1634,144 @@ fn import_today_plan_items(
     Ok(())
 }
 
+fn import_schedule_templates(
+    connection: &Connection,
+    items: &[SharedScheduleTemplate],
+) -> Result<(), String> {
+    for item in items {
+        if item.deleted_at.is_some() {
+            delete_local_row_by_sync_id(connection, ENTITY_SCHEDULE_TEMPLATE, &item.sync_id)?;
+            continue;
+        }
+
+        let Some(title) = item
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+
+        let subject_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_SUBJECT,
+            item.subject_sync_id.as_deref(),
+        )?;
+        let created_at = millis_to_rfc3339(item.created_at.unwrap_or(item.updated_at));
+        let updated_at = millis_to_rfc3339(item.updated_at);
+        let weekdays = serde_json::to_string(&item.weekdays.clone().unwrap_or_default())
+            .map_err(|error| error.to_string())?;
+
+        upsert_schedule_template_row(
+            connection,
+            &item.sync_id,
+            title,
+            item.note.clone(),
+            item.category_key
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("general"),
+            subject_id,
+            &weekdays,
+            item.start_minute.unwrap_or(360),
+            item.end_minute.unwrap_or(420),
+            item.enabled.unwrap_or(true),
+            &created_at,
+            &updated_at,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn import_schedule_blocks(
+    connection: &Connection,
+    items: &[SharedScheduleBlock],
+) -> Result<(), String> {
+    for item in items {
+        if item.deleted_at.is_some() {
+            delete_local_row_by_sync_id(connection, ENTITY_SCHEDULE_BLOCK, &item.sync_id)?;
+            continue;
+        }
+
+        let Some(schedule_date) = item
+            .schedule_date
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+        let Some(title) = item
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+
+        let subject_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_SUBJECT,
+            item.subject_sync_id.as_deref(),
+        )?;
+        let source_today_item_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_TODAY_PLAN_ITEM,
+            item.source_today_item_sync_id.as_deref(),
+        )?;
+        let template_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_SCHEDULE_TEMPLATE,
+            item.template_sync_id.as_deref(),
+        )?;
+        let linked_study_mode_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_STUDY_MODE,
+            item.linked_study_mode_sync_id.as_deref(),
+        )?;
+        let linked_focus_session_id = resolve_local_id_by_sync_id(
+            connection,
+            ENTITY_FOCUS_SESSION,
+            item.linked_focus_session_sync_id.as_deref(),
+        )?;
+        let created_at = millis_to_rfc3339(item.created_at.unwrap_or(item.updated_at));
+        let updated_at = millis_to_rfc3339(item.updated_at);
+
+        upsert_schedule_block_row(
+            connection,
+            &item.sync_id,
+            schedule_date,
+            title,
+            item.note.clone(),
+            item.category_key
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("general"),
+            subject_id,
+            source_today_item_id,
+            template_id,
+            item.start_minute.unwrap_or(360),
+            item.end_minute.unwrap_or(420),
+            item.status
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("planned"),
+            linked_study_mode_id,
+            linked_focus_session_id,
+            &created_at,
+            &updated_at,
+        )?;
+    }
+
+    Ok(())
+}
+
 fn load_subject_rows(connection: &Connection) -> Result<Vec<DesktopSubjectRow>, String> {
     let mut statement = connection
         .prepare(
@@ -1369,7 +1808,7 @@ fn load_study_mode_rows(connection: &Connection) -> Result<Vec<DesktopStudyModeR
                    long_break_seconds, long_break_interval, phase, cycle_index,
                    started_at, phase_started_at, paused_at, total_paused_seconds,
                    phase_paused_seconds, ended_at, current_session_id, status, finish_reason,
-                   created_at, updated_at
+                   created_at, updated_at, schedule_block_id, today_plan_item_id
             FROM study_modes
             ORDER BY id ASC
             ",
@@ -1400,6 +1839,8 @@ fn load_study_mode_rows(connection: &Connection) -> Result<Vec<DesktopStudyModeR
                 finish_reason: row.get(18)?,
                 created_at: row.get(19)?,
                 updated_at: row.get(20)?,
+                schedule_block_id: row.get(21)?,
+                today_plan_item_id: row.get(22)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -1414,7 +1855,7 @@ fn load_focus_session_rows(connection: &Connection) -> Result<Vec<DesktopFocusSe
             "
             SELECT id, mode, subject_id, planned_seconds, actual_seconds, started_at, ended_at,
                    status, end_reason, interruption_count, emergency_exit_count, paused_seconds,
-                   followed_by_break_type, created_at, updated_at
+                   followed_by_break_type, created_at, updated_at, schedule_block_id, today_plan_item_id
             FROM focus_sessions
             ORDER BY id ASC
             ",
@@ -1439,6 +1880,8 @@ fn load_focus_session_rows(connection: &Connection) -> Result<Vec<DesktopFocusSe
                 followed_by_break_type: row.get(12)?,
                 created_at: row.get(13)?,
                 updated_at: row.get(14)?,
+                schedule_block_id: row.get(15)?,
+                today_plan_item_id: row.get(16)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -1539,6 +1982,83 @@ fn load_today_plan_item_rows(
                 synced_source_completion: row.get::<_, i64>(9)? != 0,
                 created_at: row.get(10)?,
                 updated_at: row.get(11)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_schedule_block_rows(
+    connection: &Connection,
+) -> Result<Vec<DesktopScheduleBlockRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT id, schedule_date, title, note, category_key, subject_id, source_today_item_id,
+                   template_id, start_minute, end_minute, status, linked_study_mode_id,
+                   linked_focus_session_id, created_at, updated_at
+            FROM schedule_blocks
+            ORDER BY schedule_date ASC, start_minute ASC, id ASC
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(DesktopScheduleBlockRow {
+                id: row.get(0)?,
+                schedule_date: row.get(1)?,
+                title: row.get(2)?,
+                note: row.get(3)?,
+                category_key: row.get(4)?,
+                subject_id: row.get(5)?,
+                source_today_item_id: row.get(6)?,
+                template_id: row.get(7)?,
+                start_minute: row.get(8)?,
+                end_minute: row.get(9)?,
+                status: row.get(10)?,
+                linked_study_mode_id: row.get(11)?,
+                linked_focus_session_id: row.get(12)?,
+                created_at: row.get(13)?,
+                updated_at: row.get(14)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_schedule_template_rows(
+    connection: &Connection,
+) -> Result<Vec<DesktopScheduleTemplateRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT id, title, note, category_key, subject_id, weekdays, start_minute,
+                   end_minute, enabled, created_at, updated_at
+            FROM schedule_templates
+            ORDER BY start_minute ASC, id ASC
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(DesktopScheduleTemplateRow {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                note: row.get(2)?,
+                category_key: row.get(3)?,
+                subject_id: row.get(4)?,
+                weekdays: row.get(5)?,
+                start_minute: row.get(6)?,
+                end_minute: row.get(7)?,
+                enabled: row.get::<_, i64>(8)? != 0,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -1681,6 +2201,8 @@ fn upsert_study_mode_row(
     phase_paused_seconds: i64,
     ended_at: Option<String>,
     current_session_id: Option<i64>,
+    schedule_block_id: Option<i64>,
+    today_plan_item_id: Option<i64>,
     status: &str,
     finish_reason: Option<String>,
     created_at: &str,
@@ -1709,11 +2231,13 @@ fn upsert_study_mode_row(
                     phase_paused_seconds = ?14,
                     ended_at = ?15,
                     current_session_id = ?16,
-                    status = ?17,
-                    finish_reason = ?18,
-                    created_at = ?19,
-                    updated_at = ?20
-                WHERE id = ?21
+                    schedule_block_id = ?17,
+                    today_plan_item_id = ?18,
+                    status = ?19,
+                    finish_reason = ?20,
+                    created_at = ?21,
+                    updated_at = ?22
+                WHERE id = ?23
                 ",
                 params![
                     mode,
@@ -1732,6 +2256,8 @@ fn upsert_study_mode_row(
                     phase_paused_seconds,
                     ended_at,
                     current_session_id,
+                    schedule_block_id,
+                    today_plan_item_id,
                     status,
                     finish_reason,
                     created_at,
@@ -1758,9 +2284,9 @@ fn upsert_study_mode_row(
               mode, subject_id, planned_seconds, focus_seconds, break_seconds,
               long_break_seconds, long_break_interval, phase, cycle_index,
               started_at, phase_started_at, paused_at, total_paused_seconds,
-              phase_paused_seconds, ended_at, current_session_id, status,
-              finish_reason, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+              phase_paused_seconds, ended_at, current_session_id, schedule_block_id,
+              today_plan_item_id, status, finish_reason, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
             ",
             params![
                 mode,
@@ -1779,6 +2305,8 @@ fn upsert_study_mode_row(
                 phase_paused_seconds,
                 ended_at,
                 current_session_id,
+                schedule_block_id,
+                today_plan_item_id,
                 status,
                 finish_reason,
                 created_at,
@@ -1812,6 +2340,8 @@ fn upsert_focus_session_row(
     emergency_exit_count: i64,
     paused_seconds: i64,
     followed_by_break_type: Option<String>,
+    schedule_block_id: Option<i64>,
+    today_plan_item_id: Option<i64>,
     created_at: &str,
     updated_at: &str,
 ) -> Result<(), String> {
@@ -1834,9 +2364,11 @@ fn upsert_focus_session_row(
                     emergency_exit_count = ?10,
                     paused_seconds = ?11,
                     followed_by_break_type = ?12,
-                    created_at = ?13,
-                    updated_at = ?14
-                WHERE id = ?15
+                    schedule_block_id = ?13,
+                    today_plan_item_id = ?14,
+                    created_at = ?15,
+                    updated_at = ?16
+                WHERE id = ?17
                 ",
                 params![
                     mode,
@@ -1851,6 +2383,8 @@ fn upsert_focus_session_row(
                     emergency_exit_count,
                     paused_seconds,
                     followed_by_break_type,
+                    schedule_block_id,
+                    today_plan_item_id,
                     created_at,
                     updated_at,
                     local_id
@@ -1874,8 +2408,9 @@ fn upsert_focus_session_row(
             INSERT INTO focus_sessions (
               mode, subject_id, planned_seconds, actual_seconds, started_at, ended_at,
               status, end_reason, interruption_count, emergency_exit_count,
-              paused_seconds, followed_by_break_type, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+              paused_seconds, followed_by_break_type, schedule_block_id, today_plan_item_id,
+              created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
             ",
             params![
                 mode,
@@ -1890,6 +2425,8 @@ fn upsert_focus_session_row(
                 emergency_exit_count,
                 paused_seconds,
                 followed_by_break_type,
+                schedule_block_id,
+                today_plan_item_id,
                 created_at,
                 updated_at
             ],
@@ -2207,6 +2744,207 @@ fn upsert_today_plan_item_row(
     )
 }
 
+fn upsert_schedule_template_row(
+    connection: &Connection,
+    sync_id: &str,
+    title: &str,
+    note: Option<String>,
+    category_key: &str,
+    subject_id: Option<i64>,
+    weekdays: &str,
+    start_minute: i64,
+    end_minute: i64,
+    enabled: bool,
+    created_at: &str,
+    updated_at: &str,
+) -> Result<(), String> {
+    if let Some(local_id) =
+        resolve_local_id_by_sync_id(connection, ENTITY_SCHEDULE_TEMPLATE, Some(sync_id))?
+    {
+        connection
+            .execute(
+                "
+                UPDATE schedule_templates
+                SET title = ?1,
+                    note = ?2,
+                    category_key = ?3,
+                    subject_id = ?4,
+                    weekdays = ?5,
+                    start_minute = ?6,
+                    end_minute = ?7,
+                    enabled = ?8,
+                    created_at = ?9,
+                    updated_at = ?10
+                WHERE id = ?11
+                ",
+                params![
+                    title,
+                    note,
+                    category_key,
+                    subject_id,
+                    weekdays,
+                    start_minute,
+                    end_minute,
+                    if enabled { 1 } else { 0 },
+                    created_at,
+                    updated_at,
+                    local_id
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        upsert_sync_meta(
+            connection,
+            ENTITY_SCHEDULE_TEMPLATE,
+            local_id,
+            sync_id,
+            parse_rfc3339_millis(updated_at)?,
+            None,
+        )?;
+        return Ok(());
+    }
+
+    connection
+        .execute(
+            "
+            INSERT INTO schedule_templates (
+              title, note, category_key, subject_id, weekdays, start_minute, end_minute,
+              enabled, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            ",
+            params![
+                title,
+                note,
+                category_key,
+                subject_id,
+                weekdays,
+                start_minute,
+                end_minute,
+                if enabled { 1 } else { 0 },
+                created_at,
+                updated_at
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    let local_id = connection.last_insert_rowid();
+    upsert_sync_meta(
+        connection,
+        ENTITY_SCHEDULE_TEMPLATE,
+        local_id,
+        sync_id,
+        parse_rfc3339_millis(updated_at)?,
+        None,
+    )
+}
+
+fn upsert_schedule_block_row(
+    connection: &Connection,
+    sync_id: &str,
+    schedule_date: &str,
+    title: &str,
+    note: Option<String>,
+    category_key: &str,
+    subject_id: Option<i64>,
+    source_today_item_id: Option<i64>,
+    template_id: Option<i64>,
+    start_minute: i64,
+    end_minute: i64,
+    status: &str,
+    linked_study_mode_id: Option<i64>,
+    linked_focus_session_id: Option<i64>,
+    created_at: &str,
+    updated_at: &str,
+) -> Result<(), String> {
+    if let Some(local_id) =
+        resolve_local_id_by_sync_id(connection, ENTITY_SCHEDULE_BLOCK, Some(sync_id))?
+    {
+        connection
+            .execute(
+                "
+                UPDATE schedule_blocks
+                SET schedule_date = ?1,
+                    title = ?2,
+                    note = ?3,
+                    category_key = ?4,
+                    subject_id = ?5,
+                    source_today_item_id = ?6,
+                    template_id = ?7,
+                    start_minute = ?8,
+                    end_minute = ?9,
+                    status = ?10,
+                    linked_study_mode_id = ?11,
+                    linked_focus_session_id = ?12,
+                    created_at = ?13,
+                    updated_at = ?14
+                WHERE id = ?15
+                ",
+                params![
+                    schedule_date,
+                    title,
+                    note,
+                    category_key,
+                    subject_id,
+                    source_today_item_id,
+                    template_id,
+                    start_minute,
+                    end_minute,
+                    status,
+                    linked_study_mode_id,
+                    linked_focus_session_id,
+                    created_at,
+                    updated_at,
+                    local_id
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        upsert_sync_meta(
+            connection,
+            ENTITY_SCHEDULE_BLOCK,
+            local_id,
+            sync_id,
+            parse_rfc3339_millis(updated_at)?,
+            None,
+        )?;
+        return Ok(());
+    }
+
+    connection
+        .execute(
+            "
+            INSERT INTO schedule_blocks (
+              schedule_date, title, note, category_key, subject_id, source_today_item_id,
+              template_id, start_minute, end_minute, status, linked_study_mode_id,
+              linked_focus_session_id, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            ",
+            params![
+                schedule_date,
+                title,
+                note,
+                category_key,
+                subject_id,
+                source_today_item_id,
+                template_id,
+                start_minute,
+                end_minute,
+                status,
+                linked_study_mode_id,
+                linked_focus_session_id,
+                created_at,
+                updated_at
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    let local_id = connection.last_insert_rowid();
+    upsert_sync_meta(
+        connection,
+        ENTITY_SCHEDULE_BLOCK,
+        local_id,
+        sync_id,
+        parse_rfc3339_millis(updated_at)?,
+        None,
+    )
+}
+
 fn resolve_or_create_sync_id(
     connection: &Connection,
     entity_type: &str,
@@ -2378,6 +3116,28 @@ fn delete_local_row_by_sync_id(
                     )
                     .map_err(|error| error.to_string())?;
             }
+            ENTITY_SCHEDULE_BLOCK => {
+                connection
+                    .execute(
+                        "DELETE FROM schedule_blocks WHERE id = ?1",
+                        params![local_id],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
+            ENTITY_SCHEDULE_TEMPLATE => {
+                connection
+                    .execute(
+                        "DELETE FROM schedule_blocks WHERE template_id = ?1",
+                        params![local_id],
+                    )
+                    .map_err(|error| error.to_string())?;
+                connection
+                    .execute(
+                        "DELETE FROM schedule_templates WHERE id = ?1",
+                        params![local_id],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
             _ => {}
         }
     }
@@ -2493,6 +3253,14 @@ fn map_board_scope_to_category_key(board_scope: &str) -> String {
         "checklist:major" => "major".to_string(),
         _ => "general".to_string(),
     }
+}
+
+fn parse_weekdays_json(raw: &str) -> Vec<i64> {
+    serde_json::from_str::<Vec<i64>>(raw)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|weekday| matches!(*weekday, 1..=7))
+        .collect()
 }
 
 fn default_subject_sync_id(name: &str, local_id: i64) -> String {

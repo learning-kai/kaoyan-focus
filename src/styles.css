@@ -2516,6 +2516,419 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   border: none;
 }
 
+.schedule-page {
+  display: grid;
+  gap: 14px;
+}
+
+.schedule-hero {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(121, 167, 255, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(16, 27, 43, 0.88), rgba(9, 15, 25, 0.74));
+  box-shadow: 0 18px 38px rgba(2, 6, 17, 0.2);
+}
+
+.schedule-hero h2,
+.schedule-hero p {
+  margin: 0;
+}
+
+.schedule-hero h2 {
+  margin-top: 4px;
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.schedule-hero p:not(.eyebrow) {
+  margin-top: 6px;
+  max-width: 680px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.schedule-actions,
+.schedule-toolbar,
+.date-stepper,
+.weekday-pills,
+.schedule-block-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.schedule-actions {
+  flex: 0 0 auto;
+}
+
+.schedule-page .primary-button,
+.schedule-page .ghost-button,
+.schedule-task-row button,
+.template-row button,
+.schedule-block-actions button,
+.date-stepper button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 7px 11px;
+  color: var(--ink);
+  background: rgba(16, 27, 43, 0.72);
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.schedule-page .primary-button {
+  color: #07111c;
+  border-color: transparent;
+  background: linear-gradient(135deg, #8db8ff, #69dfb7);
+  font-weight: 700;
+}
+
+.schedule-page .ghost-button:hover,
+.schedule-task-row button:hover,
+.template-row button:hover,
+.schedule-block-actions button:hover,
+.date-stepper button:hover {
+  border-color: var(--line-strong);
+  background: rgba(22, 34, 54, 0.92);
+  transform: translateY(-1px);
+}
+
+.schedule-toolbar {
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.schedule-toolbar .segmented-control {
+  width: 220px;
+}
+
+.date-stepper {
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(9, 15, 25, 0.46);
+}
+
+.date-stepper input,
+.schedule-composer input,
+.schedule-composer select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 7px 10px;
+  color: var(--ink);
+  background: rgba(9, 15, 25, 0.86);
+}
+
+.date-stepper input {
+  width: 146px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.schedule-composer {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) 150px 110px 110px minmax(140px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+}
+
+.template-composer {
+  grid-template-columns: minmax(160px, 1.3fr) 150px 110px 110px minmax(220px, 1fr) auto;
+}
+
+.weekday-pills {
+  flex-wrap: wrap;
+}
+
+.weekday-pills button {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: var(--muted);
+  background: rgba(9, 15, 25, 0.62);
+  font-size: 12px;
+}
+
+.weekday-pills button.active {
+  color: #07111c;
+  border-color: transparent;
+  background: linear-gradient(135deg, #8db8ff, #69dfb7);
+}
+
+.schedule-grid-shell {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(180px, 240px);
+  gap: 12px;
+  align-items: start;
+}
+
+.today-task-rail,
+.template-rail {
+  display: grid;
+  gap: 10px;
+  max-height: 650px;
+  overflow: auto;
+}
+
+.schedule-task-row,
+.template-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(9, 15, 25, 0.46);
+}
+
+.schedule-task-row strong,
+.template-row strong,
+.week-block {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-task-row span,
+.template-row span,
+.week-day header span,
+.schedule-block span,
+.schedule-block small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.schedule-task-row > div,
+.template-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.schedule-task-row button {
+  min-width: 56px;
+  min-height: 28px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.schedule-task-row.muted {
+  opacity: 0.66;
+}
+
+.schedule-timeline {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 650px;
+  padding: 14px;
+}
+
+.schedule-time-column {
+  display: grid;
+  grid-template-rows: repeat(19, 1fr);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.schedule-lane {
+  position: relative;
+  min-height: 620px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(to bottom, rgba(145, 167, 199, 0.12) 0 1px, transparent 1px calc(100% / 18)),
+    linear-gradient(180deg, rgba(9, 15, 25, 0.48), rgba(9, 15, 25, 0.28));
+}
+
+.schedule-now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 2px;
+  background: var(--red);
+  box-shadow: 0 0 20px rgba(255, 125, 115, 0.32);
+}
+
+.schedule-block {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid rgba(145, 167, 199, 0.22);
+  border-radius: 10px;
+  color: var(--ink);
+  background: rgba(22, 34, 54, 0.88);
+  box-shadow: 0 14px 30px rgba(2, 6, 17, 0.28);
+}
+
+.schedule-block > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.schedule-block strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-block.conflict {
+  border-color: rgba(255, 125, 115, 0.42);
+  box-shadow: 0 0 0 1px rgba(255, 125, 115, 0.14), 0 14px 30px rgba(2, 6, 17, 0.28);
+}
+
+.schedule-block-actions {
+  gap: 5px;
+}
+
+.schedule-block-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 84px 84px auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.schedule-block-editor input {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 7px;
+  color: var(--ink);
+  background: rgba(9, 15, 25, 0.72);
+  font-size: 12px;
+}
+
+.schedule-block-editor button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.schedule-block-actions button,
+.template-row button,
+.date-stepper button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+
+.category-politics {
+  border-color: rgba(242, 181, 107, 0.38);
+  background: linear-gradient(135deg, rgba(242, 181, 107, 0.2), rgba(22, 34, 54, 0.88));
+}
+
+.category-english {
+  border-color: rgba(121, 167, 255, 0.4);
+  background: linear-gradient(135deg, rgba(121, 167, 255, 0.2), rgba(22, 34, 54, 0.88));
+}
+
+.category-math {
+  border-color: rgba(79, 208, 161, 0.4);
+  background: linear-gradient(135deg, rgba(79, 208, 161, 0.18), rgba(22, 34, 54, 0.88));
+}
+
+.category-major {
+  border-color: rgba(255, 125, 115, 0.34);
+  background: linear-gradient(135deg, rgba(255, 125, 115, 0.16), rgba(22, 34, 54, 0.88));
+}
+
+.category-general {
+  border-color: rgba(145, 167, 199, 0.28);
+}
+
+.schedule-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.week-board {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 650px;
+  padding: 12px;
+}
+
+.week-day {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(9, 15, 25, 0.38);
+}
+
+.week-day header {
+  display: grid;
+  gap: 2px;
+}
+
+.week-blocks {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+}
+
+.week-block {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  color: var(--ink);
+  background: rgba(16, 27, 43, 0.72);
+  font-size: 12px;
+  text-align: left;
+}
+
+.week-block span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
 @media (max-width: 1200px) {
   .app-shell {
     grid-template-columns: 208px minmax(0, 1fr);
@@ -2545,6 +2958,20 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 
   .task-editor-grid.compact {
     grid-template-columns: 1fr;
+  }
+
+  .schedule-grid-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .today-task-rail,
+  .template-rail {
+    max-height: none;
+  }
+
+  .schedule-composer,
+  .template-composer {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
 }
@@ -3017,6 +3444,145 @@ html[data-theme='light'] .today-plan-panel {
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.66);
   box-shadow: 0 18px 40px rgba(82, 101, 129, 0.1);
+}
+
+html[data-theme='light'] .schedule-hero {
+  border-color: rgba(112, 131, 159, 0.18);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(75, 119, 232, 0.11), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(245, 249, 255, 0.64));
+  box-shadow: 0 18px 38px rgba(82, 101, 129, 0.1);
+}
+
+html[data-theme='light'] .schedule-toolbar {
+  border-color: rgba(112, 131, 159, 0.18);
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 18px 40px rgba(82, 101, 129, 0.1);
+}
+
+html[data-theme='light'] .date-stepper {
+  border-color: rgba(112, 131, 159, 0.16);
+  background: rgba(255, 255, 255, 0.54);
+}
+
+html[data-theme='light'] .schedule-composer,
+html[data-theme='light'] .template-composer {
+  border-color: rgba(112, 131, 159, 0.18);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+html[data-theme='light'] .schedule-task-row,
+html[data-theme='light'] .template-row {
+  border-color: rgba(112, 131, 159, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme='light'] .schedule-task-row:hover,
+html[data-theme='light'] .template-row:hover {
+  border-color: rgba(75, 119, 232, 0.22);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+html[data-theme='light'] .schedule-task-row.muted {
+  background: rgba(255, 255, 255, 0.58);
+}
+
+html[data-theme='light'] .today-task-rail,
+html[data-theme='light'] .template-rail {
+  scrollbar-color: rgba(75, 119, 232, 0.2) rgba(255, 255, 255, 0.42);
+}
+
+html[data-theme='light'] .schedule-timeline {
+  background: rgba(255, 255, 255, 0.46);
+}
+
+html[data-theme='light'] .schedule-time-column {
+  color: #7b8798;
+}
+
+html[data-theme='light'] .schedule-lane {
+  border-color: rgba(112, 131, 159, 0.18);
+  background:
+    repeating-linear-gradient(to bottom, rgba(112, 131, 159, 0.1) 0 1px, transparent 1px calc(100% / 18)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(245, 249, 255, 0.6));
+}
+
+html[data-theme='light'] .schedule-block {
+  border-color: rgba(112, 131, 159, 0.18);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(244, 248, 255, 0.72)),
+    rgba(255, 255, 255, 0.64);
+  box-shadow: 0 14px 30px rgba(82, 101, 129, 0.12);
+}
+
+html[data-theme='light'] .schedule-block strong,
+html[data-theme='light'] .week-day header strong,
+html[data-theme='light'] .week-block {
+  color: #162033;
+}
+
+html[data-theme='light'] .schedule-block.category-politics {
+  border-color: rgba(213, 146, 61, 0.24);
+  background: linear-gradient(135deg, rgba(255, 245, 230, 0.94), rgba(244, 248, 255, 0.78));
+}
+
+html[data-theme='light'] .schedule-block.category-english {
+  border-color: rgba(75, 119, 232, 0.22);
+  background: linear-gradient(135deg, rgba(238, 244, 255, 0.96), rgba(244, 248, 255, 0.8));
+}
+
+html[data-theme='light'] .schedule-block.category-math {
+  border-color: rgba(44, 181, 139, 0.22);
+  background: linear-gradient(135deg, rgba(235, 251, 245, 0.96), rgba(244, 248, 255, 0.8));
+}
+
+html[data-theme='light'] .schedule-block.category-major {
+  border-color: rgba(217, 110, 103, 0.22);
+  background: linear-gradient(135deg, rgba(255, 240, 239, 0.96), rgba(244, 248, 255, 0.8));
+}
+
+html[data-theme='light'] .schedule-block.category-general {
+  border-color: rgba(112, 131, 159, 0.18);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(244, 248, 255, 0.74));
+}
+
+html[data-theme='light'] .schedule-empty {
+  color: #7b8798;
+}
+
+html[data-theme='light'] .week-board {
+  border-color: rgba(112, 131, 159, 0.18);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+html[data-theme='light'] .week-day {
+  border-color: rgba(112, 131, 159, 0.16);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme='light'] .week-block {
+  border-color: rgba(112, 131, 159, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(244, 248, 255, 0.74));
+}
+
+html[data-theme='light'] .week-block.category-politics {
+  border-color: rgba(213, 146, 61, 0.24);
+}
+
+html[data-theme='light'] .week-block.category-english {
+  border-color: rgba(75, 119, 232, 0.22);
+}
+
+html[data-theme='light'] .week-block.category-math {
+  border-color: rgba(44, 181, 139, 0.22);
+}
+
+html[data-theme='light'] .week-block.category-major {
+  border-color: rgba(217, 110, 103, 0.22);
+}
+
+html[data-theme='light'] .week-block.category-general {
+  border-color: rgba(112, 131, 159, 0.18);
 }
 
 html[data-theme='light'] .list-drop-zone {

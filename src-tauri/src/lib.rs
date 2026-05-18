@@ -17,6 +17,7 @@ mod commands {
     pub mod checklist;
     pub mod focus;
     pub mod monitor;
+    pub mod schedule;
     pub mod settings;
     pub mod sync;
     pub mod whitelist;
@@ -227,6 +228,16 @@ pub fn run() {
             commands::checklist::delete_today_plan_item,
             commands::checklist::reorder_today_plan_items,
             commands::checklist::complete_today_plan_item,
+            commands::schedule::get_schedule_page_data,
+            commands::schedule::create_schedule_block,
+            commands::schedule::create_schedule_block_from_today_item,
+            commands::schedule::update_schedule_block,
+            commands::schedule::move_schedule_block,
+            commands::schedule::delete_schedule_block,
+            commands::schedule::create_schedule_template,
+            commands::schedule::update_schedule_template,
+            commands::schedule::delete_schedule_template,
+            commands::schedule::start_study_mode_from_schedule_block,
             commands::focus::start_study_mode,
             commands::focus::get_study_mode_state,
             commands::focus::confirm_study_break,

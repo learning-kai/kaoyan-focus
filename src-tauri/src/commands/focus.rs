@@ -35,6 +35,12 @@ pub struct FocusSessionRecovery {
     pub remaining_seconds: i64,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StudyModeLinks {
+    pub schedule_block_id: Option<i64>,
+    pub today_plan_item_id: Option<i64>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct StudyModeState {
     pub id: Option<i64>,
@@ -94,6 +100,8 @@ struct StudyModeRecord {
     phase_paused_seconds: i64,
     ended_at: Option<String>,
     current_session_id: Option<i64>,
+    schedule_block_id: Option<i64>,
+    _today_plan_item_id: Option<i64>,
     status: String,
 }
 
@@ -195,6 +203,92 @@ pub fn start_study_mode(
         .map_err(|error| error.to_string())?;
 
     set_runtime_state(state.inner(), true, Some(session.id))?;
+    load_current_study_mode_state(&connection, Utc::now())
+}
+
+pub fn start_study_mode_with_links(
+    app: AppHandle,
+    state: &AppState,
+    planned_seconds: i64,
+    focus_seconds: i64,
+    break_seconds: i64,
+    long_break_seconds: i64,
+    long_break_interval: i64,
+    mode: String,
+    subject_id: Option<i64>,
+    links: StudyModeLinks,
+) -> Result<StudyModeState, String> {
+    if planned_seconds <= 0 {
+        return Err("Study mode duration must be greater than 0 seconds.".to_string());
+    }
+
+    if focus_seconds <= 0 {
+        return Err("Focus duration must be greater than 0 seconds.".to_string());
+    }
+
+    if break_seconds <= 0 {
+        return Err("Break duration must be greater than 0 seconds.".to_string());
+    }
+
+    if long_break_seconds <= 0 {
+        return Err("Long break duration must be greater than 0 seconds.".to_string());
+    }
+
+    if long_break_interval <= 0 {
+        return Err("Long break interval must be greater than 0.".to_string());
+    }
+
+    if mode != "normal" && mode != "strict" {
+        return Err("Unknown focus mode.".to_string());
+    }
+
+    let connection = open_database(&database_path(&app)?)?;
+    if get_active_study_mode_record(&connection)?.is_some() {
+        return Err("A study mode is already running.".to_string());
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let session = insert_focus_session(&connection, focus_seconds, &mode, subject_id, &now)?;
+    connection
+        .execute(
+            "
+            INSERT INTO study_modes (
+              mode,
+              subject_id,
+              planned_seconds,
+              focus_seconds,
+              break_seconds,
+              long_break_seconds,
+              long_break_interval,
+              phase,
+              cycle_index,
+              started_at,
+              phase_started_at,
+              current_session_id,
+              schedule_block_id,
+              today_plan_item_id,
+              status,
+              created_at,
+              updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'focus', 1, ?8, ?8, ?9, ?10, ?11, 'active', ?8, ?8)
+            ",
+            params![
+                mode,
+                subject_id,
+                planned_seconds,
+                focus_seconds,
+                break_seconds,
+                long_break_seconds,
+                long_break_interval,
+                now,
+                session.id,
+                links.schedule_block_id,
+                links.today_plan_item_id
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    set_runtime_state(state, true, Some(session.id))?;
     load_current_study_mode_state(&connection, Utc::now())
 }
 
@@ -1119,6 +1213,14 @@ fn complete_study_mode_record(
         }
     }
 
+    let _ = crate::commands::schedule::mark_schedule_block_completed(
+        connection,
+        record.schedule_block_id,
+        record.id,
+        record.current_session_id,
+        &now.to_rfc3339(),
+    );
+
     connection
         .execute(
             "
@@ -1267,7 +1369,7 @@ fn get_active_study_mode_record(
                    long_break_seconds, long_break_interval,
                    phase, cycle_index, started_at, phase_started_at, paused_at,
                    total_paused_seconds, phase_paused_seconds, ended_at,
-                   current_session_id, status
+                   current_session_id, schedule_block_id, today_plan_item_id, status
             FROM study_modes
             WHERE status = 'active'
             ORDER BY id DESC
@@ -1290,7 +1392,7 @@ fn get_latest_study_mode_record(
                    long_break_seconds, long_break_interval,
                    phase, cycle_index, started_at, phase_started_at, paused_at,
                    total_paused_seconds, phase_paused_seconds, ended_at,
-                   current_session_id, status
+                   current_session_id, schedule_block_id, today_plan_item_id, status
             FROM study_modes
             ORDER BY id DESC
             LIMIT 1
@@ -1313,7 +1415,7 @@ fn get_study_mode_record_by_id(
                    long_break_seconds, long_break_interval,
                    phase, cycle_index, started_at, phase_started_at, paused_at,
                    total_paused_seconds, phase_paused_seconds, ended_at,
-                   current_session_id, status
+                   current_session_id, schedule_block_id, today_plan_item_id, status
             FROM study_modes
             WHERE id = ?1
             ",
@@ -1538,7 +1640,9 @@ fn row_to_study_mode_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<StudyMo
         phase_paused_seconds: row.get(14)?,
         ended_at: row.get(15)?,
         current_session_id: row.get(16)?,
-        status: row.get(17)?,
+        schedule_block_id: row.get(17)?,
+        _today_plan_item_id: row.get(18)?,
+        status: row.get(19)?,
     })
 }
 

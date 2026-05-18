@@ -24,6 +24,8 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               actual_seconds INTEGER NOT NULL DEFAULT 0,
               paused_seconds INTEGER NOT NULL DEFAULT 0,
               followed_by_break_type TEXT,
+              schedule_block_id INTEGER,
+              today_plan_item_id INTEGER,
               started_at TEXT NOT NULL,
               ended_at TEXT,
               status TEXT NOT NULL,
@@ -52,6 +54,8 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               phase_paused_seconds INTEGER NOT NULL DEFAULT 0,
               ended_at TEXT,
               current_session_id INTEGER,
+              schedule_block_id INTEGER,
+              today_plan_item_id INTEGER,
               status TEXT NOT NULL DEFAULT 'active',
               finish_reason TEXT,
               created_at TEXT NOT NULL,
@@ -149,6 +153,42 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               FOREIGN KEY (source_task_id) REFERENCES checklist_tasks(id)
             );
 
+            CREATE TABLE IF NOT EXISTS schedule_templates (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL,
+              note TEXT,
+              category_key TEXT NOT NULL DEFAULT 'general',
+              subject_id INTEGER,
+              weekdays TEXT NOT NULL DEFAULT '[]',
+              start_minute INTEGER NOT NULL,
+              end_minute INTEGER NOT NULL,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS schedule_blocks (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              schedule_date TEXT NOT NULL,
+              title TEXT NOT NULL,
+              note TEXT,
+              category_key TEXT NOT NULL DEFAULT 'general',
+              subject_id INTEGER,
+              source_today_item_id INTEGER,
+              template_id INTEGER,
+              start_minute INTEGER NOT NULL,
+              end_minute INTEGER NOT NULL,
+              status TEXT NOT NULL DEFAULT 'planned',
+              linked_study_mode_id INTEGER,
+              linked_focus_session_id INTEGER,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              FOREIGN KEY (source_today_item_id) REFERENCES today_plan_items(id),
+              FOREIGN KEY (template_id) REFERENCES schedule_templates(id),
+              FOREIGN KEY (linked_study_mode_id) REFERENCES study_modes(id),
+              FOREIGN KEY (linked_focus_session_id) REFERENCES focus_sessions(id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_checklist_columns_scope_sort
               ON checklist_columns (board_scope, sort_order, id);
             CREATE INDEX IF NOT EXISTS idx_checklist_tasks_column_sort
@@ -157,6 +197,13 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               ON checklist_tasks (board_scope, sort_order, id);
             CREATE INDEX IF NOT EXISTS idx_today_plan_items_date_sort
               ON today_plan_items (today_date, sort_order, id);
+            CREATE INDEX IF NOT EXISTS idx_schedule_blocks_date_start
+              ON schedule_blocks (schedule_date, start_minute, id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_blocks_template_date
+              ON schedule_blocks (template_id, schedule_date)
+              WHERE template_id IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_schedule_templates_enabled
+              ON schedule_templates (enabled, start_minute, id);
             CREATE INDEX IF NOT EXISTS idx_sync_meta_sync_id
               ON sync_meta (sync_id);
             CREATE INDEX IF NOT EXISTS idx_sync_meta_entity_deleted
@@ -202,6 +249,10 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "followed_by_break_type",
         "TEXT",
     )?;
+    add_column_if_missing(connection, "focus_sessions", "schedule_block_id", "INTEGER")?;
+    add_column_if_missing(connection, "focus_sessions", "today_plan_item_id", "INTEGER")?;
+    add_column_if_missing(connection, "study_modes", "schedule_block_id", "INTEGER")?;
+    add_column_if_missing(connection, "study_modes", "today_plan_item_id", "INTEGER")?;
 
     Ok(())
 }
