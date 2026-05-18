@@ -17,6 +17,7 @@ mod commands {
     pub mod checklist;
     pub mod focus;
     pub mod monitor;
+    pub mod review;
     pub mod schedule;
     pub mod settings;
     pub mod sync;
@@ -238,6 +239,9 @@ pub fn run() {
             commands::schedule::update_schedule_template,
             commands::schedule::delete_schedule_template,
             commands::schedule::start_study_mode_from_schedule_block,
+            commands::review::get_daily_review_page_data,
+            commands::review::save_daily_review,
+            commands::review::delete_daily_review,
             commands::focus::start_study_mode,
             commands::focus::get_study_mode_state,
             commands::focus::confirm_study_break,
@@ -278,6 +282,7 @@ pub fn run() {
             commands::whitelist::list_whitelist_apps,
             commands::whitelist::list_running_processes,
             commands::whitelist::set_whitelist_app_enabled,
+            commands::whitelist::update_whitelist_subject,
             commands::whitelist::delete_whitelist_app,
             commands::monitor::get_current_foreground_app,
             commands::monitor::check_focus_foreground_app,

@@ -4,6 +4,7 @@ export type WhitelistApp = {
   process_name: string;
   path: string | null;
   match_type: 'process_name' | 'website_domain' | string;
+  subject_id: number | null;
   note: string | null;
   enabled: boolean;
   created_at: string;

@@ -5,20 +5,28 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
   return invoke<T>(command, args);
 }
 
-export function createWhitelistApp(name: string, processName: string, note?: string, path?: string | null): Promise<WhitelistApp> {
+export function createWhitelistApp(
+  name: string,
+  processName: string,
+  note?: string,
+  path?: string | null,
+  subjectId?: number | null,
+): Promise<WhitelistApp> {
   return invokeCommand<WhitelistApp>('create_whitelist_app', {
     name,
     processName,
     path: path?.trim() ? path.trim() : null,
     note: note?.trim() ? note.trim() : null,
+    subjectId: subjectId ?? null,
   });
 }
 
-export function createWhitelistWebsite(name: string, domain: string, note?: string): Promise<WhitelistApp> {
+export function createWhitelistWebsite(name: string, domain: string, note?: string, subjectId?: number | null): Promise<WhitelistApp> {
   return invokeCommand<WhitelistApp>('create_whitelist_website', {
     name,
     domain,
     note: note?.trim() ? note.trim() : null,
+    subjectId: subjectId ?? null,
   });
 }
 
@@ -38,6 +46,13 @@ export function setWhitelistAppEnabled(id: number, enabled: boolean): Promise<Wh
   return invokeCommand<WhitelistApp>('set_whitelist_app_enabled', {
     id,
     enabled,
+  });
+}
+
+export function updateWhitelistSubject(id: number, subjectId: number | null): Promise<WhitelistApp> {
+  return invokeCommand<WhitelistApp>('update_whitelist_subject', {
+    id,
+    subjectId,
   });
 }
 

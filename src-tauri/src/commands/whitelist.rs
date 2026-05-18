@@ -26,6 +26,7 @@ pub fn create_whitelist_app(
     process_name: String,
     path: Option<String>,
     note: Option<String>,
+    subject_id: Option<i64>,
 ) -> Result<WhitelistApp, String> {
     let name = name.trim();
     let process_name = process_name.trim();
@@ -44,6 +45,7 @@ pub fn create_whitelist_app(
 
     let now = Utc::now().to_rfc3339();
     let connection = open_database(&database_path(&app)?)?;
+    validate_subject_id(&connection, subject_id)?;
     let existing_id = connection
         .query_row(
             "
@@ -66,12 +68,13 @@ pub fn create_whitelist_app(
                 UPDATE whitelist_apps
                 SET name = ?1,
                     path = COALESCE(?2, path),
-                    note = ?3,
+                    subject_id = ?3,
+                    note = ?4,
                     enabled = 1,
-                    updated_at = ?4
-                WHERE id = ?5
+                    updated_at = ?5
+                WHERE id = ?6
                 ",
-                params![name, path, note, now, existing_id],
+                params![name, path, subject_id, note, now, existing_id],
             )
             .map_err(|error| error.to_string())?;
 
@@ -86,13 +89,14 @@ pub fn create_whitelist_app(
               process_name,
               path,
               match_type,
+              subject_id,
               note,
               enabled,
               created_at,
               updated_at
-            ) VALUES (?1, ?2, ?3, 'process_name', ?4, 1, ?5, ?5)
+            ) VALUES (?1, ?2, ?3, 'process_name', ?4, ?5, 1, ?6, ?6)
             ",
-            params![name, process_name, path, note, now],
+            params![name, process_name, path, subject_id, note, now],
         )
         .map_err(|error| error.to_string())?;
 
@@ -105,6 +109,7 @@ pub fn create_whitelist_website(
     name: String,
     domain: String,
     note: Option<String>,
+    subject_id: Option<i64>,
 ) -> Result<WhitelistApp, String> {
     let name = name.trim();
     let launch_url = website_launch_url(&domain);
@@ -120,6 +125,7 @@ pub fn create_whitelist_website(
 
     let now = Utc::now().to_rfc3339();
     let connection = open_database(&database_path(&app)?)?;
+    validate_subject_id(&connection, subject_id)?;
     let is_specific_url = launch_url
         .as_deref()
         .is_some_and(website_url_has_specific_path);
@@ -168,12 +174,13 @@ pub fn create_whitelist_website(
                 UPDATE whitelist_apps
                 SET name = ?1,
                     path = ?2,
-                    note = ?3,
+                    subject_id = ?3,
+                    note = ?4,
                     enabled = 1,
-                    updated_at = ?4
-                WHERE id = ?5
+                    updated_at = ?5
+                WHERE id = ?6
                 ",
-                params![name, launch_url, note, now, existing_id],
+                params![name, launch_url, subject_id, note, now, existing_id],
             )
             .map_err(|error| error.to_string())?;
 
@@ -188,13 +195,14 @@ pub fn create_whitelist_website(
               process_name,
               path,
               match_type,
+              subject_id,
               note,
               enabled,
               created_at,
               updated_at
-            ) VALUES (?1, ?2, ?3, 'website_domain', ?4, 1, ?5, ?5)
+            ) VALUES (?1, ?2, ?3, 'website_domain', ?4, ?5, 1, ?6, ?6)
             ",
-            params![name, domain, launch_url, note, now],
+            params![name, domain, launch_url, subject_id, note, now],
         )
         .map_err(|error| error.to_string())?;
 
@@ -212,9 +220,9 @@ pub fn list_whitelist_apps(app: AppHandle) -> Result<Vec<WhitelistApp>, String> 
     let mut statement = connection
         .prepare(
             "
-            SELECT id, name, process_name, path, match_type, note, enabled, created_at, updated_at
+            SELECT id, name, process_name, path, match_type, subject_id, note, enabled, created_at, updated_at
             FROM whitelist_apps
-            ORDER BY enabled DESC, id DESC
+            ORDER BY enabled DESC, COALESCE(subject_id, 0), id DESC
             ",
         )
         .map_err(|error| error.to_string())?;
@@ -365,6 +373,35 @@ pub fn set_whitelist_app_enabled(
 }
 
 #[tauri::command]
+pub fn update_whitelist_subject(
+    app: AppHandle,
+    id: i64,
+    subject_id: Option<i64>,
+) -> Result<WhitelistApp, String> {
+    let now = Utc::now().to_rfc3339();
+    let connection = open_database(&database_path(&app)?)?;
+    validate_subject_id(&connection, subject_id)?;
+
+    let changed = connection
+        .execute(
+            "
+            UPDATE whitelist_apps
+            SET subject_id = ?1,
+                updated_at = ?2
+            WHERE id = ?3
+            ",
+            params![subject_id, now, id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    if changed == 0 {
+        return Err("白名单条目不存在".to_string());
+    }
+
+    get_whitelist_app_by_id(&connection, id)
+}
+
+#[tauri::command]
 pub fn delete_whitelist_app(app: AppHandle, id: i64) -> Result<(), String> {
     let connection = open_database(&database_path(&app)?)?;
     connection
@@ -388,7 +425,7 @@ fn get_whitelist_app_by_id(
     connection
         .query_row(
             "
-            SELECT id, name, process_name, path, match_type, note, enabled, created_at, updated_at
+            SELECT id, name, process_name, path, match_type, subject_id, note, enabled, created_at, updated_at
             FROM whitelist_apps
             WHERE id = ?1
             ",
@@ -401,7 +438,7 @@ fn get_whitelist_app_by_id(
 }
 
 fn row_to_whitelist_app(row: &rusqlite::Row<'_>) -> rusqlite::Result<WhitelistApp> {
-    let enabled: i64 = row.get(6)?;
+    let enabled: i64 = row.get(7)?;
 
     Ok(WhitelistApp {
         id: row.get(0)?,
@@ -409,9 +446,31 @@ fn row_to_whitelist_app(row: &rusqlite::Row<'_>) -> rusqlite::Result<WhitelistAp
         process_name: row.get(2)?,
         path: row.get(3)?,
         match_type: row.get(4)?,
-        note: row.get(5)?,
+        subject_id: row.get(5)?,
+        note: row.get(6)?,
         enabled: enabled != 0,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
+}
+
+fn validate_subject_id(
+    connection: &rusqlite::Connection,
+    subject_id: Option<i64>,
+) -> Result<(), String> {
+    if let Some(subject_id) = subject_id {
+        let exists = connection
+            .query_row(
+                "SELECT 1 FROM subjects WHERE id = ?1 AND enabled = 1",
+                params![subject_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .is_some();
+        if !exists {
+            return Err("科目不存在或已停用".to_string());
+        }
+    }
+    Ok(())
 }

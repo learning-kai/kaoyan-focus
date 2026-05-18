@@ -17,12 +17,20 @@ pub struct WhitelistMatchResult {
     pub reason: String,
     pub matched_process_name: Option<String>,
     pub detected_domain: Option<String>,
+    pub matched_subject_id: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProcessWhitelistRule {
+    pub process_name: String,
+    pub subject_id: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
 pub struct WebsiteWhitelistRule {
     pub domain: String,
     pub launch_url: Option<String>,
+    pub subject_id: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +41,7 @@ struct BrowserUrlParts {
 
 pub fn is_foreground_app_allowed(
     app: &ForegroundApp,
-    whitelist_process_names: &[String],
+    whitelist_processes: &[ProcessWhitelistRule],
     whitelist_websites: &[WebsiteWhitelistRule],
 ) -> WhitelistMatchResult {
     let process_name = app.process_name.to_ascii_lowercase();
@@ -48,6 +56,7 @@ pub fn is_foreground_app_allowed(
             reason: "默认系统放行".to_string(),
             matched_process_name: Some(app.process_name.clone()),
             detected_domain: None,
+            matched_subject_id: None,
         };
     }
 
@@ -68,6 +77,7 @@ pub fn is_foreground_app_allowed(
                     reason: "命中网站白名单".to_string(),
                     matched_process_name: Some(rule_label(matched_rule)),
                     detected_domain,
+                    matched_subject_id: matched_rule.subject_id,
                 };
             }
 
@@ -76,6 +86,7 @@ pub fn is_foreground_app_allowed(
                 reason: format!("浏览器网站 {domain} 不在白名单"),
                 matched_process_name: None,
                 detected_domain,
+                matched_subject_id: None,
             };
         }
 
@@ -84,18 +95,20 @@ pub fn is_foreground_app_allowed(
             reason: "无法识别浏览器当前网址".to_string(),
             matched_process_name: None,
             detected_domain: None,
+            matched_subject_id: None,
         };
     }
 
-    if let Some(matched_name) = whitelist_process_names
+    if let Some(matched_rule) = whitelist_processes
         .iter()
-        .find(|candidate| process_name == candidate.to_ascii_lowercase())
+        .find(|candidate| process_name == candidate.process_name.to_ascii_lowercase())
     {
         return WhitelistMatchResult {
             allowed: true,
             reason: "命中软件白名单".to_string(),
-            matched_process_name: Some(matched_name.clone()),
+            matched_process_name: Some(matched_rule.process_name.clone()),
             detected_domain: None,
+            matched_subject_id: matched_rule.subject_id,
         };
     }
 
@@ -114,6 +127,7 @@ pub fn is_foreground_app_allowed(
                 reason: "命中网站白名单".to_string(),
                 matched_process_name: Some(rule_label(matched_rule)),
                 detected_domain,
+                matched_subject_id: matched_rule.subject_id,
             };
         }
 
@@ -122,6 +136,7 @@ pub fn is_foreground_app_allowed(
             reason: format!("浏览器网站 {domain} 不在白名单"),
             matched_process_name: None,
             detected_domain,
+            matched_subject_id: None,
         };
     }
 
@@ -130,6 +145,7 @@ pub fn is_foreground_app_allowed(
         reason: "不在白名单".to_string(),
         matched_process_name: None,
         detected_domain: None,
+        matched_subject_id: None,
     }
 }
 

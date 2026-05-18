@@ -1,11 +1,13 @@
 use chrono::Utc;
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 use crate::{
     storage::db::open_database,
-    whitelist::matcher::{is_foreground_app_allowed, WebsiteWhitelistRule, WhitelistMatchResult},
+    whitelist::matcher::{
+        is_foreground_app_allowed, ProcessWhitelistRule, WebsiteWhitelistRule, WhitelistMatchResult,
+    },
     windows::{
         foreground::{get_foreground_app, ForegroundApp},
         window_control::close_window,
@@ -52,17 +54,28 @@ pub fn check_focus_foreground_app_for_session(
 ) -> Result<FocusAppCheck, String> {
     let foreground_app = get_foreground_app()?;
     let connection = open_database(&database_path(app)?)?;
-    let whitelist_process_names = enabled_whitelist_process_names(&connection)?;
+    let whitelist_processes = enabled_whitelist_processes(&connection)?;
     let whitelist_websites = enabled_whitelist_websites(&connection)?;
     let match_result = is_foreground_app_allowed(
         &foreground_app,
-        &whitelist_process_names,
+        &whitelist_processes,
         &whitelist_websites,
     );
     let mut action_taken = None;
     let mut close_error = None;
 
-    if !match_result.allowed {
+    if match_result.allowed {
+        if maybe_auto_switch_subject(&connection, &match_result)? {
+            let app = app.clone();
+            std::thread::spawn(move || {
+                let _ = crate::commands::sync::auto_sync_object_storage_database_blocking(app);
+            });
+        }
+        *state
+            .last_blocked_process
+            .lock()
+            .map_err(|error| error.to_string())? = None;
+    } else {
         match close_window(foreground_app.window()) {
             Ok(()) => {
                 action_taken = Some("close_window".to_string());
@@ -122,11 +135,6 @@ pub fn check_focus_foreground_app_for_session(
                 )
                 .map_err(|error| error.to_string())?;
         }
-    } else {
-        *state
-            .last_blocked_process
-            .lock()
-            .map_err(|error| error.to_string())? = None;
     }
 
     let interruption_count = connection
@@ -201,41 +209,111 @@ fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
         .join("kaoyan-focus.sqlite3"))
 }
 
-fn enabled_whitelist_process_names(
+fn enabled_whitelist_processes(
     connection: &rusqlite::Connection,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<ProcessWhitelistRule>, String> {
     let mut statement = connection
-        .prepare("SELECT process_name FROM whitelist_apps WHERE enabled = 1 AND match_type = 'process_name'")
+        .prepare("SELECT process_name, subject_id FROM whitelist_apps WHERE enabled = 1 AND match_type = 'process_name'")
         .map_err(|error| error.to_string())?;
 
-    let process_names = statement
-        .query_map([], |row| row.get::<_, String>(0))
+    let processes = statement
+        .query_map([], |row| {
+            Ok(ProcessWhitelistRule {
+                process_name: row.get(0)?,
+                subject_id: row.get(1)?,
+            })
+        })
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
 
-    Ok(process_names)
+    Ok(processes)
 }
 
 fn enabled_whitelist_websites(
     connection: &rusqlite::Connection,
 ) -> Result<Vec<WebsiteWhitelistRule>, String> {
     let mut statement = connection
-        .prepare("SELECT process_name, path FROM whitelist_apps WHERE enabled = 1 AND match_type = 'website_domain'")
+        .prepare("SELECT process_name, path, subject_id FROM whitelist_apps WHERE enabled = 1 AND match_type = 'website_domain'")
         .map_err(|error| error.to_string())?;
 
     let websites = statement
         .query_map([], |row| {
             let domain = row.get::<_, String>(0)?;
             let launch_url = row.get::<_, Option<String>>(1)?;
+            let subject_id = row.get::<_, Option<i64>>(2)?;
             let launch_url = launch_url.or_else(|| legacy_specific_url(&domain));
-            Ok(WebsiteWhitelistRule { domain, launch_url })
+            Ok(WebsiteWhitelistRule {
+                domain,
+                launch_url,
+                subject_id,
+            })
         })
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
 
     Ok(websites)
+}
+
+fn maybe_auto_switch_subject(
+    connection: &rusqlite::Connection,
+    match_result: &WhitelistMatchResult,
+) -> Result<bool, String> {
+    let Some(subject_id) = match_result.matched_subject_id else {
+        return Ok(false);
+    };
+
+    let active: Option<(i64, Option<i64>, Option<i64>)> = connection
+        .query_row(
+            "
+            SELECT id, subject_id, current_session_id
+            FROM study_modes
+            WHERE status = 'active'
+            ORDER BY id DESC
+            LIMIT 1
+            ",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    let Some((study_mode_id, current_subject_id, session_id)) = active else {
+        return Ok(false);
+    };
+    if current_subject_id == Some(subject_id) {
+        return Ok(false);
+    }
+
+    let now = Utc::now().to_rfc3339();
+    connection
+        .execute(
+            "
+            UPDATE study_modes
+            SET subject_id = ?1,
+                updated_at = ?2
+            WHERE id = ?3 AND status = 'active'
+            ",
+            params![subject_id, now, study_mode_id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    if let Some(session_id) = session_id {
+        connection
+            .execute(
+                "
+                UPDATE focus_sessions
+                SET subject_id = ?1,
+                    updated_at = ?2
+                WHERE id = ?3 AND status = 'running'
+                ",
+                params![subject_id, now, session_id],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+
+    Ok(true)
 }
 
 fn legacy_specific_url(value: &str) -> Option<String> {

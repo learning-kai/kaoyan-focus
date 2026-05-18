@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, FolderSearch, Globe2, History, ListPlus, Power, PowerOff, Search, ShieldCheck, Trash2 } from 'lucide-react';
-import { getStudyModeState } from '../services/focusApi';
+import { getStudyModeState, listSubjects } from '../services/focusApi';
 import { isStudyModeLocked } from '../services/studyModeLock';
 import { openExternalUrl } from '../services/systemApi';
 import {
@@ -11,8 +11,9 @@ import {
   listRunningProcesses,
   listWhitelistApps,
   setWhitelistAppEnabled,
+  updateWhitelistSubject,
 } from '../services/whitelistApi';
-import type { StudyModeState } from '../types/focus';
+import type { StudyModeState, Subject } from '../types/focus';
 import type { RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
 
 type WhitelistEntryType = 'app' | 'website';
@@ -28,12 +29,14 @@ function websiteUrlFromRule(rule: string) {
 
 export default function WhitelistPage() {
   const [apps, setApps] = useState<WhitelistApp[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [entryType, setEntryType] = useState<WhitelistEntryType>('app');
   const [name, setName] = useState('');
   const [processName, setProcessName] = useState('');
   const [domain, setDomain] = useState('');
   const [processPath, setProcessPath] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [subjectId, setSubjectId] = useState<number | null>(null);
   const [runningProcesses, setRunningProcesses] = useState<RunningProcess[]>([]);
   const [recentBlockedApps, setRecentBlockedApps] = useState<RecentBlockedApp[]>([]);
   const [processPickerOpen, setProcessPickerOpen] = useState(false);
@@ -51,6 +54,22 @@ export default function WhitelistPage() {
   const canCreate = !whitelistLocked
     && name.trim().length > 0
     && (entryType === 'website' ? domain.trim().length > 0 : processName.trim().length > 0);
+  const groupedApps = useMemo(() => {
+    const groups = [
+      { id: null as number | null, name: '未指定科目', items: apps.filter((app) => app.subject_id === null) },
+      ...subjects.map((subject) => ({
+        id: subject.id as number | null,
+        name: subject.name,
+        items: apps.filter((app) => app.subject_id === subject.id),
+      })),
+    ];
+    const knownSubjectIds = new Set(subjects.map((subject) => subject.id));
+    const unknownItems = apps.filter((app) => app.subject_id !== null && !knownSubjectIds.has(app.subject_id));
+    if (unknownItems.length > 0) {
+      groups.push({ id: -1, name: '未知科目', items: unknownItems });
+    }
+    return groups.filter((group) => group.items.length > 0);
+  }, [apps, subjects]);
 
   useEffect(() => {
     void initializeWhitelistPage();
@@ -69,12 +88,20 @@ export default function WhitelistPage() {
   }, [whitelistLocked]);
 
   async function initializeWhitelistPage() {
-    await Promise.all([refreshApps(), refreshStudyState()]);
+    await Promise.all([refreshApps(), refreshSubjects(), refreshStudyState()]);
   }
 
   async function refreshStudyState() {
     try {
       setStudyState(await getStudyModeState());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function refreshSubjects() {
+    try {
+      setSubjects(await listSubjects());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -97,15 +124,16 @@ export default function WhitelistPage() {
       setError(null);
       setLoading(true);
       if (entryType === 'website') {
-        await createWhitelistWebsite(name, domain, note);
+        await createWhitelistWebsite(name, domain, note, subjectId);
       } else {
-        await createWhitelistApp(name, processName, note, processPath);
+        await createWhitelistApp(name, processName, note, processPath, subjectId);
       }
       setName('');
       setProcessName('');
       setDomain('');
       setProcessPath(null);
       setNote('');
+      setSubjectId(null);
       await refreshApps();
       await refreshRecentBlockedApps();
     } catch (reason) {
@@ -177,7 +205,7 @@ export default function WhitelistPage() {
     try {
       setError(null);
       const displayName = blockedApp.process_name.replace(/\.exe$/i, '');
-      await createWhitelistApp(displayName, blockedApp.process_name, '从最近拦截记录加入', blockedApp.process_path);
+      await createWhitelistApp(displayName, blockedApp.process_name, '从最近拦截记录加入', blockedApp.process_path, subjectId);
       setBlockedPickerOpen(false);
       await refreshApps();
       await refreshRecentBlockedApps();
@@ -195,6 +223,21 @@ export default function WhitelistPage() {
       setError(null);
       await setWhitelistAppEnabled(app.id, !app.enabled);
       await refreshApps();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function handleSubjectChange(app: WhitelistApp, value: string) {
+    if (whitelistLocked) {
+      return;
+    }
+
+    try {
+      setError(null);
+      const nextSubjectId = value === '' ? null : Number(value);
+      const updated = await updateWhitelistSubject(app.id, nextSubjectId);
+      setApps((current) => current.map((item) => (item.id === app.id ? updated : item)));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -223,13 +266,18 @@ export default function WhitelistPage() {
     }
   }
 
+  function subjectNameFor(id: number | null) {
+    if (id === null) return '不自动切科';
+    return subjects.find((subject) => subject.id === id)?.name ?? '未知科目';
+  }
+
   return (
     <section className="page-shell whitelist-shell">
       <header className="page-header">
         <div>
           <p className="eyebrow">Allowlist Control</p>
           <h2>软件与网站白名单</h2>
-          <p>学习阶段只放行必要工具。网站规则沿用浏览器窗口标题识别，后台监控会持续关闭非白名单软件或网站。</p>
+          <p>学习阶段只放行必要工具。白名单可绑定科目，专注中切到对应软件或网页时会自动切换当前科目。</p>
         </div>
         <div className="header-metrics">
           <article>
@@ -284,12 +332,12 @@ export default function WhitelistPage() {
             </label>
             {entryType === 'website' ? (
               <label className="field-block">
-                <span>域名关键词</span>
+                <span>网址或域名</span>
                 <input
                   className="text-input"
                   disabled={whitelistLocked}
                   onChange={(event) => setDomain(event.target.value)}
-                  placeholder="例如：icourse163.org"
+                  placeholder="例如：https://www.bilibili.com/video/BV..."
                   value={domain}
                 />
               </label>
@@ -305,6 +353,20 @@ export default function WhitelistPage() {
                 />
               </label>
             )}
+            <label className="field-block">
+              <span>自动切换科目</span>
+              <select
+                className="select-input"
+                disabled={whitelistLocked}
+                onChange={(event) => setSubjectId(event.target.value ? Number(event.target.value) : null)}
+                value={subjectId ?? ''}
+              >
+                <option value="">不自动切科</option>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>{subject.name}</option>
+                ))}
+              </select>
+            </label>
             <label className="field-block">
               <span>备注</span>
               <input className="text-input" disabled={whitelistLocked} onChange={(event) => setNote(event.target.value)} placeholder="可选" value={note} />
@@ -423,36 +485,56 @@ export default function WhitelistPage() {
           </div>
         ) : (
           <div className="rule-list">
-            {apps.map((app) => (
-              <article className="list-row whitelist-row" key={app.id}>
-                <div className="row-main">
-                  <span className={app.enabled ? 'row-icon enabled' : 'row-icon'}>
-                    {app.match_type === 'website_domain' ? <Globe2 size={18} /> : <ShieldCheck size={18} />}
-                  </span>
-                  <div>
-                    <strong>{app.name}</strong>
-                    <p>{app.match_type === 'website_domain' ? `网站域名：${app.process_name}` : `进程名：${app.process_name}`}</p>
-                    {app.path && <p>{app.path}</p>}
-                    {app.note && <p>{app.note}</p>}
-                  </div>
+            {groupedApps.map((group) => (
+              <div className="whitelist-subject-group" key={group.id ?? 'none'}>
+                <div className="whitelist-subject-heading">
+                  <strong>{group.name}</strong>
+                  <span>{group.items.length} 条</span>
                 </div>
-                <div className="row-actions">
-                  {app.match_type === 'website_domain' && (
-                    <button className="small-action" onClick={() => void handleOpenWebsite(app)} type="button">
-                      <ExternalLink size={15} />
-                      打开
-                    </button>
-                  )}
-                  <button className={app.enabled ? 'small-action enabled' : 'small-action'} disabled={whitelistLocked} onClick={() => void handleToggle(app)} type="button">
-                    {app.enabled ? <Power size={15} /> : <PowerOff size={15} />}
-                    {app.enabled ? '启用中' : '已停用'}
-                  </button>
-                  <button className="small-action danger" disabled={whitelistLocked} onClick={() => void handleDelete(app.id)} type="button">
-                    <Trash2 size={15} />
-                    删除
-                  </button>
-                </div>
-              </article>
+                {group.items.map((app) => (
+                  <article className="list-row whitelist-row" key={app.id}>
+                    <div className="row-main">
+                      <span className={app.enabled ? 'row-icon enabled' : 'row-icon'}>
+                        {app.match_type === 'website_domain' ? <Globe2 size={18} /> : <ShieldCheck size={18} />}
+                      </span>
+                      <div>
+                        <strong>{app.name}</strong>
+                        <p>{app.match_type === 'website_domain' ? `网站规则：${app.path ?? app.process_name}` : `进程名：${app.process_name}`}</p>
+                        <p>自动切科：{subjectNameFor(app.subject_id)}</p>
+                        {app.note && <p>{app.note}</p>}
+                      </div>
+                    </div>
+                    <div className="row-actions">
+                      <select
+                        aria-label="白名单科目"
+                        className="select-input whitelist-subject-select"
+                        disabled={whitelistLocked}
+                        onChange={(event) => void handleSubjectChange(app, event.target.value)}
+                        value={app.subject_id ?? ''}
+                      >
+                        <option value="">不自动切科</option>
+                        {subjects.map((subject) => (
+                          <option key={subject.id} value={subject.id}>{subject.name}</option>
+                        ))}
+                      </select>
+                      {app.match_type === 'website_domain' && (
+                        <button className="small-action" onClick={() => void handleOpenWebsite(app)} type="button">
+                          <ExternalLink size={15} />
+                          打开
+                        </button>
+                      )}
+                      <button className={app.enabled ? 'small-action enabled' : 'small-action'} disabled={whitelistLocked} onClick={() => void handleToggle(app)} type="button">
+                        {app.enabled ? <Power size={15} /> : <PowerOff size={15} />}
+                        {app.enabled ? '启用中' : '已停用'}
+                      </button>
+                      <button className="small-action danger" disabled={whitelistLocked} onClick={() => void handleDelete(app.id)} type="button">
+                        <Trash2 size={15} />
+                        删除
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
             ))}
           </div>
         )}

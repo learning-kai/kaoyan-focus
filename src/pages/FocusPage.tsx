@@ -2,17 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { BellRing, BookOpen, CheckCircle2, ClipboardList, Coffee, Gauge, Leaf, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
+import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, Gauge, Leaf, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
+import ScheduleDrawer from '../components/ScheduleDrawer';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
 import { completeTodayPlanItem, createTodayPlanItem, deleteTodayPlanItem, getChecklistPageData, reorderTodayPlanItems, updateTodayPlanItem } from '../services/checklistApi';
 import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSessions, listSubjects, pauseStudyMode, resetStudyMode, resumeStudyMode, startStudyMode, updateStudyModeSubject } from '../services/focusApi';
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
+import { createScheduleBlock, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
 import { STUDY_SYNC_STATE_CHANGED_EVENT, autoSyncConfiguredDatabase, getAppSettings } from '../services/settingsApi';
 import { setStudyFullscreen } from '../services/systemApi';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
 import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
 import type { FocusAppCheck } from '../types/monitor';
+import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData } from '../types/schedule';
 
 const studyPresetMinutes = [60, 120, 180, 240];
 const focusPresetMinutes = [25, 45, 60, 90];
@@ -21,6 +24,16 @@ const longBreakPresetMinutes = [10, 15, 20, 30];
 const longBreakIntervalPresets = [2, 3, 4, 6];
 const FOCUS_TODAY_CONTAINER_ID = 'focus-today-container';
 const emptyTodayDraft: TodayPlanItemDraft = { title: '', note: '', dueDate: '', subjectId: null };
+const emptyScheduleDraft = (date: string): ScheduleBlockDraft => ({
+  scheduleDate: date,
+  title: '',
+  note: '',
+  categoryKey: 'general',
+  subjectId: null,
+  sourceTodayItemId: null,
+  startMinute: 8 * 60,
+  endMinute: 9 * 60,
+});
 
 const idleStudyState: StudyModeState = {
   id: null,
@@ -80,6 +93,11 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+function todayString() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function sessionStatusLabel(status: string) {
   const labels: Record<string, string> = { running: '进行中', finished: '已完成', interrupted: '已中断', emergency_exited: '已退出' };
   return labels[status] ?? status;
@@ -100,6 +118,9 @@ export default function FocusPage() {
   const [latestAppCheck, setLatestAppCheck] = useState<FocusAppCheck | null>(null);
   const [checklistData, setChecklistData] = useState<ChecklistPageData | null>(null);
   const [isChecklistDrawerOpen, setIsChecklistDrawerOpen] = useState(false);
+  const [scheduleData, setScheduleData] = useState<SchedulePageData | null>(null);
+  const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState(false);
+  const [scheduleDraft, setScheduleDraft] = useState<ScheduleBlockDraft>(() => emptyScheduleDraft(todayString()));
   const [showTodayComposer, setShowTodayComposer] = useState(false);
   const [todayDraft, setTodayDraft] = useState<TodayPlanItemDraft>(emptyTodayDraft);
   const [editingTodayId, setEditingTodayId] = useState<number | null>(null);
@@ -136,6 +157,7 @@ export default function FocusPage() {
       void refreshStudyState();
       void refreshDashboard();
       void refreshChecklistData();
+      void refreshScheduleData();
     }).then((dispose) => { unlisten = dispose; });
     return () => { cancelled = true; unlisten?.(); };
   }, []);
@@ -179,7 +201,7 @@ export default function FocusPage() {
       const requestId = beginStudyStateRequest();
       applyStudyStateIfCurrent(stateData, requestId);
       reminderBaselineKey = reminderKey(stateData);
-      await Promise.all([refreshDashboard(), refreshChecklistData()]);
+      await Promise.all([refreshDashboard(), refreshChecklistData(), refreshScheduleData()]);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
@@ -188,7 +210,10 @@ export default function FocusPage() {
   function applyStudyStateIfCurrent(nextState: StudyModeState, requestId: number) {
     if (requestId !== studyStateRequestRef.current) return false;
     setStudyState(nextState);
-    if (nextState.status !== 'active') setIsChecklistDrawerOpen(false);
+    if (nextState.status !== 'active') {
+      setIsChecklistDrawerOpen(false);
+      setIsScheduleDrawerOpen(false);
+    }
     return true;
   }
 
@@ -204,6 +229,14 @@ export default function FocusPage() {
     try { setChecklistData(await getChecklistPageData()); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
+  async function refreshScheduleData() {
+    try {
+      const date = todayString();
+      setScheduleData(await getSchedulePageData(date));
+      setScheduleDraft((current) => ({ ...current, scheduleDate: date, subjectId: studyState.subject_id ?? current.subjectId }));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+  }
+
   async function refreshStudyState() {
     try {
       const requestId = beginStudyStateRequest();
@@ -214,6 +247,14 @@ export default function FocusPage() {
   }
 
   function queueConfiguredSync() { void autoSyncConfiguredDatabase().catch(() => undefined); }
+
+  function scheduleSubjectCategory(subjectId: number | null | undefined) {
+    if (subjectId === 1) return 'politics';
+    if (subjectId === 2) return 'english';
+    if (subjectId === 3) return 'math';
+    if (subjectId === 4) return 'major';
+    return 'general';
+  }
 
   async function handleStart() {
     try {
@@ -286,6 +327,7 @@ export default function FocusPage() {
       await refreshDashboard();
       queueConfiguredSync();
       setIsChecklistDrawerOpen(false);
+      setIsScheduleDrawerOpen(false);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
@@ -361,13 +403,65 @@ export default function FocusPage() {
   function handleToggleChecklistDrawer() {
     const willOpen = !isChecklistDrawerOpen;
     setIsChecklistDrawerOpen(willOpen);
+    if (willOpen) setIsScheduleDrawerOpen(false);
     if (willOpen) void refreshChecklistData();
+  }
+
+  function handleToggleScheduleDrawer() {
+    const willOpen = !isScheduleDrawerOpen;
+    setIsScheduleDrawerOpen(willOpen);
+    if (willOpen) {
+      setIsChecklistDrawerOpen(false);
+      void refreshScheduleData();
+    }
+  }
+
+  async function handleCreateScheduleBlock() {
+    if (!scheduleDraft.title.trim()) return;
+    const subjectId = studyState.subject_id ?? scheduleDraft.subjectId ?? null;
+    await withChecklistRefresh(async () => {
+      await createScheduleBlock({
+        ...scheduleDraft,
+        subjectId,
+        categoryKey: scheduleSubjectCategory(subjectId),
+      });
+      setScheduleDraft(emptyScheduleDraft(todayString()));
+      await refreshScheduleData();
+    }, '课表时间块已添加。');
+  }
+
+  async function handleDeleteScheduleBlock(blockId: number) {
+    await withChecklistRefresh(async () => {
+      await deleteScheduleBlock(blockId);
+      await refreshScheduleData();
+    }, '课表时间块已删除。');
+  }
+
+  async function handleStartScheduleBlock(block: ScheduleBlock) {
+    try {
+      const settings = await getAppSettings();
+      const requestId = beginStudyStateRequest();
+      const nextState = await startStudyModeFromScheduleBlock(
+        block.id,
+        settings.default_study_minutes * 60,
+        settings.default_focus_minutes * 60,
+        settings.break_minutes * 60,
+        settings.long_break_minutes * 60,
+        settings.long_break_interval,
+        settings.default_focus_mode,
+      );
+      if (!applyStudyStateIfCurrent(nextState, requestId)) return;
+      setNotice('已从课表开始专注。');
+      setIsScheduleDrawerOpen(false);
+      await refreshDashboard();
+      queueConfiguredSync();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
   if (active) {
     return (
       <DndContext collisionDetection={closestCenter} onDragEnd={(event) => void handleTodayDrawerDragEnd(event)} sensors={sensors}>
-        <section className={'focus-active-shell phase-' + studyState.phase + (studyState.is_paused ? ' is-paused' : '') + (isChecklistDrawerOpen ? ' is-drawer-open' : '')}>
+        <section className={'focus-active-shell phase-' + studyState.phase + (studyState.is_paused ? ' is-paused' : '') + ((isChecklistDrawerOpen || isScheduleDrawerOpen) ? ' is-drawer-open' : '')}>
           <div className="focus-active-bg" aria-hidden="true" />
           <header className="focus-active-header">
             <span className="focus-minimal-status">{studyState.is_paused ? '计时暂停' : phaseLabel[studyState.phase]}</span>
@@ -384,6 +478,13 @@ export default function FocusPage() {
                 <span className="focus-hud-copy">
                   <span>今日任务</span>
                   <strong>{todayTaskCount} 项</strong>
+                </span>
+              </button>
+              <button aria-expanded={isScheduleDrawerOpen} aria-label="打开今日课表" className={'focus-hud-card focus-hud-task' + (isScheduleDrawerOpen ? ' is-active' : '')} onClick={handleToggleScheduleDrawer} title="今日课表" type="button">
+                <span className="focus-hud-icon"><CalendarClock size={15} /></span>
+                <span className="focus-hud-copy">
+                  <span>今日课表</span>
+                  <strong>{scheduleData?.day_blocks.length ?? 0} 块</strong>
                 </span>
               </button>
               <div className="live-badge"><span className={studyState.focus_enforcement_active ? 'live-dot on' : 'live-dot'} />{studyState.focus_enforcement_active ? '白名单执行中' : '休息阶段'}</div>
@@ -425,6 +526,7 @@ export default function FocusPage() {
           </footer>
 
           <TodayPlanDrawer compact dndContainerId={FOCUS_TODAY_CONTAINER_ID} dndIsOver={false} currentSubjectLabel={currentSubjectLabel} editingTodayDraft={editingTodayDraft} editingTodayId={editingTodayId} emptyDescription="可以在清单页拖入，也可以直接在这里补一条今天要推进的任务。" emptyTitle="今天还没有进入任务" isOpen={isChecklistDrawerOpen} items={checklistData?.today_items ?? []} onBeginEdit={beginEditTodayItem} onCancelEdit={() => setEditingTodayId(null)} onChangeEdit={(patch) => setEditingTodayDraft((current) => ({ ...(current ?? emptyTodayDraft), ...patch }))} onClose={() => setIsChecklistDrawerOpen(false)} onComplete={(item) => void handleCompleteTodayItem(item)} onCreate={() => void handleCreateTodayItem()} onDelete={(itemId) => void handleDeleteTodayItem(itemId)} onDraftChange={(patch) => setTodayDraft((current) => ({ ...current, ...patch }))} onRefresh={() => void refreshChecklistData()} onSaveEdit={() => void handleSaveTodayEdit()} onToggleComposer={() => setShowTodayComposer((current) => !current)} saving={checklistSaving} showComposer={showTodayComposer} sortable subtitle="Today Queue" title="今日任务" getItemDragId={(item) => getTodaySortableId(item.id)} todayDate={checklistData?.today_date ?? ''} todayDraft={todayDraft} variant="drawer" />
+          <ScheduleDrawer canStart={false} isOpen={isScheduleDrawerOpen} data={scheduleData} draft={scheduleDraft} saving={checklistSaving} onClose={() => setIsScheduleDrawerOpen(false)} onRefresh={() => void refreshScheduleData()} onDraftChange={(patch) => setScheduleDraft((current) => ({ ...current, ...patch }))} onCreate={() => void handleCreateScheduleBlock()} onDelete={(blockId) => void handleDeleteScheduleBlock(blockId)} onStart={(block) => void handleStartScheduleBlock(block)} />
         </section>
       </DndContext>
     );

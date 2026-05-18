@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "考研专注",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "identifier": "com.kaoyan.focus",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -25,8 +25,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/icon.ico"]
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ]
   },
   "plugins": {
     "updater": {

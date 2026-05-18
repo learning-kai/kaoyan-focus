@@ -7,6 +7,7 @@ use crate::{
 use chrono::{Datelike, Duration, Local, NaiveDate, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use tauri::{AppHandle, Manager, State};
 
 const ENTITY_SCHEDULE_BLOCK: &str = "schedule_block";
@@ -483,6 +484,7 @@ fn materialize_templates_for_range(
     end: NaiveDate,
 ) -> Result<(), String> {
     let templates = list_schedule_templates(connection)?;
+    let existing_keys = existing_template_block_keys(connection, start, end)?;
     let mut date = start;
     while date <= end {
         let weekday = date.weekday().number_from_monday() as i64;
@@ -492,21 +494,7 @@ fn materialize_templates_for_range(
                 continue;
             }
 
-            let exists: bool = connection
-                .query_row(
-                    "
-                    SELECT 1
-                    FROM schedule_blocks
-                    WHERE template_id = ?1 AND schedule_date = ?2
-                    LIMIT 1
-                    ",
-                    params![template.id, schedule_date],
-                    |_| Ok(true),
-                )
-                .optional()
-                .map_err(|error| error.to_string())?
-                .unwrap_or(false);
-            if exists {
+            if existing_keys.contains(&(template.id, schedule_date.clone())) {
                 continue;
             }
 
@@ -536,6 +524,31 @@ fn materialize_templates_for_range(
         date += Duration::days(1);
     }
     Ok(())
+}
+
+fn existing_template_block_keys(
+    connection: &Connection,
+    start: NaiveDate,
+    end: NaiveDate,
+) -> Result<HashSet<(i64, String)>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT template_id, schedule_date
+            FROM schedule_blocks
+            WHERE template_id IS NOT NULL
+              AND schedule_date BETWEEN ?1 AND ?2
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![date_string(start), date_string(end)], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<HashSet<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    Ok(rows)
 }
 
 fn list_schedule_blocks(

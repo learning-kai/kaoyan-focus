@@ -17,6 +17,7 @@ export type WhitelistMatchResult = {
   reason: string;
   matched_process_name: string | null;
   detected_domain: string | null;
+  matched_subject_id: number | null;
 };
 
 export type FocusAppCheck = {

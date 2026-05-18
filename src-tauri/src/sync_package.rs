@@ -14,6 +14,7 @@ const ENTITY_CHECKLIST_TASK: &str = "checklist_task";
 const ENTITY_TODAY_PLAN_ITEM: &str = "today_plan_item";
 const ENTITY_SCHEDULE_BLOCK: &str = "schedule_block";
 const ENTITY_SCHEDULE_TEMPLATE: &str = "schedule_template";
+const ENTITY_DAILY_REVIEW: &str = "daily_review";
 const DEFAULT_SUBJECT_SYNC_IDS: [&str; 4] = ["subject-1", "subject-2", "subject-3", "subject-4"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +39,8 @@ pub struct SharedSyncPayload {
     pub schedule_blocks: Vec<SharedScheduleBlock>,
     #[serde(default)]
     pub schedule_templates: Vec<SharedScheduleTemplate>,
+    #[serde(default)]
+    pub daily_reviews: Vec<SharedDailyReview>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -209,6 +212,20 @@ pub struct SharedScheduleTemplate {
     pub deleted_at: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedDailyReview {
+    pub sync_id: String,
+    pub review_date: Option<String>,
+    pub summary: Option<String>,
+    pub blockers: Option<String>,
+    pub tomorrow_focus: Option<String>,
+    pub mood_score: Option<i64>,
+    pub created_at: Option<i64>,
+    pub updated_at: i64,
+    pub deleted_at: Option<i64>,
+}
+
 #[derive(Debug, Clone)]
 struct SyncMetaRow {
     local_id: i64,
@@ -349,6 +366,18 @@ struct DesktopScheduleTemplateRow {
     updated_at: String,
 }
 
+#[derive(Debug, Clone)]
+struct DesktopDailyReviewRow {
+    id: i64,
+    review_date: String,
+    summary: Option<String>,
+    blockers: Option<String>,
+    tomorrow_focus: Option<String>,
+    mood_score: i64,
+    created_at: String,
+    updated_at: String,
+}
+
 pub fn export_shared_sync_payload(
     connection: &Connection,
     device_id: String,
@@ -366,6 +395,7 @@ pub fn export_shared_sync_payload(
         today_plan_items: export_today_plan_items(connection)?,
         schedule_blocks: export_schedule_blocks(connection)?,
         schedule_templates: export_schedule_templates(connection)?,
+        daily_reviews: export_daily_reviews(connection)?,
     })
 }
 
@@ -433,6 +463,12 @@ pub fn merge_shared_sync_payloads(
             |item| item.sync_id.as_str(),
             |item| item.updated_at,
         ),
+        daily_reviews: merge_latest_by_sync_id(
+            &local.daily_reviews,
+            &remote.daily_reviews,
+            |item| item.sync_id.as_str(),
+            |item| item.updated_at,
+        ),
     }
 }
 
@@ -480,6 +516,7 @@ pub fn import_shared_sync_payload(
     import_today_plan_items(&transaction, &payload.today_plan_items)?;
     import_schedule_templates(&transaction, &payload.schedule_templates)?;
     import_schedule_blocks(&transaction, &payload.schedule_blocks)?;
+    import_daily_reviews(&transaction, &payload.daily_reviews)?;
     import_focus_sessions(&transaction, &payload.focus_sessions)?;
     import_study_modes(&transaction, &payload.study_modes)?;
     import_schedule_blocks(&transaction, &payload.schedule_blocks)?;
@@ -1053,6 +1090,37 @@ fn export_schedule_templates(
     Ok(payload)
 }
 
+fn export_daily_reviews(connection: &Connection) -> Result<Vec<SharedDailyReview>, String> {
+    let rows = load_daily_review_rows(connection)?;
+    let mut payload = Vec::new();
+    for row in rows {
+        let updated_at = parse_rfc3339_millis(&row.updated_at)?;
+        let sync_id =
+            resolve_or_create_sync_id(connection, ENTITY_DAILY_REVIEW, row.id, None, updated_at)?;
+        if get_sync_meta_by_sync_id(connection, &sync_id)?
+            .and_then(|item| item.deleted_at)
+            .is_some()
+        {
+            continue;
+        }
+
+        payload.push(SharedDailyReview {
+            sync_id,
+            review_date: Some(row.review_date),
+            summary: row.summary,
+            blockers: row.blockers,
+            tomorrow_focus: row.tomorrow_focus,
+            mood_score: Some(row.mood_score),
+            created_at: Some(parse_rfc3339_millis(&row.created_at)?),
+            updated_at,
+            deleted_at: None,
+        });
+    }
+
+    payload.extend(export_tombstones(connection, ENTITY_DAILY_REVIEW)?);
+    Ok(payload)
+}
+
 fn export_tombstones<T>(connection: &Connection, entity_type: &str) -> Result<Vec<T>, String>
 where
     T: From<DeletedPayload>,
@@ -1251,6 +1319,22 @@ impl From<DeletedPayload> for SharedScheduleTemplate {
             start_minute: None,
             end_minute: None,
             enabled: None,
+            created_at: None,
+            updated_at: value.deleted_at.unwrap_or_default(),
+            deleted_at: value.deleted_at,
+        }
+    }
+}
+
+impl From<DeletedPayload> for SharedDailyReview {
+    fn from(value: DeletedPayload) -> Self {
+        Self {
+            sync_id: value.sync_id,
+            review_date: None,
+            summary: None,
+            blockers: None,
+            tomorrow_focus: None,
+            mood_score: None,
             created_at: None,
             updated_at: value.deleted_at.unwrap_or_default(),
             deleted_at: value.deleted_at,
@@ -1772,6 +1856,43 @@ fn import_schedule_blocks(
     Ok(())
 }
 
+fn import_daily_reviews(
+    connection: &Connection,
+    items: &[SharedDailyReview],
+) -> Result<(), String> {
+    for item in items {
+        if item.deleted_at.is_some() {
+            delete_local_row_by_sync_id(connection, ENTITY_DAILY_REVIEW, &item.sync_id)?;
+            continue;
+        }
+
+        let Some(review_date) = item
+            .review_date
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+        let created_at = millis_to_rfc3339(item.created_at.unwrap_or(item.updated_at));
+        let updated_at = millis_to_rfc3339(item.updated_at);
+
+        upsert_daily_review_row(
+            connection,
+            &item.sync_id,
+            review_date,
+            item.summary.clone(),
+            item.blockers.clone(),
+            item.tomorrow_focus.clone(),
+            item.mood_score.unwrap_or(3).clamp(1, 5),
+            &created_at,
+            &updated_at,
+        )?;
+    }
+
+    Ok(())
+}
+
 fn load_subject_rows(connection: &Connection) -> Result<Vec<DesktopSubjectRow>, String> {
     let mut statement = connection
         .prepare(
@@ -2059,6 +2180,36 @@ fn load_schedule_template_rows(
                 enabled: row.get::<_, i64>(8)? != 0,
                 created_at: row.get(9)?,
                 updated_at: row.get(10)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_daily_review_rows(connection: &Connection) -> Result<Vec<DesktopDailyReviewRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT id, review_date, summary, blockers, tomorrow_focus, mood_score, created_at, updated_at
+            FROM daily_reviews
+            ORDER BY review_date ASC, id ASC
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(DesktopDailyReviewRow {
+                id: row.get(0)?,
+                review_date: row.get(1)?,
+                summary: row.get(2)?,
+                blockers: row.get(3)?,
+                tomorrow_focus: row.get(4)?,
+                mood_score: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -2945,6 +3096,96 @@ fn upsert_schedule_block_row(
     )
 }
 
+fn upsert_daily_review_row(
+    connection: &Connection,
+    sync_id: &str,
+    review_date: &str,
+    summary: Option<String>,
+    blockers: Option<String>,
+    tomorrow_focus: Option<String>,
+    mood_score: i64,
+    created_at: &str,
+    updated_at: &str,
+) -> Result<(), String> {
+    let existing_id = resolve_local_id_by_sync_id(connection, ENTITY_DAILY_REVIEW, Some(sync_id))?
+        .or_else(|| {
+            connection
+                .query_row(
+                    "SELECT id FROM daily_reviews WHERE review_date = ?1",
+                    params![review_date],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .ok()
+                .flatten()
+        });
+
+    if let Some(local_id) = existing_id {
+        connection
+            .execute(
+                "
+                UPDATE daily_reviews
+                SET review_date = ?1,
+                    summary = ?2,
+                    blockers = ?3,
+                    tomorrow_focus = ?4,
+                    mood_score = ?5,
+                    created_at = ?6,
+                    updated_at = ?7
+                WHERE id = ?8
+                ",
+                params![
+                    review_date,
+                    summary,
+                    blockers,
+                    tomorrow_focus,
+                    mood_score,
+                    created_at,
+                    updated_at,
+                    local_id
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        upsert_sync_meta(
+            connection,
+            ENTITY_DAILY_REVIEW,
+            local_id,
+            sync_id,
+            parse_rfc3339_millis(updated_at)?,
+            None,
+        )?;
+        return Ok(());
+    }
+
+    connection
+        .execute(
+            "
+            INSERT INTO daily_reviews (
+              review_date, summary, blockers, tomorrow_focus, mood_score, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            ",
+            params![
+                review_date,
+                summary,
+                blockers,
+                tomorrow_focus,
+                mood_score,
+                created_at,
+                updated_at
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    let local_id = connection.last_insert_rowid();
+    upsert_sync_meta(
+        connection,
+        ENTITY_DAILY_REVIEW,
+        local_id,
+        sync_id,
+        parse_rfc3339_millis(updated_at)?,
+        None,
+    )
+}
+
 fn resolve_or_create_sync_id(
     connection: &Connection,
     entity_type: &str,
@@ -3136,6 +3377,11 @@ fn delete_local_row_by_sync_id(
                         "DELETE FROM schedule_templates WHERE id = ?1",
                         params![local_id],
                     )
+                    .map_err(|error| error.to_string())?;
+            }
+            ENTITY_DAILY_REVIEW => {
+                connection
+                    .execute("DELETE FROM daily_reviews WHERE id = ?1", params![local_id])
                     .map_err(|error| error.to_string())?;
             }
             _ => {}

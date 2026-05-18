@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
   ChevronLeft,
@@ -105,6 +105,7 @@ export default function SchedulePage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayString());
+  const [dateDraft, setDateDraft] = useState(todayString());
   const [view, setView] = useState<'day' | 'week'>('day');
   const [blockDraft, setBlockDraft] = useState<ScheduleBlockDraft>(() => emptyBlockDraft(todayString()));
   const [templateDraft, setTemplateDraft] = useState<ScheduleTemplateDraft>(emptyTemplateDraft);
@@ -112,9 +113,14 @@ export default function SchedulePage() {
   const [showTemplateComposer, setShowTemplateComposer] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState<number | null>(null);
   const [editingBlockDraft, setEditingBlockDraft] = useState<ScheduleBlockDraft | null>(null);
+  const [quickAddDraft, setQuickAddDraft] = useState<ScheduleBlockDraft | null>(null);
+  const [quickAddSourceTodayItemId, setQuickAddSourceTodayItemId] = useState<number | null>(null);
+  const [pendingTodayItemId, setPendingTodayItemId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const refreshTokenRef = useRef(0);
 
   useEffect(() => {
     void initialize();
@@ -122,6 +128,7 @@ export default function SchedulePage() {
 
   useEffect(() => {
     void refresh(selectedDate);
+    setDateDraft(selectedDate);
     setBlockDraft((draft) => ({ ...draft, scheduleDate: selectedDate }));
   }, [selectedDate]);
 
@@ -133,6 +140,11 @@ export default function SchedulePage() {
     return ids;
   }, [data]);
 
+  const availableTodayItems = useMemo(
+    () => (data?.today_items ?? []).filter((item) => !scheduledTodayItemIds.has(item.id)),
+    [data, scheduledTodayItemIds],
+  );
+
   const currentMinute = useMemo(() => {
     if (selectedDate !== todayString()) return null;
     const now = new Date();
@@ -141,12 +153,7 @@ export default function SchedulePage() {
 
   async function initialize() {
     try {
-      const [pageData, subjectData, appSettings] = await Promise.all([
-        getSchedulePageData(selectedDate),
-        listSubjects(),
-        getAppSettings(),
-      ]);
-      setData(pageData);
+      const [subjectData, appSettings] = await Promise.all([listSubjects(), getAppSettings()]);
       setSubjects(subjectData);
       setSettings(appSettings);
     } catch (reason) {
@@ -155,10 +162,28 @@ export default function SchedulePage() {
   }
 
   async function refresh(date = selectedDate) {
+    const token = refreshTokenRef.current + 1;
+    refreshTokenRef.current = token;
     try {
-      setData(await getSchedulePageData(date));
+      setLoadingSchedule(true);
+      const pageData = await getSchedulePageData(date);
+      if (refreshTokenRef.current === token) {
+        setData(pageData);
+      }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      if (refreshTokenRef.current === token) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    } finally {
+      if (refreshTokenRef.current === token) {
+        setLoadingSchedule(false);
+      }
+    }
+  }
+
+  function commitDate(value: string) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      setSelectedDate(value);
     }
   }
 
@@ -174,6 +199,42 @@ export default function SchedulePage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function scheduleSlotEnd(startMinute: number) {
+    return Math.min(dayEnd, startMinute + 60);
+  }
+
+  function quickDraftForSlot(startMinute: number, itemId: number | null = null): ScheduleBlockDraft {
+    const item = itemId ? data?.today_items.find((candidate) => candidate.id === itemId) : null;
+    const subjectId = item?.subject_id ?? null;
+    return {
+      ...emptyBlockDraft(selectedDate),
+      title: item?.title ?? '',
+      note: item?.note ?? '',
+      subjectId,
+      categoryKey: categoryKeyForSubject(subjectId),
+      sourceTodayItemId: itemId,
+      startMinute,
+      endMinute: scheduleSlotEnd(startMinute),
+    };
+  }
+
+  function openQuickAddAt(startMinute: number, itemId: number | null = null) {
+    setView('day');
+    setShowBlockComposer(false);
+    setQuickAddSourceTodayItemId(itemId);
+    setQuickAddDraft(quickDraftForSlot(startMinute, itemId));
+    setMessage(null);
+  }
+
+  async function handleTimeSlotClick(startMinute: number) {
+    if (pendingTodayItemId !== null) {
+      await handleAddTodayItemAt(pendingTodayItemId, startMinute);
+      return;
+    }
+
+    openQuickAddAt(startMinute);
   }
 
   function applySubjectToDraft(subjectId: number | null) {
@@ -192,6 +253,40 @@ export default function SchedulePage() {
     }));
   }
 
+  function applyQuickSubject(subjectId: number | null) {
+    setQuickAddDraft((draft) => draft ? ({
+      ...draft,
+      subjectId,
+      categoryKey: categoryKeyForSubject(subjectId),
+    }) : draft);
+  }
+
+  function handleQuickSourceChange(value: string) {
+    if (!quickAddDraft) return;
+    const itemId = value ? Number(value) : null;
+    setQuickAddSourceTodayItemId(itemId);
+    if (itemId === null) {
+      setQuickAddDraft({
+        ...quickAddDraft,
+        title: '',
+        note: '',
+        sourceTodayItemId: null,
+      });
+      return;
+    }
+
+    const item = data?.today_items.find((candidate) => candidate.id === itemId);
+    if (!item) return;
+    setQuickAddDraft({
+      ...quickAddDraft,
+      title: item.title,
+      note: item.note ?? '',
+      sourceTodayItemId: item.id,
+      subjectId: item.subject_id,
+      categoryKey: categoryKeyForSubject(item.subject_id),
+    });
+  }
+
   async function handleCreateBlock() {
     if (!blockDraft.title.trim()) return;
     await withSave(async () => {
@@ -202,9 +297,38 @@ export default function SchedulePage() {
   }
 
   async function handleAddTodayItem(itemId: number) {
+    setView('day');
+    setQuickAddDraft(null);
+    setQuickAddSourceTodayItemId(null);
+    setPendingTodayItemId((current) => (current === itemId ? null : itemId));
+    setMessage('点击时间轴上的 30 分钟空格，把任务安排到对应时间。');
+  }
+
+  async function handleAddTodayItemAt(itemId: number, startMinute: number) {
     await withSave(async () => {
-      await createScheduleBlockFromTodayItem(itemId, selectedDate, blockDraft.startMinute, blockDraft.endMinute);
+      await createScheduleBlockFromTodayItem(itemId, selectedDate, startMinute, scheduleSlotEnd(startMinute));
+      setPendingTodayItemId(null);
     }, '今日任务已安排到课表。');
+  }
+
+  async function handleQuickAddSave() {
+    if (!quickAddDraft) return;
+    await withSave(async () => {
+      if (quickAddSourceTodayItemId !== null) {
+        await createScheduleBlockFromTodayItem(
+          quickAddSourceTodayItemId,
+          selectedDate,
+          quickAddDraft.startMinute,
+          quickAddDraft.endMinute,
+        );
+      } else {
+        if (!quickAddDraft.title.trim()) return;
+        await createScheduleBlock(quickAddDraft);
+      }
+      setQuickAddDraft(null);
+      setQuickAddSourceTodayItemId(null);
+      setPendingTodayItemId(null);
+    }, quickAddSourceTodayItemId !== null ? '今日任务已安排到课表。' : '课表块已添加。');
   }
 
   async function handleCreateTemplate() {
@@ -283,7 +407,18 @@ export default function SchedulePage() {
           <button type="button" aria-label="前一天" onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}>
             <ChevronLeft size={16} />
           </button>
-          <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+          <input
+            type="date"
+            value={dateDraft}
+            onBlur={(event) => commitDate(event.target.value)}
+            onChange={(event) => {
+              setDateDraft(event.target.value);
+              commitDate(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commitDate(event.currentTarget.value);
+            }}
+          />
           <button type="button" aria-label="后一天" onClick={() => setSelectedDate(shiftDate(selectedDate, 1))}>
             <ChevronRight size={16} />
           </button>
@@ -292,6 +427,8 @@ export default function SchedulePage() {
           <CopyPlus size={16} /> 周模板
         </button>
       </section>
+
+      {loadingSchedule && <div className="schedule-loading-hint">正在更新课表...</div>}
 
       {showBlockComposer && (
         <section className="schedule-composer soft-panel">
@@ -363,18 +500,20 @@ export default function SchedulePage() {
           </div>
           {data?.today_items.length ? data.today_items.map((item) => {
             const already = scheduledTodayItemIds.has(item.id);
+            const picking = pendingTodayItemId === item.id;
             return (
-              <article className={already ? 'schedule-task-row muted' : 'schedule-task-row'} key={item.id}>
+              <article className={`${already ? 'schedule-task-row muted' : 'schedule-task-row'}${picking ? ' picking' : ''}`} key={item.id}>
                 <div>
                   <strong>{item.title}</strong>
                   <span>{subjectName(subjects, item.subject_id)}{item.due_date ? ` / ${item.due_date}` : ''}</span>
                 </div>
                 <button disabled={already || saving} type="button" onClick={() => void handleAddTodayItem(item.id)}>
-                  {already ? '已安排' : '安排'}
+                  {already ? '已安排' : picking ? '取消' : '选时间'}
                 </button>
               </article>
             );
           }) : <div className="empty-state compact">今日任务为空。</div>}
+          {pendingTodayItemId !== null && <div className="schedule-placement-hint">现在点击右侧时间轴空格即可安排。</div>}
         </aside>
 
         {view === 'day' ? (
@@ -384,7 +523,25 @@ export default function SchedulePage() {
                 <span key={index}>{formatMinute(dayStart + index * 60)}</span>
               ))}
             </div>
-            <div className="schedule-lane">
+            <div className={`schedule-lane${pendingTodayItemId !== null ? ' picking' : ''}`}>
+              {Array.from({ length: (dayEnd - dayStart) / 30 }, (_, index) => {
+                const startMinute = dayStart + index * 30;
+                return (
+                  <button
+                    aria-label={`在 ${formatMinute(startMinute)} 添加安排`}
+                    className="schedule-time-slot"
+                    key={startMinute}
+                    onClick={() => void handleTimeSlotClick(startMinute)}
+                    style={{
+                      top: `${((startMinute - dayStart) / (dayEnd - dayStart)) * 100}%`,
+                      height: `${(30 / (dayEnd - dayStart)) * 100}%`,
+                    }}
+                    type="button"
+                  >
+                    <span>{pendingTodayItemId !== null ? '放到这里' : '+'}</span>
+                  </button>
+                );
+              })}
               {currentMinute !== null && currentMinute >= dayStart && currentMinute <= dayEnd && (
                 <div className="schedule-now-line" style={{ top: `${((currentMinute - dayStart) / (dayEnd - dayStart)) * 100}%` }} />
               )}
@@ -428,7 +585,51 @@ export default function SchedulePage() {
                   )}
                 </article>
               ))}
-              {!data?.day_blocks.length && <div className="schedule-empty"><CalendarDays size={28} />今天还没有安排。</div>}
+              {quickAddDraft && (
+                <div
+                  className="schedule-quick-add"
+                  style={{
+                    top: `${Math.min(74, ((quickAddDraft.startMinute - dayStart) / (dayEnd - dayStart)) * 100)}%`,
+                  }}
+                >
+                  <div className="schedule-quick-add-head">
+                    <strong>{formatMinute(quickAddDraft.startMinute)} 快速添加</strong>
+                    <button type="button" onClick={() => { setQuickAddDraft(null); setQuickAddSourceTodayItemId(null); }}>×</button>
+                  </div>
+                  <select value={quickAddSourceTodayItemId ?? ''} onChange={(event) => handleQuickSourceChange(event.target.value)}>
+                    <option value="">手动安排</option>
+                    {availableTodayItems.map((item) => (
+                      <option key={item.id} value={item.id}>{item.title}</option>
+                    ))}
+                  </select>
+                  <input
+                    disabled={quickAddSourceTodayItemId !== null}
+                    placeholder="安排标题"
+                    value={quickAddDraft.title}
+                    onChange={(event) => setQuickAddDraft({ ...quickAddDraft, title: event.target.value })}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.nativeEvent.isComposing) void handleQuickAddSave();
+                      if (event.key === 'Escape') { setQuickAddDraft(null); setQuickAddSourceTodayItemId(null); }
+                    }}
+                  />
+                  <div className="schedule-quick-add-row">
+                    <input type="time" value={formatMinute(quickAddDraft.startMinute)} onChange={(event) => setQuickAddDraft({ ...quickAddDraft, startMinute: parseTime(event.target.value) })} />
+                    <input type="time" value={formatMinute(quickAddDraft.endMinute)} onChange={(event) => setQuickAddDraft({ ...quickAddDraft, endMinute: parseTime(event.target.value) })} />
+                  </div>
+                  <select
+                    disabled={quickAddSourceTodayItemId !== null}
+                    value={quickAddDraft.subjectId ?? ''}
+                    onChange={(event) => applyQuickSubject(event.target.value ? Number(event.target.value) : null)}
+                  >
+                    <option value="">未指定科目</option>
+                    {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+                  </select>
+                  <button className="primary-button" disabled={saving || (quickAddSourceTodayItemId === null && !quickAddDraft.title.trim())} type="button" onClick={() => void handleQuickAddSave()}>
+                    保存到课表
+                  </button>
+                </div>
+              )}
+              {!data?.day_blocks.length && !quickAddDraft && <div className="schedule-empty"><CalendarDays size={28} />点击时间格添加今天的安排。</div>}
             </div>
           </section>
         ) : (

@@ -1,10 +1,11 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { BarChart3, CalendarDays, ClipboardList, Settings, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarDays, ClipboardList, NotebookPen, Settings, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
 import Layout from './components/Layout';
 import FocusPage from './pages/FocusPage';
 import ChecklistPage from './pages/ChecklistPage';
 import SchedulePage from './pages/SchedulePage';
+import ReviewPage from './pages/ReviewPage';
 import WhitelistPage from './pages/WhitelistPage';
 import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage';
@@ -64,6 +65,12 @@ const pages: Record<AppPage, PageMeta> = {
     description: '今日安排与本周视图',
     icon: CalendarDays,
     component: <SchedulePage />,
+  },
+  review: {
+    title: '复盘',
+    description: '每日总结与明日重点',
+    icon: NotebookPen,
+    component: <ReviewPage />,
   },
   whitelist: {
     title: '白名单',

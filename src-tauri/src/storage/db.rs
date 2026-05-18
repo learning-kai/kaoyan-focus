@@ -69,6 +69,7 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               process_name TEXT NOT NULL,
               path TEXT,
               match_type TEXT NOT NULL DEFAULT 'process_name',
+              subject_id INTEGER,
               note TEXT,
               enabled INTEGER NOT NULL DEFAULT 1,
               created_at TEXT NOT NULL,
@@ -189,6 +190,17 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               FOREIGN KEY (linked_focus_session_id) REFERENCES focus_sessions(id)
             );
 
+            CREATE TABLE IF NOT EXISTS daily_reviews (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              review_date TEXT NOT NULL UNIQUE,
+              summary TEXT,
+              blockers TEXT,
+              tomorrow_focus TEXT,
+              mood_score INTEGER NOT NULL DEFAULT 3,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_checklist_columns_scope_sort
               ON checklist_columns (board_scope, sort_order, id);
             CREATE INDEX IF NOT EXISTS idx_checklist_tasks_column_sort
@@ -204,6 +216,8 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               WHERE template_id IS NOT NULL;
             CREATE INDEX IF NOT EXISTS idx_schedule_templates_enabled
               ON schedule_templates (enabled, start_minute, id);
+            CREATE INDEX IF NOT EXISTS idx_daily_reviews_date
+              ON daily_reviews (review_date);
             CREATE INDEX IF NOT EXISTS idx_sync_meta_sync_id
               ON sync_meta (sync_id);
             CREATE INDEX IF NOT EXISTS idx_sync_meta_entity_deleted
@@ -253,6 +267,13 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
     add_column_if_missing(connection, "focus_sessions", "today_plan_item_id", "INTEGER")?;
     add_column_if_missing(connection, "study_modes", "schedule_block_id", "INTEGER")?;
     add_column_if_missing(connection, "study_modes", "today_plan_item_id", "INTEGER")?;
+    add_column_if_missing(connection, "whitelist_apps", "subject_id", "INTEGER")?;
+    connection
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_whitelist_apps_subject ON whitelist_apps (subject_id, enabled)",
+            [],
+        )
+        .map_err(|error| error.to_string())?;
 
     Ok(())
 }
