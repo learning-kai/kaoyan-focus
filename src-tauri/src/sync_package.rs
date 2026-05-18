@@ -24,6 +24,10 @@ pub struct SharedSyncPayload {
     pub device_id: String,
     pub exported_at: i64,
     #[serde(default)]
+    pub source_device_id: Option<String>,
+    #[serde(default)]
+    pub active_device_id: Option<String>,
+    #[serde(default)]
     pub subjects: Vec<SharedSubject>,
     #[serde(default)]
     pub study_modes: Vec<SharedStudyMode>,
@@ -385,8 +389,10 @@ pub fn export_shared_sync_payload(
 ) -> Result<SharedSyncPayload, String> {
     Ok(SharedSyncPayload {
         schema_version: SYNC_SCHEMA_VERSION,
-        device_id,
+        device_id: device_id.clone(),
         exported_at,
+        source_device_id: Some(device_id.clone()),
+        active_device_id: active_device_id(connection).ok().flatten(),
         subjects: export_subjects(connection)?,
         study_modes: export_study_modes(connection)?,
         focus_sessions: export_focus_sessions(connection)?,
@@ -405,6 +411,16 @@ pub fn merge_shared_sync_payloads(
     device_id: String,
     exported_at: i64,
 ) -> SharedSyncPayload {
+    let local_active = shared_active_study_snapshot(&local);
+    let remote_active = shared_active_study_snapshot(&remote);
+    let preferred_active_sync_id = match (&local_active, &remote_active) {
+        (Some(local_snapshot), Some(remote_snapshot))
+            if local_snapshot.updated_at >= remote_snapshot.updated_at =>
+        {
+            Some(local_snapshot.sync_id.clone())
+        }
+        _ => None,
+    };
     let mut study_modes = merge_latest_by_sync_id(
         &local.study_modes,
         &remote.study_modes,
@@ -417,14 +433,41 @@ pub fn merge_shared_sync_payloads(
         |item| item.sync_id.as_str(),
         |item| item.updated_at,
     );
-    resolve_shared_active_conflicts(&mut study_modes, &mut focus_sessions, exported_at);
+    resolve_shared_active_conflicts(
+        &mut study_modes,
+        &mut focus_sessions,
+        exported_at,
+        preferred_active_sync_id.as_deref(),
+    );
 
     SharedSyncPayload {
         schema_version: SYNC_SCHEMA_VERSION
             .max(local.schema_version)
             .max(remote.schema_version),
-        device_id,
+        device_id: device_id.clone(),
         exported_at,
+        source_device_id: Some(device_id.clone()),
+        active_device_id: shared_active_study_snapshot_from_modes(&study_modes)
+            .and_then(|snapshot| {
+                if local.active_device_id.is_some()
+                    && local.device_id == device_id
+                    && local
+                        .study_modes
+                        .iter()
+                        .any(|mode| mode.sync_id == snapshot.sync_id)
+                {
+                    local.active_device_id.clone()
+                } else if remote.active_device_id.is_some()
+                    && remote
+                        .study_modes
+                        .iter()
+                        .any(|mode| mode.sync_id == snapshot.sync_id)
+                {
+                    remote.active_device_id.clone()
+                } else {
+                    Some(device_id.clone())
+                }
+            }),
         subjects: merge_latest_by_sync_id(
             &local.subjects,
             &remote.subjects,
@@ -472,11 +515,121 @@ pub fn merge_shared_sync_payloads(
     }
 }
 
+pub fn merge_remote_payload_into_local(
+    local: SharedSyncPayload,
+    remote: SharedSyncPayload,
+    device_id: String,
+    exported_at: i64,
+) -> SharedSyncPayload {
+    let local_active = shared_active_study_snapshot(&local);
+    let remote_active = shared_active_study_snapshot(&remote);
+    let mut merged = merge_shared_sync_payloads(local, remote, device_id, exported_at);
+    if let (Some(local_snapshot), Some(remote_snapshot)) = (local_active, remote_active) {
+        if local_snapshot.updated_at >= remote_snapshot.updated_at {
+            for mode in merged.study_modes.iter_mut() {
+                if mode.sync_id == local_snapshot.sync_id {
+                    mode.status = local_snapshot.status.clone();
+                    mode.phase = local_snapshot.phase.clone();
+                    mode.subject_sync_id = local_snapshot.subject_sync_id.clone();
+                    mode.current_session_sync_id = local_snapshot.current_session_sync_id.clone();
+                    mode.paused_at = local_snapshot.paused_at;
+                    mode.round_number = local_snapshot.round_number;
+                    mode.current_break_type = local_snapshot.current_break_type.clone();
+                    mode.ended_at = local_snapshot.ended_at;
+                    mode.updated_at = local_snapshot.updated_at;
+                }
+            }
+        }
+    }
+    merged
+}
+
+pub fn count_payload_entities(payload: &SharedSyncPayload) -> i64 {
+    [
+        payload.subjects.len(),
+        payload.study_modes.len(),
+        payload.focus_sessions.len(),
+        payload.app_events.len(),
+        payload.checklist_tasks.len(),
+        payload.today_plan_items.len(),
+        payload.schedule_blocks.len(),
+        payload.schedule_templates.len(),
+        payload.daily_reviews.len(),
+    ]
+    .iter()
+    .map(|value| *value as i64)
+    .sum()
+}
+
+pub fn count_payload_deleted_entities(payload: &SharedSyncPayload) -> i64 {
+    payload.subjects.iter().filter(|item| item.deleted_at.is_some()).count() as i64
+        + payload
+            .study_modes
+            .iter()
+            .filter(|item| item.deleted_at.is_some())
+            .count() as i64
+        + payload
+            .focus_sessions
+            .iter()
+            .filter(|item| item.deleted_at.is_some())
+            .count() as i64
+        + payload
+            .app_events
+            .iter()
+            .filter(|item| item.deleted_at.is_some())
+            .count() as i64
+        + payload
+            .checklist_tasks
+            .iter()
+            .filter(|item| item.deleted_at.is_some())
+            .count() as i64
+        + payload
+            .today_plan_items
+            .iter()
+            .filter(|item| item.deleted_at.is_some())
+            .count() as i64
+        + payload
+            .schedule_blocks
+            .iter()
+            .filter(|item| item.deleted_at.is_some())
+            .count() as i64
+        + payload
+            .schedule_templates
+            .iter()
+            .filter(|item| item.deleted_at.is_some())
+            .count() as i64
+        + payload
+            .daily_reviews
+            .iter()
+            .filter(|item| item.deleted_at.is_some())
+            .count() as i64
+}
+
+fn active_device_id(connection: &Connection) -> Result<Option<String>, String> {
+    let active_exists: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM study_modes WHERE status = 'active'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if active_exists > 0 {
+        ensure_device_id(connection).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
 pub fn shared_active_study_snapshot(
     payload: &SharedSyncPayload,
 ) -> Option<SharedActiveStudySnapshot> {
-    payload
-        .study_modes
+    shared_active_study_snapshot_from_modes(&payload.study_modes)
+}
+
+fn shared_active_study_snapshot_from_modes(
+    study_modes: &[SharedStudyMode],
+) -> Option<SharedActiveStudySnapshot> {
+    study_modes
         .iter()
         .filter(|item| item.deleted_at.is_none())
         .filter(|item| {
@@ -485,11 +638,7 @@ pub fn shared_active_study_snapshot(
                 .map(is_shared_running_status)
                 .unwrap_or(false)
         })
-        .max_by(|left, right| {
-            left.updated_at
-                .cmp(&right.updated_at)
-                .then_with(|| left.sync_id.cmp(&right.sync_id))
-        })
+        .max_by_key(|item| item.updated_at)
         .map(|item| SharedActiveStudySnapshot {
             sync_id: item.sync_id.clone(),
             status: item.status.clone(),
@@ -554,31 +703,53 @@ where
     Id: Fn(&T) -> &str,
     Updated: Fn(&T) -> i64,
 {
-    let mut merged: HashMap<String, T> = HashMap::new();
+    let mut merged: Vec<T> = Vec::new();
+    let mut positions: HashMap<String, usize> = HashMap::new();
     for item in local.iter().chain(remote.iter()) {
         let sync_id = id_of(item).trim();
         if sync_id.is_empty() {
             continue;
         }
 
-        let should_replace = merged
-            .get(sync_id)
-            .map(|existing| updated_at_of(item) > updated_at_of(existing))
-            .unwrap_or(true);
-        if should_replace {
-            merged.insert(sync_id.to_string(), item.clone());
+        if let Some(position) = positions.get(sync_id).copied() {
+            if updated_at_of(item) > updated_at_of(&merged[position]) {
+                merged[position] = item.clone();
+            }
+        } else {
+            positions.insert(sync_id.to_string(), merged.len());
+            merged.push(item.clone());
         }
     }
 
-    merged.into_values().collect()
+    merged
 }
 
 fn resolve_shared_active_conflicts(
     study_modes: &mut [SharedStudyMode],
     focus_sessions: &mut [SharedFocusSession],
     resolved_at: i64,
+    preferred_winner_sync_id: Option<&str>,
 ) {
-    let winner_sync_id = study_modes
+    let preferred_winner_sync_id = preferred_winner_sync_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let winner_sync_id = preferred_winner_sync_id
+        .and_then(|preferred| {
+            study_modes
+                .iter()
+                .find(|item| {
+                    item.deleted_at.is_none()
+                        && item.sync_id == preferred
+                        && item
+                            .status
+                            .as_deref()
+                            .map(is_shared_running_status)
+                            .unwrap_or(false)
+                })
+                .map(|item| item.sync_id.clone())
+        })
+        .or_else(|| {
+            study_modes
         .iter()
         .filter(|item| item.deleted_at.is_none())
         .filter(|item| {
@@ -587,12 +758,9 @@ fn resolve_shared_active_conflicts(
                 .map(is_shared_running_status)
                 .unwrap_or(false)
         })
-        .max_by(|left, right| {
-            left.updated_at
-                .cmp(&right.updated_at)
-                .then_with(|| left.sync_id.cmp(&right.sync_id))
-        })
-        .map(|item| item.sync_id.clone());
+        .max_by_key(|item| item.updated_at)
+        .map(|item| item.sync_id.clone())
+        });
 
     let Some(winner_sync_id) = winner_sync_id else {
         return;
@@ -3571,4 +3739,110 @@ fn ensure_device_id(connection: &Connection) -> Result<String, String> {
 
 pub fn load_or_create_device_id(connection: &Connection) -> Result<String, String> {
     ensure_device_id(connection)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_payload(device_id: &str, exported_at: i64) -> SharedSyncPayload {
+        SharedSyncPayload {
+            schema_version: SYNC_SCHEMA_VERSION,
+            device_id: device_id.to_string(),
+            exported_at,
+            source_device_id: Some(device_id.to_string()),
+            active_device_id: None,
+            subjects: Vec::new(),
+            study_modes: Vec::new(),
+            focus_sessions: Vec::new(),
+            app_events: Vec::new(),
+            checklist_tasks: Vec::new(),
+            today_plan_items: Vec::new(),
+            schedule_blocks: Vec::new(),
+            schedule_templates: Vec::new(),
+            daily_reviews: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn checklist_tombstone_wins_over_same_timestamp_live_item() {
+        let mut local = empty_payload("desktop", 1000);
+        local.checklist_tasks.push(SharedChecklistTask {
+            sync_id: "task-1".to_string(),
+            category_key: Some("math".to_string()),
+            subject_sync_id: None,
+            title: Some("old".to_string()),
+            note: None,
+            due_date: None,
+            sort_order: Some(0.0),
+            completed: Some(false),
+            created_at: Some(900),
+            updated_at: 2000,
+            deleted_at: None,
+        });
+        let mut remote = empty_payload("phone", 2000);
+        remote.checklist_tasks.push(SharedChecklistTask {
+            sync_id: "task-1".to_string(),
+            category_key: None,
+            subject_sync_id: None,
+            title: None,
+            note: None,
+            due_date: None,
+            sort_order: None,
+            completed: None,
+            created_at: None,
+            updated_at: 2000,
+            deleted_at: Some(2000),
+        });
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 3000);
+        assert_eq!(merged.checklist_tasks.len(), 1);
+        assert_eq!(merged.checklist_tasks[0].deleted_at, Some(2000));
+    }
+
+    #[test]
+    fn newer_tombstone_wins_over_older_schedule_block() {
+        let mut local = empty_payload("desktop", 1000);
+        local.schedule_blocks.push(SharedScheduleBlock {
+            sync_id: "block-1".to_string(),
+            schedule_date: Some("2026-05-18".to_string()),
+            title: Some("math".to_string()),
+            note: None,
+            category_key: Some("math".to_string()),
+            subject_sync_id: None,
+            source_today_item_sync_id: None,
+            template_sync_id: None,
+            start_minute: Some(480),
+            end_minute: Some(540),
+            status: Some("planned".to_string()),
+            linked_study_mode_sync_id: None,
+            linked_focus_session_sync_id: None,
+            created_at: Some(1000),
+            updated_at: 1500,
+            deleted_at: None,
+        });
+        let mut remote = empty_payload("phone", 2000);
+        remote.schedule_blocks.push(SharedScheduleBlock {
+            sync_id: "block-1".to_string(),
+            schedule_date: None,
+            title: None,
+            note: None,
+            category_key: None,
+            subject_sync_id: None,
+            source_today_item_sync_id: None,
+            template_sync_id: None,
+            start_minute: None,
+            end_minute: None,
+            status: None,
+            linked_study_mode_sync_id: None,
+            linked_focus_session_sync_id: None,
+            created_at: None,
+            updated_at: 2500,
+            deleted_at: Some(2500),
+        });
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 3000);
+        assert_eq!(merged.schedule_blocks.len(), 1);
+        assert_eq!(merged.schedule_blocks[0].deleted_at, Some(2500));
+    }
 }

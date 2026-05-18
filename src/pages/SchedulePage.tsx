@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import {
   CalendarDays,
   ChevronLeft,
@@ -18,6 +19,7 @@ import {
   deleteScheduleBlock,
   deleteScheduleTemplate,
   getSchedulePageData,
+  moveScheduleBlock,
   startStudyModeFromScheduleBlock,
   updateScheduleBlock,
 } from '../services/scheduleApi';
@@ -37,6 +39,10 @@ const categories = [
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const dayStart = 6 * 60;
 const dayEnd = 24 * 60;
+const slotMinutes = 15;
+const minBlockMinutes = 15;
+const defaultBlockMinutes = 60;
+const todayItemDragType = 'application/x-schedule-today-item';
 
 const emptyBlockDraft = (date: string): ScheduleBlockDraft => ({
   scheduleDate: date,
@@ -69,9 +75,17 @@ function todayString() {
 }
 
 function shiftDate(value: string, days: number) {
-  const date = new Date(`${value}T00:00:00`);
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) {
+    return value;
+  }
+
+  const date = new Date(year, month - 1, day);
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  const nextYear = date.getFullYear();
+  const nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+  const nextDay = String(date.getDate()).padStart(2, '0');
+  return `${nextYear}-${nextMonth}-${nextDay}`;
 }
 
 function formatMinute(minute: number) {
@@ -82,6 +96,101 @@ function formatMinute(minute: number) {
 function parseTime(value: string) {
   const [hour, minute] = value.split(':').map(Number);
   return (Number.isFinite(hour) ? hour : 0) * 60 + (Number.isFinite(minute) ? minute : 0);
+}
+
+function timelinePercent(minute: number) {
+  return Math.max(0, Math.min(100, ((minute - dayStart) / (dayEnd - dayStart)) * 100));
+}
+
+function rangeTimelineStyle(startMinute: number, endMinute: number) {
+  const visibleStart = Math.max(dayStart, Math.min(dayEnd, startMinute));
+  const visibleEnd = Math.max(visibleStart + minBlockMinutes, Math.min(dayEnd, endMinute));
+  const height = Math.max(5, ((visibleEnd - visibleStart) / (dayEnd - dayStart)) * 100);
+  return {
+    top: `${timelinePercent(visibleStart)}%`,
+    height: `${height}%`,
+  };
+}
+
+function blockTimelineStyle(block: ScheduleBlock) {
+  return rangeTimelineStyle(block.start_minute, block.end_minute);
+}
+
+function clampMinute(value: number, min = dayStart, max = dayEnd) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function snapMinute(value: number) {
+  return Math.round(value / slotMinutes) * slotMinutes;
+}
+
+type PositionedScheduleBlock = {
+  block: ScheduleBlock;
+  columnIndex: number;
+  columnCount: number;
+};
+
+type CalendarDragState = {
+  mode: 'create' | 'move' | 'resize-start' | 'resize-end';
+  title: string;
+  blockId?: number;
+  todayItemId?: number;
+  originalStart: number;
+  originalEnd: number;
+  startMinute: number;
+  endMinute: number;
+  originClientY?: number;
+};
+
+function layoutScheduleBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlock[] {
+  const ordered = [...blocks].sort((left, right) =>
+    left.start_minute - right.start_minute ||
+    left.end_minute - right.end_minute ||
+    left.id - right.id,
+  );
+  const groups: ScheduleBlock[][] = [];
+  let activeGroup: ScheduleBlock[] = [];
+  let activeGroupEnd = Number.NEGATIVE_INFINITY;
+
+  for (const block of ordered) {
+    if (!activeGroup.length || block.start_minute < activeGroupEnd) {
+      activeGroup.push(block);
+      activeGroupEnd = Math.max(activeGroupEnd, block.end_minute);
+    } else {
+      groups.push(activeGroup);
+      activeGroup = [block];
+      activeGroupEnd = block.end_minute;
+    }
+  }
+  if (activeGroup.length) groups.push(activeGroup);
+
+  return groups.flatMap((group) => {
+    const columnEnds: number[] = [];
+    const assigned = group.map((block) => {
+      const reusableColumn = columnEnds.findIndex((endMinute) => endMinute <= block.start_minute);
+      const columnIndex = reusableColumn >= 0 ? reusableColumn : columnEnds.length;
+      columnEnds[columnIndex] = block.end_minute;
+      return { block, columnIndex };
+    });
+    const columnCount = Math.max(1, columnEnds.length);
+    return assigned.map(({ block, columnIndex }) => ({ block, columnIndex, columnCount }));
+  });
+}
+
+function positionedBlockTimelineStyle(positioned: PositionedScheduleBlock) {
+  const base = blockTimelineStyle(positioned.block);
+  const gap = 8;
+  const sidePadding = 20;
+  const totalGap = (positioned.columnCount - 1) * gap;
+  const offsetPercent = (positioned.columnIndex * 100) / positioned.columnCount;
+  const offsetPixels = positioned.columnIndex * gap - (positioned.columnIndex * (sidePadding + totalGap)) / positioned.columnCount;
+  const width = `calc((100% - ${sidePadding}px - ${totalGap}px) / ${positioned.columnCount})`;
+  return {
+    ...base,
+    left: `calc(10px + ${offsetPercent}% + ${offsetPixels}px)`,
+    right: 'auto',
+    width,
+  };
 }
 
 function categoryLabel(key: string) {
@@ -120,7 +229,10 @@ export default function SchedulePage() {
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dragState, setDragState] = useState<CalendarDragState | null>(null);
   const refreshTokenRef = useRef(0);
+  const laneRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef<CalendarDragState | null>(null);
 
   useEffect(() => {
     void initialize();
@@ -131,6 +243,33 @@ export default function SchedulePage() {
     setDateDraft(selectedDate);
     setBlockDraft((draft) => ({ ...draft, scheduleDate: selectedDate }));
   }, [selectedDate]);
+
+  useEffect(() => {
+    dragStateRef.current = dragState;
+  }, [dragState]);
+
+  useEffect(() => {
+    const active = dragState;
+    if (!active || active.mode === 'create') return;
+
+    function handlePointerMove(event: PointerEvent) {
+      event.preventDefault();
+      updateDragPreview(event.clientY);
+    }
+
+    function handlePointerUp() {
+      void commitDrag(dragStateRef.current);
+    }
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+    window.addEventListener('pointercancel', handlePointerUp, { once: true });
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [dragState]);
 
   const scheduledTodayItemIds = useMemo(() => {
     const ids = new Set<number>();
@@ -143,6 +282,10 @@ export default function SchedulePage() {
   const availableTodayItems = useMemo(
     () => (data?.today_items ?? []).filter((item) => !scheduledTodayItemIds.has(item.id)),
     [data, scheduledTodayItemIds],
+  );
+  const positionedDayBlocks = useMemo(
+    () => layoutScheduleBlocks(data?.day_blocks ?? []),
+    [data?.day_blocks],
   );
 
   const currentMinute = useMemo(() => {
@@ -202,7 +345,205 @@ export default function SchedulePage() {
   }
 
   function scheduleSlotEnd(startMinute: number) {
-    return Math.min(dayEnd, startMinute + 60);
+    return Math.min(dayEnd, startMinute + defaultBlockMinutes);
+  }
+
+  function minuteFromLaneClientY(clientY: number) {
+    const lane = laneRef.current;
+    if (!lane) return dayStart;
+    const rect = lane.getBoundingClientRect();
+    const ratio = rect.height > 0 ? (clientY - rect.top) / rect.height : 0;
+    return clampMinute(snapMinute(dayStart + ratio * (dayEnd - dayStart)));
+  }
+
+  function minuteDeltaFromClientY(clientY: number, originClientY: number) {
+    const lane = laneRef.current;
+    if (!lane) return 0;
+    const rect = lane.getBoundingClientRect();
+    if (rect.height <= 0) return 0;
+    return snapMinute(((clientY - originClientY) / rect.height) * (dayEnd - dayStart));
+  }
+
+  function nextDragForMinute(current: CalendarDragState, minute: number) {
+    if (current.mode === 'create') {
+      const startMinute = clampMinute(minute, dayStart, dayEnd - minBlockMinutes);
+      return {
+        ...current,
+        startMinute,
+        endMinute: clampMinute(startMinute + defaultBlockMinutes, startMinute + minBlockMinutes, dayEnd),
+      };
+    }
+
+    if (current.mode === 'move') {
+      const duration = current.originalEnd - current.originalStart;
+      const startMinute = clampMinute(minute, dayStart, dayEnd - duration);
+      return {
+        ...current,
+        startMinute,
+        endMinute: startMinute + duration,
+      };
+    }
+
+    if (current.mode === 'resize-start') {
+      const startMinute = clampMinute(minute, dayStart, current.originalEnd - minBlockMinutes);
+      return {
+        ...current,
+        startMinute,
+        endMinute: current.originalEnd,
+      };
+    }
+
+    const endMinute = clampMinute(minute, current.originalStart + minBlockMinutes, dayEnd);
+    return {
+      ...current,
+      startMinute: current.originalStart,
+      endMinute,
+    };
+  }
+
+  function updateDragPreview(clientY: number) {
+    setDragState((current) => {
+      if (!current) return current;
+      if (current.mode !== 'create' && typeof current.originClientY === 'number') {
+        const delta = minuteDeltaFromClientY(clientY, current.originClientY);
+        if (current.mode === 'move') {
+          const duration = current.originalEnd - current.originalStart;
+          const startMinute = clampMinute(current.originalStart + delta, dayStart, dayEnd - duration);
+          return {
+            ...current,
+            startMinute,
+            endMinute: startMinute + duration,
+          };
+        }
+        if (current.mode === 'resize-start') {
+          const startMinute = clampMinute(current.originalStart + delta, dayStart, current.originalEnd - minBlockMinutes);
+          return {
+            ...current,
+            startMinute,
+            endMinute: current.originalEnd,
+          };
+        }
+        const endMinute = clampMinute(current.originalEnd + delta, current.originalStart + minBlockMinutes, dayEnd);
+        return {
+          ...current,
+          startMinute: current.originalStart,
+          endMinute,
+        };
+      }
+      return nextDragForMinute(current, minuteFromLaneClientY(clientY));
+    });
+  }
+
+  function startCreateDrag(itemId: number, title: string, clientY?: number) {
+    setView('day');
+    setQuickAddDraft(null);
+    setQuickAddSourceTodayItemId(null);
+    setPendingTodayItemId(null);
+    setMessage(null);
+    const startMinute = typeof clientY === 'number' ? minuteFromLaneClientY(clientY) : dayStart;
+    setDragState({
+      mode: 'create',
+      title,
+      todayItemId: itemId,
+      originalStart: startMinute,
+      originalEnd: scheduleSlotEnd(startMinute),
+      startMinute,
+      endMinute: scheduleSlotEnd(startMinute),
+    });
+  }
+
+  function startBlockDrag(block: ScheduleBlock, mode: CalendarDragState['mode'], clientY: number) {
+    if (mode === 'create') return;
+    setEditingBlockId(null);
+    setEditingBlockDraft(null);
+    setQuickAddDraft(null);
+    setQuickAddSourceTodayItemId(null);
+    setMessage(null);
+    setDragState({
+      mode,
+      title: block.title,
+      blockId: block.id,
+      originalStart: block.start_minute,
+      originalEnd: block.end_minute,
+      startMinute: block.start_minute,
+      endMinute: block.end_minute,
+      originClientY: clientY,
+    });
+  }
+
+  async function commitDrag(state: CalendarDragState | null = dragState) {
+    if (!state) return;
+    setDragState(null);
+    if (state.mode !== 'create' && state.startMinute === state.originalStart && state.endMinute === state.originalEnd) return;
+    await withSave(async () => {
+      if (state.mode === 'create' && typeof state.todayItemId === 'number') {
+        await createScheduleBlockFromTodayItem(state.todayItemId, selectedDate, state.startMinute, state.endMinute);
+      } else if (typeof state.blockId === 'number') {
+        await moveScheduleBlock(state.blockId, selectedDate, state.startMinute, state.endMinute);
+      }
+    }, state.mode === 'create' ? '今日任务已安排到课表。' : '课表时间已更新。');
+  }
+
+  function isInteractiveElement(target: EventTarget | null) {
+    if (!(target instanceof HTMLElement)) return false;
+    return Boolean(target.closest('button, input, select, textarea, a, .schedule-resize-handle'));
+  }
+
+  function handleTodayItemDragStart(event: ReactDragEvent<HTMLElement>, itemId: number, title: string) {
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData(todayItemDragType, String(itemId));
+    event.dataTransfer.setData('text/plain', title);
+    startCreateDrag(itemId, title, event.clientY);
+  }
+
+  function handleTodayItemDragEnd() {
+    const active = dragStateRef.current;
+    if (active?.mode === 'create') {
+      setDragState(null);
+    }
+  }
+
+  function handleLaneDragOver(event: ReactDragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes(todayItemDragType)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    const current = dragStateRef.current;
+    const itemId = Number(event.dataTransfer.getData(todayItemDragType) || current?.todayItemId);
+    const item = data?.today_items.find((candidate) => candidate.id === itemId);
+    if (!item || scheduledTodayItemIds.has(item.id)) return;
+    if (!current || current.mode !== 'create' || current.todayItemId !== item.id) {
+      startCreateDrag(item.id, item.title, event.clientY);
+      return;
+    }
+    updateDragPreview(event.clientY);
+  }
+
+  function handleLaneDrop(event: ReactDragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes(todayItemDragType)) return;
+    event.preventDefault();
+    const active = dragStateRef.current;
+    if (active?.mode === 'create') {
+      void commitDrag(active);
+    }
+  }
+
+  function handleBlockPointerDown(event: ReactPointerEvent<HTMLElement>, block: ScheduleBlock) {
+    if (event.button !== 0 || editingBlockId === block.id || isInteractiveElement(event.target)) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+    startBlockDrag(block, 'move', event.clientY);
+  }
+
+  function handleResizePointerDown(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    block: ScheduleBlock,
+    mode: 'resize-start' | 'resize-end',
+  ) {
+    if (event.button !== 0 || editingBlockId === block.id) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+    startBlockDrag(block, mode, event.clientY);
   }
 
   function quickDraftForSlot(startMinute: number, itemId: number | null = null): ScheduleBlockDraft {
@@ -301,7 +642,7 @@ export default function SchedulePage() {
     setQuickAddDraft(null);
     setQuickAddSourceTodayItemId(null);
     setPendingTodayItemId((current) => (current === itemId ? null : itemId));
-    setMessage('点击时间轴上的 30 分钟空格，把任务安排到对应时间。');
+    setMessage('点击时间轴上的 15 分钟空格，或直接拖动任务到时间轴上。');
   }
 
   async function handleAddTodayItemAt(itemId: number, startMinute: number) {
@@ -490,7 +831,7 @@ export default function SchedulePage() {
         </section>
       )}
 
-      <div className="schedule-grid-shell">
+      <div className={`schedule-grid-shell is-${view}`}>
         <aside className="today-task-rail soft-panel">
           <div className="panel-title compact-title">
             <div>
@@ -502,7 +843,13 @@ export default function SchedulePage() {
             const already = scheduledTodayItemIds.has(item.id);
             const picking = pendingTodayItemId === item.id;
             return (
-              <article className={`${already ? 'schedule-task-row muted' : 'schedule-task-row'}${picking ? ' picking' : ''}`} key={item.id}>
+              <article
+                className={`${already ? 'schedule-task-row muted' : 'schedule-task-row'}${picking ? ' picking' : ''}`}
+                draggable={!already && !saving}
+                key={item.id}
+                onDragEnd={handleTodayItemDragEnd}
+                onDragStart={(event) => handleTodayItemDragStart(event, item.id, item.title)}
+              >
                 <div>
                   <strong>{item.title}</strong>
                   <span>{subjectName(subjects, item.subject_id)}{item.due_date ? ` / ${item.due_date}` : ''}</span>
@@ -519,13 +866,23 @@ export default function SchedulePage() {
         {view === 'day' ? (
           <section className="schedule-timeline soft-panel">
             <div className="schedule-time-column">
-              {Array.from({ length: (dayEnd - dayStart) / 60 + 1 }, (_, index) => (
-                <span key={index}>{formatMinute(dayStart + index * 60)}</span>
-              ))}
+              {Array.from({ length: (dayEnd - dayStart) / 60 + 1 }, (_, index) => {
+                const minute = dayStart + index * 60;
+                return (
+                  <span key={minute} style={{ top: `${timelinePercent(minute)}%` }}>
+                    {formatMinute(minute)}
+                  </span>
+                );
+              })}
             </div>
-            <div className={`schedule-lane${pendingTodayItemId !== null ? ' picking' : ''}`}>
-              {Array.from({ length: (dayEnd - dayStart) / 30 }, (_, index) => {
-                const startMinute = dayStart + index * 30;
+            <div
+              className={`schedule-lane${pendingTodayItemId !== null || dragState ? ' picking' : ''}${dragState ? ' dragging' : ''}`}
+              onDragOver={handleLaneDragOver}
+              onDrop={handleLaneDrop}
+              ref={laneRef}
+            >
+              {Array.from({ length: (dayEnd - dayStart) / slotMinutes }, (_, index) => {
+                const startMinute = dayStart + index * slotMinutes;
                 return (
                   <button
                     aria-label={`在 ${formatMinute(startMinute)} 添加安排`}
@@ -533,8 +890,8 @@ export default function SchedulePage() {
                     key={startMinute}
                     onClick={() => void handleTimeSlotClick(startMinute)}
                     style={{
-                      top: `${((startMinute - dayStart) / (dayEnd - dayStart)) * 100}%`,
-                      height: `${(30 / (dayEnd - dayStart)) * 100}%`,
+                      top: `${timelinePercent(startMinute)}%`,
+                      height: `${(slotMinutes / (dayEnd - dayStart)) * 100}%`,
                     }}
                     type="button"
                   >
@@ -543,16 +900,14 @@ export default function SchedulePage() {
                 );
               })}
               {currentMinute !== null && currentMinute >= dayStart && currentMinute <= dayEnd && (
-                <div className="schedule-now-line" style={{ top: `${((currentMinute - dayStart) / (dayEnd - dayStart)) * 100}%` }} />
+                <div className="schedule-now-line" style={{ top: `${timelinePercent(currentMinute)}%` }} />
               )}
-              {data?.day_blocks.map((block) => (
+              {positionedDayBlocks.map(({ block, columnCount, columnIndex }) => (
                 <article
-                  className={`schedule-block category-${block.category_key}${block.has_conflict ? ' conflict' : ''}`}
+                  className={`schedule-block category-${block.category_key}${columnCount > 1 ? ' conflict' : ''}${dragState?.blockId === block.id ? ' is-dragging' : ''}`}
                   key={block.id}
-                  style={{
-                    top: `${((block.start_minute - dayStart) / (dayEnd - dayStart)) * 100}%`,
-                    height: `${Math.max(5, ((block.end_minute - block.start_minute) / (dayEnd - dayStart)) * 100)}%`,
-                  }}
+                  onPointerDown={(event) => handleBlockPointerDown(event, block)}
+                  style={positionedBlockTimelineStyle({ block, columnCount, columnIndex })}
                 >
                   {editingBlockId === block.id && editingBlockDraft ? (
                     <div className="schedule-block-editor">
@@ -571,25 +926,46 @@ export default function SchedulePage() {
                     </div>
                   ) : (
                     <>
+                      <button
+                        aria-label="Resize start time"
+                        className="schedule-resize-handle is-start"
+                        onPointerDown={(event) => handleResizePointerDown(event, block, 'resize-start')}
+                        type="button"
+                      />
                       <div onDoubleClick={() => beginEditBlock(block)}>
                         <span>{formatMinute(block.start_minute)}-{formatMinute(block.end_minute)} · {categoryLabel(block.category_key)}</span>
                         <strong>{block.title}</strong>
-                        <small>{subjectName(subjects, block.subject_id)}{block.has_conflict ? ' · 时间冲突' : ''}</small>
+                        <small>{subjectName(subjects, block.subject_id)}{columnCount > 1 ? ' · 时间冲突' : ''}</small>
                       </div>
                       <div className="schedule-block-actions">
                         <button aria-label="开始专注" type="button" onClick={() => void handleStart(block)}><Play size={14} /></button>
                         <button aria-label="编辑" type="button" onClick={() => beginEditBlock(block)}>改</button>
                         <button aria-label="删除" type="button" onClick={() => void withSave(() => deleteScheduleBlock(block.id), '课表块已删除。')}><Trash2 size={14} /></button>
                       </div>
+                      <button
+                        aria-label="Resize end time"
+                        className="schedule-resize-handle is-end"
+                        onPointerDown={(event) => handleResizePointerDown(event, block, 'resize-end')}
+                        type="button"
+                      />
                     </>
                   )}
                 </article>
               ))}
+              {dragState && (
+                <div
+                  className={`schedule-drag-preview is-${dragState.mode}`}
+                  style={rangeTimelineStyle(dragState.startMinute, dragState.endMinute)}
+                >
+                  <strong>{dragState.title}</strong>
+                  <span>{formatMinute(dragState.startMinute)}-{formatMinute(dragState.endMinute)}</span>
+                </div>
+              )}
               {quickAddDraft && (
                 <div
-                  className="schedule-quick-add"
+                  className={`schedule-quick-add${timelinePercent(quickAddDraft.startMinute) > 62 ? ' is-above' : ''}`}
                   style={{
-                    top: `${Math.min(74, ((quickAddDraft.startMinute - dayStart) / (dayEnd - dayStart)) * 100)}%`,
+                    top: `${timelinePercent(quickAddDraft.startMinute)}%`,
                   }}
                 >
                   <div className="schedule-quick-add-head">

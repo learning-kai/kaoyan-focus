@@ -4,6 +4,9 @@ import type {
   ObjectStorageSettings,
   ObjectStorageStatus,
   ObjectStorageSyncResult,
+  SyncBackupEntry,
+  SyncBackupPreview,
+  SyncRunSummary,
   WebDavAutoSyncResult,
   WebDavSettings,
   WebDavStatus,
@@ -82,10 +85,39 @@ export function autoSyncObjectStorageDatabase(): Promise<ObjectStorageAutoSyncRe
   return invokeCommand<ObjectStorageAutoSyncResult>('auto_sync_object_storage_database');
 }
 
+export function syncObjectStorageStateChange(): Promise<ObjectStorageAutoSyncResult> {
+  return invokeCommand<ObjectStorageAutoSyncResult>('sync_object_storage_state_change');
+}
+
+export function listSyncRuns(limit = 10): Promise<SyncRunSummary[]> {
+  return invokeCommand<SyncRunSummary[]>('list_sync_runs', { limit });
+}
+
+export function listSyncBackups(): Promise<SyncBackupEntry[]> {
+  return invokeCommand<SyncBackupEntry[]>('list_sync_backups');
+}
+
+export function previewSyncBackup(source: string, key: string): Promise<SyncBackupPreview> {
+  return invokeCommand<SyncBackupPreview>('preview_sync_backup', { source, key });
+}
+
+export function restoreSyncBackup(source: string, key: string): Promise<string> {
+  return invokeCommand<string>('restore_sync_backup', { source, key });
+}
+
 export async function autoSyncConfiguredDatabase(): Promise<WebDavAutoSyncResult | ObjectStorageAutoSyncResult> {
   const settings = await getAppSettings();
   if (settings.sync_backend === 'object_storage') {
     return autoSyncObjectStorageDatabase();
+  }
+
+  return autoSyncWebDavDatabase();
+}
+
+export async function syncConfiguredStateChange(): Promise<WebDavAutoSyncResult | ObjectStorageAutoSyncResult> {
+  const settings = await getAppSettings();
+  if (settings.sync_backend === 'object_storage') {
+    return syncObjectStorageStateChange();
   }
 
   return autoSyncWebDavDatabase();

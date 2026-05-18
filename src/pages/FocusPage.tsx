@@ -10,7 +10,7 @@ import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSe
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { createScheduleBlock, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
-import { STUDY_SYNC_STATE_CHANGED_EVENT, autoSyncConfiguredDatabase, getAppSettings } from '../services/settingsApi';
+import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange, getAppSettings } from '../services/settingsApi';
 import { setStudyFullscreen } from '../services/systemApi';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
 import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
@@ -246,7 +246,7 @@ export default function FocusPage() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
-  function queueConfiguredSync() { void autoSyncConfiguredDatabase().catch(() => undefined); }
+  function queueConfiguredSync() { void syncConfiguredStateChange().catch(() => undefined); }
 
   function scheduleSubjectCategory(subjectId: number | null | undefined) {
     if (subjectId === 1) return 'politics';

@@ -89,7 +89,7 @@ export type ObjectStorageSyncResult = {
 export type ObjectStorageAutoSyncResult = {
   status: 'synced' | 'skipped';
   message: string;
-  direction: 'upload' | 'download_upload' | null;
+  direction: 'upload' | 'download_upload' | 'download' | null;
   skipped_reason: string | null;
   synced_at: string;
   object_url: string | null;
@@ -97,4 +97,46 @@ export type ObjectStorageAutoSyncResult = {
   backup_path: string | null;
   active_state_changed?: boolean;
   took_over_active_mode?: boolean;
+};
+
+export type SyncRunSummary = {
+  id: number;
+  sync_id: string;
+  backend: string;
+  trigger: string;
+  direction: string | null;
+  status: string;
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  bytes: number;
+  imported_count: number;
+  exported_count: number;
+  deleted_count: number;
+  conflict_count: number;
+  active_state_changed: boolean;
+  took_over_active_mode: boolean;
+  validation_report: string | null;
+  backup_path: string | null;
+  remote_backup_key: string | null;
+  error_message: string | null;
+};
+
+export type SyncBackupEntry = {
+  source: string;
+  key: string;
+  label: string;
+  created_at: string | null;
+  bytes: number | null;
+};
+
+export type SyncBackupPreview = {
+  source: string;
+  key: string;
+  bytes: number;
+  validation_report: string;
+  entity_count: number;
+  deleted_count: number;
+  exported_at: number | null;
+  device_id: string | null;
 };

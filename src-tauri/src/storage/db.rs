@@ -218,10 +218,6 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               ON schedule_templates (enabled, start_minute, id);
             CREATE INDEX IF NOT EXISTS idx_daily_reviews_date
               ON daily_reviews (review_date);
-            CREATE INDEX IF NOT EXISTS idx_sync_meta_sync_id
-              ON sync_meta (sync_id);
-            CREATE INDEX IF NOT EXISTS idx_sync_meta_entity_deleted
-              ON sync_meta (entity_type, deleted_at);
             ",
         )
         .map_err(|error| error.to_string())?;
@@ -268,6 +264,60 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
     add_column_if_missing(connection, "study_modes", "schedule_block_id", "INTEGER")?;
     add_column_if_missing(connection, "study_modes", "today_plan_item_id", "INTEGER")?;
     add_column_if_missing(connection, "whitelist_apps", "subject_id", "INTEGER")?;
+    connection
+        .execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS sync_runs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              sync_id TEXT NOT NULL,
+              backend TEXT NOT NULL,
+              trigger TEXT NOT NULL,
+              direction TEXT,
+              status TEXT NOT NULL,
+              started_at TEXT NOT NULL,
+              finished_at TEXT NOT NULL,
+              duration_ms INTEGER NOT NULL DEFAULT 0,
+              device_id TEXT,
+              remote_device_id TEXT,
+              remote_exported_at INTEGER,
+              local_exported_at INTEGER,
+              bytes INTEGER NOT NULL DEFAULT 0,
+              imported_count INTEGER NOT NULL DEFAULT 0,
+              exported_count INTEGER NOT NULL DEFAULT 0,
+              deleted_count INTEGER NOT NULL DEFAULT 0,
+              conflict_count INTEGER NOT NULL DEFAULT 0,
+              active_state_changed INTEGER NOT NULL DEFAULT 0,
+              took_over_active_mode INTEGER NOT NULL DEFAULT 0,
+              validation_report TEXT,
+              backup_path TEXT,
+              remote_backup_key TEXT,
+              error_message TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS sync_conflicts (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              run_id INTEGER NOT NULL,
+              entity_type TEXT NOT NULL,
+              sync_id TEXT NOT NULL,
+              resolution TEXT NOT NULL,
+              local_updated_at INTEGER,
+              remote_updated_at INTEGER,
+              message TEXT,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY (run_id) REFERENCES sync_runs(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_sync_meta_sync_id
+              ON sync_meta (sync_id);
+            CREATE INDEX IF NOT EXISTS idx_sync_meta_entity_deleted
+              ON sync_meta (entity_type, deleted_at);
+            CREATE INDEX IF NOT EXISTS idx_sync_runs_finished_at
+              ON sync_runs (finished_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_sync_conflicts_run
+              ON sync_conflicts (run_id);
+            ",
+        )
+        .map_err(|error| error.to_string())?;
     connection
         .execute(
             "CREATE INDEX IF NOT EXISTS idx_whitelist_apps_subject ON whitelist_apps (subject_id, enabled)",

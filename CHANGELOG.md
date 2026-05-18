@@ -124,4 +124,54 @@
 ### Android
 - No commits found.
 
+## v0.2.1 - 2026-05-18
+
+### Desktop
+#### Changed
+- Automate release versioning in Windows build (b92232b)
+
+### Android
+#### Changed
+- Refactor navigation and add review stats (49d670e)
+
+## v0.2.2 - 2026-05-18
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.2.3 - 2026-05-18
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.2.4 - 2026-05-18
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.2.5 - 2026-05-18
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.3.0 - 2026-05-18
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
 

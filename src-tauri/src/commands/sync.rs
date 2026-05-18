@@ -7,7 +7,8 @@ use std::{
 use crate::{
     storage::db::open_database,
     sync_package::{
-        export_shared_sync_payload, import_shared_sync_payload, load_or_create_device_id,
+        count_payload_deleted_entities, count_payload_entities, export_shared_sync_payload,
+        import_shared_sync_payload, load_or_create_device_id, merge_remote_payload_into_local,
         merge_shared_sync_payloads, shared_active_study_snapshot, SharedSyncPayload,
     },
 };
@@ -28,6 +29,7 @@ use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use tauri::{AppHandle, Emitter, Manager};
+use uuid::Uuid;
 
 const WEBDAV_URL_KEY: &str = "webdav_url";
 const WEBDAV_USERNAME_KEY: &str = "webdav_username";
@@ -137,11 +139,86 @@ pub struct ObjectStorageAutoSyncResult {
     pub took_over_active_mode: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncRunSummary {
+    pub id: i64,
+    pub sync_id: String,
+    pub backend: String,
+    pub trigger: String,
+    pub direction: Option<String>,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: String,
+    pub duration_ms: i64,
+    pub device_id: Option<String>,
+    pub remote_device_id: Option<String>,
+    pub remote_exported_at: Option<i64>,
+    pub local_exported_at: Option<i64>,
+    pub bytes: i64,
+    pub imported_count: i64,
+    pub exported_count: i64,
+    pub deleted_count: i64,
+    pub conflict_count: i64,
+    pub active_state_changed: bool,
+    pub took_over_active_mode: bool,
+    pub validation_report: Option<String>,
+    pub backup_path: Option<String>,
+    pub remote_backup_key: Option<String>,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncBackupEntry {
+    pub source: String,
+    pub key: String,
+    pub label: String,
+    pub created_at: Option<String>,
+    pub bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncBackupPreview {
+    pub source: String,
+    pub key: String,
+    pub bytes: u64,
+    pub validation_report: String,
+    pub entity_count: i64,
+    pub deleted_count: i64,
+    pub exported_at: Option<i64>,
+    pub device_id: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 struct RemoteFileMetadata {
     exists: bool,
     size: Option<u64>,
     last_modified: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone)]
+struct SyncRunRecord {
+    sync_id: String,
+    backend: String,
+    trigger: String,
+    direction: Option<String>,
+    status: String,
+    started_at: DateTime<Utc>,
+    finished_at: DateTime<Utc>,
+    device_id: Option<String>,
+    remote_device_id: Option<String>,
+    remote_exported_at: Option<i64>,
+    local_exported_at: Option<i64>,
+    bytes: i64,
+    imported_count: i64,
+    exported_count: i64,
+    deleted_count: i64,
+    conflict_count: i64,
+    active_state_changed: bool,
+    took_over_active_mode: bool,
+    validation_report: Option<String>,
+    backup_path: Option<String>,
+    remote_backup_key: Option<String>,
+    error_message: Option<String>,
 }
 
 #[tauri::command]
@@ -516,6 +593,167 @@ pub fn test_object_storage_connection(
 }
 
 #[tauri::command]
+pub fn list_sync_runs(app: AppHandle, limit: Option<i64>) -> Result<Vec<SyncRunSummary>, String> {
+    let connection = open_database(&database_path(&app)?)?;
+    let limit = limit.unwrap_or(10).clamp(1, 100);
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT id, sync_id, backend, trigger, direction, status, started_at, finished_at,
+                   duration_ms, device_id, remote_device_id, remote_exported_at, local_exported_at,
+                   bytes, imported_count, exported_count, deleted_count, conflict_count,
+                   active_state_changed, took_over_active_mode, validation_report, backup_path,
+                   remote_backup_key, error_message
+            FROM sync_runs
+            ORDER BY finished_at DESC, id DESC
+            LIMIT ?1
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([limit], row_to_sync_run_summary)
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn list_sync_backups(app: AppHandle) -> Result<Vec<SyncBackupEntry>, String> {
+    let mut entries = Vec::new();
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    if app_data_dir.exists() {
+        for entry in fs::read_dir(&app_data_dir).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if !name.starts_with("kaoyan-focus.before-") || !name.ends_with(".sqlite3") {
+                continue;
+            }
+            let metadata = entry.metadata().ok();
+            entries.push(SyncBackupEntry {
+                source: "local".to_string(),
+                key: path.to_string_lossy().to_string(),
+                label: name.to_string(),
+                created_at: metadata
+                    .as_ref()
+                    .and_then(|value| value.modified().ok())
+                    .map(DateTime::<Utc>::from)
+                    .map(|value| value.to_rfc3339()),
+                bytes: metadata.map(|value| value.len()),
+            });
+        }
+    }
+
+    if let Ok(settings) = get_object_storage_settings(app.clone()) {
+        if settings.enabled && object_storage_configured(&settings) {
+            let normalized = normalize_object_storage_settings(settings)?;
+            if let Ok(remote) = list_object_storage_backup_entries(&normalized) {
+                entries.extend(remote);
+            }
+        }
+    }
+
+    entries.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+    Ok(entries)
+}
+
+#[tauri::command]
+pub fn preview_sync_backup(
+    app: AppHandle,
+    source: String,
+    key: String,
+) -> Result<SyncBackupPreview, String> {
+    let bytes = load_backup_bytes(&app, &source, &key)?;
+    let validation_report;
+    let entity_count;
+    let deleted_count;
+    let exported_at;
+    let device_id;
+    if source == "local" {
+        let app_data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?;
+        let temp_path = app_data_dir.join("kaoyan-focus.backup-preview.tmp");
+        fs::write(&temp_path, &bytes).map_err(|error| error.to_string())?;
+        validation_report = validate_sqlite_database(&temp_path)
+            .map(|_| "SQLite integrity_check ok".to_string())
+            .unwrap_or_else(|error| error);
+        let _ = fs::remove_file(&temp_path);
+        entity_count = 0;
+        deleted_count = 0;
+        exported_at = None;
+        device_id = None;
+    } else {
+        let payload: SharedSyncPayload = serde_json::from_slice(&bytes)
+            .map_err(|error| format!("解析同步备份失败：{error}"))?;
+        validation_report = validate_sync_payload(&payload, Some(Utc::now().timestamp_millis()));
+        entity_count = count_payload_entities(&payload);
+        deleted_count = count_payload_deleted_entities(&payload);
+        exported_at = Some(payload.exported_at);
+        device_id = Some(payload.device_id);
+    }
+
+    Ok(SyncBackupPreview {
+        source,
+        key,
+        bytes: bytes.len() as u64,
+        validation_report,
+        entity_count,
+        deleted_count,
+        exported_at,
+        device_id,
+    })
+}
+
+#[tauri::command]
+pub fn restore_sync_backup(app: AppHandle, source: String, key: String) -> Result<String, String> {
+    let bytes = load_backup_bytes(&app, &source, &key)?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&app_data_dir).map_err(|error| error.to_string())?;
+    let local_database_path = database_path(&app)?;
+    ensure_no_active_runtime(&local_database_path)?;
+
+    if source == "local" {
+        let temp_path = app_data_dir.join("kaoyan-focus.restore.tmp");
+        fs::write(&temp_path, &bytes).map_err(|error| error.to_string())?;
+        validate_sqlite_database(&temp_path)?;
+        let backup_path = backup_database_path_with_prefix(&app_data_dir, "restore-current");
+        if local_database_path.exists() {
+            fs::copy(&local_database_path, &backup_path)
+                .map_err(|error| format!("创建恢复前备份失败：{error}"))?;
+        }
+        fs::rename(&temp_path, &local_database_path)
+            .or_else(|_| {
+                fs::copy(&temp_path, &local_database_path)?;
+                fs::remove_file(&temp_path)
+            })
+            .map_err(|error| format!("恢复本地数据库失败：{error}"))?;
+        return Ok("已从本地备份恢复数据库。".to_string());
+    }
+
+    let payload: SharedSyncPayload =
+        serde_json::from_slice(&bytes).map_err(|error| format!("解析同步备份失败：{error}"))?;
+    let backup_path = backup_database_path_with_prefix(&app_data_dir, "restore-current");
+    if local_database_path.exists() {
+        fs::copy(&local_database_path, &backup_path)
+            .map_err(|error| format!("创建恢复前备份失败：{error}"))?;
+    }
+    let mut connection = open_database(&local_database_path)?;
+    import_shared_sync_payload(&mut connection, &payload)?;
+    let _ = crate::commands::focus::sync_study_runtime_state(&app);
+    Ok("已从 R2/S3 同步包备份导入共享数据。".to_string())
+}
+
+#[tauri::command]
 pub fn upload_database_to_object_storage(
     app: AppHandle,
     settings: ObjectStorageSettings,
@@ -616,9 +854,158 @@ pub fn download_database_from_object_storage(
 pub async fn auto_sync_object_storage_database(
     app: AppHandle,
 ) -> Result<ObjectStorageAutoSyncResult, String> {
-    tauri::async_runtime::spawn_blocking(move || auto_sync_object_storage_database_blocking(app))
+    tauri::async_runtime::spawn_blocking(move || auto_sync_object_storage_database_pull_only(app))
         .await
         .map_err(|error| format!("对象存储自动同步后台任务失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn sync_object_storage_state_change(
+    app: AppHandle,
+) -> Result<ObjectStorageAutoSyncResult, String> {
+    tauri::async_runtime::spawn_blocking(move || auto_sync_object_storage_database_blocking(app))
+        .await
+        .map_err(|error| format!("对象存储状态同步后台任务失败：{error}"))?
+}
+
+fn auto_sync_object_storage_database_pull_only(
+    app: AppHandle,
+) -> Result<ObjectStorageAutoSyncResult, String> {
+    let started_at = Utc::now();
+    let sync_id = Uuid::new_v4().to_string();
+    let settings = get_object_storage_settings(app.clone())?;
+    if !settings.enabled {
+        let result = skipped_object_storage_auto_sync(
+            "object_storage_disabled",
+            "对象存储同步已关闭，已跳过自动同步。",
+            None,
+        );
+        record_object_sync_result(&app, &sync_id, "periodic_pull", started_at, &result, None, None, None);
+        return Ok(result);
+    }
+
+    if !object_storage_configured(&settings) {
+        let result = skipped_object_storage_auto_sync(
+            "object_storage_not_configured",
+            "未配置对象存储，已跳过自动同步。",
+            None,
+        );
+        record_object_sync_result(&app, &sync_id, "periodic_pull", started_at, &result, None, None, None);
+        return Ok(result);
+    }
+
+    let normalized = normalize_object_storage_settings(settings)?;
+    let object_url = object_storage_url(&normalized);
+    let local_database_path = database_path(&app)?;
+    if !has_active_runtime(&local_database_path)? {
+        return auto_sync_object_storage_database_blocking(app);
+    }
+
+    let remote_bytes = with_s3_runtime(async {
+        let client = object_storage_client(&normalized).await?;
+        match client
+            .get_object()
+            .bucket(&normalized.bucket)
+            .key(&normalized.object_key)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let bytes = response
+                    .body
+                    .collect()
+                    .await
+                    .map_err(|error| format!("读取对象存储同步包失败：{error}"))?
+                    .into_bytes();
+                Ok(Some(bytes.to_vec()))
+            }
+            Err(error) => {
+                let message = error.to_string();
+                if message.contains("NotFound")
+                    || message.contains("404")
+                    || message.contains("NoSuchKey")
+                {
+                    Ok(None)
+                } else {
+                    Err(format!("下载对象存储同步包失败：{error}"))
+                }
+            }
+        }
+    })?;
+
+    let Some(remote_bytes) = remote_bytes else {
+        let result = skipped_object_storage_auto_sync(
+            "remote_missing_pull_only",
+            "运行中只拉取远端状态，远端同步包不存在，本轮未上传。",
+            Some(object_url),
+        );
+        record_object_sync_result(&app, &sync_id, "periodic_pull", started_at, &result, None, None, None);
+        return Ok(result);
+    };
+
+    if remote_bytes.is_empty() {
+        let result = skipped_object_storage_auto_sync(
+            "remote_empty",
+            "对象存储同步包为空，已跳过自动同步。",
+            Some(object_url),
+        );
+        record_object_sync_result(&app, &sync_id, "periodic_pull", started_at, &result, None, None, None);
+        return Ok(result);
+    }
+
+    let remote_payload: SharedSyncPayload = serde_json::from_slice(&remote_bytes)
+        .map_err(|error| format!("解析对象存储同步包失败：{error}"))?;
+    let remote_report = validate_sync_payload(&remote_payload, Some(Utc::now().timestamp_millis()));
+    let mut connection = open_database(&local_database_path)?;
+    let device_id = load_or_create_device_id(&connection)?;
+    let exported_at = Utc::now().timestamp_millis();
+    let local_payload = export_shared_sync_payload(&connection, device_id.clone(), exported_at)?;
+    let local_active_snapshot = shared_active_study_snapshot(&local_payload);
+    let merged_payload =
+        merge_remote_payload_into_local(local_payload, remote_payload, device_id, exported_at);
+    let backup_path = create_local_sync_backup(&app, &local_database_path, "object-storage-pull")?;
+    import_shared_sync_payload(&mut connection, &merged_payload)?;
+    let _ = crate::commands::focus::sync_study_runtime_state(&app);
+
+    let refreshed_payload = export_shared_sync_payload(
+        &connection,
+        load_or_create_device_id(&connection)?,
+        Utc::now().timestamp_millis(),
+    )?;
+    let refreshed_active_snapshot = shared_active_study_snapshot(&refreshed_payload);
+    let active_state_changed = local_active_snapshot != refreshed_active_snapshot;
+    let took_over_active_mode = refreshed_active_snapshot.is_some()
+        && local_active_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.sync_id.as_str())
+            != refreshed_active_snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.sync_id.as_str());
+
+    let result = ObjectStorageAutoSyncResult {
+        status: "synced".to_string(),
+        message: "运行中已拉取远端状态，本轮未上传普通计时数据。".to_string(),
+        direction: Some("download".to_string()),
+        skipped_reason: None,
+        synced_at: Utc::now().to_rfc3339(),
+        object_url: Some(object_url),
+        bytes: remote_bytes.len() as u64,
+        backup_path: backup_path.clone(),
+        active_state_changed,
+        took_over_active_mode,
+    };
+    record_object_sync_result(
+        &app,
+        &sync_id,
+        "periodic_pull",
+        started_at,
+        &result,
+        Some(&refreshed_payload),
+        Some(remote_report),
+        None,
+    );
+    emit_study_sync_state_changed(&app, &result);
+    Ok(result)
 }
 
 pub(crate) fn auto_sync_object_storage_database_blocking(
@@ -699,12 +1086,14 @@ pub(crate) fn auto_sync_object_storage_database_blocking(
     let exported_at = Utc::now().timestamp_millis();
     let local_payload = export_shared_sync_payload(&connection, device_id.clone(), exported_at)?;
     let local_active_snapshot = shared_active_study_snapshot(&local_payload);
+    let remote_report = validate_sync_payload(&remote_payload, Some(Utc::now().timestamp_millis()));
     let merged_payload = merge_shared_sync_payloads(
         local_payload,
         remote_payload,
         device_id.clone(),
         exported_at,
     );
+    let backup_path = create_local_sync_backup(&app, &local_database_path, "object-storage-auto")?;
     import_shared_sync_payload(&mut connection, &merged_payload)?;
     let _ = crate::commands::focus::sync_study_runtime_state(&app);
 
@@ -723,6 +1112,7 @@ pub(crate) fn auto_sync_object_storage_database_blocking(
         serde_json::to_vec(&refreshed_payload).map_err(|error| error.to_string())?;
     let bytes_len = refreshed_bytes.len() as u64;
 
+    let remote_backup_key = backup_remote_object_storage_payload(&normalized, &remote_bytes).ok();
     with_s3_runtime(async {
         let client = object_storage_client(&normalized).await?;
         client
@@ -745,10 +1135,20 @@ pub(crate) fn auto_sync_object_storage_database_blocking(
         synced_at: Utc::now().to_rfc3339(),
         object_url: Some(object_url),
         bytes: bytes_len,
-        backup_path: None,
+        backup_path: backup_path.clone(),
         active_state_changed,
         took_over_active_mode,
     };
+    record_object_sync_result(
+        &app,
+        &Uuid::new_v4().to_string(),
+        "state_change",
+        Utc::now(),
+        &result,
+        Some(&refreshed_payload),
+        Some(remote_report),
+        remote_backup_key,
+    );
     emit_study_sync_state_changed(&app, &result);
     Ok(result)
 }
@@ -1088,6 +1488,273 @@ fn backup_database_path(app_data_dir: &Path) -> PathBuf {
 fn backup_database_path_with_prefix(app_data_dir: &Path, prefix: &str) -> PathBuf {
     let stamp = Utc::now().format("%Y%m%d%H%M%S");
     app_data_dir.join(format!("kaoyan-focus.before-{prefix}-{stamp}.sqlite3"))
+}
+
+fn create_local_sync_backup(
+    app: &AppHandle,
+    local_database_path: &Path,
+    prefix: &str,
+) -> Result<Option<String>, String> {
+    if !local_database_path.exists() {
+        return Ok(None);
+    }
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&app_data_dir).map_err(|error| error.to_string())?;
+    let backup_path = backup_database_path_with_prefix(&app_data_dir, prefix);
+    fs::copy(local_database_path, &backup_path)
+        .map_err(|error| format!("创建本地同步备份失败：{error}"))?;
+    Ok(Some(backup_path.to_string_lossy().to_string()))
+}
+
+fn object_storage_backup_key(settings: &ObjectStorageSettings) -> String {
+    let stamp = Utc::now().format("%Y%m%d-%H%M%S");
+    let file_name = settings
+        .object_key
+        .rsplit('/')
+        .next()
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_OBJECT_KEY);
+    format!("backups/study-sync/{stamp}-{file_name}")
+}
+
+fn backup_remote_object_storage_payload(
+    settings: &ObjectStorageSettings,
+    bytes: &[u8],
+) -> Result<String, String> {
+    if bytes.is_empty() {
+        return Err("远端同步包为空，跳过云端备份。".to_string());
+    }
+    let backup_key = object_storage_backup_key(settings);
+    with_s3_runtime(async {
+        let client = object_storage_client(settings).await?;
+        client
+            .put_object()
+            .bucket(&settings.bucket)
+            .key(&backup_key)
+            .body(ByteStream::from(bytes.to_vec()))
+            .content_type("application/json")
+            .send()
+            .await
+            .map_err(|error| format!("创建 R2/S3 远端备份失败：{error}"))?;
+        Ok(())
+    })?;
+    Ok(backup_key)
+}
+
+fn list_object_storage_backup_entries(
+    settings: &ObjectStorageSettings,
+) -> Result<Vec<SyncBackupEntry>, String> {
+    with_s3_runtime(async {
+        let client = object_storage_client(settings).await?;
+        let output = client
+            .list_objects_v2()
+            .bucket(&settings.bucket)
+            .prefix("backups/study-sync/")
+            .send()
+            .await
+            .map_err(|error| format!("读取 R2/S3 备份列表失败：{error}"))?;
+        let entries = output
+            .contents()
+            .iter()
+            .filter_map(|object| {
+                let key = object.key()?.to_string();
+                Some(SyncBackupEntry {
+                    source: "r2".to_string(),
+                    label: key.rsplit('/').next().unwrap_or(&key).to_string(),
+                    key,
+                    created_at: object.last_modified().and_then(|value| {
+                        DateTime::<Utc>::from_timestamp(value.secs(), value.subsec_nanos())
+                            .map(|date| date.to_rfc3339())
+                    }),
+                    bytes: object.size().and_then(|value| u64::try_from(value).ok()),
+                })
+            })
+            .collect();
+        Ok(entries)
+    })
+}
+
+fn load_backup_bytes(app: &AppHandle, source: &str, key: &str) -> Result<Vec<u8>, String> {
+    if source == "local" {
+        let path = PathBuf::from(key);
+        return fs::read(&path).map_err(|error| format!("读取本地备份失败：{error}"));
+    }
+    let settings = normalize_object_storage_settings(get_object_storage_settings(app.clone())?)?;
+    with_s3_runtime(async {
+        let client = object_storage_client(&settings).await?;
+        let response = client
+            .get_object()
+            .bucket(&settings.bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|error| format!("读取 R2/S3 备份失败：{error}"))?;
+        let bytes = response
+            .body
+            .collect()
+            .await
+            .map_err(|error| format!("读取 R2/S3 备份内容失败：{error}"))?
+            .into_bytes();
+        Ok(bytes.to_vec())
+    })
+}
+
+fn validate_sync_payload(payload: &SharedSyncPayload, local_now: Option<i64>) -> String {
+    let mut warnings = Vec::new();
+    if payload.schema_version <= 0 {
+        warnings.push("schemaVersion 异常".to_string());
+    }
+    if payload.device_id.trim().is_empty() {
+        warnings.push("deviceId 为空".to_string());
+    }
+    let active_count = payload
+        .study_modes
+        .iter()
+        .filter(|item| item.deleted_at.is_none())
+        .filter(|item| {
+            item.status
+                .as_deref()
+                .map(|status| status == "running" || status == "active")
+                .unwrap_or(false)
+        })
+        .count();
+    if active_count > 1 {
+        warnings.push(format!("发现 {active_count} 个运行中学习模式"));
+    }
+    if let Some(now) = local_now {
+        let drift_ms = now.saturating_sub(payload.exported_at).abs();
+        if drift_ms > 120_000 {
+            warnings.push(format!("本机与远端导出时间相差约 {} 秒", drift_ms / 1000));
+        }
+    }
+    let entity_count = count_payload_entities(payload);
+    let deleted_count = count_payload_deleted_entities(payload);
+    if warnings.is_empty() {
+        format!("校验通过：{entity_count} 条实体，{deleted_count} 条删除墓碑。")
+    } else {
+        format!(
+            "校验完成：{entity_count} 条实体，{deleted_count} 条删除墓碑；警告：{}。",
+            warnings.join("；")
+        )
+    }
+}
+
+fn record_object_sync_result(
+    app: &AppHandle,
+    sync_id: &str,
+    trigger: &str,
+    started_at: DateTime<Utc>,
+    result: &ObjectStorageAutoSyncResult,
+    payload: Option<&SharedSyncPayload>,
+    validation_report: Option<String>,
+    remote_backup_key: Option<String>,
+) {
+    let finished_at = Utc::now();
+    let Ok(path) = database_path(app) else {
+        return;
+    };
+    let Ok(connection) = open_database(&path) else {
+        return;
+    };
+    let record = SyncRunRecord {
+        sync_id: sync_id.to_string(),
+        backend: "object_storage".to_string(),
+        trigger: trigger.to_string(),
+        direction: result.direction.clone(),
+        status: result.status.clone(),
+        started_at,
+        finished_at,
+        device_id: payload.map(|value| value.device_id.clone()),
+        remote_device_id: None,
+        remote_exported_at: None,
+        local_exported_at: payload.map(|value| value.exported_at),
+        bytes: result.bytes as i64,
+        imported_count: payload.map(count_payload_entities).unwrap_or(0),
+        exported_count: payload.map(count_payload_entities).unwrap_or(0),
+        deleted_count: payload.map(count_payload_deleted_entities).unwrap_or(0),
+        conflict_count: 0,
+        active_state_changed: result.active_state_changed,
+        took_over_active_mode: result.took_over_active_mode,
+        validation_report,
+        backup_path: result.backup_path.clone(),
+        remote_backup_key,
+        error_message: result.skipped_reason.clone(),
+    };
+    let _ = insert_sync_run(&connection, &record);
+}
+
+fn insert_sync_run(connection: &Connection, record: &SyncRunRecord) -> Result<i64, String> {
+    connection
+        .execute(
+            "
+            INSERT INTO sync_runs (
+              sync_id, backend, trigger, direction, status, started_at, finished_at, duration_ms,
+              device_id, remote_device_id, remote_exported_at, local_exported_at, bytes,
+              imported_count, exported_count, deleted_count, conflict_count,
+              active_state_changed, took_over_active_mode, validation_report, backup_path,
+              remote_backup_key, error_message
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+            ",
+            rusqlite::params![
+                record.sync_id,
+                record.backend,
+                record.trigger,
+                record.direction,
+                record.status,
+                record.started_at.to_rfc3339(),
+                record.finished_at.to_rfc3339(),
+                (record.finished_at - record.started_at).num_milliseconds(),
+                record.device_id,
+                record.remote_device_id,
+                record.remote_exported_at,
+                record.local_exported_at,
+                record.bytes,
+                record.imported_count,
+                record.exported_count,
+                record.deleted_count,
+                record.conflict_count,
+                if record.active_state_changed { 1 } else { 0 },
+                if record.took_over_active_mode { 1 } else { 0 },
+                record.validation_report,
+                record.backup_path,
+                record.remote_backup_key,
+                record.error_message,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(connection.last_insert_rowid())
+}
+
+fn row_to_sync_run_summary(row: &rusqlite::Row<'_>) -> rusqlite::Result<SyncRunSummary> {
+    Ok(SyncRunSummary {
+        id: row.get(0)?,
+        sync_id: row.get(1)?,
+        backend: row.get(2)?,
+        trigger: row.get(3)?,
+        direction: row.get(4)?,
+        status: row.get(5)?,
+        started_at: row.get(6)?,
+        finished_at: row.get(7)?,
+        duration_ms: row.get(8)?,
+        device_id: row.get(9)?,
+        remote_device_id: row.get(10)?,
+        remote_exported_at: row.get(11)?,
+        local_exported_at: row.get(12)?,
+        bytes: row.get(13)?,
+        imported_count: row.get(14)?,
+        exported_count: row.get(15)?,
+        deleted_count: row.get(16)?,
+        conflict_count: row.get(17)?,
+        active_state_changed: row.get::<_, i64>(18)? != 0,
+        took_over_active_mode: row.get::<_, i64>(19)? != 0,
+        validation_report: row.get(20)?,
+        backup_path: row.get(21)?,
+        remote_backup_key: row.get(22)?,
+        error_message: row.get(23)?,
+    })
 }
 
 fn get_setting(connection: &Connection, key: &str, fallback: &str) -> Result<String, String> {

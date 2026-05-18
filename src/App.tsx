@@ -138,7 +138,7 @@ export default function App() {
       try {
         const [state, settings] = await Promise.all([getStudyModeState(), getAppSettings()]);
         const active = state.status === 'active' && ['focus', 'awaiting_break', 'break'].includes(state.phase);
-        return active || settings.sync_backend === 'object_storage' ? ACTIVE_AUTO_SYNC_INTERVAL_MS : AUTO_SYNC_INTERVAL_MS;
+        return active ? ACTIVE_AUTO_SYNC_INTERVAL_MS : AUTO_SYNC_INTERVAL_MS;
       } catch {
         return AUTO_SYNC_INTERVAL_MS;
       }

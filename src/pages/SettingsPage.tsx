@@ -8,6 +8,7 @@ import {
   HardDrive,
   MonitorDot,
   RefreshCw,
+  RotateCcw,
   Save,
   Settings2,
   ShieldCheck,
@@ -28,13 +29,17 @@ import {
   testObjectStorageConnection,
   testWebDavConnection,
   downloadDatabaseFromObjectStorage,
+  listSyncBackups,
+  listSyncRuns,
+  previewSyncBackup,
+  restoreSyncBackup,
   uploadDatabaseToWebDav,
   uploadDatabaseToObjectStorage,
 } from '../services/settingsApi';
 import { checkForAppUpdate, installAppUpdate, type AppUpdate } from '../services/updateApi';
 import type { StudyModeState } from '../types/focus';
 import type { ForegroundApp } from '../types/monitor';
-import type { AppSettings, AppTheme, ObjectStorageSettings, SyncBackend, WebDavSettings } from '../types/settings';
+import type { AppSettings, AppTheme, ObjectStorageSettings, SyncBackupEntry, SyncBackend, SyncRunSummary, WebDavSettings } from '../types/settings';
 
 const defaultSettings: AppSettings = {
   default_study_minutes: 120,
@@ -84,6 +89,9 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [webDavMessage, setWebDavMessage] = useState<string | null>(null);
   const [objectStorageMessage, setObjectStorageMessage] = useState<string | null>(null);
+  const [syncRuns, setSyncRuns] = useState<SyncRunSummary[]>([]);
+  const [syncBackups, setSyncBackups] = useState<SyncBackupEntry[]>([]);
+  const [syncDetailMessage, setSyncDetailMessage] = useState<string | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<AppUpdate | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [updateProgress, setUpdateProgress] = useState<number | null>(null);
@@ -123,6 +131,7 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
       refreshDataLocation(),
       refreshWebDavSettings(),
       refreshObjectStorageSettings(),
+      refreshSyncDetails(),
     ]);
   }
 
@@ -169,6 +178,16 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
       setDataLocation(location.database_path);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function refreshSyncDetails() {
+    try {
+      const [runs, backups] = await Promise.all([listSyncRuns(6), listSyncBackups()]);
+      setSyncRuns(runs);
+      setSyncBackups(backups);
+    } catch {
+      // Sync detail is observational; keep settings usable if a backup provider is offline.
     }
   }
 
@@ -250,6 +269,24 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
       return result.backup_path
         ? `${result.message} 备份路径：${result.backup_path}`
         : result.message;
+    });
+    await initializeSettingsPage();
+  }
+
+  async function handlePreviewBackup(entry: SyncBackupEntry) {
+    await runObjectStorageAction(async () => {
+      const preview = await previewSyncBackup(entry.source, entry.key);
+      setSyncDetailMessage(`${entry.label}：${preview.validation_report}`);
+      return '备份预检完成。';
+    });
+  }
+
+  async function handleRestoreBackup(entry: SyncBackupEntry) {
+    if (!window.confirm(`确认恢复备份「${entry.label}」吗？恢复前会先备份当前本地数据。`)) return;
+    await runObjectStorageAction(async () => {
+      const message = await restoreSyncBackup(entry.source, entry.key);
+      await refreshSyncDetails();
+      return message;
     });
     await initializeSettingsPage();
   }
@@ -498,6 +535,59 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
             <button className="secondary-action" disabled={webDavActionDisabled} onClick={() => void handleTestWebDav()} type="button"><Cloud size={17} />测试连接</button>
             <button className="primary-action" disabled={webDavActionDisabled} onClick={() => void handleUploadWebDav()} type="button"><UploadCloud size={17} />上传本机数据</button>
             <button className="secondary-action" disabled={webDavActionDisabled} onClick={() => void handleDownloadWebDav()} type="button"><Download size={17} />从云端恢复</button>
+          </div>
+        </section>
+
+        <section className="command-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Sync Journal</p>
+              <h3>最近同步详情</h3>
+            </div>
+            <Activity size={20} />
+          </div>
+          {syncDetailMessage && <p className="alert neutral">{syncDetailMessage}</p>}
+          <div className="settings-list">
+            {syncRuns.length === 0 ? (
+              <p className="panel-copy">暂无同步日志。完成一次对象存储同步后会显示校验、备份和接管信息。</p>
+            ) : syncRuns.map((run) => (
+              <div className="details-card stacked" key={run.id}>
+                <Detail label={`${run.trigger} · ${run.status}`} value={run.finished_at} />
+                <Detail label="方向 / 耗时" value={`${run.direction ?? 'skip'} · ${run.duration_ms}ms`} />
+                <Detail label="实体 / 删除 / 字节" value={`${run.exported_count} / ${run.deleted_count} / ${formatBytes(run.bytes)}`} />
+                {run.validation_report && <Detail label="校验" value={run.validation_report} />}
+                {run.backup_path && <Detail label="本地备份" value={run.backup_path} />}
+                {run.remote_backup_key && <Detail label="云端备份" value={run.remote_backup_key} />}
+              </div>
+            ))}
+          </div>
+          <div className="row-actions">
+            <button className="secondary-action" disabled={objectStorageBusy} onClick={() => void refreshSyncDetails()} type="button"><RefreshCw size={17} />刷新详情</button>
+          </div>
+        </section>
+
+        <section className="command-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Restore</p>
+              <h3>备份恢复</h3>
+            </div>
+            <RotateCcw size={20} />
+          </div>
+          <p className="panel-copy">恢复前先点预检查看校验结果；真正恢复会自动备份当前本地数据库。</p>
+          <div className="settings-list">
+            {syncBackups.length === 0 ? (
+              <p className="panel-copy">暂无可用备份。</p>
+            ) : syncBackups.slice(0, 8).map((entry) => (
+              <div className="details-card stacked" key={`${entry.source}:${entry.key}`}>
+                <Detail label={`${entry.source.toUpperCase()} · ${entry.label}`} value={entry.created_at ?? '未知时间'} />
+                <Detail label="大小" value={entry.bytes === null ? '未知' : formatBytes(entry.bytes)} />
+                <div className="row-actions">
+                  <button className="secondary-action" disabled={objectStorageBusy || settingsLocked} onClick={() => void handlePreviewBackup(entry)} type="button">预检</button>
+                  <button className="secondary-action" disabled={objectStorageBusy || settingsLocked} onClick={() => void handleRestoreBackup(entry)} type="button">恢复</button>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
