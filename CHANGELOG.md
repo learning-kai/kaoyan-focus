@@ -312,4 +312,70 @@
 ### Android
 - No commits found.
 
+## v0.7.3 - 2026-05-20
+
+### Desktop
+#### Changed
+- Implement R2 shared data sync (ac95b9e)
+
+### Android
+#### Changed
+- Implement R2 polling sync (a961234)
+
+## v0.7.4 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.7.5 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.7.6 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.7.7 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.7.8 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.7.9 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.7.10 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
 

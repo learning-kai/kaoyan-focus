@@ -140,8 +140,8 @@ pub fn save_daily_review(app: AppHandle, draft: DailyReviewDraft) -> Result<Dail
         )
         .map_err(|error| error.to_string())?;
 
-    let review = get_daily_review(&connection, &review_date)?
-        .ok_or_else(|| "复盘保存失败。".to_string())?;
+    let review =
+        get_daily_review(&connection, &review_date)?.ok_or_else(|| "复盘保存失败。".to_string())?;
     ensure_sync_meta_for_local_id(
         &connection,
         ENTITY_DAILY_REVIEW,
@@ -306,7 +306,9 @@ fn get_daily_summary(
             "
             SELECT COALESCE(SUM(actual_seconds), 0)
             FROM focus_sessions
-            WHERE status = 'finished' AND actual_seconds >= ?2 AND started_at LIKE ?1 || '%'
+            WHERE status = 'finished'
+              AND actual_seconds >= ?2
+              AND date(started_at, '+8 hours') = ?1
             ",
             params![review_date, MIN_RECORDED_FOCUS_SECONDS],
             |row| row.get(0),
@@ -317,7 +319,9 @@ fn get_daily_summary(
             "
             SELECT COUNT(*)
             FROM focus_sessions
-            WHERE status = 'finished' AND actual_seconds >= ?2 AND started_at LIKE ?1 || '%'
+            WHERE status = 'finished'
+              AND actual_seconds >= ?2
+              AND date(started_at, '+8 hours') = ?1
             ",
             params![review_date, MIN_RECORDED_FOCUS_SECONDS],
             |row| row.get(0),
@@ -328,7 +332,7 @@ fn get_daily_summary(
             "
             SELECT COALESCE(SUM(interruption_count), 0)
             FROM focus_sessions
-            WHERE started_at LIKE ?1 || '%'
+            WHERE date(started_at, '+8 hours') = ?1
             ",
             params![review_date],
             |row| row.get(0),
@@ -399,8 +403,8 @@ fn get_weekly_summary(
             FROM focus_sessions
             WHERE status = 'finished'
               AND actual_seconds >= ?3
-              AND started_at >= ?1
-              AND started_at < ?2
+              AND date(started_at, '+8 hours') >= ?1
+              AND date(started_at, '+8 hours') < ?2
             ",
             params![week_start_date, next_day, MIN_RECORDED_FOCUS_SECONDS],
             |row| row.get(0),
@@ -413,8 +417,8 @@ fn get_weekly_summary(
             FROM focus_sessions
             WHERE status = 'finished'
               AND actual_seconds >= ?3
-              AND started_at >= ?1
-              AND started_at < ?2
+              AND date(started_at, '+8 hours') >= ?1
+              AND date(started_at, '+8 hours') < ?2
             ",
             params![week_start_date, next_day, MIN_RECORDED_FOCUS_SECONDS],
             |row| row.get(0),
@@ -425,7 +429,8 @@ fn get_weekly_summary(
             "
             SELECT COALESCE(SUM(interruption_count), 0)
             FROM focus_sessions
-            WHERE started_at >= ?1 AND started_at < ?2
+            WHERE date(started_at, '+8 hours') >= ?1
+              AND date(started_at, '+8 hours') < ?2
             ",
             params![week_start_date, next_day],
             |row| row.get(0),

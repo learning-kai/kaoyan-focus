@@ -134,10 +134,11 @@ struct TaskRecord {
 }
 
 fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
-    let app = app.clone();
+    let sync_app = app.clone();
     thread::spawn(move || {
-        let _ = crate::commands::sync::sync_object_storage_after_external_change(app, trigger);
+        let _ = crate::commands::sync::sync_object_storage_after_external_change(sync_app, trigger);
     });
+    crate::commands::feishu::sync_feishu_bridge_after_local_change(app.clone(), trigger);
 }
 
 #[tauri::command]
@@ -379,7 +380,10 @@ pub fn add_task_to_today_plan(app: AppHandle, task_id: i64) -> Result<TodayPlanI
         &connection,
         "today_plan_item",
         item.id,
-        Some(format!("today_plan:{}:source-task:{}", item.today_date, task.id)),
+        Some(format!(
+            "today_plan:{}:source-task:{}",
+            item.today_date, task.id
+        )),
         Utc::now().timestamp_millis(),
     )?;
     trigger_shared_sync(&app, "today_plan_change");

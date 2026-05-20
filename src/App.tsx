@@ -13,6 +13,7 @@ import { notifyStudyReminder } from './services/alertApi';
 import { getStudyModeState } from './services/focusApi';
 import { getSchedulePageData } from './services/scheduleApi';
 import {
+  FEISHU_SYNC_REFRESH_EVENT,
   STUDY_SYNC_STATE_CHANGED_EVENT,
   autoSyncConfiguredDatabase,
   checkDueTaskEmailReminders,
@@ -28,6 +29,7 @@ import type { AppTheme } from './types/settings';
 const AUTO_SYNC_STARTUP_DELAY_MS = 5000;
 const AUTO_SYNC_INTERVAL_MS = 3 * 60 * 1000;
 const ACTIVE_AUTO_SYNC_INTERVAL_MS = 30 * 1000;
+const FEISHU_AUTO_SYNC_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_LOOKBACK_MINUTES = 1;
 const EMAIL_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
@@ -117,6 +119,29 @@ export default function App() {
     let syncInFlight = false;
     let feishuSyncInFlight = false;
     let lastAutoSyncAt = 0;
+    let lastFeishuAutoSyncAt = 0;
+
+    async function runFeishuSync(trigger = 'auto') {
+      if (feishuSyncInFlight) {
+        return;
+      }
+
+      lastFeishuAutoSyncAt = Date.now();
+      feishuSyncInFlight = true;
+      await syncFeishuBridge(trigger)
+        .then((result) => {
+          if (result.status === 'synced' && (result.pulled_count > 0 || result.deleted_count > 0)) {
+            window.dispatchEvent(new CustomEvent(FEISHU_SYNC_REFRESH_EVENT, { detail: result }));
+            void syncConfiguredStateChange('feishu_bridge_in').catch(() => undefined);
+          }
+        })
+        .catch(() => {
+          // Feishu bridge status is visible in Settings; automatic checks stay quiet.
+        })
+        .finally(() => {
+          feishuSyncInFlight = false;
+        });
+    }
 
     async function runAutoSync() {
       if (syncInFlight) {
@@ -144,26 +169,12 @@ export default function App() {
           syncInFlight = false;
         });
 
-      if (!feishuSyncInFlight) {
-        feishuSyncInFlight = true;
-        void syncFeishuBridge('auto')
-          .then((result) => {
-            if (result.status === 'synced' && (result.pulled_count > 0 || result.deleted_count > 0)) {
-              void syncConfiguredStateChange('feishu_bridge_in').catch(() => undefined);
-            }
-          })
-          .catch(() => {
-            // Feishu bridge status is visible in Settings; automatic checks stay quiet.
-          })
-          .finally(() => {
-            feishuSyncInFlight = false;
-          });
-      }
+      void runFeishuSync('auto');
     }
 
     async function getRequiredInterval() {
       try {
-        const [state, settings] = await Promise.all([getStudyModeState(), getAppSettings()]);
+        const state = await getStudyModeState();
         const active = state.status === 'active' && ['focus', 'awaiting_break', 'break'].includes(state.phase);
         return active ? ACTIVE_AUTO_SYNC_INTERVAL_MS : AUTO_SYNC_INTERVAL_MS;
       } catch {
@@ -180,6 +191,9 @@ export default function App() {
         const requiredInterval = await getRequiredInterval();
         if (Date.now() - lastAutoSyncAt >= requiredInterval) {
           await runAutoSync();
+        }
+        if (Date.now() - lastFeishuAutoSyncAt >= FEISHU_AUTO_SYNC_INTERVAL_MS) {
+          await runFeishuSync('auto_poll');
         }
       })();
     }, ACTIVE_AUTO_SYNC_INTERVAL_MS);

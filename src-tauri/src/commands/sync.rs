@@ -22,6 +22,7 @@ use aws_config::BehaviorVersion;
 use aws_credential_types::Credentials;
 use aws_sdk_s3::{
     config::{timeout::TimeoutConfig, Builder as S3ConfigBuilder, Region},
+    error::{ProvideErrorMetadata, SdkError},
     primitives::ByteStream,
     Client as S3Client,
 };
@@ -400,11 +401,15 @@ pub fn test_webdav_connection(
             remote_exists: false,
             remote_size: None,
             last_modified: None,
-            message: "WebDAV connection succeeded; remote sync file does not exist yet.".to_string(),
+            message: "WebDAV connection succeeded; remote sync file does not exist yet."
+                .to_string(),
         });
     }
 
-    Err(format!("WebDAV connection failed with status: {}", status.as_u16()))
+    Err(format!(
+        "WebDAV connection failed with status: {}",
+        status.as_u16()
+    ))
 }
 
 #[tauri::command]
@@ -414,7 +419,8 @@ pub fn upload_database_to_webdav(
 ) -> Result<WebDavSyncResult, String> {
     let normalized = save_webdav_settings(app.clone(), settings)?;
     let database_path = database_path(&app)?;
-    let bytes = fs::read(&database_path).map_err(|error| format!("Read local database failed: {error}"))?;
+    let bytes =
+        fs::read(&database_path).map_err(|error| format!("Read local database failed: {error}"))?;
 
     if bytes.is_empty() {
         return Err("Local database is empty; cannot upload.".to_string());
@@ -489,7 +495,8 @@ pub fn download_database_from_webdav(
         .map_err(|error| error.to_string())?;
     fs::create_dir_all(&app_data_dir).map_err(|error| error.to_string())?;
     let temp_path = app_data_dir.join("kaoyan-focus.webdav-download.tmp");
-    fs::write(&temp_path, &bytes).map_err(|error| format!("Write temporary file failed: {error}"))?;
+    fs::write(&temp_path, &bytes)
+        .map_err(|error| format!("Write temporary file failed: {error}"))?;
     validate_sqlite_database(&temp_path)?;
 
     let backup_path = create_local_sync_backup(&app, &local_database_path, "webdav")?;
@@ -798,8 +805,8 @@ pub fn preview_sync_backup(
         exported_at = None;
         device_id = None;
     } else {
-        let payload: SharedSyncPayload =
-            serde_json::from_slice(&bytes).map_err(|error| format!("Parse sync backup failed: {error}"))?;
+        let payload: SharedSyncPayload = serde_json::from_slice(&bytes)
+            .map_err(|error| format!("Parse sync backup failed: {error}"))?;
         validation_report = validate_sync_payload(&payload, Some(Utc::now().timestamp_millis()));
         entity_count = count_payload_entities(&payload);
         deleted_count = count_payload_deleted_entities(&payload);
@@ -844,8 +851,8 @@ pub fn restore_sync_backup(app: AppHandle, source: String, key: String) -> Resul
         return Ok("Restored the database from local backup.".to_string());
     }
 
-    let payload: SharedSyncPayload =
-        serde_json::from_slice(&bytes).map_err(|error| format!("Parse sync backup failed: {error}"))?;
+    let payload: SharedSyncPayload = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("Parse sync backup failed: {error}"))?;
     let _ = create_local_sync_backup(&app, &local_database_path, "restore-current")?;
     let mut connection = open_database(&local_database_path)?;
     import_shared_sync_payload(&mut connection, &payload)?;
@@ -863,9 +870,13 @@ pub fn upload_database_to_object_storage(
     Ok(ObjectStorageSyncResult {
         success: auto.status == "synced",
         message: auto.message,
-        object_url: auto
-            .object_url
-            .unwrap_or_else(|| format!("{}/{}", normalized.endpoint.trim_end_matches('/'), r2_v3_prefix(&normalized))),
+        object_url: auto.object_url.unwrap_or_else(|| {
+            format!(
+                "{}/{}",
+                normalized.endpoint.trim_end_matches('/'),
+                r2_v3_prefix(&normalized)
+            )
+        }),
         bytes: auto.bytes,
         backup_path: auto.backup_path,
     })
@@ -880,9 +891,13 @@ pub fn download_database_from_object_storage(
     Ok(ObjectStorageSyncResult {
         success: auto.status == "synced",
         message: auto.message,
-        object_url: auto
-            .object_url
-            .unwrap_or_else(|| format!("{}/{}", normalized.endpoint.trim_end_matches('/'), r2_v3_prefix(&normalized))),
+        object_url: auto.object_url.unwrap_or_else(|| {
+            format!(
+                "{}/{}",
+                normalized.endpoint.trim_end_matches('/'),
+                r2_v3_prefix(&normalized)
+            )
+        }),
         bytes: auto.bytes,
         backup_path: auto.backup_path,
     })
@@ -894,8 +909,8 @@ pub async fn auto_sync_object_storage_database(
     tauri::async_runtime::spawn_blocking(move || {
         with_object_storage_sync_lock(|| auto_sync_object_storage_database_pull_only(app))
     })
-        .await
-        .map_err(|error| format!("object storage auto sync background task failed: {error}"))?
+    .await
+    .map_err(|error| format!("object storage auto sync background task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -905,10 +920,12 @@ pub async fn sync_object_storage_state_change(
 ) -> Result<ObjectStorageAutoSyncResult, String> {
     let trigger = trigger.unwrap_or_else(|| "state_change".to_string());
     tauri::async_runtime::spawn_blocking(move || {
-        with_object_storage_sync_lock(|| auto_sync_object_storage_database_blocking_with_trigger(app, &trigger))
+        with_object_storage_sync_lock(|| {
+            auto_sync_object_storage_database_blocking_with_trigger(app, &trigger)
+        })
     })
-        .await
-        .map_err(|error| format!("object storage state sync background task failed: {error}"))?
+    .await
+    .map_err(|error| format!("object storage state sync background task failed: {error}"))?
 }
 
 fn sync_r2_v3_object_storage(
@@ -924,32 +941,67 @@ fn sync_r2_v3_object_storage(
     );
     let settings = get_object_storage_settings(app.clone())?;
     if !settings.enabled {
-        let result = skipped_object_storage_auto_sync("object_storage_disabled", "object storage sync disabled", None);
-        record_object_sync_result(&app, &sync_id, trigger, started_at, &result, None, None, None, None, None);
-        eprintln!("R2 v3 sync finish id={} status={} reason={:?}", sync_id, result.status, result.skipped_reason);
+        let result = skipped_object_storage_auto_sync(
+            "object_storage_disabled",
+            "object storage sync disabled",
+            None,
+        );
+        record_object_sync_result(
+            &app, &sync_id, trigger, started_at, &result, None, None, None, None, None,
+        );
+        eprintln!(
+            "R2 v3 sync finish id={} status={} reason={:?}",
+            sync_id, result.status, result.skipped_reason
+        );
         return Ok(result);
     }
     if !object_storage_configured(&settings) {
-        let result = skipped_object_storage_auto_sync("object_storage_not_configured", "object storage not configured", None);
-        record_object_sync_result(&app, &sync_id, trigger, started_at, &result, None, None, None, None, None);
-        eprintln!("R2 v3 sync finish id={} status={} reason={:?}", sync_id, result.status, result.skipped_reason);
+        let result = skipped_object_storage_auto_sync(
+            "object_storage_not_configured",
+            "object storage not configured",
+            None,
+        );
+        record_object_sync_result(
+            &app, &sync_id, trigger, started_at, &result, None, None, None, None, None,
+        );
+        eprintln!(
+            "R2 v3 sync finish id={} status={} reason={:?}",
+            sync_id, result.status, result.skipped_reason
+        );
         return Ok(result);
     }
 
     let normalized = normalize_object_storage_settings(settings)?;
-    let object_url = format!("{}/{}", normalized.endpoint.trim_end_matches('/'), r2_v3_prefix(&normalized));
+    let object_url = format!(
+        "{}/{}",
+        normalized.endpoint.trim_end_matches('/'),
+        r2_v3_prefix(&normalized)
+    );
     let local_database_path = database_path(&app)?;
 
     for attempt in 0..3 {
-        eprintln!("R2 v3 sync stage id={} attempt={} open_db", sync_id, attempt + 1);
+        eprintln!(
+            "R2 v3 sync stage id={} attempt={} open_db",
+            sync_id,
+            attempt + 1
+        );
         let mut connection = open_database(&local_database_path)?;
         let device_id = load_or_create_device_id(&connection)?;
-        eprintln!("R2 v3 sync stage id={} attempt={} load_versions", sync_id, attempt + 1);
+        eprintln!(
+            "R2 v3 sync stage id={} attempt={} load_versions",
+            sync_id,
+            attempt + 1
+        );
         let local_entity_versions = load_local_entity_versions(&connection)?;
         let applied_operation_ids = load_applied_operation_ids(&connection)?;
         let exported_at = Utc::now().timestamp_millis();
-        eprintln!("R2 v3 sync stage id={} attempt={} export_payload", sync_id, attempt + 1);
-        let local_payload = export_shared_sync_payload(&connection, device_id.clone(), exported_at)?;
+        eprintln!(
+            "R2 v3 sync stage id={} attempt={} export_payload",
+            sync_id,
+            attempt + 1
+        );
+        let local_payload =
+            export_shared_sync_payload(&connection, device_id.clone(), exported_at)?;
         let local_active_snapshot = shared_active_study_snapshot(&local_payload);
         let local_pending_operations = if pull_only {
             Vec::new()
@@ -964,24 +1016,51 @@ fn sync_r2_v3_object_storage(
         );
 
         let remote_state = with_s3_runtime(async {
-            eprintln!("R2 v3 sync stage id={} attempt={} create_client", sync_id, attempt + 1);
+            eprintln!(
+                "R2 v3 sync stage id={} attempt={} create_client",
+                sync_id,
+                attempt + 1
+            );
             let client = object_storage_client(&normalized).await?;
             if !pull_only {
                 if let Some(active_snapshot) = local_active_snapshot.as_ref() {
-                    eprintln!("R2 v3 sync stage id={} attempt={} acquire_active_lock", sync_id, attempt + 1);
-                    if !try_acquire_r2_v3_active_lock(&client, &normalized, &device_id, active_snapshot).await? {
+                    eprintln!(
+                        "R2 v3 sync stage id={} attempt={} acquire_active_lock",
+                        sync_id,
+                        attempt + 1
+                    );
+                    if !try_acquire_r2_v3_active_lock(
+                        &client,
+                        &normalized,
+                        &device_id,
+                        active_snapshot,
+                    )
+                    .await?
+                    {
                         return Err("r2_active_lock_conflict".to_string());
                     }
                 } else {
-                    eprintln!("R2 v3 sync stage id={} attempt={} release_active_lock", sync_id, attempt + 1);
+                    eprintln!(
+                        "R2 v3 sync stage id={} attempt={} release_active_lock",
+                        sync_id,
+                        attempt + 1
+                    );
                     release_r2_v3_active_lock_if_owned(&client, &normalized, &device_id).await?;
                 }
             }
             if !pull_only {
-                eprintln!("R2 v3 sync stage id={} attempt={} upload_pending_ops", sync_id, attempt + 1);
+                eprintln!(
+                    "R2 v3 sync stage id={} attempt={} upload_pending_ops",
+                    sync_id,
+                    attempt + 1
+                );
                 upload_payload_operations(&client, &normalized, &local_pending_operations).await?;
             }
-            eprintln!("R2 v3 sync stage id={} attempt={} load_remote_state", sync_id, attempt + 1);
+            eprintln!(
+                "R2 v3 sync stage id={} attempt={} load_remote_state",
+                sync_id,
+                attempt + 1
+            );
             load_r2_v3_remote_state(
                 &client,
                 &normalized,
@@ -1031,23 +1110,48 @@ fn sync_r2_v3_object_storage(
             remote_state.migrated_legacy
         );
         let merged_payload = if pull_only {
-            merge_remote_payload_into_local(local_payload, remote_state.payload.clone(), device_id.clone(), exported_at)
+            merge_remote_payload_into_local(
+                local_payload,
+                remote_state.payload.clone(),
+                device_id.clone(),
+                exported_at,
+            )
         } else {
-            merge_shared_sync_payloads(local_payload, remote_state.payload.clone(), device_id.clone(), exported_at)
+            merge_shared_sync_payloads(
+                local_payload,
+                remote_state.payload.clone(),
+                device_id.clone(),
+                exported_at,
+            )
         };
 
         let backup_path = create_local_sync_backup(
             &app,
             &local_database_path,
-            if pull_only { "r2-v3-pull" } else { "r2-v3-auto" },
+            if pull_only {
+                "r2-v3-pull"
+            } else {
+                "r2-v3-auto"
+            },
         )?;
-        eprintln!("R2 v3 sync stage id={} attempt={} import_payload", sync_id, attempt + 1);
+        eprintln!(
+            "R2 v3 sync stage id={} attempt={} import_payload",
+            sync_id,
+            attempt + 1
+        );
         import_shared_sync_payload(&mut connection, &merged_payload)?;
         let _ = crate::commands::focus::sync_study_runtime_state(&app);
 
-        eprintln!("R2 v3 sync stage id={} attempt={} refresh_payload", sync_id, attempt + 1);
-        let refreshed_payload =
-            export_shared_sync_payload(&connection, device_id.clone(), Utc::now().timestamp_millis())?;
+        eprintln!(
+            "R2 v3 sync stage id={} attempt={} refresh_payload",
+            sync_id,
+            attempt + 1
+        );
+        let refreshed_payload = export_shared_sync_payload(
+            &connection,
+            device_id.clone(),
+            Utc::now().timestamp_millis(),
+        )?;
         let refreshed_active_snapshot = shared_active_study_snapshot(&refreshed_payload);
         let active_state_changed = local_active_snapshot != refreshed_active_snapshot;
         let took_over_active_mode = refreshed_active_snapshot.is_some()
@@ -1086,18 +1190,29 @@ fn sync_r2_v3_object_storage(
                 None,
             );
             emit_study_sync_state_changed(&app, &result);
-            eprintln!("R2 v3 sync finish id={} status={} pull_only=true", sync_id, result.status);
+            eprintln!(
+                "R2 v3 sync finish id={} status={} pull_only=true",
+                sync_id, result.status
+            );
             return Ok(result);
         }
 
         let write_success = with_s3_runtime(async {
-            eprintln!("R2 v3 sync stage id={} attempt={} write_create_client", sync_id, attempt + 1);
+            eprintln!(
+                "R2 v3 sync stage id={} attempt={} write_create_client",
+                sync_id,
+                attempt + 1
+            );
             let client = object_storage_client(&normalized).await?;
             let version_seed = apply_operations_to_version_map(
-                apply_operations_to_version_map(local_entity_versions.clone(), &remote_state.applied_operations),
+                apply_operations_to_version_map(
+                    payload_entity_version_map(&remote_state.payload, &device_id)?,
+                    &remote_state.applied_operations,
+                ),
                 &local_pending_operations,
             );
-            let refreshed_ops = payload_entity_operations(&refreshed_payload, &device_id, &version_seed)?;
+            let refreshed_ops =
+                payload_entity_operations(&refreshed_payload, &device_id, &version_seed)?;
             eprintln!(
                 "R2 v3 sync stage id={} attempt={} upload_refreshed_ops={}",
                 sync_id,
@@ -1125,7 +1240,11 @@ fn sync_r2_v3_object_storage(
                     .and_then(|manifest| manifest.current_snapshot_key.as_ref())
                     .is_none();
             let success = if should_compact {
-                eprintln!("R2 v3 sync stage id={} attempt={} write_snapshot_manifest", sync_id, attempt + 1);
+                eprintln!(
+                    "R2 v3 sync stage id={} attempt={} write_snapshot_manifest",
+                    sync_id,
+                    attempt + 1
+                );
                 write_r2_v3_snapshot_and_manifest(
                     &client,
                     &normalized,
@@ -1136,7 +1255,11 @@ fn sync_r2_v3_object_storage(
                 )
                 .await?
             } else {
-                eprintln!("R2 v3 sync stage id={} attempt={} write_manifest", sync_id, attempt + 1);
+                eprintln!(
+                    "R2 v3 sync stage id={} attempt={} write_manifest",
+                    sync_id,
+                    attempt + 1
+                );
                 write_r2_v3_manifest(
                     &client,
                     &normalized,
@@ -1149,10 +1272,7 @@ fn sync_r2_v3_object_storage(
                 )
                 .await?
             };
-            Ok::<(bool, Vec<R2V3Operation>), String>((
-                success,
-                refreshed_ops,
-            ))
+            Ok::<(bool, Vec<R2V3Operation>), String>((success, refreshed_ops))
         })?;
 
         if write_success.0 {
@@ -1186,7 +1306,10 @@ fn sync_r2_v3_object_storage(
                 None,
             );
             emit_study_sync_state_changed(&app, &result);
-            eprintln!("R2 v3 sync finish id={} status={} pull_only=false", sync_id, result.status);
+            eprintln!(
+                "R2 v3 sync finish id={} status={} pull_only=false",
+                sync_id, result.status
+            );
             return Ok(result);
         }
 
@@ -1198,7 +1321,8 @@ fn sync_r2_v3_object_storage(
             persist_payload_entity_versions(&connection, &refreshed_payload, &device_id)?;
             let result = ObjectStorageAutoSyncResult {
                 status: "synced".to_string(),
-                message: "R2 v3 ops uploaded; manifest CAS will be reconciled by the next sync".to_string(),
+                message: "R2 v3 ops uploaded; manifest CAS will be reconciled by the next sync"
+                    .to_string(),
                 direction: Some("download_upload".to_string()),
                 skipped_reason: None,
                 synced_at: Utc::now().to_rfc3339(),
@@ -1221,7 +1345,10 @@ fn sync_r2_v3_object_storage(
                 Some("manifestConflict=true uploadedOps=true".to_string()),
             );
             emit_study_sync_state_changed(&app, &result);
-            eprintln!("R2 v3 sync finish id={} status={} manifest_conflict_uploaded_ops=true", sync_id, result.status);
+            eprintln!(
+                "R2 v3 sync finish id={} status={} manifest_conflict_uploaded_ops=true",
+                sync_id, result.status
+            );
             return Ok(result);
         }
 
@@ -1268,7 +1395,10 @@ where
             ));
         }
         Err(TryLockError::Poisoned(_)) => {
-            return Err("object storage sync lock is poisoned, please restart the app and retry".to_string());
+            return Err(
+                "object storage sync lock is poisoned, please restart the app and retry"
+                    .to_string(),
+            );
         }
     };
     work()
@@ -1282,7 +1412,9 @@ pub(crate) fn sync_object_storage_after_external_change(
     app: AppHandle,
     trigger: &str,
 ) -> Result<ObjectStorageAutoSyncResult, String> {
-    with_object_storage_sync_lock(|| auto_sync_object_storage_database_blocking_with_trigger(app, trigger))
+    with_object_storage_sync_lock(|| {
+        auto_sync_object_storage_database_blocking_with_trigger(app, trigger)
+    })
 }
 
 pub(crate) fn poll_object_storage_for_remote_changes(
@@ -1313,7 +1445,11 @@ fn has_pending_object_storage_local_changes(app: AppHandle) -> Result<bool, Stri
     let connection = open_database(&local_database_path)?;
     let device_id = load_or_create_device_id(&connection)?;
     let entity_versions = load_local_entity_versions(&connection)?;
-    let payload = export_shared_sync_payload(&connection, device_id.clone(), Utc::now().timestamp_millis())?;
+    let payload = export_shared_sync_payload(
+        &connection,
+        device_id.clone(),
+        Utc::now().timestamp_millis(),
+    )?;
     Ok(!payload_entity_operations(&payload, &device_id, &entity_versions)?.is_empty())
 }
 fn normalize_settings(settings: WebDavSettings) -> Result<WebDavSettings, String> {
@@ -1386,7 +1522,10 @@ fn normalize_object_storage_settings(
         }
 
         if object_key.contains("..") {
-            return Err("Object key is invalid; use a path like study-sync.json or a folder prefix.".to_string());
+            return Err(
+                "Object key is invalid; use a path like study-sync.json or a folder prefix."
+                    .to_string(),
+            );
         }
     } else if !endpoint.is_empty() {
         Url::parse(&endpoint)
@@ -1427,7 +1566,11 @@ fn object_storage_configured(settings: &ObjectStorageSettings) -> bool {
 }
 
 fn r2_v3_prefix(settings: &ObjectStorageSettings) -> String {
-    let key = settings.object_key.trim().trim_matches('/').replace('\\', "/");
+    let key = settings
+        .object_key
+        .trim()
+        .trim_matches('/')
+        .replace('\\', "/");
     if key.is_empty() || key == DEFAULT_OBJECT_KEY || key.ends_with(".json") {
         R2_V3_DEFAULT_PREFIX.to_string()
     } else {
@@ -1436,7 +1579,11 @@ fn r2_v3_prefix(settings: &ObjectStorageSettings) -> String {
 }
 
 fn r2_v3_key(settings: &ObjectStorageSettings, child: &str) -> String {
-    format!("{}/{}", r2_v3_prefix(settings), child.trim_start_matches('/'))
+    format!(
+        "{}/{}",
+        r2_v3_prefix(settings),
+        child.trim_start_matches('/')
+    )
 }
 
 fn r2_v3_manifest_key(settings: &ObjectStorageSettings) -> String {
@@ -1496,7 +1643,13 @@ fn operation_seq(updated_at: i64, entity_type: &str, sync_id: &str, action: &str
         .saturating_add(stable_logical_suffix(entity_type, sync_id, action))
 }
 
-fn hlc_from_updated_at(updated_at: i64, entity_type: &str, sync_id: &str, action: &str, device_id: &str) -> String {
+fn hlc_from_updated_at(
+    updated_at: i64,
+    entity_type: &str,
+    sync_id: &str,
+    action: &str,
+    device_id: &str,
+) -> String {
     format!(
         "{:020}-{:05}-{}",
         updated_at.max(0),
@@ -1562,7 +1715,11 @@ fn payload_entity_operations(
                 .and_then(Value::as_i64)
                 .unwrap_or(payload.exported_at);
             let deleted_at = item.get("deletedAt").and_then(Value::as_i64);
-            let action = if deleted_at.is_some() { "delete" } else { "upsert" };
+            let action = if deleted_at.is_some() {
+                "delete"
+            } else {
+                "upsert"
+            };
             let version_key = (entity_type.to_string(), sync_id.to_string());
             if let Some(version) = entity_versions.get(&version_key) {
                 if version.updated_at == updated_at && version.deleted_at == deleted_at {
@@ -1590,7 +1747,8 @@ fn payload_entity_operations(
     }
 
     operations.sort_by_key(operation_sort_key);
-    operations.dedup_by(|left, right| left.op_id == right.op_id && left.device_id == right.device_id);
+    operations
+        .dedup_by(|left, right| left.op_id == right.op_id && left.device_id == right.device_id);
     Ok(operations)
 }
 
@@ -1608,36 +1766,46 @@ fn payload_from_operations(
             continue;
         };
         match operation.entity_type.as_str() {
-            "subject" => payload
-                .subjects
-                .push(serde_json::from_value::<SharedSubject>(value).map_err(|error| error.to_string())?),
-            "study_mode" => payload
-                .study_modes
-                .push(serde_json::from_value::<SharedStudyMode>(value).map_err(|error| error.to_string())?),
-            "focus_session" => payload
-                .focus_sessions
-                .push(serde_json::from_value::<SharedFocusSession>(value).map_err(|error| error.to_string())?),
-            "app_event" => payload
-                .app_events
-                .push(serde_json::from_value::<SharedAppEvent>(value).map_err(|error| error.to_string())?),
-            "checklist_task" => payload
-                .checklist_tasks
-                .push(serde_json::from_value::<SharedChecklistTask>(value).map_err(|error| error.to_string())?),
-            "today_plan_item" => payload
-                .today_plan_items
-                .push(serde_json::from_value::<SharedTodayPlanItem>(value).map_err(|error| error.to_string())?),
-            "schedule_block" => payload
-                .schedule_blocks
-                .push(serde_json::from_value::<SharedScheduleBlock>(value).map_err(|error| error.to_string())?),
-            "schedule_template" => payload
-                .schedule_templates
-                .push(serde_json::from_value::<SharedScheduleTemplate>(value).map_err(|error| error.to_string())?),
-            "daily_review" => payload
-                .daily_reviews
-                .push(serde_json::from_value::<SharedDailyReview>(value).map_err(|error| error.to_string())?),
-            "weekly_review" => payload
-                .weekly_reviews
-                .push(serde_json::from_value::<SharedWeeklyReview>(value).map_err(|error| error.to_string())?),
+            "subject" => payload.subjects.push(
+                serde_json::from_value::<SharedSubject>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
+            "study_mode" => payload.study_modes.push(
+                serde_json::from_value::<SharedStudyMode>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
+            "focus_session" => payload.focus_sessions.push(
+                serde_json::from_value::<SharedFocusSession>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
+            "app_event" => payload.app_events.push(
+                serde_json::from_value::<SharedAppEvent>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
+            "checklist_task" => payload.checklist_tasks.push(
+                serde_json::from_value::<SharedChecklistTask>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
+            "today_plan_item" => payload.today_plan_items.push(
+                serde_json::from_value::<SharedTodayPlanItem>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
+            "schedule_block" => payload.schedule_blocks.push(
+                serde_json::from_value::<SharedScheduleBlock>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
+            "schedule_template" => payload.schedule_templates.push(
+                serde_json::from_value::<SharedScheduleTemplate>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
+            "daily_review" => payload.daily_reviews.push(
+                serde_json::from_value::<SharedDailyReview>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
+            "weekly_review" => payload.weekly_reviews.push(
+                serde_json::from_value::<SharedWeeklyReview>(value)
+                    .map_err(|error| error.to_string())?,
+            ),
             _ => {}
         }
     }
@@ -1786,7 +1954,9 @@ fn persist_applied_operations(
         return Ok(());
     }
     let now = Utc::now().timestamp_millis();
-    let transaction = connection.unchecked_transaction().map_err(|error| error.to_string())?;
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
     {
         let mut insert_applied = transaction
             .prepare(
@@ -1835,7 +2005,8 @@ fn persist_payload_entity_versions(
     let versions: Vec<_> = candidates
         .into_iter()
         .filter(|(entity_type, sync_id, version)| {
-            let Some(current) = current_versions.get(&(entity_type.clone(), sync_id.clone())) else {
+            let Some(current) = current_versions.get(&(entity_type.clone(), sync_id.clone()))
+            else {
                 return true;
             };
             version.hlc > current.hlc
@@ -1848,7 +2019,9 @@ fn persist_payload_entity_versions(
         return Ok(());
     }
 
-    let transaction = connection.unchecked_transaction().map_err(|error| error.to_string())?;
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
     {
         let mut upsert_version = transaction
             .prepare(
@@ -1913,9 +2086,19 @@ fn payload_entity_version_records(
                 .and_then(Value::as_i64)
                 .unwrap_or(payload.exported_at);
             let deleted_at = item.get("deletedAt").and_then(Value::as_i64);
-            let action = if deleted_at.is_some() { "delete" } else { "upsert" };
+            let action = if deleted_at.is_some() {
+                "delete"
+            } else {
+                "upsert"
+            };
             let version = LocalEntityVersion {
-                hlc: hlc_from_updated_at(updated_at, entity_type, sync_id, action, version_device_id),
+                hlc: hlc_from_updated_at(
+                    updated_at,
+                    entity_type,
+                    sync_id,
+                    action,
+                    version_device_id,
+                ),
                 deleted_at,
                 updated_at,
             };
@@ -1933,6 +2116,16 @@ fn payload_entity_version_records(
     Ok(versions
         .into_iter()
         .map(|((entity_type, sync_id), version)| (entity_type, sync_id, version))
+        .collect())
+}
+
+fn payload_entity_version_map(
+    payload: &SharedSyncPayload,
+    device_id: &str,
+) -> Result<HashMap<(String, String), LocalEntityVersion>, String> {
+    Ok(payload_entity_version_records(payload, device_id)?
+        .into_iter()
+        .map(|(entity_type, sync_id, version)| ((entity_type, sync_id), version))
         .collect())
 }
 
@@ -2003,6 +2196,28 @@ fn is_precondition_error(message: &str) -> bool {
         || message.contains("412")
         || message.contains("ConditionalRequestConflict")
         || message.contains("409")
+}
+
+fn is_r2_conditional_put_conflict<E, R>(error: &SdkError<E, R>) -> bool
+where
+    E: ProvideErrorMetadata + std::fmt::Debug,
+    R: std::fmt::Debug,
+{
+    if matches!(
+        error.code(),
+        Some("PreconditionFailed" | "ConditionalRequestConflict")
+    ) {
+        return true;
+    }
+
+    if let Some(response) = error.raw_response() {
+        let text = format!("{response:?}");
+        if is_precondition_error(&text) {
+            return true;
+        }
+    }
+
+    is_precondition_error(&format!("{error:?}")) || is_precondition_error(&error.to_string())
 }
 
 async fn get_object_bytes_with_etag(
@@ -2089,11 +2304,10 @@ async fn put_object_if_none_match(
     match result {
         Ok(_) => Ok(true),
         Err(error) => {
-            let message = error.to_string();
-            if is_precondition_error(&message) {
+            if is_r2_conditional_put_conflict(&error) {
                 Ok(false)
             } else {
-                Err(format!("Upload R2 object failed: {error}"))
+                Err(format!("Upload R2 object failed: {error:?}"))
             }
         }
     }
@@ -2122,11 +2336,10 @@ async fn put_manifest_conditionally(
     match request.send().await {
         Ok(_) => Ok(true),
         Err(error) => {
-            let message = error.to_string();
-            if is_precondition_error(&message) {
+            if is_r2_conditional_put_conflict(&error) {
                 Ok(false)
             } else {
-                Err(format!("Conditional R2 manifest update failed: {error}"))
+                Err(format!("Conditional R2 manifest update failed: {error:?}"))
             }
         }
     }
@@ -2159,7 +2372,13 @@ async fn try_acquire_r2_v3_active_lock(
         device_id: device_id.to_string(),
         sync_id: active_snapshot.sync_id.clone(),
         state_revision: active_snapshot.state_revision.unwrap_or_default(),
-        hlc: hlc_from_updated_at(now, "active_lock", &active_snapshot.sync_id, "claim", device_id),
+        hlc: hlc_from_updated_at(
+            now,
+            "active_lock",
+            &active_snapshot.sync_id,
+            "claim",
+            device_id,
+        ),
         claimed_at: now,
         expires_at: now + R2_V3_ACTIVE_LOCK_TTL_MILLIS,
     };
@@ -2190,7 +2409,13 @@ async fn release_r2_v3_active_lock_if_owned(
     }
     let now = Utc::now().timestamp_millis();
     let released_lock = R2V3ActiveLock {
-        hlc: hlc_from_updated_at(now, "active_lock", &existing_lock.sync_id, "release", device_id),
+        hlc: hlc_from_updated_at(
+            now,
+            "active_lock",
+            &existing_lock.sync_id,
+            "release",
+            device_id,
+        ),
         claimed_at: now,
         expires_at: now - 1,
         ..existing_lock
@@ -2380,11 +2605,15 @@ async fn list_all_object_storage_backup_objects(
     client: &S3Client,
     settings: &ObjectStorageSettings,
 ) -> Result<Vec<ObjectStorageBackupObject>, String> {
-    let mut objects =
-        list_object_storage_backup_objects_for_prefix(client, settings, &r2_v3_key(settings, "backups/"))
-            .await?;
+    let mut objects = list_object_storage_backup_objects_for_prefix(
+        client,
+        settings,
+        &r2_v3_key(settings, "backups/"),
+    )
+    .await?;
     objects.extend(
-        list_object_storage_backup_objects_for_prefix(client, settings, R2_LEGACY_BACKUP_PREFIX).await?,
+        list_object_storage_backup_objects_for_prefix(client, settings, R2_LEGACY_BACKUP_PREFIX)
+            .await?,
     );
     Ok(objects)
 }
@@ -2463,12 +2692,18 @@ async fn load_r2_v3_remote_state(
         .map(|snapshot| snapshot.watermarks.clone())
         .unwrap_or_default();
 
-    let (operations, watermarks, op_bytes) =
-        list_r2_v3_operations(client, settings, &snapshot_watermarks, applied_operation_ids).await?;
+    let (operations, watermarks, op_bytes) = list_r2_v3_operations(
+        client,
+        settings,
+        &snapshot_watermarks,
+        applied_operation_ids,
+    )
+    .await?;
     let applied_operations =
         filter_incoming_operations(operations, applied_operation_ids, entity_versions);
     if !applied_operations.is_empty() {
-        payload = apply_operations_to_payload(payload, &applied_operations, device_id, exported_at)?;
+        payload =
+            apply_operations_to_payload(payload, &applied_operations, device_id, exported_at)?;
     }
 
     Ok(R2V3RemoteState {
@@ -2493,11 +2728,7 @@ async fn write_r2_v3_snapshot_and_manifest(
 ) -> Result<bool, String> {
     let now = Utc::now();
     payload.schema_version = R2_V3_SCHEMA_VERSION;
-    let snapshot_id = format!(
-        "{}-{}",
-        now.format("%Y%m%dT%H%M%S%.3fZ"),
-        Uuid::new_v4()
-    );
+    let snapshot_id = format!("{}-{}", now.format("%Y%m%dT%H%M%S%.3fZ"), Uuid::new_v4());
     let snapshot_key = r2_v3_key(settings, &format!("snapshots/{snapshot_id}.json"));
     let backup_key = r2_v3_key(
         settings,
@@ -2510,7 +2741,13 @@ async fn write_r2_v3_snapshot_and_manifest(
     let snapshot = R2V3Snapshot {
         schema_version: R2_V3_SCHEMA_VERSION,
         snapshot_id: snapshot_id.clone(),
-        created_hlc: hlc_from_updated_at(now.timestamp_millis(), "snapshot", &snapshot_id, "compact", device_id),
+        created_hlc: hlc_from_updated_at(
+            now.timestamp_millis(),
+            "snapshot",
+            &snapshot_id,
+            "compact",
+            device_id,
+        ),
         watermarks: watermarks.clone(),
         payload,
     };
@@ -2684,8 +2921,8 @@ fn ensure_remote_directories(client: &Client, settings: &WebDavSettings) -> Resu
 }
 
 fn validate_sqlite_database(path: &Path) -> Result<(), String> {
-    let connection =
-        Connection::open(path).map_err(|error| format!("File is not a valid SQLite database: {error}"))?;
+    let connection = Connection::open(path)
+        .map_err(|error| format!("File is not a valid SQLite database: {error}"))?;
     connection
         .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
         .map_err(|error| format!("SQLite integrity_check failed: {error}"))
@@ -2700,7 +2937,9 @@ fn validate_sqlite_database(path: &Path) -> Result<(), String> {
 
 fn ensure_no_active_runtime(path: &Path) -> Result<(), String> {
     if has_active_runtime(path)? {
-        return Err("A study mode is currently running; finish it before restoring data.".to_string());
+        return Err(
+            "A study mode is currently running; finish it before restoring data.".to_string(),
+        );
     }
 
     Ok(())
@@ -2800,7 +3039,11 @@ fn current_backup_keep_dates(now: DateTime<Utc>) -> (NaiveDate, HashSet<NaiveDat
     (today, keep_dates)
 }
 
-fn should_delete_backup(modified_at: Option<DateTime<Utc>>, today: NaiveDate, keep_dates: &HashSet<NaiveDate>) -> bool {
+fn should_delete_backup(
+    modified_at: Option<DateTime<Utc>>,
+    today: NaiveDate,
+    keep_dates: &HashSet<NaiveDate>,
+) -> bool {
     let Some(modified_at) = modified_at else {
         return false;
     };
@@ -2829,7 +3072,10 @@ fn prune_local_sync_backups(app_data_dir: &Path) -> Result<(), String> {
         let modified_at = match entry.metadata() {
             Ok(metadata) => metadata.modified().ok().map(DateTime::<Utc>::from),
             Err(error) => {
-                eprintln!("Keep local sync backup without metadata {}: {error}", path.display());
+                eprintln!(
+                    "Keep local sync backup without metadata {}: {error}",
+                    path.display()
+                );
                 None
             }
         };
@@ -2840,7 +3086,10 @@ fn prune_local_sync_backups(app_data_dir: &Path) -> Result<(), String> {
             Ok(_) => {}
             Err(error) if error.kind() == ErrorKind::NotFound => {}
             Err(error) => {
-                return Err(format!("Delete local sync backup {} failed: {error}", path.display()));
+                return Err(format!(
+                    "Delete local sync backup {} failed: {error}",
+                    path.display()
+                ));
             }
         }
     }
@@ -2902,7 +3151,9 @@ pub(crate) fn prune_sync_backups_best_effort(app: &AppHandle) {
                         eprintln!("Scheduled R2 sync backup prune failed: {error}");
                     }
                 }
-                Err(error) => eprintln!("Normalize object storage settings for prune failed: {error}"),
+                Err(error) => {
+                    eprintln!("Normalize object storage settings for prune failed: {error}")
+                }
             }
         }
         Ok(_) => {}
@@ -2960,7 +3211,10 @@ fn validate_sync_payload(payload: &SharedSyncPayload, local_now: Option<i64>) ->
     if let Some(now) = local_now {
         let drift_ms = now.saturating_sub(payload.exported_at).abs();
         if drift_ms > 120_000 {
-            warnings.push(format!("remote export clock drift is about {} seconds", drift_ms / 1000));
+            warnings.push(format!(
+                "remote export clock drift is about {} seconds",
+                drift_ms / 1000
+            ));
         }
     }
     let entity_count = count_payload_entities(payload);
@@ -2995,8 +3249,13 @@ fn record_object_sync_result(
     };
     let active_snapshot = payload.and_then(shared_active_study_snapshot);
     let remote_active_snapshot = remote_payload.and_then(shared_active_study_snapshot);
-    let remote_exported_drift_seconds = remote_payload
-        .map(|remote| (Utc::now().timestamp_millis().saturating_sub(remote.exported_at)).abs() / 1000);
+    let remote_exported_drift_seconds = remote_payload.map(|remote| {
+        (Utc::now()
+            .timestamp_millis()
+            .saturating_sub(remote.exported_at))
+        .abs()
+            / 1000
+    });
     let detail = build_sync_run_detail(
         trigger,
         result,
@@ -3027,11 +3286,15 @@ fn record_object_sync_result(
         validation_report,
         backup_path: result.backup_path.clone(),
         remote_backup_key,
-        active_snapshot_sync_id: active_snapshot.as_ref().map(|snapshot| snapshot.sync_id.clone()),
+        active_snapshot_sync_id: active_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.sync_id.clone()),
         remote_active_snapshot_sync_id: remote_active_snapshot
             .as_ref()
             .map(|snapshot| snapshot.sync_id.clone()),
-        active_snapshot_phase: active_snapshot.as_ref().and_then(|snapshot| snapshot.phase.clone()),
+        active_snapshot_phase: active_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.phase.clone()),
         remote_active_snapshot_phase: remote_active_snapshot
             .as_ref()
             .and_then(|snapshot| snapshot.phase.clone()),
@@ -3437,4 +3700,3 @@ fn header_string(headers: &HeaderMap, name: &str) -> Option<String> {
         .and_then(|value: &HeaderValue| value.to_str().ok())
         .map(ToString::to_string)
 }
-

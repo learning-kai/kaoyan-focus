@@ -46,7 +46,7 @@ import {
   updateTodayPlanItem,
 } from '../services/checklistApi';
 import { getStudyModeState } from '../services/focusApi';
-import { syncConfiguredStateChange } from '../services/settingsApi';
+import { FEISHU_SYNC_REFRESH_EVENT, syncConfiguredStateChange } from '../services/settingsApi';
 import type {
   ChecklistCategory,
   ChecklistPageData,
@@ -255,6 +255,14 @@ export default function ChecklistPage() {
   useEffect(() => {
     void initializePage();
   }, []);
+
+  useEffect(() => {
+    const handleFeishuRefresh = () => {
+      void initializePage(activeCategoryKey);
+    };
+    window.addEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
+    return () => window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
+  }, [activeCategoryKey]);
 
   async function initializePage(preferredCategoryKey: string | null = null) {
     try {

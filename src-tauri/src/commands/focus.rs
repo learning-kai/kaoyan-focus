@@ -13,10 +13,11 @@ use tauri::{AppHandle, Manager, State};
 const MIN_RECORDED_FOCUS_SECONDS: i64 = 60;
 
 fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
-    let app = app.clone();
+    let sync_app = app.clone();
     thread::spawn(move || {
-        let _ = crate::commands::sync::sync_object_storage_after_external_change(app, trigger);
+        let _ = crate::commands::sync::sync_object_storage_after_external_change(sync_app, trigger);
     });
+    crate::commands::feishu::sync_feishu_bridge_after_local_change(app.clone(), trigger);
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -352,19 +353,16 @@ pub fn confirm_study_break(
 
     if let Some(session_id) = record.current_session_id {
         let actual_seconds = focus_session_actual_seconds(&record, now)?;
-        let ended_at = if record.phase == "awaiting_break" {
-            parse_rfc3339(&record.phase_started_at)?
-        } else {
-            now
-        };
         finish_running_focus_session(
             &connection,
             session_id,
             actual_seconds,
-            ended_at,
+            now,
             "pomodoro_completed",
         )?;
     }
+
+    let next_accumulated = study_elapsed_seconds(&record, now)?;
 
     connection
         .execute(
@@ -376,11 +374,12 @@ pub fn confirm_study_break(
                 phase_paused_seconds = 0,
                 paused_stage_elapsed_seconds = 0,
                 paused_at = NULL,
+                accumulated_study_seconds = ?2,
                 current_session_id = NULL,
                 updated_at = ?1
-            WHERE id = ?2 AND status = 'active'
+            WHERE id = ?3 AND status = 'active'
             ",
-            params![now.to_rfc3339(), record.id],
+            params![now.to_rfc3339(), next_accumulated, record.id],
         )
         .map_err(|error| error.to_string())?;
 
@@ -570,7 +569,9 @@ pub fn emergency_exit_study_mode(
             ",
             params![
                 now.to_rfc3339(),
-                study_elapsed_seconds(&record, now)?.min(record.planned_seconds).max(0),
+                study_elapsed_seconds(&record, now)?
+                    .min(record.planned_seconds)
+                    .max(0),
                 record.id
             ],
         )
@@ -621,7 +622,9 @@ pub fn reset_study_mode(
                 ",
                 params![
                     now.to_rfc3339(),
-                    study_elapsed_seconds(&record, now)?.min(record.planned_seconds).max(0),
+                    study_elapsed_seconds(&record, now)?
+                        .min(record.planned_seconds)
+                        .max(0),
                     record.id
                 ],
             )
@@ -1071,9 +1074,27 @@ pub fn get_focus_stats_summary(app: AppHandle) -> Result<FocusStatsSummary, Stri
     let sessions = load_focus_session_stats_rows(&connection)?;
     let active = get_active_study_mode_record(&connection)?;
 
-    let today_seconds = sum_session_seconds_for_window(&sessions, active.as_ref(), today_start, tomorrow_start, now)?;
-    let week_seconds = sum_session_seconds_for_window(&sessions, active.as_ref(), week_start, now + Duration::seconds(1), now)?;
-    let month_seconds = sum_session_seconds_for_window(&sessions, active.as_ref(), month_start, now + Duration::seconds(1), now)?;
+    let today_seconds = sum_session_seconds_for_window(
+        &sessions,
+        active.as_ref(),
+        today_start,
+        tomorrow_start,
+        now,
+    )?;
+    let week_seconds = sum_session_seconds_for_window(
+        &sessions,
+        active.as_ref(),
+        week_start,
+        now + Duration::seconds(1),
+        now,
+    )?;
+    let month_seconds = sum_session_seconds_for_window(
+        &sessions,
+        active.as_ref(),
+        month_start,
+        now + Duration::seconds(1),
+        now,
+    )?;
     let interruption_count = total_interruptions(&connection)?;
     let subjects = subject_stats(&connection, &sessions, active.as_ref(), now)?;
 
@@ -1214,7 +1235,10 @@ fn session_seconds_in_window(
     }
     let interval_start = parse_rfc3339(&session.started_at)?;
     let interval_end = effective_session_end(session, active, now)?;
-    if interval_end <= interval_start || interval_end <= window_start || interval_start >= window_end {
+    if interval_end <= interval_start
+        || interval_end <= window_start
+        || interval_start >= window_end
+    {
         return Ok(0);
     }
     let overlap_start = interval_start.max(window_start);
@@ -1224,8 +1248,7 @@ fn session_seconds_in_window(
     if overlap_seconds >= wall_seconds {
         return Ok(seconds);
     }
-    Ok(((seconds as f64) * (overlap_seconds as f64) / (wall_seconds as f64))
-        .round() as i64)
+    Ok(((seconds as f64) * (overlap_seconds as f64) / (wall_seconds as f64)).round() as i64)
 }
 
 fn effective_session_seconds(
@@ -1249,7 +1272,9 @@ fn effective_session_end(
     active: Option<&StudyModeRecord>,
     now: DateTime<Utc>,
 ) -> Result<DateTime<Utc>, String> {
-    if session.status == "running" && active.and_then(|record| record.current_session_id) == Some(session.id) {
+    if session.status == "running"
+        && active.and_then(|record| record.current_session_id) == Some(session.id)
+    {
         return Ok(now);
     }
     if let Some(ended_at) = session.ended_at.as_deref() {
@@ -1274,7 +1299,12 @@ fn shanghai_day_start(now: DateTime<Utc>) -> Result<DateTime<Utc>, String> {
 
 fn shanghai_week_start(now: DateTime<Utc>) -> Result<DateTime<Utc>, String> {
     let day_start = shanghai_day_start(now)?;
-    Ok(day_start - Duration::days(now.with_timezone(&shanghai_offset()).weekday().num_days_from_monday() as i64))
+    Ok(day_start
+        - Duration::days(
+            now.with_timezone(&shanghai_offset())
+                .weekday()
+                .num_days_from_monday() as i64,
+        ))
 }
 
 fn shanghai_month_start(now: DateTime<Utc>) -> Result<DateTime<Utc>, String> {
@@ -1330,25 +1360,19 @@ fn advance_study_mode(app: &AppHandle, state: &AppState) -> Result<StudyModeStat
             }
 
             let phase_elapsed_seconds = phase_elapsed_seconds(&record, now)?;
-            let focus_run_seconds = record
-                .focus_seconds
-                .min(record.planned_seconds.saturating_sub(record.accumulated_study_seconds).max(0));
+            let focus_run_seconds = record.focus_seconds.min(
+                record
+                    .planned_seconds
+                    .saturating_sub(record.accumulated_study_seconds)
+                    .max(0),
+            );
             if focus_run_seconds <= 0 {
                 complete_study_mode_record(&connection, state, &record, now, "completed")?;
                 return load_study_mode_state_by_id(&connection, record.id, now);
             }
             if phase_elapsed_seconds >= focus_run_seconds {
-                let focus_end = parse_rfc3339(&record.phase_started_at)?
-                    + Duration::seconds(focus_run_seconds);
-                if let Some(session_id) = record.current_session_id {
-                    finish_running_focus_session(
-                        &connection,
-                        session_id,
-                        focus_run_seconds,
-                        focus_end,
-                        "pomodoro_completed",
-                    )?;
-                }
+                let focus_end =
+                    parse_rfc3339(&record.phase_started_at)? + Duration::seconds(focus_run_seconds);
                 let next_accumulated = (record.accumulated_study_seconds + focus_run_seconds)
                     .min(record.planned_seconds);
                 if next_accumulated >= record.planned_seconds {
@@ -1372,16 +1396,39 @@ fn advance_study_mode(app: &AppHandle, state: &AppState) -> Result<StudyModeStat
                             accumulated_study_seconds = ?2,
                             phase_paused_seconds = 0,
                             paused_stage_elapsed_seconds = 0,
-                            current_session_id = NULL,
                             updated_at = ?3
                         WHERE id = ?4 AND status = 'active'
                         ",
-                        params![focus_end.to_rfc3339(), next_accumulated, now.to_rfc3339(), record.id],
+                        params![
+                            focus_end.to_rfc3339(),
+                            next_accumulated,
+                            now.to_rfc3339(),
+                            record.id
+                        ],
                     )
                     .map_err(|error| error.to_string())?;
             }
         }
-        "awaiting_break" => {}
+        "awaiting_break" => {
+            let phase_elapsed_seconds = phase_elapsed_seconds(&record, now)?;
+            let remaining_study_seconds = record
+                .planned_seconds
+                .saturating_sub(record.accumulated_study_seconds)
+                .max(0);
+            if remaining_study_seconds <= 0 || phase_elapsed_seconds >= remaining_study_seconds {
+                let completed_at = parse_rfc3339(&record.phase_started_at)?
+                    + Duration::seconds(remaining_study_seconds);
+                complete_study_mode_record_at(
+                    &connection,
+                    state,
+                    &record,
+                    completed_at,
+                    "completed",
+                    Some(record.planned_seconds),
+                )?;
+                return load_study_mode_state_by_id(&connection, record.id, now);
+            }
+        }
         "break" => {
             let phase_elapsed_seconds = phase_elapsed_seconds(&record, now)?;
             if phase_elapsed_seconds >= effective_break_seconds(&record) {
@@ -1408,7 +1455,12 @@ fn advance_study_mode(app: &AppHandle, state: &AppState) -> Result<StudyModeStat
                             updated_at = ?4
                         WHERE id = ?3 AND status = 'active'
                         ",
-                        params![next_started_at.to_rfc3339(), session.id, record.id, now.to_rfc3339()],
+                        params![
+                            next_started_at.to_rfc3339(),
+                            session.id,
+                            record.id,
+                            now.to_rfc3339()
+                        ],
                     )
                     .map_err(|error| error.to_string())?;
             }
@@ -1487,7 +1539,8 @@ fn complete_study_mode_record_at(
                 finish_reason,
                 now.to_rfc3339(),
                 accumulated_override
-                    .unwrap_or_else(|| study_elapsed_seconds(record, now).unwrap_or(record.accumulated_study_seconds))
+                    .unwrap_or_else(|| study_elapsed_seconds(record, now)
+                        .unwrap_or(record.accumulated_study_seconds))
                     .min(record.planned_seconds)
                     .max(0),
                 record.id
@@ -1572,22 +1625,20 @@ fn study_mode_record_to_state(
     };
     let break_kind = break_kind_for_cycle(record.cycle_index, record.long_break_interval);
     let effective_break_seconds = effective_break_seconds(record);
-    let focus_run_seconds = record
-        .focus_seconds
-        .min(
-            record
-                .planned_seconds
-                .saturating_sub(record.accumulated_study_seconds)
-                .max(0),
-        );
+    let focus_run_seconds = record.focus_seconds.min(
+        record
+            .planned_seconds
+            .saturating_sub(record.accumulated_study_seconds)
+            .max(0),
+    );
     let phase_remaining_seconds = match record.phase.as_str() {
         "focus" => (focus_run_seconds - phase_elapsed_seconds).max(0),
         "awaiting_break" => 0,
         "break" => (effective_break_seconds - phase_elapsed_seconds).max(0),
         _ => 0,
     };
-    let focus_enforcement_active = record.status == "active"
-        && matches!(record.phase.as_str(), "focus" | "awaiting_break");
+    let focus_enforcement_active =
+        record.status == "active" && matches!(record.phase.as_str(), "focus" | "awaiting_break");
 
     Ok(StudyModeState {
         id: Some(record.id),
@@ -1790,7 +1841,7 @@ fn set_runtime_state(
 
 fn study_elapsed_seconds(record: &StudyModeRecord, now: DateTime<Utc>) -> Result<i64, String> {
     let current_phase_seconds = match record.phase.as_str() {
-        "focus" => phase_elapsed_seconds(record, now)?,
+        "focus" | "awaiting_break" => phase_elapsed_seconds(record, now)?,
         _ => 0,
     };
     Ok((record.accumulated_study_seconds + current_phase_seconds)
@@ -1805,16 +1856,20 @@ fn phase_elapsed_seconds(record: &StudyModeRecord, now: DateTime<Utc>) -> Result
     Ok(seconds_since(&record.phase_started_at, now)?.max(0))
 }
 
-fn focus_session_actual_seconds(record: &StudyModeRecord, now: DateTime<Utc>) -> Result<i64, String> {
+fn focus_session_actual_seconds(
+    record: &StudyModeRecord,
+    now: DateTime<Utc>,
+) -> Result<i64, String> {
     let remaining_total = record
         .planned_seconds
         .saturating_sub(record.accumulated_study_seconds)
         .max(0);
     let phase_elapsed = phase_elapsed_seconds(record, now)?;
-    Ok(phase_elapsed
-        .min(record.focus_seconds)
-        .min(remaining_total)
-        .max(0))
+    let actual_seconds = match record.phase.as_str() {
+        "awaiting_break" => record.focus_seconds + phase_elapsed.min(remaining_total),
+        _ => phase_elapsed.min(record.focus_seconds).min(remaining_total),
+    };
+    Ok(actual_seconds.max(0))
 }
 
 fn seconds_since(started_at: &str, now: DateTime<Utc>) -> Result<i64, String> {

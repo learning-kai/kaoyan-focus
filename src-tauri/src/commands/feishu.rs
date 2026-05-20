@@ -14,7 +14,10 @@ use std::{
     io::{Read, Write},
     net::TcpListener,
     path::{Path, PathBuf},
-    sync::{Mutex, TryLockError},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex, TryLockError,
+    },
     thread,
 };
 use tauri::{AppHandle, Manager};
@@ -63,6 +66,7 @@ const REMOTE_FEISHU_TASK: &str = "feishu_task";
 const REMOTE_FEISHU_EVENT: &str = "feishu_calendar_event";
 
 static FEISHU_SYNC_LOCK: Mutex<()> = Mutex::new(());
+static FEISHU_LOCAL_CHANGE_SYNC_PENDING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeishuSyncSettings {
@@ -167,6 +171,9 @@ struct FeishuLink {
     remote_kind: String,
     remote_id: String,
     remote_parent_id: Option<String>,
+    remote_etag: Option<String>,
+    remote_change_key: Option<String>,
+    remote_last_modified: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -431,6 +438,40 @@ pub async fn sync_feishu_bridge(
     .map_err(|error| format!("飞书同步后台任务失败：{error}"))?
 }
 
+pub fn sync_feishu_bridge_after_local_change(app: AppHandle, trigger: &'static str) {
+    if FEISHU_LOCAL_CHANGE_SYNC_PENDING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let result = (|| -> Result<(), String> {
+            let database_path = database_path(&app)?;
+            let _sync_guard = FEISHU_SYNC_LOCK
+                .lock()
+                .map_err(|_| "飞书同步锁状态异常，请重启应用后再试。".to_string())?;
+            let result = sync_feishu_bridge_blocking_locked(
+                database_path,
+                trigger.to_string(),
+                Uuid::new_v4().to_string(),
+                Utc::now(),
+            )?;
+            if result.status == "failed" {
+                return Err(result.message);
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            eprintln!("Feishu local-change sync failed: {error}");
+        }
+        FEISHU_LOCAL_CHANGE_SYNC_PENDING.store(false, Ordering::SeqCst);
+    });
+}
+
+fn is_local_change_trigger(trigger: &str) -> bool {
+    trigger.ends_with("_change")
+}
+
 #[tauri::command]
 pub async fn rebuild_feishu_tasklists_from_local(
     app: AppHandle,
@@ -469,6 +510,15 @@ fn sync_feishu_bridge_blocking(
             return Err("飞书同步锁状态异常，请重启应用后再试。".to_string());
         }
     };
+    sync_feishu_bridge_blocking_locked(database_path, trigger, run_id, started_at)
+}
+
+fn sync_feishu_bridge_blocking_locked(
+    database_path: std::path::PathBuf,
+    trigger: String,
+    run_id: String,
+    started_at: DateTime<Utc>,
+) -> Result<FeishuSyncResult, String> {
     let mut connection = open_database(&database_path)?;
 
     let result: Result<FeishuSyncResult, String> = (|| {
@@ -500,6 +550,7 @@ fn sync_feishu_bridge_blocking(
             &mut connection,
             &feishu,
             &containers.calendar_id,
+            is_local_change_trigger(&trigger),
             &mut counters,
         )?;
         Ok(FeishuSyncResult {
@@ -976,6 +1027,19 @@ fn sync_tasks(
         .iter()
         .map(|task| (task.id.clone(), task.clone()))
         .collect::<HashMap<_, _>>();
+    let today_date = today_date_string();
+    let stale_today_remote_ids =
+        if let Some(today_tasklist_guid) = tasklists.get(TASKLIST_KEY_TODAY) {
+            prune_stale_today_task_links(
+                connection,
+                feishu,
+                today_tasklist_guid,
+                &today_date,
+                counters,
+            )?
+        } else {
+            Vec::new()
+        };
 
     for task in load_local_tasks(connection)? {
         if task.deleted_at.is_none() && task.title.trim().is_empty() {
@@ -1065,6 +1129,9 @@ fn sync_tasks(
     }
 
     for remote in remote_tasks {
+        if stale_today_remote_ids.iter().any(|id| id == &remote.id) {
+            continue;
+        }
         if get_link_by_remote_id(connection, REMOTE_FEISHU_TASK, &remote.id)?.is_some() {
             continue;
         }
@@ -1081,6 +1148,14 @@ fn sync_tasks(
                 if let Some((local_id, deleted_at)) =
                     get_sync_meta_local_by_sync_id(connection, entity_type, sync_id)?
                 {
+                    if entity_type == ENTITY_TODAY_PLAN_ITEM
+                        && remote.tasklist_key == TASKLIST_KEY_TODAY
+                        && is_stale_today_plan_item(connection, local_id, &today_date)?
+                    {
+                        delete_remote_task_if_present(feishu, &remote.id)?;
+                        counters.deleted_count += 1;
+                        continue;
+                    }
                     upsert_link(
                         connection,
                         entity_type,
@@ -1140,6 +1215,75 @@ fn fetch_remote_tasks_for_tasklist(
             .filter_map(|value| parse_remote_task(value, tasklist_key, tasklist_guid)),
     );
     Ok(())
+}
+
+fn prune_stale_today_task_links(
+    connection: &Connection,
+    feishu: &FeishuClient,
+    today_tasklist_guid: &str,
+    today_date: &str,
+    counters: &mut SyncCounters,
+) -> Result<Vec<String>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT l.id, l.remote_id
+            FROM feishu_sync_links l
+            INNER JOIN today_plan_items t ON t.id = l.local_id
+            WHERE l.entity_type = ?1
+              AND l.remote_kind = ?2
+              AND l.deleted_at IS NULL
+              AND (l.remote_parent_id = ?3 OR l.remote_parent_id IS NULL)
+              AND t.today_date <> ?4
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(
+            params![
+                ENTITY_TODAY_PLAN_ITEM,
+                REMOTE_FEISHU_TASK,
+                today_tasklist_guid,
+                today_date
+            ],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+        )
+        .map_err(|error| error.to_string())?;
+    let stale_links = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    let mut remote_ids = Vec::new();
+    for (link_id, remote_id) in stale_links {
+        delete_remote_task_if_present(feishu, &remote_id)?;
+        mark_link_deleted(connection, link_id)?;
+        counters.deleted_count += 1;
+        remote_ids.push(remote_id);
+    }
+    Ok(remote_ids)
+}
+
+fn is_stale_today_plan_item(
+    connection: &Connection,
+    local_id: i64,
+    today_date: &str,
+) -> Result<bool, String> {
+    connection
+        .query_row(
+            "SELECT today_date <> ?1 FROM today_plan_items WHERE id = ?2",
+            params![today_date, local_id],
+            |row| row.get::<_, bool>(0),
+        )
+        .optional()
+        .map(|value| value.unwrap_or(false))
+        .map_err(|error| error.to_string())
+}
+
+fn delete_remote_task_if_present(feishu: &FeishuClient, remote_id: &str) -> Result<(), String> {
+    feishu.delete(&format!(
+        "/open-apis/task/v2/tasks/{}",
+        encode_path_segment(remote_id)
+    ))
 }
 
 fn link_points_to_current_tasklist(link: &FeishuLink, tasklists: &HashMap<String, String>) -> bool {
@@ -1306,8 +1450,11 @@ fn sync_calendar_events(
     connection: &mut Connection,
     feishu: &FeishuClient,
     calendar_id: &str,
+    prefer_local_changes: bool,
     counters: &mut SyncCounters,
 ) -> Result<(), String> {
+    prune_orphan_calendar_event_links(connection, feishu, calendar_id, counters)?;
+
     let (range_start, range_end) = calendar_sync_range();
     let remote_values = feishu.get_paged(&format!(
         "/open-apis/calendar/v4/calendars/{}/events?start_time={}&end_time={}&page_size=100",
@@ -1334,11 +1481,7 @@ fn sync_calendar_events(
         )? {
             if let Some(remote) = remote_by_id.get(&link.remote_id) {
                 if block.deleted_at.is_some() {
-                    feishu.delete(&format!(
-                        "/open-apis/calendar/v4/calendars/{}/events/{}",
-                        encode_path_segment(calendar_id),
-                        encode_path_segment(&link.remote_id)
-                    ))?;
+                    delete_remote_calendar_event_if_present(feishu, calendar_id, &link.remote_id)?;
                     mark_link_deleted(connection, link.id)?;
                     counters.deleted_count += 1;
                     continue;
@@ -1350,6 +1493,7 @@ fn sync_calendar_events(
                     &block,
                     remote,
                     &link,
+                    prefer_local_changes,
                     counters,
                 )?;
             } else if block.deleted_at.is_none() && date_in_sync_range(&block.schedule_date) {
@@ -1381,8 +1525,8 @@ fn sync_calendar_events(
                 REMOTE_FEISHU_EVENT,
                 &remote.id,
                 Some(calendar_id),
-                None,
-                None,
+                Some(&local_schedule_block_fingerprint(&block)),
+                Some(&remote_event_fingerprint(&remote)),
                 remote
                     .updated_millis
                     .map(|value| value.to_string())
@@ -1401,6 +1545,15 @@ fn sync_calendar_events(
             if let Some((local_id, deleted_at)) =
                 get_sync_meta_local_by_sync_id(connection, ENTITY_SCHEDULE_BLOCK, sync_id)?
             {
+                let local_block = if deleted_at.is_none() {
+                    Some(load_local_schedule_block_by_id(connection, local_id)?)
+                } else {
+                    None
+                };
+                let local_fingerprint = local_block
+                    .as_ref()
+                    .map(local_schedule_block_fingerprint)
+                    .unwrap_or_else(|| remote_event_fingerprint(&remote));
                 upsert_link(
                     connection,
                     ENTITY_SCHEDULE_BLOCK,
@@ -1409,19 +1562,19 @@ fn sync_calendar_events(
                     REMOTE_FEISHU_EVENT,
                     &remote.id,
                     Some(calendar_id),
-                    None,
-                    None,
+                    Some(&local_fingerprint),
+                    Some(&remote_event_fingerprint(&remote)),
                     remote
                         .updated_millis
                         .map(|value| value.to_string())
                         .as_deref(),
                 )?;
-                if deleted_at.is_none() {
+                if let Some(local_block) = local_block.as_ref() {
                     sync_linked_event(
                         connection,
                         feishu,
                         calendar_id,
-                        &load_local_schedule_block_by_id(connection, local_id)?,
+                        local_block,
                         &remote,
                         &get_link_by_sync_id(
                             connection,
@@ -1430,16 +1583,147 @@ fn sync_calendar_events(
                             REMOTE_FEISHU_EVENT,
                         )?
                         .ok_or_else(|| "飞书日程链接写入后读取失败。".to_string())?,
+                        prefer_local_changes,
                         counters,
                     )?;
                 }
                 continue;
             }
         }
-        create_local_schedule_block_from_remote(connection, &remote)?;
-        counters.pulled_count += 1;
+        if is_importable_remote_event(&remote) {
+            create_local_schedule_block_from_remote(connection, &remote)?;
+            counters.pulled_count += 1;
+        }
     }
     Ok(())
+}
+
+fn prune_orphan_calendar_event_links(
+    connection: &Connection,
+    feishu: &FeishuClient,
+    calendar_id: &str,
+    counters: &mut SyncCounters,
+) -> Result<(), String> {
+    for link in load_orphan_calendar_event_links(connection)? {
+        delete_remote_calendar_event_if_present(feishu, calendar_id, &link.remote_id)?;
+        mark_link_deleted(connection, link.id)?;
+        counters.deleted_count += 1;
+    }
+    Ok(())
+}
+
+fn load_orphan_calendar_event_links(connection: &Connection) -> Result<Vec<FeishuLink>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT l.id, l.entity_type, l.local_id, l.local_sync_id, l.remote_kind, l.remote_id,
+                   l.remote_parent_id, l.remote_etag, l.remote_change_key,
+                   l.remote_last_modified
+            FROM feishu_sync_links l
+            LEFT JOIN schedule_blocks b ON b.id = l.local_id
+            LEFT JOIN sync_meta m ON m.entity_type = 'schedule_block' AND m.local_id = l.local_id
+            WHERE l.entity_type = ?1
+              AND l.remote_kind = ?2
+              AND l.deleted_at IS NULL
+              AND (b.id IS NULL OR m.deleted_at IS NOT NULL)
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(
+            params![ENTITY_SCHEDULE_BLOCK, REMOTE_FEISHU_EVENT],
+            row_to_link,
+        )
+        .map_err(|error| error.to_string())?;
+    let mut links = Vec::new();
+    for row in rows {
+        links.push(row.map_err(|error| error.to_string())?);
+    }
+    Ok(links)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinkedCalendarAction {
+    PushLocal,
+    PullRemote,
+    RefreshLink,
+}
+
+fn linked_calendar_action(
+    local_updated: i64,
+    remote_updated: Option<i64>,
+    local_changed_since_sync: bool,
+    remote_changed_since_sync: bool,
+    prefer_local_changes: bool,
+) -> LinkedCalendarAction {
+    const SKEW_MILLIS: i64 = 1_000;
+    if let Some(remote_updated) = remote_updated {
+        if local_updated > remote_updated + SKEW_MILLIS {
+            return LinkedCalendarAction::PushLocal;
+        }
+        if remote_updated > local_updated + SKEW_MILLIS {
+            return LinkedCalendarAction::PullRemote;
+        }
+        return LinkedCalendarAction::RefreshLink;
+    }
+
+    if !local_changed_since_sync && !remote_changed_since_sync {
+        return LinkedCalendarAction::RefreshLink;
+    }
+    if local_changed_since_sync && !remote_changed_since_sync {
+        LinkedCalendarAction::PushLocal
+    } else if remote_changed_since_sync && !local_changed_since_sync {
+        LinkedCalendarAction::PullRemote
+    } else if prefer_local_changes {
+        LinkedCalendarAction::PushLocal
+    } else {
+        LinkedCalendarAction::PullRemote
+    }
+}
+
+fn calendar_event_content_differs(local: &LocalScheduleBlock, remote: &RemoteEvent) -> bool {
+    local_schedule_block_fingerprint(local) != remote_event_fingerprint(remote)
+}
+
+fn local_schedule_block_fingerprint(block: &LocalScheduleBlock) -> String {
+    calendar_fingerprint(
+        &block.schedule_date,
+        block.start_minute,
+        block.end_minute,
+        &block.title,
+        block.note.as_deref(),
+    )
+}
+
+fn remote_event_fingerprint(remote: &RemoteEvent) -> String {
+    calendar_fingerprint(
+        &remote.schedule_date,
+        remote.start_minute,
+        remote.end_minute,
+        &remote.title,
+        remote.note.as_deref(),
+    )
+}
+
+fn calendar_fingerprint(
+    schedule_date: &str,
+    start_minute: i64,
+    end_minute: i64,
+    title: &str,
+    note: Option<&str>,
+) -> String {
+    [
+        schedule_date.trim().to_string(),
+        start_minute.to_string(),
+        end_minute.to_string(),
+        title.trim().to_string(),
+        normalize_note(note),
+    ]
+    .join("\u{1f}")
+}
+
+fn normalize_note(value: Option<&str>) -> String {
+    value.unwrap_or("").trim().to_string()
 }
 
 fn sync_linked_event(
@@ -1449,77 +1733,168 @@ fn sync_linked_event(
     local: &LocalScheduleBlock,
     remote: &RemoteEvent,
     link: &FeishuLink,
+    prefer_local_changes: bool,
     counters: &mut SyncCounters,
 ) -> Result<(), String> {
     let local_updated = parse_rfc3339_millis(&local.updated_at)?;
-    let remote_updated = remote.updated_millis.unwrap_or(local_updated);
-    if local_updated > remote_updated + 1_000 {
-        let data = feishu.patch(
-            &format!(
-                "/open-apis/calendar/v4/calendars/{}/events/{}",
-                encode_path_segment(calendar_id),
-                encode_path_segment(&remote.id)
-            ),
-            feishu_event_body(local),
-        )?;
-        let next_remote = data
-            .get("event")
-            .or_else(|| data.get("calendar_event"))
-            .and_then(parse_remote_event)
-            .or_else(|| parse_remote_event(&data))
-            .unwrap_or_else(|| remote.clone());
-        upsert_link(
-            connection,
-            ENTITY_SCHEDULE_BLOCK,
-            Some(local.id),
-            &local.sync_id,
-            REMOTE_FEISHU_EVENT,
-            &remote.id,
-            Some(calendar_id),
-            None,
-            None,
-            next_remote
-                .updated_millis
-                .map(|value| value.to_string())
-                .as_deref(),
-        )?;
-        counters.pushed_count += 1;
-    } else if remote_updated > local_updated + 1_000 {
-        update_local_schedule_block_from_remote(connection, local.id, remote)?;
-        upsert_link(
-            connection,
-            ENTITY_SCHEDULE_BLOCK,
-            Some(local.id),
-            &local.sync_id,
-            REMOTE_FEISHU_EVENT,
-            &remote.id,
-            Some(calendar_id),
-            None,
-            None,
-            remote
-                .updated_millis
-                .map(|value| value.to_string())
-                .as_deref(),
-        )?;
-        counters.pulled_count += 1;
-    } else {
-        upsert_link(
-            connection,
-            ENTITY_SCHEDULE_BLOCK,
-            Some(local.id),
-            &local.sync_id,
-            &link.remote_kind,
-            &remote.id,
-            link.remote_parent_id.as_deref(),
-            None,
-            None,
-            remote
-                .updated_millis
-                .map(|value| value.to_string())
-                .as_deref(),
-        )?;
+    let remote_updated = remote.updated_millis.or_else(|| {
+        link.remote_last_modified
+            .as_deref()
+            .and_then(parse_link_millis)
+    });
+    let local_fingerprint = local_schedule_block_fingerprint(local);
+    let remote_fingerprint = remote_event_fingerprint(remote);
+    let local_changed_since_sync = link
+        .remote_etag
+        .as_deref()
+        .map(|fingerprint| fingerprint != local_fingerprint)
+        .unwrap_or_else(|| calendar_event_content_differs(local, remote));
+    let remote_changed_since_sync = link
+        .remote_change_key
+        .as_deref()
+        .map(|fingerprint| fingerprint != remote_fingerprint)
+        .unwrap_or(false);
+
+    match linked_calendar_action(
+        local_updated,
+        remote_updated,
+        local_changed_since_sync,
+        remote_changed_since_sync,
+        prefer_local_changes,
+    ) {
+        LinkedCalendarAction::PushLocal => {
+            let data = match feishu.patch(
+                &format!(
+                    "/open-apis/calendar/v4/calendars/{}/events/{}",
+                    encode_path_segment(calendar_id),
+                    encode_path_segment(&remote.id)
+                ),
+                feishu_event_body(local),
+            ) {
+                Ok(data) => data,
+                Err(error) if is_feishu_deleted_event_error(&error) => {
+                    mark_link_deleted(connection, link.id)?;
+                    create_remote_calendar_event(connection, feishu, calendar_id, local)?;
+                    counters.pushed_count += 1;
+                    counters.calendar_count += 1;
+                    return Ok(());
+                }
+                Err(error) => return Err(error),
+            };
+            let next_remote = data
+                .get("event")
+                .or_else(|| data.get("calendar_event"))
+                .and_then(parse_remote_event)
+                .or_else(|| parse_remote_event(&data))
+                .unwrap_or_else(|| remote.clone());
+            upsert_link(
+                connection,
+                ENTITY_SCHEDULE_BLOCK,
+                Some(local.id),
+                &local.sync_id,
+                REMOTE_FEISHU_EVENT,
+                &remote.id,
+                Some(calendar_id),
+                Some(&local_schedule_block_fingerprint(local)),
+                Some(&remote_event_fingerprint(&next_remote)),
+                next_remote
+                    .updated_millis
+                    .map(|value| value.to_string())
+                    .as_deref(),
+            )?;
+            counters.pushed_count += 1;
+        }
+        LinkedCalendarAction::PullRemote => {
+            update_local_schedule_block_from_remote(connection, local.id, remote)?;
+            upsert_link(
+                connection,
+                ENTITY_SCHEDULE_BLOCK,
+                Some(local.id),
+                &local.sync_id,
+                REMOTE_FEISHU_EVENT,
+                &remote.id,
+                Some(calendar_id),
+                Some(&remote_event_fingerprint(remote)),
+                Some(&remote_event_fingerprint(remote)),
+                remote
+                    .updated_millis
+                    .map(|value| value.to_string())
+                    .as_deref(),
+            )?;
+            counters.pulled_count += 1;
+        }
+        LinkedCalendarAction::RefreshLink => {
+            upsert_link(
+                connection,
+                ENTITY_SCHEDULE_BLOCK,
+                Some(local.id),
+                &local.sync_id,
+                &link.remote_kind,
+                &remote.id,
+                link.remote_parent_id.as_deref(),
+                Some(&local_schedule_block_fingerprint(local)),
+                Some(&remote_event_fingerprint(remote)),
+                remote
+                    .updated_millis
+                    .map(|value| value.to_string())
+                    .as_deref(),
+            )?;
+        }
     }
     Ok(())
+}
+
+fn create_remote_calendar_event(
+    connection: &Connection,
+    feishu: &FeishuClient,
+    calendar_id: &str,
+    block: &LocalScheduleBlock,
+) -> Result<RemoteEvent, String> {
+    let data = feishu.post(
+        &format!(
+            "/open-apis/calendar/v4/calendars/{}/events",
+            encode_path_segment(calendar_id)
+        ),
+        feishu_event_body(block),
+    )?;
+    let remote = data
+        .get("event")
+        .or_else(|| data.get("calendar_event"))
+        .and_then(parse_remote_event)
+        .or_else(|| parse_remote_event(&data))
+        .ok_or_else(|| "Feishu did not return created calendar event".to_string())?;
+    upsert_link(
+        connection,
+        ENTITY_SCHEDULE_BLOCK,
+        Some(block.id),
+        &block.sync_id,
+        REMOTE_FEISHU_EVENT,
+        &remote.id,
+        Some(calendar_id),
+        Some(&local_schedule_block_fingerprint(block)),
+        Some(&remote_event_fingerprint(&remote)),
+        remote
+            .updated_millis
+            .map(|value| value.to_string())
+            .as_deref(),
+    )?;
+    Ok(remote)
+}
+
+fn delete_remote_calendar_event_if_present(
+    feishu: &FeishuClient,
+    calendar_id: &str,
+    remote_id: &str,
+) -> Result<(), String> {
+    match feishu.delete(&format!(
+        "/open-apis/calendar/v4/calendars/{}/events/{}",
+        encode_path_segment(calendar_id),
+        encode_path_segment(remote_id)
+    )) {
+        Ok(()) => Ok(()),
+        Err(error) if is_feishu_deleted_event_error(&error) => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 fn feishu_task_body(task: &LocalTask, tasklist_guid: &str) -> Value {
@@ -1590,7 +1965,9 @@ fn parse_remote_task(value: &Value, tasklist_key: &str, tasklist_guid: &str) -> 
     let title = value
         .get("summary")
         .and_then(Value::as_str)
-        .unwrap_or("Untitled")
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .unwrap_or("")
         .to_string();
     let raw_note = value
         .get("description")
@@ -1638,7 +2015,9 @@ fn parse_remote_event(value: &Value) -> Option<RemoteEvent> {
     let title = value
         .get("summary")
         .and_then(Value::as_str)
-        .unwrap_or("Untitled")
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .unwrap_or("")
         .to_string();
     let raw_note = value
         .get("description")
@@ -1727,6 +2106,7 @@ fn load_local_tasks(connection: &Connection) -> Result<Vec<LocalTask>, String> {
         }
     }
     {
+        let today_date = today_date_string();
         let mut statement = connection
             .prepare(
                 "
@@ -1734,12 +2114,13 @@ fn load_local_tasks(connection: &Connection) -> Result<Vec<LocalTask>, String> {
                        m.sync_id, m.deleted_at
                 FROM today_plan_items t
                 LEFT JOIN sync_meta m ON m.entity_type = 'today_plan_item' AND m.local_id = t.id
+                WHERE t.today_date = ?1
                 ORDER BY t.id ASC
                 ",
             )
             .map_err(|error| error.to_string())?;
         let rows = statement
-            .query_map([], |row| {
+            .query_map(params![today_date], |row| {
                 let id: i64 = row.get(0)?;
                 Ok(LocalTask {
                     entity_type: ENTITY_TODAY_PLAN_ITEM,
@@ -2227,7 +2608,10 @@ fn update_local_schedule_block_from_remote(
         .execute(
             "
             UPDATE schedule_blocks
-            SET schedule_date = ?1, title = ?2, note = ?3, start_minute = ?4,
+            SET schedule_date = ?1,
+                title = CASE WHEN ?2 = '' THEN title ELSE ?2 END,
+                note = ?3,
+                start_minute = ?4,
                 end_minute = ?5, updated_at = ?6
             WHERE id = ?7
             ",
@@ -2243,6 +2627,10 @@ fn update_local_schedule_block_from_remote(
         )
         .map_err(|error| error.to_string())?;
     Ok(())
+}
+
+fn is_importable_remote_event(remote: &RemoteEvent) -> bool {
+    !remote.title.trim().is_empty()
 }
 
 fn create_local_schedule_block_from_remote(
@@ -2289,8 +2677,8 @@ fn create_local_schedule_block_from_remote(
         REMOTE_FEISHU_EVENT,
         &remote.id,
         None,
-        None,
-        None,
+        Some(&remote_event_fingerprint(remote)),
+        Some(&remote_event_fingerprint(remote)),
         remote
             .updated_millis
             .map(|value| value.to_string())
@@ -2409,7 +2797,7 @@ fn upsert_link(
               remote_parent_id = excluded.remote_parent_id,
               remote_etag = excluded.remote_etag,
               remote_change_key = excluded.remote_change_key,
-              remote_last_modified = excluded.remote_last_modified,
+              remote_last_modified = COALESCE(excluded.remote_last_modified, feishu_sync_links.remote_last_modified),
               last_synced_at = excluded.last_synced_at,
               deleted_at = NULL
             ",
@@ -2463,6 +2851,9 @@ fn row_to_link(row: &rusqlite::Row<'_>) -> rusqlite::Result<FeishuLink> {
         remote_kind: row.get(4)?,
         remote_id: row.get(5)?,
         remote_parent_id: row.get(6)?,
+        remote_etag: row.get(7)?,
+        remote_change_key: row.get(8)?,
+        remote_last_modified: row.get(9)?,
     })
 }
 
@@ -3034,14 +3425,164 @@ mod live_tests {
     use super::*;
 
     #[test]
+    fn recognizes_deleted_calendar_event_error() {
+        assert!(is_feishu_deleted_event_error(
+            "Feishu returned status 403 / code 193003: event is deleted"
+        ));
+        assert!(!is_feishu_deleted_event_error(
+            "Feishu returned status 403 / code 193004: permission denied"
+        ));
+    }
+
+    #[test]
+    fn skips_untitled_remote_calendar_imports() {
+        let event = parse_remote_event(&json!({
+            "event_id": "remote-blank-title",
+            "description": "",
+            "start_time": { "timestamp": "1779235200" },
+            "end_time": { "timestamp": "1779238800" },
+            "updated_time": "1779235200000"
+        }))
+        .expect("event parses");
+
+        assert_eq!(event.title, "");
+        assert!(!is_importable_remote_event(&event));
+    }
+
+    #[test]
+    fn finds_orphan_calendar_event_links() {
+        let connection = Connection::open_in_memory().expect("in-memory db");
+        connection
+            .execute_batch(
+                "
+                CREATE TABLE schedule_blocks (
+                  id INTEGER PRIMARY KEY,
+                  title TEXT NOT NULL
+                );
+                CREATE TABLE sync_meta (
+                  entity_type TEXT NOT NULL,
+                  local_id INTEGER NOT NULL,
+                  sync_id TEXT NOT NULL,
+                  deleted_at INTEGER,
+                  updated_at INTEGER,
+                  PRIMARY KEY (entity_type, local_id)
+                );
+                CREATE TABLE feishu_sync_links (
+                  id INTEGER PRIMARY KEY,
+                  entity_type TEXT NOT NULL,
+                  local_id INTEGER,
+                  local_sync_id TEXT NOT NULL,
+                  remote_kind TEXT NOT NULL,
+                  remote_id TEXT NOT NULL,
+                  remote_parent_id TEXT,
+                  remote_etag TEXT,
+                  remote_change_key TEXT,
+                  remote_last_modified TEXT,
+                  last_synced_at TEXT,
+                  deleted_at TEXT
+                );
+                ",
+            )
+            .expect("schema");
+        connection
+            .execute(
+                "INSERT INTO schedule_blocks (id, title) VALUES (1, 'live'), (2, 'deleted')",
+                [],
+            )
+            .expect("blocks");
+        connection
+            .execute(
+                "INSERT INTO sync_meta (entity_type, local_id, sync_id, deleted_at, updated_at)
+                 VALUES ('schedule_block', 1, 'schedule_block-1', NULL, 1),
+                        ('schedule_block', 2, 'schedule_block-2', 2, 2)",
+                [],
+            )
+            .expect("sync meta");
+        connection
+            .execute(
+                "INSERT INTO feishu_sync_links
+                 (id, entity_type, local_id, local_sync_id, remote_kind, remote_id, deleted_at)
+                 VALUES
+                 (1, 'schedule_block', 1, 'schedule_block-1', 'feishu_calendar_event', 'live', NULL),
+                 (2, 'schedule_block', 2, 'schedule_block-2', 'feishu_calendar_event', 'tombstone', NULL),
+                 (3, 'schedule_block', 3, 'schedule_block-3', 'feishu_calendar_event', 'missing-local', NULL),
+                 (4, 'schedule_block', 4, 'schedule_block-4', 'feishu_calendar_event', 'already-deleted', 'now'),
+                 (5, 'checklist_task', 5, 'checklist_task-5', 'feishu_calendar_event', 'other-entity', NULL)",
+                [],
+            )
+            .expect("links");
+
+        let links = load_orphan_calendar_event_links(&connection).expect("loads orphan links");
+        let remote_ids = links
+            .into_iter()
+            .map(|link| link.remote_id)
+            .collect::<Vec<_>>();
+
+        assert_eq!(remote_ids, vec!["tombstone", "missing-local"]);
+    }
+
+    #[test]
+    fn local_calendar_change_pushes_when_remote_timestamp_is_missing() {
+        assert_eq!(
+            linked_calendar_action(2_000, None, true, false, true),
+            LinkedCalendarAction::PushLocal
+        );
+        assert_eq!(
+            linked_calendar_action(6_500, None, true, false, false),
+            LinkedCalendarAction::PushLocal
+        );
+        assert_eq!(
+            linked_calendar_action(2_000, None, false, true, false),
+            LinkedCalendarAction::PullRemote
+        );
+        assert_eq!(
+            linked_calendar_action(2_000, None, false, false, true),
+            LinkedCalendarAction::RefreshLink
+        );
+    }
+
+    #[test]
+    fn calendar_fingerprint_tracks_block_time_changes() {
+        let local = LocalScheduleBlock {
+            id: 1,
+            sync_id: "schedule_block-1".to_string(),
+            schedule_date: "2026-05-20".to_string(),
+            title: "Math".to_string(),
+            note: Some("chapter 3".to_string()),
+            start_minute: 600,
+            end_minute: 660,
+            status: "planned".to_string(),
+            updated_at: "2026-05-20T00:00:00Z".to_string(),
+            deleted_at: None,
+        };
+        let remote = RemoteEvent {
+            id: "event-1".to_string(),
+            title: "Math".to_string(),
+            note: Some("chapter 3".to_string()),
+            schedule_date: "2026-05-20".to_string(),
+            start_minute: 630,
+            end_minute: 690,
+            updated_millis: None,
+            marker_sync_id: Some("schedule_block-1".to_string()),
+        };
+
+        assert_ne!(
+            local_schedule_block_fingerprint(&local),
+            remote_event_fingerprint(&remote)
+        );
+    }
+
+    #[test]
     #[ignore = "uses the local app database and live Feishu account"]
     fn live_sync_feishu_bridge_once() {
+        let trigger =
+            std::env::var("FEISHU_LIVE_TEST_TRIGGER").unwrap_or_else(|_| "live_test".to_string());
         let database_path = PathBuf::from(std::env::var("APPDATA").expect("APPDATA is required"))
             .join("com.kaoyan.focus")
             .join("kaoyan-focus.sqlite3");
         let result = sync_feishu_bridge_blocking(
             database_path,
-            "live_test".to_string(),
+            trigger,
             Uuid::new_v4().to_string(),
             Utc::now(),
         )
@@ -3096,6 +3637,10 @@ fn feishu_value_error_message(status: StatusCode, value: &Value) -> String {
         code,
         message
     )
+}
+
+fn is_feishu_deleted_event_error(error: &str) -> bool {
+    error.contains("193003")
 }
 
 fn append_query_param(url: &str, key: &str, value: &str) -> String {
@@ -3164,6 +3709,10 @@ fn date_in_sync_range(date: &str) -> bool {
     date >= today - Duration::days(30) && date <= today + Duration::days(180)
 }
 
+fn today_date_string() -> String {
+    Local::now().date_naive().format("%Y-%m-%d").to_string()
+}
+
 fn due_date_to_millis(date: &str) -> i64 {
     local_date_minute_to_timestamp(date, 0) * 1000
 }
@@ -3227,6 +3776,14 @@ fn normalize_timestamp_millis(value: i64) -> i64 {
     } else {
         value
     }
+}
+
+fn parse_link_millis(value: &str) -> Option<i64> {
+    value
+        .parse::<i64>()
+        .ok()
+        .map(normalize_timestamp_millis)
+        .or_else(|| parse_rfc3339_millis(value).ok())
 }
 
 fn parse_rfc3339(value: &str) -> Option<DateTime<Utc>> {

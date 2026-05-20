@@ -14,10 +14,26 @@ pub fn open_database(path: &Path) -> Result<Connection, String> {
     }
 
     let connection = Connection::open(path).map_err(|error| error.to_string())?;
+    configure_connection(&connection)?;
     run_migrations(&connection)?;
     seed_default_subjects(&connection)?;
     normalize_default_subjects(&connection)?;
     Ok(connection)
+}
+
+fn configure_connection(connection: &Connection) -> Result<(), String> {
+    connection
+        .busy_timeout(std::time::Duration::from_secs(10))
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute_batch(
+            "
+            PRAGMA foreign_keys = ON;
+            PRAGMA journal_mode = WAL;
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn run_migrations(connection: &Connection) -> Result<(), String> {
@@ -490,7 +506,12 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "TEXT",
     )?;
     add_column_if_missing(connection, "sync_runs", "active_snapshot_phase", "TEXT")?;
-    add_column_if_missing(connection, "sync_runs", "remote_active_snapshot_phase", "TEXT")?;
+    add_column_if_missing(
+        connection,
+        "sync_runs",
+        "remote_active_snapshot_phase",
+        "TEXT",
+    )?;
     add_column_if_missing(
         connection,
         "sync_runs",
@@ -774,7 +795,9 @@ fn normalize_default_subjects(connection: &Connection) -> Result<(), String> {
             )
             .map_err(|error| error.to_string())?;
         let candidate_ids = statement
-            .query_map(params![name, sync_id, legacy_sync_id], |row| row.get::<_, i64>(0))
+            .query_map(params![name, sync_id, legacy_sync_id], |row| {
+                row.get::<_, i64>(0)
+            })
             .map_err(|error| error.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())?;
@@ -880,9 +903,7 @@ fn rewrite_subject_references(
     ] {
         connection
             .execute(
-                &format!(
-                    "UPDATE {table} SET subject_id = ?1 WHERE subject_id = ?2"
-                ),
+                &format!("UPDATE {table} SET subject_id = ?1 WHERE subject_id = ?2"),
                 params![canonical_subject_id, old_subject_id],
             )
             .map_err(|error| error.to_string())?;

@@ -15,10 +15,11 @@ const ENTITY_SCHEDULE_BLOCK: &str = "schedule_block";
 const ENTITY_SCHEDULE_TEMPLATE: &str = "schedule_template";
 
 fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
-    let app = app.clone();
+    let sync_app = app.clone();
     thread::spawn(move || {
-        let _ = crate::commands::sync::sync_object_storage_after_external_change(app, trigger);
+        let _ = crate::commands::sync::sync_object_storage_after_external_change(sync_app, trigger);
     });
+    crate::commands::feishu::sync_feishu_bridge_after_local_change(app.clone(), trigger);
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -161,10 +162,7 @@ pub fn create_schedule_block(
             block.id,
             Some(format!(
                 "schedule_block:{}:source-today:{}:{}-{}",
-                draft.schedule_date,
-                source_today_item_id,
-                draft.start_minute,
-                draft.end_minute
+                draft.schedule_date, source_today_item_id, draft.start_minute, draft.end_minute
             )),
             Utc::now().timestamp_millis(),
         )?;
@@ -566,10 +564,7 @@ fn materialize_templates_for_range(
                 local_id,
                 Some(format!(
                     "schedule_block:{}:template:{}:{}-{}",
-                    schedule_date,
-                    template.id,
-                    template.start_minute,
-                    template.end_minute
+                    schedule_date, template.id, template.start_minute, template.end_minute
                 )),
                 Utc::now().timestamp_millis(),
             )?;

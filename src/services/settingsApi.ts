@@ -23,6 +23,7 @@ import type {
 } from '../types/settings';
 
 export const STUDY_SYNC_STATE_CHANGED_EVENT = 'study-sync-state-changed';
+export const FEISHU_SYNC_REFRESH_EVENT = 'ultrafocus-feishu-sync-refresh';
 
 export type AppDataLocation = {
   app_data_dir: string;

@@ -10,7 +10,7 @@ import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSe
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { createScheduleBlock, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
-import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange, getAppSettings } from '../services/settingsApi';
+import { FEISHU_SYNC_REFRESH_EVENT, STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange, getAppSettings } from '../services/settingsApi';
 import { setStudyFullscreen } from '../services/systemApi';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
 import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
@@ -176,6 +176,16 @@ export default function FocusPage() {
       void refreshScheduleData();
     }).then((dispose) => { unlisten = dispose; });
     return () => { cancelled = true; unlisten?.(); };
+  }, []);
+
+  useEffect(() => {
+    const handleFeishuRefresh = () => {
+      void refreshDashboard();
+      void refreshChecklistData();
+      void refreshScheduleData();
+    };
+    window.addEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
+    return () => window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
   }, []);
 
   useEffect(() => {

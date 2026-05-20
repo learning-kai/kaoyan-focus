@@ -9,9 +9,10 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Save,
   Trash2,
 } from 'lucide-react';
-import { getAppSettings, syncConfiguredStateChange } from '../services/settingsApi';
+import { FEISHU_SYNC_REFRESH_EVENT, getAppSettings, syncConfiguredStateChange, syncFeishuBridge } from '../services/settingsApi';
 import {
   createScheduleBlock,
   createScheduleBlockFromTodayItem,
@@ -245,6 +246,14 @@ export default function SchedulePage() {
   }, [selectedDate]);
 
   useEffect(() => {
+    const handleFeishuRefresh = () => {
+      void refresh(selectedDate);
+    };
+    window.addEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
+    return () => window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
+  }, [selectedDate]);
+
+  useEffect(() => {
     dragStateRef.current = dragState;
   }, [dragState]);
 
@@ -338,6 +347,27 @@ export default function SchedulePage() {
       await refresh();
       setMessage(done);
       void syncConfiguredStateChange(trigger).catch(() => undefined);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveSchedule() {
+    try {
+      setSaving(true);
+      setError(null);
+      setMessage(null);
+      await refresh(selectedDate);
+      const feishuResult = await syncFeishuBridge('schedule_change');
+      await syncConfiguredStateChange('schedule_change').catch(() => undefined);
+      await refresh(selectedDate);
+      if (feishuResult.status === 'failed') {
+        setError(feishuResult.message || '飞书日历同步失败。');
+        return;
+      }
+      setMessage(feishuResult.status === 'synced' ? '课表已保存并同步到飞书日历。' : '课表已保存。');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -729,6 +759,9 @@ export default function SchedulePage() {
           <p>把今日任务和手动安排放进一天的时间轴，到点提醒，但不自动开始专注。</p>
         </div>
         <div className="schedule-actions">
+          <button className="primary-button" disabled={saving || loadingSchedule} type="button" onClick={() => void handleSaveSchedule()}>
+            <Save size={16} /> 保存
+          </button>
           <button className="ghost-button" type="button" onClick={() => void refresh()}>
             <RefreshCw size={16} /> 刷新
           </button>
