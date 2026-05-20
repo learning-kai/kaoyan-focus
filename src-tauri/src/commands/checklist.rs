@@ -1,9 +1,13 @@
-use crate::{storage::db::open_database, sync_package::mark_entity_deleted};
+use crate::{
+    storage::db::open_database,
+    sync_package::{ensure_sync_meta_for_local_id, mark_entity_deleted},
+};
 use chrono::{Local, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::thread;
 use tauri::{AppHandle, Manager};
 
 const CATEGORY_NAME_SETTING_KEY: &str = "checklist_category_names";
@@ -129,6 +133,13 @@ struct TaskRecord {
     updated_at: String,
 }
 
+fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
+    let app = app.clone();
+    thread::spawn(move || {
+        let _ = crate::commands::sync::sync_object_storage_after_external_change(app, trigger);
+    });
+}
+
 #[tauri::command]
 pub fn get_checklist_page_data(app: AppHandle) -> Result<ChecklistPageData, String> {
     let connection = open_database(&database_path(&app)?)?;
@@ -187,7 +198,9 @@ pub fn create_checklist_task(
         )
         .map_err(|error| error.to_string())?;
 
-    get_checklist_task_by_id(&connection, connection.last_insert_rowid())
+    let task = get_checklist_task_by_id(&connection, connection.last_insert_rowid())?;
+    trigger_shared_sync(&app, "checklist_change");
+    Ok(task)
 }
 
 #[tauri::command]
@@ -229,7 +242,9 @@ pub fn update_checklist_task(
         )
         .map_err(|error| error.to_string())?;
 
-    get_checklist_task_by_id(&connection, id)
+    let task = get_checklist_task_by_id(&connection, id)?;
+    trigger_shared_sync(&app, "checklist_change");
+    Ok(task)
 }
 
 #[tauri::command]
@@ -246,6 +261,7 @@ pub fn delete_checklist_task(app: AppHandle, id: i64) -> Result<(), String> {
     connection
         .execute("DELETE FROM checklist_tasks WHERE id = ?1", params![id])
         .map_err(|error| error.to_string())?;
+    trigger_shared_sync(&app, "checklist_change");
     Ok(())
 }
 
@@ -274,6 +290,7 @@ pub fn reorder_checklist_tasks(
             .map_err(|error| error.to_string())?;
     }
 
+    trigger_shared_sync(&app, "checklist_change");
     Ok(())
 }
 
@@ -291,7 +308,9 @@ pub fn complete_checklist_task(
         )
         .map_err(|error| error.to_string())?;
 
-    get_checklist_task_by_id(&connection, id)
+    let task = get_checklist_task_by_id(&connection, id)?;
+    trigger_shared_sync(&app, "checklist_change");
+    Ok(task)
 }
 
 #[tauri::command]
@@ -355,7 +374,16 @@ pub fn add_task_to_today_plan(app: AppHandle, task_id: i64) -> Result<TodayPlanI
         )
         .map_err(|error| error.to_string())?;
 
-    get_today_plan_item_by_id(&connection, connection.last_insert_rowid())
+    let item = get_today_plan_item_by_id(&connection, connection.last_insert_rowid())?;
+    ensure_sync_meta_for_local_id(
+        &connection,
+        "today_plan_item",
+        item.id,
+        Some(format!("today_plan:{}:source-task:{}", item.today_date, task.id)),
+        Utc::now().timestamp_millis(),
+    )?;
+    trigger_shared_sync(&app, "today_plan_change");
+    Ok(item)
 }
 
 #[tauri::command]
@@ -408,7 +436,9 @@ pub fn create_today_plan_item(
         )
         .map_err(|error| error.to_string())?;
 
-    get_today_plan_item_by_id(&connection, connection.last_insert_rowid())
+    let item = get_today_plan_item_by_id(&connection, connection.last_insert_rowid())?;
+    trigger_shared_sync(&app, "today_plan_change");
+    Ok(item)
 }
 
 #[tauri::command]
@@ -447,7 +477,9 @@ pub fn update_today_plan_item(
         )
         .map_err(|error| error.to_string())?;
 
-    get_today_plan_item_by_id(&connection, id)
+    let item = get_today_plan_item_by_id(&connection, id)?;
+    trigger_shared_sync(&app, "today_plan_change");
+    Ok(item)
 }
 
 #[tauri::command]
@@ -458,6 +490,7 @@ pub fn delete_today_plan_item(app: AppHandle, id: i64) -> Result<(), String> {
     connection
         .execute("DELETE FROM today_plan_items WHERE id = ?1", params![id])
         .map_err(|error| error.to_string())?;
+    trigger_shared_sync(&app, "today_plan_change");
     Ok(())
 }
 
@@ -473,6 +506,7 @@ pub fn reorder_today_plan_items(app: AppHandle, ordered_ids: Vec<i64>) -> Result
             )
             .map_err(|error| error.to_string())?;
     }
+    trigger_shared_sync(&app, "today_plan_change");
     Ok(())
 }
 
@@ -516,7 +550,9 @@ pub fn complete_today_plan_item(
         }
     }
 
-    get_today_plan_item_by_id(&connection, id)
+    let item = get_today_plan_item_by_id(&connection, id)?;
+    trigger_shared_sync(&app, "today_plan_change");
+    Ok(item)
 }
 
 fn load_checklist_page_data(

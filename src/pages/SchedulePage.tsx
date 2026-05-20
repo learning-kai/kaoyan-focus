@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react';
-import { getAppSettings } from '../services/settingsApi';
+import { getAppSettings, syncConfiguredStateChange } from '../services/settingsApi';
 import {
   createScheduleBlock,
   createScheduleBlockFromTodayItem,
@@ -330,13 +330,14 @@ export default function SchedulePage() {
     }
   }
 
-  async function withSave(action: () => Promise<void>, done: string) {
+  async function withSave(action: () => Promise<void>, done: string, trigger = 'local_data_change') {
     try {
       setSaving(true);
       setError(null);
       await action();
       await refresh();
       setMessage(done);
+      void syncConfiguredStateChange(trigger).catch(() => undefined);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -716,7 +717,7 @@ export default function SchedulePage() {
         appSettings.long_break_interval,
         appSettings.default_focus_mode,
       );
-    }, '已从课表开始专注。');
+    }, '已从课表开始专注。', 'focus_state_change');
   }
 
   return (

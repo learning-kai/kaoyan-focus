@@ -2266,6 +2266,54 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   margin-top: 2px;
 }
 
+.settings-shell .command-panel {
+  align-self: start;
+}
+
+.settings-shell .panel-title {
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.settings-shell .panel-title > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-collapse-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid rgba(139, 167, 215, 0.18);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(11, 18, 30, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.settings-collapse-button svg {
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.settings-collapse-button[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.settings-collapse-button:hover {
+  border-color: var(--line-strong);
+  background: rgba(20, 33, 51, 0.94);
+}
+
+.settings-collapse-button[aria-expanded='false'] {
+  color: var(--muted);
+}
+
 .history-panel {
   min-height: 100%;
 }
@@ -3659,6 +3707,17 @@ html[data-theme='light'] .command-panel,
 html[data-theme='light'] .soft-panel {
   border-color: rgba(112, 131, 159, 0.18);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(246, 250, 255, 0.62));
+}
+
+html[data-theme='light'] .settings-collapse-button {
+  color: var(--ink);
+  border-color: rgba(112, 131, 159, 0.18);
+  background: rgba(255, 255, 255, 0.64);
+}
+
+html[data-theme='light'] .settings-collapse-button:hover {
+  border-color: rgba(75, 119, 232, 0.24);
+  background: rgba(255, 255, 255, 0.86);
 }
 
 html[data-theme='light'] .top-strip {

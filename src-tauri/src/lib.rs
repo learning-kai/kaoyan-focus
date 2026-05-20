@@ -15,6 +15,8 @@ use tauri_winrt_notification::{Duration as ToastDuration, LoopableSound, Scenari
 
 mod commands {
     pub mod checklist;
+    pub mod email;
+    pub mod feishu;
     pub mod focus;
     pub mod monitor;
     pub mod review;
@@ -152,10 +154,46 @@ pub fn run() {
         })
         .setup(|app| {
             let app_handle = app.handle().clone();
+            let tick_app_handle = app_handle.clone();
+            let prune_app_handle = app_handle.clone();
+            let sync_poll_app_handle = app_handle.clone();
             let _ = commands::focus::sync_study_runtime_state(&app_handle);
+            commands::sync::prune_sync_backups_best_effort(&app_handle);
             thread::spawn(move || loop {
-                let _ = commands::focus::tick_background_study_mode(&app_handle);
+                let _ = commands::focus::tick_background_study_mode(&tick_app_handle);
                 thread::sleep(Duration::from_secs(3));
+            });
+            thread::spawn(move || {
+                thread::sleep(Duration::from_secs(10));
+                loop {
+                    eprintln!("Starting desktop background object storage sync poll");
+                    match commands::sync::poll_object_storage_for_remote_changes(
+                        sync_poll_app_handle.clone(),
+                    ) {
+                        Ok(result) => {
+                            eprintln!(
+                                "Desktop background object storage sync finished: status={} message={}",
+                                result.status, result.message
+                            );
+                            if result
+                                .skipped_reason
+                                .as_deref()
+                                .is_some_and(|reason| reason == "object_storage_sync_in_flight")
+                            {
+                                thread::sleep(Duration::from_secs(15));
+                                continue;
+                            }
+                        }
+                        Err(error) => {
+                            eprintln!("Desktop background object storage sync failed: {error}");
+                        }
+                    }
+                    thread::sleep(Duration::from_secs(180));
+                }
+            });
+            thread::spawn(move || loop {
+                commands::sync::prune_sync_backups_best_effort(&prune_app_handle);
+                thread::sleep(Duration::from_secs(60 * 60));
             });
 
             let show_item =
@@ -242,6 +280,9 @@ pub fn run() {
             commands::review::get_daily_review_page_data,
             commands::review::save_daily_review,
             commands::review::delete_daily_review,
+            commands::review::get_weekly_review_page_data,
+            commands::review::save_weekly_review,
+            commands::review::delete_weekly_review,
             commands::focus::start_study_mode,
             commands::focus::get_study_mode_state,
             commands::focus::confirm_study_break,
@@ -263,6 +304,19 @@ pub fn run() {
             commands::settings::get_app_settings,
             commands::settings::get_app_data_location,
             commands::settings::save_app_settings,
+            commands::email::get_email_reminder_settings,
+            commands::email::save_email_reminder_settings,
+            commands::email::test_email_reminder,
+            commands::email::check_due_task_email_reminders,
+            commands::feishu::get_feishu_sync_settings,
+            commands::feishu::save_feishu_sync_settings,
+            commands::feishu::get_feishu_sync_status,
+            commands::feishu::start_feishu_oauth_login,
+            commands::feishu::poll_feishu_oauth_login,
+            commands::feishu::logout_feishu,
+            commands::feishu::sync_feishu_bridge,
+            commands::feishu::rebuild_feishu_tasklists_from_local,
+            commands::feishu::list_feishu_sync_runs,
             show_study_reminder,
             commands::sync::get_webdav_settings,
             commands::sync::save_webdav_settings,

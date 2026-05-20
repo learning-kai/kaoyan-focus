@@ -119,6 +119,14 @@ export type SyncRunSummary = {
   validation_report: string | null;
   backup_path: string | null;
   remote_backup_key: string | null;
+  active_snapshot_sync_id: string | null;
+  remote_active_snapshot_sync_id: string | null;
+  active_snapshot_phase: string | null;
+  remote_active_snapshot_phase: string | null;
+  active_snapshot_updated_at: number | null;
+  remote_snapshot_updated_at: number | null;
+  remote_exported_drift_seconds: number | null;
+  detail: string | null;
   error_message: string | null;
 };
 
@@ -139,4 +147,105 @@ export type SyncBackupPreview = {
   deleted_count: number;
   exported_at: number | null;
   device_id: string | null;
+};
+
+export type EmailReminderSettings = {
+  enabled: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_security: 'tls' | 'starttls' | 'none';
+  username: string;
+  password: string;
+  from: string;
+  to: string;
+};
+
+export type EmailReminderResult = {
+  status: 'sent' | 'skipped';
+  message: string;
+  sent_count: number;
+};
+
+export type FeishuSyncSettings = {
+  enabled: boolean;
+  app_id: string;
+  app_secret: string;
+  redirect_uri: string;
+};
+
+export type FeishuSyncRunSummary = {
+  id: number;
+  run_id: string;
+  trigger: string;
+  status: string;
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  pushed_count: number;
+  pulled_count: number;
+  deleted_count: number;
+  conflict_count: number;
+  task_count: number;
+  calendar_count: number;
+  message: string;
+  error_message: string | null;
+};
+
+export type FeishuTasklistStatus = {
+  key: string;
+  label: string;
+  guid: string | null;
+  ready: boolean;
+};
+
+export type FeishuSyncStatus = {
+  enabled: boolean;
+  configured: boolean;
+  authenticated: boolean;
+  expires_at: string | null;
+  tasklist_guid: string | null;
+  tasklist_count: number;
+  tasklists: FeishuTasklistStatus[];
+  calendar_id: string | null;
+  redirect_uri: string;
+  pending_authorization_url: string | null;
+  pending_message: string | null;
+  required_scopes: string;
+  last_run: FeishuSyncRunSummary | null;
+};
+
+export type FeishuOAuthLogin = {
+  status: string;
+  authorization_url: string;
+  redirect_uri: string;
+  message: string;
+};
+
+export type FeishuLoginPollResult = {
+  status: string;
+  message: string;
+  authenticated: boolean;
+};
+
+export type FeishuSyncResult = {
+  status: 'synced' | 'skipped' | 'failed';
+  message: string;
+  pushed_count: number;
+  pulled_count: number;
+  deleted_count: number;
+  conflict_count: number;
+  task_count: number;
+  calendar_count: number;
+  synced_at: string;
+};
+
+export type FeishuRebuildResult = {
+  status: string;
+  message: string;
+  backup_path: string;
+  remote_backup_path: string;
+  deleted_tasklist_count: number;
+  uploaded_task_count: number;
+  tasklist_count: number;
+  synced_at: string;
 };

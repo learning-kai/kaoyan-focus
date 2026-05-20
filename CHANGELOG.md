@@ -174,4 +174,142 @@
 ### Android
 - No commits found.
 
+## v0.3.1 - 2026-05-18
+
+### Desktop
+#### Added
+- Add drag-and-resize schedule interactions (51ff197)
+
+### Android
+#### Fixed
+- Fix schedule overlap and study alerts (53d6898)
+
+## v0.4.0 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.4.1 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.4.2 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.4.3 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.4.4 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.4.5 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.4.8 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.4.9 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.5.0 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.5.1 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.5.2 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.5.3 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.6.0 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.7.0 - 2026-05-19
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.7.1 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v0.7.2 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
 

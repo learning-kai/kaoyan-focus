@@ -14,6 +14,29 @@ function formatStudyTime(seconds: number) {
   return `${Number.isInteger(hours) ? hours.toFixed(0) : hours.toFixed(1)} 小时`;
 }
 
+function formatDateTime(value: string | null) {
+  if (!value) return '未记录';
+  return new Date(value).toLocaleString();
+}
+
+function formatTimeOnly(value: string | null) {
+  if (!value) return '未记录';
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatSessionTimeRange(session: FocusSession) {
+  const start = new Date(session.started_at);
+  if (!session.ended_at) {
+    return `${formatDateTime(session.started_at)} - 未记录结束`;
+  }
+
+  const end = new Date(session.ended_at);
+  const sameDay = start.toDateString() === end.toDateString();
+  return sameDay
+    ? `${formatDateTime(session.started_at)} - ${formatTimeOnly(session.ended_at)}`
+    : `${formatDateTime(session.started_at)} - ${formatDateTime(session.ended_at)}`;
+}
+
 export default function StatsPage() {
   const [stats, setStats] = useState<FocusStatsSummary | null>(null);
   const [interruptions, setInterruptions] = useState<InterruptionSummary[]>([]);
@@ -205,7 +228,7 @@ export default function StatsPage() {
                   <span className="row-icon enabled"><TimerReset size={18} /></span>
                   <div>
                     <strong>{formatStudyTime(session.actual_seconds || session.planned_seconds)}</strong>
-                    <p>{new Date(session.started_at).toLocaleString()} / {sessionStatusLabel(session.status)}</p>
+                    <p>{formatSessionTimeRange(session)} / {sessionStatusLabel(session.status)}</p>
                   </div>
                 </div>
                 <div className="record-subject">

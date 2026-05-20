@@ -46,6 +46,7 @@ import {
   updateTodayPlanItem,
 } from '../services/checklistApi';
 import { getStudyModeState } from '../services/focusApi';
+import { syncConfiguredStateChange } from '../services/settingsApi';
 import type {
   ChecklistCategory,
   ChecklistPageData,
@@ -297,6 +298,7 @@ export default function ChecklistPage() {
       if (successMessage) {
         setMessage(successMessage);
       }
+      void syncConfiguredStateChange('local_data_change').catch(() => undefined);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {

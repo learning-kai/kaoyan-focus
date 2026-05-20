@@ -93,6 +93,22 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+function formatTimeOnly(value: string | null) {
+  if (!value) return '暂无';
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatSessionTimeRange(session: FocusSession) {
+  if (!session.ended_at) {
+    return `${formatDateTime(session.started_at)} - 未记录结束`;
+  }
+  const start = new Date(session.started_at);
+  const end = new Date(session.ended_at);
+  return start.toDateString() === end.toDateString()
+    ? `${formatDateTime(session.started_at)} - ${formatTimeOnly(session.ended_at)}`
+    : `${formatDateTime(session.started_at)} - ${formatDateTime(session.ended_at)}`;
+}
+
 function todayString() {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -246,7 +262,9 @@ export default function FocusPage() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
-  function queueConfiguredSync() { void syncConfiguredStateChange().catch(() => undefined); }
+  function queueConfiguredSync(trigger = 'focus_state_change') {
+    void syncConfiguredStateChange(trigger).catch(() => undefined);
+  }
 
   function scheduleSubjectCategory(subjectId: number | null | undefined) {
     if (subjectId === 1) return 'politics';
@@ -342,13 +360,13 @@ export default function FocusPage() {
     setEditingTodayDraft({ title: item.title, note: item.note ?? '', dueDate: item.due_date ?? '', subjectId: item.subject_id });
   }
 
-  async function withChecklistRefresh(work: () => Promise<void>, successMessage?: string) {
+  async function withChecklistRefresh(work: () => Promise<void>, successMessage?: string, trigger = 'local_data_change') {
     try {
       setChecklistSaving(true);
       await work();
       await refreshChecklistData();
       if (successMessage) setNotice(successMessage);
-      queueConfiguredSync();
+      queueConfiguredSync(trigger);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); } finally { setChecklistSaving(false); }
   }
 
@@ -556,7 +574,7 @@ export default function FocusPage() {
       <div className="dashboard-strip">
         <section className="soft-panel"><div className="panel-title"><div><p className="eyebrow">Today</p><h3>今日状态</h3></div><CheckCircle2 size={20} /></div><div className="stats-grid four"><Metric icon={Timer} label="今日" value={formatDuration(stats?.today_seconds ?? 0)} /><Metric icon={Timer} label="本周" value={formatDuration(stats?.week_seconds ?? 0)} /><Metric icon={Timer} label="本月" value={formatDuration(stats?.month_seconds ?? 0)} /><Metric icon={ShieldCheck} label="拦截" value={String(stats?.interruption_count ?? 0)} /></div></section>
         <section className="soft-panel"><div className="panel-title"><div><p className="eyebrow">Monitor</p><h3>白名单状态</h3></div><Gauge size={20} /></div><div className="monitor-callout"><Leaf size={18} /><div><strong>准备就绪</strong><p>开始学习后会持续检查前台窗口，并关闭非白名单软件或网站。</p></div></div></section>
-        <section className="soft-panel history-panel"><div className="panel-title"><div><p className="eyebrow">History</p><h3>最近记录</h3></div><BellRing size={20} /></div>{history.length === 0 ? <div className="empty-state compact">还没有专注记录。</div> : <div className="compact-history">{history.slice(0, 4).map((session) => <article className="list-row compact-row" key={session.id}><div><strong>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</strong><p>{formatDateTime(session.started_at)}</p></div><div className="history-meta"><span>{sessionStatusLabel(session.status)}</span><strong>{formatDuration(session.actual_seconds || session.planned_seconds)}</strong></div></article>)}</div>}</section>
+        <section className="soft-panel history-panel"><div className="panel-title"><div><p className="eyebrow">History</p><h3>最近记录</h3></div><BellRing size={20} /></div>{history.length === 0 ? <div className="empty-state compact">还没有专注记录。</div> : <div className="compact-history">{history.slice(0, 4).map((session) => <article className="list-row compact-row" key={session.id}><div><strong>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</strong><p>{formatSessionTimeRange(session)}</p></div><div className="history-meta"><span>{sessionStatusLabel(session.status)}</span><strong>{formatDuration(session.actual_seconds || session.planned_seconds)}</strong></div></article>)}</div>}</section>
       </div>
     </section>
   );

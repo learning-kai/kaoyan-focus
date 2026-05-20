@@ -1,17 +1,25 @@
 use crate::{
     commands::focus::{self, StudyModeLinks, StudyModeState},
     storage::db::open_database,
-    sync_package::mark_entity_deleted,
+    sync_package::{ensure_sync_meta_for_local_id, mark_entity_deleted},
     AppState,
 };
 use chrono::{Datelike, Duration, Local, NaiveDate, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::thread;
 use tauri::{AppHandle, Manager, State};
 
 const ENTITY_SCHEDULE_BLOCK: &str = "schedule_block";
 const ENTITY_SCHEDULE_TEMPLATE: &str = "schedule_template";
+
+fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
+    let app = app.clone();
+    thread::spawn(move || {
+        let _ = crate::commands::sync::sync_object_storage_after_external_change(app, trigger);
+    });
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScheduleBlock {
@@ -145,7 +153,24 @@ pub fn create_schedule_block(
         )
         .map_err(|error| error.to_string())?;
 
-    get_schedule_block_by_id(&connection, connection.last_insert_rowid())
+    let block = get_schedule_block_by_id(&connection, connection.last_insert_rowid())?;
+    if let Some(source_today_item_id) = draft.source_today_item_id {
+        ensure_sync_meta_for_local_id(
+            &connection,
+            ENTITY_SCHEDULE_BLOCK,
+            block.id,
+            Some(format!(
+                "schedule_block:{}:source-today:{}:{}-{}",
+                draft.schedule_date,
+                source_today_item_id,
+                draft.start_minute,
+                draft.end_minute
+            )),
+            Utc::now().timestamp_millis(),
+        )?;
+    }
+    trigger_shared_sync(&app, "schedule_change");
+    Ok(block)
 }
 
 #[tauri::command]
@@ -232,7 +257,9 @@ pub fn update_schedule_block(
         )
         .map_err(|error| error.to_string())?;
 
-    get_schedule_block_by_id(&connection, id)
+    let block = get_schedule_block_by_id(&connection, id)?;
+    trigger_shared_sync(&app, "schedule_change");
+    Ok(block)
 }
 
 #[tauri::command]
@@ -261,7 +288,9 @@ pub fn move_schedule_block(
         )
         .map_err(|error| error.to_string())?;
 
-    get_schedule_block_by_id(&connection, id)
+    let block = get_schedule_block_by_id(&connection, id)?;
+    trigger_shared_sync(&app, "schedule_change");
+    Ok(block)
 }
 
 #[tauri::command]
@@ -272,6 +301,7 @@ pub fn delete_schedule_block(app: AppHandle, id: i64) -> Result<(), String> {
     connection
         .execute("DELETE FROM schedule_blocks WHERE id = ?1", params![id])
         .map_err(|error| error.to_string())?;
+    trigger_shared_sync(&app, "schedule_change");
     Ok(())
 }
 
@@ -305,7 +335,9 @@ pub fn create_schedule_template(
         )
         .map_err(|error| error.to_string())?;
 
-    get_schedule_template_by_id(&connection, connection.last_insert_rowid())
+    let template = get_schedule_template_by_id(&connection, connection.last_insert_rowid())?;
+    trigger_shared_sync(&app, "schedule_change");
+    Ok(template)
 }
 
 #[tauri::command]
@@ -347,7 +379,9 @@ pub fn update_schedule_template(
         )
         .map_err(|error| error.to_string())?;
 
-    get_schedule_template_by_id(&connection, id)
+    let template = get_schedule_template_by_id(&connection, id)?;
+    trigger_shared_sync(&app, "schedule_change");
+    Ok(template)
 }
 
 #[tauri::command]
@@ -358,6 +392,7 @@ pub fn delete_schedule_template(app: AppHandle, id: i64) -> Result<(), String> {
     connection
         .execute("DELETE FROM schedule_templates WHERE id = ?1", params![id])
         .map_err(|error| error.to_string())?;
+    trigger_shared_sync(&app, "schedule_change");
     Ok(())
 }
 
@@ -407,13 +442,17 @@ pub fn start_study_mode_from_schedule_block(
             ",
             params![
                 next_state.id,
-                next_state.current_session.as_ref().map(|session| session.id),
+                next_state
+                    .current_session
+                    .as_ref()
+                    .map(|session| session.id),
                 now,
                 block_id
             ],
         )
         .map_err(|error| error.to_string())?;
 
+    trigger_shared_sync(&app, "schedule_change");
     Ok(next_state)
 }
 
@@ -520,6 +559,20 @@ fn materialize_templates_for_range(
                     ],
                 )
                 .map_err(|error| error.to_string())?;
+            let local_id = connection.last_insert_rowid();
+            ensure_sync_meta_for_local_id(
+                connection,
+                ENTITY_SCHEDULE_BLOCK,
+                local_id,
+                Some(format!(
+                    "schedule_block:{}:template:{}:{}-{}",
+                    schedule_date,
+                    template.id,
+                    template.start_minute,
+                    template.end_minute
+                )),
+                Utc::now().timestamp_millis(),
+            )?;
         }
         date += Duration::days(1);
     }
@@ -644,10 +697,7 @@ fn list_today_items(
     Ok(rows)
 }
 
-fn get_schedule_block_by_id(
-    connection: &Connection,
-    id: i64,
-) -> Result<ScheduleBlock, String> {
+fn get_schedule_block_by_id(connection: &Connection, id: i64) -> Result<ScheduleBlock, String> {
     connection
         .query_row(
             "

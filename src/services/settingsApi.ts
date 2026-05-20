@@ -1,5 +1,14 @@
 import type {
   AppSettings,
+  EmailReminderResult,
+  EmailReminderSettings,
+  FeishuLoginPollResult,
+  FeishuOAuthLogin,
+  FeishuRebuildResult,
+  FeishuSyncResult,
+  FeishuSyncRunSummary,
+  FeishuSyncSettings,
+  FeishuSyncStatus,
   ObjectStorageAutoSyncResult,
   ObjectStorageSettings,
   ObjectStorageStatus,
@@ -85,8 +94,8 @@ export function autoSyncObjectStorageDatabase(): Promise<ObjectStorageAutoSyncRe
   return invokeCommand<ObjectStorageAutoSyncResult>('auto_sync_object_storage_database');
 }
 
-export function syncObjectStorageStateChange(): Promise<ObjectStorageAutoSyncResult> {
-  return invokeCommand<ObjectStorageAutoSyncResult>('sync_object_storage_state_change');
+export function syncObjectStorageStateChange(trigger = 'state_change'): Promise<ObjectStorageAutoSyncResult> {
+  return invokeCommand<ObjectStorageAutoSyncResult>('sync_object_storage_state_change', { trigger });
 }
 
 export function listSyncRuns(limit = 10): Promise<SyncRunSummary[]> {
@@ -105,6 +114,58 @@ export function restoreSyncBackup(source: string, key: string): Promise<string> 
   return invokeCommand<string>('restore_sync_backup', { source, key });
 }
 
+export function getEmailReminderSettings(): Promise<EmailReminderSettings> {
+  return invokeCommand<EmailReminderSettings>('get_email_reminder_settings');
+}
+
+export function saveEmailReminderSettings(settings: EmailReminderSettings): Promise<EmailReminderSettings> {
+  return invokeCommand<EmailReminderSettings>('save_email_reminder_settings', { settings });
+}
+
+export function testEmailReminder(settings: EmailReminderSettings): Promise<EmailReminderResult> {
+  return invokeCommand<EmailReminderResult>('test_email_reminder', { settings });
+}
+
+export function checkDueTaskEmailReminders(): Promise<EmailReminderResult> {
+  return invokeCommand<EmailReminderResult>('check_due_task_email_reminders');
+}
+
+export function getFeishuSyncSettings(): Promise<FeishuSyncSettings> {
+  return invokeCommand<FeishuSyncSettings>('get_feishu_sync_settings');
+}
+
+export function saveFeishuSyncSettings(settings: FeishuSyncSettings): Promise<FeishuSyncSettings> {
+  return invokeCommand<FeishuSyncSettings>('save_feishu_sync_settings', { settings });
+}
+
+export function getFeishuSyncStatus(): Promise<FeishuSyncStatus> {
+  return invokeCommand<FeishuSyncStatus>('get_feishu_sync_status');
+}
+
+export function startFeishuOAuthLogin(): Promise<FeishuOAuthLogin> {
+  return invokeCommand<FeishuOAuthLogin>('start_feishu_oauth_login');
+}
+
+export function pollFeishuOAuthLogin(): Promise<FeishuLoginPollResult> {
+  return invokeCommand<FeishuLoginPollResult>('poll_feishu_oauth_login');
+}
+
+export function logoutFeishu(): Promise<void> {
+  return invokeCommand<void>('logout_feishu');
+}
+
+export function syncFeishuBridge(trigger = 'manual'): Promise<FeishuSyncResult> {
+  return invokeCommand<FeishuSyncResult>('sync_feishu_bridge', { trigger });
+}
+
+export function rebuildFeishuTasklistsFromLocal(): Promise<FeishuRebuildResult> {
+  return invokeCommand<FeishuRebuildResult>('rebuild_feishu_tasklists_from_local');
+}
+
+export function listFeishuSyncRuns(limit = 5): Promise<FeishuSyncRunSummary[]> {
+  return invokeCommand<FeishuSyncRunSummary[]>('list_feishu_sync_runs', { limit });
+}
+
 export async function autoSyncConfiguredDatabase(): Promise<WebDavAutoSyncResult | ObjectStorageAutoSyncResult> {
   const settings = await getAppSettings();
   if (settings.sync_backend === 'object_storage') {
@@ -114,10 +175,10 @@ export async function autoSyncConfiguredDatabase(): Promise<WebDavAutoSyncResult
   return autoSyncWebDavDatabase();
 }
 
-export async function syncConfiguredStateChange(): Promise<WebDavAutoSyncResult | ObjectStorageAutoSyncResult> {
+export async function syncConfiguredStateChange(trigger = 'state_change'): Promise<WebDavAutoSyncResult | ObjectStorageAutoSyncResult> {
   const settings = await getAppSettings();
   if (settings.sync_backend === 'object_storage') {
-    return syncObjectStorageStateChange();
+    return syncObjectStorageStateChange(trigger);
   }
 
   return autoSyncWebDavDatabase();

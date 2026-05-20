@@ -12,7 +12,15 @@ import SettingsPage from './pages/SettingsPage';
 import { notifyStudyReminder } from './services/alertApi';
 import { getStudyModeState } from './services/focusApi';
 import { getSchedulePageData } from './services/scheduleApi';
-import { STUDY_SYNC_STATE_CHANGED_EVENT, autoSyncConfiguredDatabase, getAppSettings, saveAppSettings } from './services/settingsApi';
+import {
+  STUDY_SYNC_STATE_CHANGED_EVENT,
+  autoSyncConfiguredDatabase,
+  checkDueTaskEmailReminders,
+  getAppSettings,
+  saveAppSettings,
+  syncConfiguredStateChange,
+  syncFeishuBridge,
+} from './services/settingsApi';
 import type { AppPage } from './types/navigation';
 import { applyTheme, bootstrapTheme, storeTheme } from './theme';
 import type { AppTheme } from './types/settings';
@@ -22,11 +30,13 @@ const AUTO_SYNC_INTERVAL_MS = 3 * 60 * 1000;
 const ACTIVE_AUTO_SYNC_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_LOOKBACK_MINUTES = 1;
+const EMAIL_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const SILENT_AUTO_SYNC_SKIP_REASONS = new Set([
   'webdav_not_configured',
   'webdav_disabled',
   'object_storage_not_configured',
   'object_storage_disabled',
+  'object_storage_sync_in_flight',
   'study_mode_active',
 ]);
 
@@ -105,6 +115,7 @@ export default function App() {
   useEffect(() => {
     let disposed = false;
     let syncInFlight = false;
+    let feishuSyncInFlight = false;
     let lastAutoSyncAt = 0;
 
     async function runAutoSync() {
@@ -132,6 +143,22 @@ export default function App() {
         .finally(() => {
           syncInFlight = false;
         });
+
+      if (!feishuSyncInFlight) {
+        feishuSyncInFlight = true;
+        void syncFeishuBridge('auto')
+          .then((result) => {
+            if (result.status === 'synced' && (result.pulled_count > 0 || result.deleted_count > 0)) {
+              void syncConfiguredStateChange('feishu_bridge_in').catch(() => undefined);
+            }
+          })
+          .catch(() => {
+            // Feishu bridge status is visible in Settings; automatic checks stay quiet.
+          })
+          .finally(() => {
+            feishuSyncInFlight = false;
+          });
+      }
     }
 
     async function getRequiredInterval() {
@@ -223,6 +250,31 @@ export default function App() {
     const intervalId = window.setInterval(() => {
       void checkScheduleReminders();
     }, SCHEDULE_REMINDER_INTERVAL_MS);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function checkEmailReminders() {
+      try {
+        const result = await checkDueTaskEmailReminders();
+        if (!disposed && result.status === 'sent') {
+          setLastAutoSyncMessage(result.message);
+        }
+      } catch {
+        // Email reminder failures are visible from Settings test/save; the periodic check stays quiet.
+      }
+    }
+
+    void checkEmailReminders();
+    const intervalId = window.setInterval(() => {
+      void checkEmailReminders();
+    }, EMAIL_REMINDER_INTERVAL_MS);
 
     return () => {
       disposed = true;

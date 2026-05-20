@@ -15,6 +15,7 @@ const ENTITY_TODAY_PLAN_ITEM: &str = "today_plan_item";
 const ENTITY_SCHEDULE_BLOCK: &str = "schedule_block";
 const ENTITY_SCHEDULE_TEMPLATE: &str = "schedule_template";
 const ENTITY_DAILY_REVIEW: &str = "daily_review";
+const ENTITY_WEEKLY_REVIEW: &str = "weekly_review";
 const DEFAULT_SUBJECT_SYNC_IDS: [&str; 4] = ["subject-1", "subject-2", "subject-3", "subject-4"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +46,8 @@ pub struct SharedSyncPayload {
     pub schedule_templates: Vec<SharedScheduleTemplate>,
     #[serde(default)]
     pub daily_reviews: Vec<SharedDailyReview>,
+    #[serde(default)]
+    pub weekly_reviews: Vec<SharedWeeklyReview>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,10 +57,12 @@ pub struct SharedActiveStudySnapshot {
     pub phase: Option<String>,
     pub subject_sync_id: Option<String>,
     pub current_session_sync_id: Option<String>,
+    pub phase_started_at: Option<i64>,
     pub paused_at: Option<i64>,
     pub round_number: Option<i64>,
     pub current_break_type: Option<String>,
     pub ended_at: Option<i64>,
+    pub state_revision: Option<i64>,
     pub updated_at: i64,
 }
 
@@ -77,6 +82,8 @@ pub struct SharedSubject {
 #[serde(rename_all = "camelCase")]
 pub struct SharedStudyMode {
     pub sync_id: String,
+    #[serde(default)]
+    pub state_revision: Option<i64>,
     pub mode: Option<String>,
     pub subject_sync_id: Option<String>,
     pub planned_seconds: Option<i64>,
@@ -93,6 +100,7 @@ pub struct SharedStudyMode {
     pub accumulated_study_seconds: Option<i64>,
     pub total_paused_seconds: Option<i64>,
     pub phase_paused_seconds: Option<i64>,
+    pub paused_stage_elapsed_seconds: Option<i64>,
     pub current_break_type: Option<String>,
     pub ended_at: Option<i64>,
     pub current_session_sync_id: Option<String>,
@@ -230,6 +238,20 @@ pub struct SharedDailyReview {
     pub deleted_at: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedWeeklyReview {
+    pub sync_id: String,
+    pub week_start_date: Option<String>,
+    pub summary: Option<String>,
+    pub blockers: Option<String>,
+    pub next_week_focus: Option<String>,
+    pub mood_score: Option<i64>,
+    pub created_at: Option<i64>,
+    pub updated_at: i64,
+    pub deleted_at: Option<i64>,
+}
+
 #[derive(Debug, Clone)]
 struct SyncMetaRow {
     local_id: i64,
@@ -250,6 +272,7 @@ struct DesktopSubjectRow {
 #[derive(Debug, Clone)]
 struct DesktopStudyModeRow {
     id: i64,
+    state_revision: i64,
     mode: String,
     subject_id: Option<i64>,
     planned_seconds: i64,
@@ -263,7 +286,9 @@ struct DesktopStudyModeRow {
     phase_started_at: String,
     paused_at: Option<String>,
     total_paused_seconds: i64,
-    phase_paused_seconds: i64,
+    _phase_paused_seconds: i64,
+    accumulated_study_seconds: i64,
+    paused_stage_elapsed_seconds: i64,
     ended_at: Option<String>,
     current_session_id: Option<i64>,
     schedule_block_id: Option<i64>,
@@ -382,12 +407,24 @@ struct DesktopDailyReviewRow {
     updated_at: String,
 }
 
+#[derive(Debug, Clone)]
+struct DesktopWeeklyReviewRow {
+    id: i64,
+    week_start_date: String,
+    summary: Option<String>,
+    blockers: Option<String>,
+    next_week_focus: Option<String>,
+    mood_score: i64,
+    created_at: String,
+    updated_at: String,
+}
+
 pub fn export_shared_sync_payload(
     connection: &Connection,
     device_id: String,
     exported_at: i64,
 ) -> Result<SharedSyncPayload, String> {
-    Ok(SharedSyncPayload {
+    let mut payload = SharedSyncPayload {
         schema_version: SYNC_SCHEMA_VERSION,
         device_id: device_id.clone(),
         exported_at,
@@ -402,43 +439,41 @@ pub fn export_shared_sync_payload(
         schedule_blocks: export_schedule_blocks(connection)?,
         schedule_templates: export_schedule_templates(connection)?,
         daily_reviews: export_daily_reviews(connection)?,
-    })
+        weekly_reviews: export_weekly_reviews(connection)?,
+    };
+    canonicalize_subject_payload(&mut payload);
+    Ok(payload)
 }
 
 pub fn merge_shared_sync_payloads(
-    local: SharedSyncPayload,
-    remote: SharedSyncPayload,
+    mut local: SharedSyncPayload,
+    mut remote: SharedSyncPayload,
     device_id: String,
     exported_at: i64,
 ) -> SharedSyncPayload {
+    canonicalize_subject_payload(&mut local);
+    canonicalize_subject_payload(&mut remote);
     let local_active = shared_active_study_snapshot(&local);
     let remote_active = shared_active_study_snapshot(&remote);
+    let keep_local_active =
+        should_keep_local_active(&local, &remote, local_active.as_ref(), remote_active.as_ref(), exported_at);
     let preferred_active_sync_id = match (&local_active, &remote_active) {
-        (Some(local_snapshot), Some(remote_snapshot))
-            if local_snapshot.updated_at >= remote_snapshot.updated_at =>
-        {
-            Some(local_snapshot.sync_id.clone())
-        }
+        (Some(local_snapshot), Some(_)) if keep_local_active => Some(local_snapshot.sync_id.clone()),
         _ => None,
     };
-    let mut study_modes = merge_latest_by_sync_id(
-        &local.study_modes,
-        &remote.study_modes,
-        |item| item.sync_id.as_str(),
-        |item| item.updated_at,
-    );
-    let mut focus_sessions = merge_latest_by_sync_id(
-        &local.focus_sessions,
-        &remote.focus_sessions,
-        |item| item.sync_id.as_str(),
-        |item| item.updated_at,
-    );
+    let mut study_modes = merge_study_modes(&local.study_modes, &remote.study_modes);
+    let mut focus_sessions = merge_focus_sessions(&local.focus_sessions, &remote.focus_sessions);
     resolve_shared_active_conflicts(
         &mut study_modes,
         &mut focus_sessions,
         exported_at,
         preferred_active_sync_id.as_deref(),
     );
+    if keep_local_active {
+        if let Some(snapshot) = local_active.as_ref() {
+            restore_active_from_payload(&mut study_modes, &mut focus_sessions, &local, snapshot);
+        }
+    }
 
     SharedSyncPayload {
         schema_version: SYNC_SCHEMA_VERSION
@@ -447,8 +482,8 @@ pub fn merge_shared_sync_payloads(
         device_id: device_id.clone(),
         exported_at,
         source_device_id: Some(device_id.clone()),
-        active_device_id: shared_active_study_snapshot_from_modes(&study_modes)
-            .and_then(|snapshot| {
+        active_device_id: shared_active_study_snapshot_from_modes(&study_modes).and_then(
+            |snapshot| {
                 if local.active_device_id.is_some()
                     && local.device_id == device_id
                     && local
@@ -467,12 +502,14 @@ pub fn merge_shared_sync_payloads(
                 } else {
                     Some(device_id.clone())
                 }
-            }),
+            },
+        ),
         subjects: merge_latest_by_sync_id(
             &local.subjects,
             &remote.subjects,
             |item| item.sync_id.as_str(),
             |item| item.updated_at,
+            |item| item.deleted_at,
         ),
         study_modes,
         focus_sessions,
@@ -481,36 +518,49 @@ pub fn merge_shared_sync_payloads(
             &remote.app_events,
             |item| item.sync_id.as_str(),
             |item| item.updated_at,
+            |item| item.deleted_at,
         ),
         checklist_tasks: merge_latest_by_sync_id(
             &local.checklist_tasks,
             &remote.checklist_tasks,
             |item| item.sync_id.as_str(),
             |item| item.updated_at,
+            |item| item.deleted_at,
         ),
         today_plan_items: merge_latest_by_sync_id(
             &local.today_plan_items,
             &remote.today_plan_items,
             |item| item.sync_id.as_str(),
             |item| item.updated_at,
+            |item| item.deleted_at,
         ),
         schedule_blocks: merge_latest_by_sync_id(
             &local.schedule_blocks,
             &remote.schedule_blocks,
             |item| item.sync_id.as_str(),
             |item| item.updated_at,
+            |item| item.deleted_at,
         ),
         schedule_templates: merge_latest_by_sync_id(
             &local.schedule_templates,
             &remote.schedule_templates,
             |item| item.sync_id.as_str(),
             |item| item.updated_at,
+            |item| item.deleted_at,
         ),
         daily_reviews: merge_latest_by_sync_id(
             &local.daily_reviews,
             &remote.daily_reviews,
             |item| item.sync_id.as_str(),
             |item| item.updated_at,
+            |item| item.deleted_at,
+        ),
+        weekly_reviews: merge_latest_by_sync_id(
+            &local.weekly_reviews,
+            &remote.weekly_reviews,
+            |item| item.sync_id.as_str(),
+            |item| item.updated_at,
+            |item| item.deleted_at,
         ),
     }
 }
@@ -521,27 +571,11 @@ pub fn merge_remote_payload_into_local(
     device_id: String,
     exported_at: i64,
 ) -> SharedSyncPayload {
-    let local_active = shared_active_study_snapshot(&local);
-    let remote_active = shared_active_study_snapshot(&remote);
-    let mut merged = merge_shared_sync_payloads(local, remote, device_id, exported_at);
-    if let (Some(local_snapshot), Some(remote_snapshot)) = (local_active, remote_active) {
-        if local_snapshot.updated_at >= remote_snapshot.updated_at {
-            for mode in merged.study_modes.iter_mut() {
-                if mode.sync_id == local_snapshot.sync_id {
-                    mode.status = local_snapshot.status.clone();
-                    mode.phase = local_snapshot.phase.clone();
-                    mode.subject_sync_id = local_snapshot.subject_sync_id.clone();
-                    mode.current_session_sync_id = local_snapshot.current_session_sync_id.clone();
-                    mode.paused_at = local_snapshot.paused_at;
-                    mode.round_number = local_snapshot.round_number;
-                    mode.current_break_type = local_snapshot.current_break_type.clone();
-                    mode.ended_at = local_snapshot.ended_at;
-                    mode.updated_at = local_snapshot.updated_at;
-                }
-            }
-        }
-    }
-    merged
+    let mut local = local;
+    let mut remote = remote;
+    canonicalize_subject_payload(&mut local);
+    canonicalize_subject_payload(&mut remote);
+    merge_shared_sync_payloads(local, remote, device_id, exported_at)
 }
 
 pub fn count_payload_entities(payload: &SharedSyncPayload) -> i64 {
@@ -555,6 +589,7 @@ pub fn count_payload_entities(payload: &SharedSyncPayload) -> i64 {
         payload.schedule_blocks.len(),
         payload.schedule_templates.len(),
         payload.daily_reviews.len(),
+        payload.weekly_reviews.len(),
     ]
     .iter()
     .map(|value| *value as i64)
@@ -562,7 +597,11 @@ pub fn count_payload_entities(payload: &SharedSyncPayload) -> i64 {
 }
 
 pub fn count_payload_deleted_entities(payload: &SharedSyncPayload) -> i64 {
-    payload.subjects.iter().filter(|item| item.deleted_at.is_some()).count() as i64
+    payload
+        .subjects
+        .iter()
+        .filter(|item| item.deleted_at.is_some())
+        .count() as i64
         + payload
             .study_modes
             .iter()
@@ -603,6 +642,11 @@ pub fn count_payload_deleted_entities(payload: &SharedSyncPayload) -> i64 {
             .iter()
             .filter(|item| item.deleted_at.is_some())
             .count() as i64
+        + payload
+            .weekly_reviews
+            .iter()
+            .filter(|item| item.deleted_at.is_some())
+            .count() as i64
 }
 
 fn active_device_id(connection: &Connection) -> Result<Option<String>, String> {
@@ -638,39 +682,209 @@ fn shared_active_study_snapshot_from_modes(
                 .map(is_shared_running_status)
                 .unwrap_or(false)
         })
-        .max_by_key(|item| item.updated_at)
-        .map(|item| SharedActiveStudySnapshot {
+        .fold(None, |best: Option<(&SharedStudyMode, (i64, i64))>, item| {
+            let score = active_sort_key(item);
+            match best {
+                Some((current, current_score)) if current_score >= score => Some((current, current_score)),
+                _ => Some((item, score)),
+            }
+        })
+        .map(|(item, _)| SharedActiveStudySnapshot {
             sync_id: item.sync_id.clone(),
             status: item.status.clone(),
             phase: item.phase.clone(),
             subject_sync_id: item.subject_sync_id.clone(),
             current_session_sync_id: item.current_session_sync_id.clone(),
+            phase_started_at: item.phase_started_at,
             paused_at: item.paused_at,
             round_number: item.round_number,
             current_break_type: item.current_break_type.clone(),
             ended_at: item.ended_at,
+            state_revision: item.state_revision,
             updated_at: item.updated_at,
         })
+}
+
+fn canonicalize_subject_payload(payload: &mut SharedSyncPayload) {
+    let mut aliases = HashMap::<String, String>::new();
+    for legacy in [
+        ("subject-politics", "subject-1"),
+        ("subject-english", "subject-2"),
+        ("subject-math", "subject-3"),
+        ("subject-major", "subject-4"),
+    ] {
+        aliases.insert(legacy.0.to_string(), legacy.1.to_string());
+    }
+
+    for subject in &payload.subjects {
+        let canonical = canonical_subject_sync_id_for_subject(
+            &subject.sync_id,
+            subject.name.as_deref(),
+        );
+        if canonical != subject.sync_id {
+            aliases.insert(subject.sync_id.clone(), canonical);
+        }
+    }
+
+    for subject in &mut payload.subjects {
+        subject.sync_id = aliases
+            .get(&subject.sync_id)
+            .cloned()
+            .unwrap_or_else(|| canonical_subject_sync_id(&subject.sync_id));
+    }
+    payload
+        .subjects
+        .retain(|subject| !(is_default_subject_sync_id(&subject.sync_id) && subject.deleted_at.is_some()));
+    for mode in &mut payload.study_modes {
+        canonicalize_subject_option(&mut mode.subject_sync_id, &aliases);
+    }
+    for session in &mut payload.focus_sessions {
+        canonicalize_subject_option(&mut session.subject_sync_id, &aliases);
+    }
+    for task in &mut payload.checklist_tasks {
+        canonicalize_subject_option(&mut task.subject_sync_id, &aliases);
+    }
+    for item in &mut payload.today_plan_items {
+        canonicalize_subject_option(&mut item.subject_sync_id, &aliases);
+    }
+    for block in &mut payload.schedule_blocks {
+        canonicalize_subject_option(&mut block.subject_sync_id, &aliases);
+    }
+    for template in &mut payload.schedule_templates {
+        canonicalize_subject_option(&mut template.subject_sync_id, &aliases);
+    }
+}
+
+fn normalize_import_active_sessions(payload: &mut SharedSyncPayload) {
+    let active_mode_ids = payload
+        .study_modes
+        .iter()
+        .filter(|mode| mode.deleted_at.is_none())
+        .filter(|mode| {
+            mode.status
+                .as_deref()
+                .map(is_shared_running_status)
+                .unwrap_or(false)
+        })
+        .map(|mode| mode.sync_id.clone())
+        .collect::<HashSet<_>>();
+    let active_session_ids = payload
+        .study_modes
+        .iter()
+        .filter_map(|mode| mode.current_session_sync_id.as_deref())
+        .map(str::to_string)
+        .collect::<HashSet<_>>();
+
+    for session in &mut payload.focus_sessions {
+        if session.deleted_at.is_some() || session.status.as_deref() != Some("running") {
+            continue;
+        }
+        let belongs_to_active_mode = session
+            .study_mode_sync_id
+            .as_deref()
+            .map(|mode_id| active_mode_ids.contains(mode_id))
+            .unwrap_or(false);
+        if active_session_ids.contains(&session.sync_id) || belongs_to_active_mode {
+            continue;
+        }
+
+        session.status = Some("finished".to_string());
+        session.ended_at = session.ended_at.or(Some(session.updated_at));
+        session.end_reason = session
+            .end_reason
+            .clone()
+            .or_else(|| Some("sync_takeover".to_string()));
+    }
+}
+
+fn canonicalize_subject_option(
+    value: &mut Option<String>,
+    aliases: &HashMap<String, String>,
+) {
+    if let Some(sync_id) = value.as_deref() {
+        *value = Some(
+            aliases
+                .get(sync_id)
+                .cloned()
+                .unwrap_or_else(|| canonical_subject_sync_id(sync_id)),
+        );
+    }
+}
+
+fn canonical_subject_sync_id_for_subject(sync_id: &str, name: Option<&str>) -> String {
+    if let Some(canonical) = name.and_then(canonical_subject_sync_id_for_name) {
+        return canonical.to_string();
+    }
+    canonical_subject_sync_id(sync_id)
+}
+
+fn canonical_subject_sync_id(sync_id: &str) -> String {
+    match sync_id.trim() {
+        "subject-politics" => "subject-1".to_string(),
+        "subject-english" => "subject-2".to_string(),
+        "subject-math" => "subject-3".to_string(),
+        "subject-major" => "subject-4".to_string(),
+        value => value.to_string(),
+    }
+}
+
+fn canonical_subject_sync_id_for_name(name: &str) -> Option<&'static str> {
+    match normalize_name(name).as_str() {
+        "政治" => Some(DEFAULT_SUBJECT_SYNC_IDS[0]),
+        "英语" => Some(DEFAULT_SUBJECT_SYNC_IDS[1]),
+        "数学" => Some(DEFAULT_SUBJECT_SYNC_IDS[2]),
+        "专业课" => Some(DEFAULT_SUBJECT_SYNC_IDS[3]),
+        _ => None,
+    }
+}
+
+fn is_default_subject_sync_id(sync_id: &str) -> bool {
+    DEFAULT_SUBJECT_SYNC_IDS.contains(&sync_id)
 }
 
 pub fn import_shared_sync_payload(
     connection: &mut Connection,
     payload: &SharedSyncPayload,
 ) -> Result<(), String> {
+    let mut payload = payload.clone();
+    canonicalize_subject_payload(&mut payload);
+    normalize_import_active_sessions(&mut payload);
+    {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        eprintln!("shared payload import: subjects {}", payload.subjects.len());
+        import_subjects(&transaction, &payload.subjects)?;
+        eprintln!("shared payload import: checklist_tasks {}", payload.checklist_tasks.len());
+        import_checklist_tasks(&transaction, &payload.checklist_tasks)?;
+        eprintln!("shared payload import: today_plan_items {}", payload.today_plan_items.len());
+        import_today_plan_items(&transaction, &payload.today_plan_items)?;
+        eprintln!("shared payload import: schedule_templates {}", payload.schedule_templates.len());
+        import_schedule_templates(&transaction, &payload.schedule_templates)?;
+        eprintln!("shared payload import: schedule_blocks {}", payload.schedule_blocks.len());
+        import_schedule_blocks(&transaction, &payload.schedule_blocks)?;
+        eprintln!("shared payload import: daily_reviews {}", payload.daily_reviews.len());
+        import_daily_reviews(&transaction, &payload.daily_reviews)?;
+        eprintln!("shared payload import: weekly_reviews {}", payload.weekly_reviews.len());
+        import_weekly_reviews(&transaction, &payload.weekly_reviews)?;
+        eprintln!("shared payload import: high priority commit");
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+
     let transaction = connection
         .transaction()
         .map_err(|error| error.to_string())?;
-    import_subjects(&transaction, &payload.subjects)?;
-    import_checklist_tasks(&transaction, &payload.checklist_tasks)?;
-    import_today_plan_items(&transaction, &payload.today_plan_items)?;
-    import_schedule_templates(&transaction, &payload.schedule_templates)?;
-    import_schedule_blocks(&transaction, &payload.schedule_blocks)?;
-    import_daily_reviews(&transaction, &payload.daily_reviews)?;
+    eprintln!("shared payload import: focus_sessions {}", payload.focus_sessions.len());
     import_focus_sessions(&transaction, &payload.focus_sessions)?;
+    eprintln!("shared payload import: study_modes {}", payload.study_modes.len());
     import_study_modes(&transaction, &payload.study_modes)?;
+    eprintln!("shared payload import: schedule_blocks second pass {}", payload.schedule_blocks.len());
     import_schedule_blocks(&transaction, &payload.schedule_blocks)?;
+    eprintln!("shared payload import: app_events {}", payload.app_events.len());
     import_app_events(&transaction, &payload.app_events)?;
+    eprintln!("shared payload import: active_conflicts");
     resolve_local_active_conflicts(&transaction)?;
+    eprintln!("shared payload import: commit");
     transaction.commit().map_err(|error| error.to_string())
 }
 
@@ -692,16 +906,18 @@ pub fn mark_entity_deleted(
     Ok(())
 }
 
-fn merge_latest_by_sync_id<T, Id, Updated>(
+fn merge_latest_by_sync_id<T, Id, Updated, Deleted>(
     local: &[T],
     remote: &[T],
     id_of: Id,
     updated_at_of: Updated,
+    deleted_at_of: Deleted,
 ) -> Vec<T>
 where
     T: Clone,
     Id: Fn(&T) -> &str,
     Updated: Fn(&T) -> i64,
+    Deleted: Fn(&T) -> Option<i64>,
 {
     let mut merged: Vec<T> = Vec::new();
     let mut positions: HashMap<String, usize> = HashMap::new();
@@ -712,7 +928,13 @@ where
         }
 
         if let Some(position) = positions.get(sync_id).copied() {
-            if updated_at_of(item) > updated_at_of(&merged[position]) {
+            let current = &merged[position];
+            let item_updated_at = updated_at_of(item);
+            let current_updated_at = updated_at_of(current);
+            let tombstone_tie_wins = item_updated_at == current_updated_at
+                && deleted_at_of(item).is_some()
+                && deleted_at_of(current).is_none();
+            if item_updated_at > current_updated_at || tombstone_tie_wins {
                 merged[position] = item.clone();
             }
         } else {
@@ -722,6 +944,262 @@ where
     }
 
     merged
+}
+
+fn merge_study_modes(local: &[SharedStudyMode], remote: &[SharedStudyMode]) -> Vec<SharedStudyMode> {
+    let mut merged: Vec<SharedStudyMode> = Vec::new();
+    let mut positions: HashMap<String, usize> = HashMap::new();
+    for item in local.iter().chain(remote.iter()) {
+        let sync_id = item.sync_id.trim();
+        if sync_id.is_empty() {
+            continue;
+        }
+
+        if let Some(position) = positions.get(sync_id).copied() {
+            if should_replace_study_mode(&merged[position], item) {
+                merged[position] = item.clone();
+            }
+        } else {
+            positions.insert(sync_id.to_string(), merged.len());
+            merged.push(item.clone());
+        }
+    }
+    merged
+}
+
+fn should_replace_study_mode(existing: &SharedStudyMode, candidate: &SharedStudyMode) -> bool {
+    let existing_deleted = existing.deleted_at.is_some();
+    let candidate_deleted = candidate.deleted_at.is_some();
+    if candidate.updated_at == existing.updated_at && candidate_deleted && !existing_deleted {
+        return true;
+    }
+
+    let existing_revision = existing.state_revision.unwrap_or(0).max(0);
+    let candidate_revision = candidate.state_revision.unwrap_or(0).max(0);
+    if candidate_revision != existing_revision {
+        return candidate_revision > existing_revision;
+    }
+
+    if existing_deleted != candidate_deleted {
+        return candidate_deleted && candidate.updated_at >= existing.updated_at;
+    }
+
+    candidate.updated_at > existing.updated_at
+}
+
+fn merge_focus_sessions(
+    local: &[SharedFocusSession],
+    remote: &[SharedFocusSession],
+) -> Vec<SharedFocusSession> {
+    let mut merged: Vec<SharedFocusSession> = Vec::new();
+    let mut positions: HashMap<String, usize> = HashMap::new();
+    for item in local.iter().chain(remote.iter()) {
+        let sync_id = item.sync_id.trim();
+        if sync_id.is_empty() {
+            continue;
+        }
+
+        if let Some(position) = positions.get(sync_id).copied() {
+            if should_replace_focus_session(&merged[position], item) {
+                merged[position] = item.clone();
+            }
+        } else {
+            positions.insert(sync_id.to_string(), merged.len());
+            merged.push(item.clone());
+        }
+    }
+    merged
+}
+
+fn should_replace_focus_session(existing: &SharedFocusSession, candidate: &SharedFocusSession) -> bool {
+    let existing_deleted = existing.deleted_at.is_some();
+    let candidate_deleted = candidate.deleted_at.is_some();
+    if candidate.updated_at == existing.updated_at && candidate_deleted && !existing_deleted {
+        return true;
+    }
+
+    let existing_running = existing.status.as_deref() == Some("running");
+    let candidate_running = candidate.status.as_deref() == Some("running");
+    if existing_running != candidate_running {
+        return !candidate_running && candidate.ended_at.is_some();
+    }
+
+    if existing_deleted != candidate_deleted {
+        return candidate_deleted && candidate.updated_at >= existing.updated_at;
+    }
+
+    candidate.updated_at > existing.updated_at
+}
+
+fn active_sort_key(mode: &SharedStudyMode) -> (i64, i64) {
+    (
+        mode.state_revision.unwrap_or(0).max(0),
+        mode.updated_at.max(0),
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ActiveLogicalPosition {
+    round: i64,
+    phase_rank: i64,
+    progress_seconds: i64,
+}
+
+fn should_keep_local_active(
+    local: &SharedSyncPayload,
+    remote: &SharedSyncPayload,
+    local_active: Option<&SharedActiveStudySnapshot>,
+    remote_active: Option<&SharedActiveStudySnapshot>,
+    now_millis: i64,
+) -> bool {
+    let (Some(local_active), Some(remote_active)) = (local_active, remote_active) else {
+        return false;
+    };
+
+    let local_revision = local_active.state_revision.unwrap_or(0).max(0);
+    let remote_revision = remote_active.state_revision.unwrap_or(0).max(0);
+    if local_revision != remote_revision {
+        return local_revision > remote_revision;
+    }
+
+    if local_active.updated_at >= remote_active.updated_at {
+        return true;
+    }
+
+    if local_active.sync_id != remote_active.sync_id {
+        return false;
+    }
+
+    let local_mode = local
+        .study_modes
+        .iter()
+        .find(|mode| mode.sync_id == local_active.sync_id);
+    let remote_mode = remote
+        .study_modes
+        .iter()
+        .find(|mode| mode.sync_id == remote_active.sync_id);
+
+    match (local_mode, remote_mode) {
+        (Some(local_mode), Some(remote_mode)) => active_mode_regresses(local_mode, remote_mode, now_millis),
+        _ => false,
+    }
+}
+
+fn active_mode_regresses(
+    local: &SharedStudyMode,
+    remote: &SharedStudyMode,
+    now_millis: i64,
+) -> bool {
+    let local_position = active_logical_position(local, now_millis);
+    let remote_position = active_logical_position(remote, now_millis);
+
+    if remote_position.round != local_position.round {
+        return remote_position.round < local_position.round;
+    }
+    if remote_position.phase_rank != local_position.phase_rank {
+        return remote_position.phase_rank < local_position.phase_rank;
+    }
+
+    remote_position.progress_seconds + 5 < local_position.progress_seconds
+}
+
+fn active_logical_position(mode: &SharedStudyMode, now_millis: i64) -> ActiveLogicalPosition {
+    let round = mode.round_number.unwrap_or(1).max(1);
+    let phase = effective_shared_phase(mode);
+    let phase_rank = match phase.as_str() {
+        "awaiting_break" => 1,
+        "break" => 2,
+        "finished" | "emergency_exited" => 3,
+        _ => 0,
+    };
+    let accumulated = mode.accumulated_study_seconds.unwrap_or(0).max(0);
+    let planned = mode.planned_seconds.unwrap_or(i64::MAX / 4).max(0);
+    let remaining = planned.saturating_sub(accumulated);
+    let current_focus_seconds = if phase == "focus" {
+        let focus_seconds = mode.focus_seconds.unwrap_or(remaining).max(0);
+        phase_elapsed_seconds(mode, now_millis)
+            .min(focus_seconds)
+            .min(remaining)
+            .max(0)
+    } else {
+        0
+    };
+
+    ActiveLogicalPosition {
+        round,
+        phase_rank,
+        progress_seconds: (accumulated + current_focus_seconds).min(planned).max(0),
+    }
+}
+
+fn effective_shared_phase(mode: &SharedStudyMode) -> String {
+    let phase = mode.phase.as_deref().unwrap_or("focus");
+    if phase == "paused" {
+        mode.paused_from_phase
+            .as_deref()
+            .filter(|value| !value.trim().is_empty() && *value != "paused")
+            .unwrap_or("focus")
+            .to_string()
+    } else {
+        phase.to_string()
+    }
+}
+
+fn phase_elapsed_seconds(mode: &SharedStudyMode, now_millis: i64) -> i64 {
+    if mode.phase.as_deref() == Some("paused") || mode.paused_at.is_some() {
+        return mode
+            .paused_stage_elapsed_seconds
+            .or(mode.phase_paused_seconds)
+            .unwrap_or(0)
+            .max(0);
+    }
+
+    mode.phase_started_at
+        .map(|started_at| ((now_millis - started_at).max(0)) / 1000)
+        .unwrap_or(0)
+}
+
+fn restore_active_from_payload(
+    study_modes: &mut Vec<SharedStudyMode>,
+    focus_sessions: &mut Vec<SharedFocusSession>,
+    source: &SharedSyncPayload,
+    snapshot: &SharedActiveStudySnapshot,
+) {
+    let Some(source_mode) = source
+        .study_modes
+        .iter()
+        .find(|mode| mode.sync_id == snapshot.sync_id)
+        .cloned()
+    else {
+        return;
+    };
+
+    if let Some(position) = study_modes
+        .iter()
+        .position(|mode| mode.sync_id == source_mode.sync_id)
+    {
+        study_modes[position] = source_mode.clone();
+    } else {
+        study_modes.push(source_mode.clone());
+    }
+
+    if let Some(session_sync_id) = source_mode.current_session_sync_id.as_deref() {
+        if let Some(source_session) = source
+            .focus_sessions
+            .iter()
+            .find(|session| session.sync_id == session_sync_id)
+            .cloned()
+        {
+            if let Some(position) = focus_sessions
+                .iter()
+                .position(|session| session.sync_id == source_session.sync_id)
+            {
+                focus_sessions[position] = source_session;
+            } else {
+                focus_sessions.push(source_session);
+            }
+        }
+    }
 }
 
 fn resolve_shared_active_conflicts(
@@ -750,16 +1228,16 @@ fn resolve_shared_active_conflicts(
         })
         .or_else(|| {
             study_modes
-        .iter()
-        .filter(|item| item.deleted_at.is_none())
-        .filter(|item| {
-            item.status
-                .as_deref()
-                .map(is_shared_running_status)
-                .unwrap_or(false)
-        })
-        .max_by_key(|item| item.updated_at)
-        .map(|item| item.sync_id.clone())
+                .iter()
+                .filter(|item| item.deleted_at.is_none())
+                .filter(|item| {
+                    item.status
+                        .as_deref()
+                        .map(is_shared_running_status)
+                        .unwrap_or(false)
+                })
+                .max_by_key(|item| active_sort_key(item))
+                .map(|item| item.sync_id.clone())
         });
 
     let Some(winner_sync_id) = winner_sync_id else {
@@ -789,7 +1267,7 @@ fn resolve_shared_active_conflicts(
         mode.ended_at = mode.ended_at.or(Some(resolved_at));
         mode.current_session_sync_id = None;
         mode.finish_reason = Some("sync_takeover".to_string());
-        mode.updated_at = resolved_at;
+        mode.updated_at = mode.updated_at.max(resolved_at);
     }
 
     if losing_mode_ids.is_empty() && losing_session_ids.is_empty() {
@@ -809,7 +1287,7 @@ fn resolve_shared_active_conflicts(
             session.status = Some("finished".to_string());
             session.ended_at = session.ended_at.or(Some(resolved_at));
             session.end_reason = Some("sync_takeover".to_string());
-            session.updated_at = resolved_at;
+            session.updated_at = session.updated_at.max(resolved_at);
         }
     }
 }
@@ -834,10 +1312,6 @@ fn to_desktop_study_status(status: &str) -> &str {
     }
 }
 
-fn millis_to_seconds(millis: i64) -> i64 {
-    millis.saturating_div(1000)
-}
-
 fn break_type_after_round(round_number: i64, long_break_interval: i64) -> String {
     if long_break_interval > 0 && round_number > 0 && round_number % long_break_interval == 0 {
         "long".to_string()
@@ -850,6 +1324,9 @@ fn export_subjects(connection: &Connection) -> Result<Vec<SharedSubject>, String
     let rows = load_subject_rows(connection)?;
     let mut payload = Vec::new();
     for row in rows {
+        if !row.enabled {
+            continue;
+        }
         let updated_at = parse_rfc3339_millis(&row.updated_at)?;
         let preferred_sync_id = default_subject_sync_id(&row.name, row.id);
         let sync_id = resolve_or_create_sync_id(
@@ -891,25 +1368,6 @@ fn export_study_modes(connection: &Connection) -> Result<Vec<SharedStudyMode>, S
             .as_deref()
             .map(parse_rfc3339_millis)
             .transpose()?;
-        let exported_at = Utc::now().timestamp_millis();
-        let open_pause_seconds = paused_at_millis
-            .map(|paused_at| millis_to_seconds(exported_at.saturating_sub(paused_at)))
-            .unwrap_or(0);
-        let study_elapsed_seconds =
-            millis_to_seconds(exported_at.saturating_sub(started_at_millis))
-                .saturating_sub(row.total_paused_seconds)
-                .saturating_sub(open_pause_seconds)
-                .max(0);
-        let phase_end_millis = paused_at_millis.unwrap_or(exported_at);
-        let phase_elapsed_seconds =
-            millis_to_seconds(phase_end_millis.saturating_sub(phase_started_at_millis))
-                .saturating_sub(row.phase_paused_seconds)
-                .max(0);
-        let accumulated_study_seconds = if row.phase == "focus" || row.phase == "awaiting_break" {
-            study_elapsed_seconds.saturating_sub(phase_elapsed_seconds)
-        } else {
-            study_elapsed_seconds
-        };
         let sync_id =
             resolve_or_create_sync_id(connection, ENTITY_STUDY_MODE, row.id, None, updated_at)?;
         if get_sync_meta_by_sync_id(connection, &sync_id)?
@@ -921,9 +1379,10 @@ fn export_study_modes(connection: &Connection) -> Result<Vec<SharedStudyMode>, S
 
         payload.push(SharedStudyMode {
             sync_id,
+            state_revision: Some(row.state_revision.max(1)),
             mode: Some(row.mode),
             subject_sync_id: row.subject_id.and_then(|subject_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
                     .ok()
                     .flatten()
             }),
@@ -942,9 +1401,10 @@ fn export_study_modes(connection: &Connection) -> Result<Vec<SharedStudyMode>, S
             phase_started_at: Some(phase_started_at_millis),
             paused_at: paused_at_millis,
             paused_from_phase: row.paused_at.as_ref().map(|_| row.phase.clone()),
-            accumulated_study_seconds: Some(accumulated_study_seconds),
+            accumulated_study_seconds: Some(row.accumulated_study_seconds),
             total_paused_seconds: Some(row.total_paused_seconds),
-            phase_paused_seconds: Some(row.phase_paused_seconds),
+            phase_paused_seconds: Some(row.paused_stage_elapsed_seconds),
+            paused_stage_elapsed_seconds: Some(row.paused_stage_elapsed_seconds),
             current_break_type: Some(break_type_after_round(
                 row.cycle_index,
                 row.long_break_interval,
@@ -955,17 +1415,17 @@ fn export_study_modes(connection: &Connection) -> Result<Vec<SharedStudyMode>, S
                 .map(parse_rfc3339_millis)
                 .transpose()?,
             current_session_sync_id: row.current_session_id.and_then(|session_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_FOCUS_SESSION, Some(session_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_FOCUS_SESSION, Some(session_id))
                     .ok()
                     .flatten()
             }),
             schedule_block_sync_id: row.schedule_block_id.and_then(|block_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_SCHEDULE_BLOCK, Some(block_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_SCHEDULE_BLOCK, Some(block_id))
                     .ok()
                     .flatten()
             }),
             today_plan_item_sync_id: row.today_plan_item_id.and_then(|today_item_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_TODAY_PLAN_ITEM, Some(today_item_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_TODAY_PLAN_ITEM, Some(today_item_id))
                     .ok()
                     .flatten()
             }),
@@ -999,7 +1459,7 @@ fn export_focus_sessions(connection: &Connection) -> Result<Vec<SharedFocusSessi
             sync_id,
             study_mode_sync_id: resolve_study_mode_sync_id_for_session(connection, row.id)?,
             subject_sync_id: row.subject_id.and_then(|subject_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
                     .ok()
                     .flatten()
             }),
@@ -1019,12 +1479,12 @@ fn export_focus_sessions(connection: &Connection) -> Result<Vec<SharedFocusSessi
             paused_seconds: Some(row.paused_seconds),
             followed_by_break_type: row.followed_by_break_type,
             schedule_block_sync_id: row.schedule_block_id.and_then(|block_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_SCHEDULE_BLOCK, Some(block_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_SCHEDULE_BLOCK, Some(block_id))
                     .ok()
                     .flatten()
             }),
             today_plan_item_sync_id: row.today_plan_item_id.and_then(|today_item_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_TODAY_PLAN_ITEM, Some(today_item_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_TODAY_PLAN_ITEM, Some(today_item_id))
                     .ok()
                     .flatten()
             }),
@@ -1048,7 +1508,7 @@ fn export_app_events(connection: &Connection) -> Result<Vec<SharedAppEvent>, Str
         payload.push(SharedAppEvent {
             sync_id,
             study_mode_sync_id: None,
-            focus_session_sync_id: resolve_sync_id_by_local_id(
+            focus_session_sync_id: resolve_existing_sync_id_by_local_id(
                 connection,
                 ENTITY_FOCUS_SESSION,
                 Some(row.session_id),
@@ -1083,7 +1543,7 @@ fn export_checklist_tasks(connection: &Connection) -> Result<Vec<SharedChecklist
             sync_id,
             category_key: Some(map_board_scope_to_category_key(&row.board_scope)),
             subject_sync_id: row.subject_id.and_then(|subject_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
                     .ok()
                     .flatten()
             }),
@@ -1125,12 +1585,12 @@ fn export_today_plan_items(connection: &Connection) -> Result<Vec<SharedTodayPla
             sync_id,
             today_date: Some(row.today_date),
             source_task_sync_id: row.source_task_id.and_then(|source_task_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_CHECKLIST_TASK, Some(source_task_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_CHECKLIST_TASK, Some(source_task_id))
                     .ok()
                     .flatten()
             }),
             subject_sync_id: row.subject_id.and_then(|subject_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
                     .ok()
                     .flatten()
             }),
@@ -1155,13 +1615,8 @@ fn export_schedule_blocks(connection: &Connection) -> Result<Vec<SharedScheduleB
     let mut payload = Vec::new();
     for row in rows {
         let updated_at = parse_rfc3339_millis(&row.updated_at)?;
-        let sync_id = resolve_or_create_sync_id(
-            connection,
-            ENTITY_SCHEDULE_BLOCK,
-            row.id,
-            None,
-            updated_at,
-        )?;
+        let sync_id =
+            resolve_or_create_sync_id(connection, ENTITY_SCHEDULE_BLOCK, row.id, None, updated_at)?;
         if get_sync_meta_by_sync_id(connection, &sync_id)?
             .and_then(|item| item.deleted_at)
             .is_some()
@@ -1176,17 +1631,17 @@ fn export_schedule_blocks(connection: &Connection) -> Result<Vec<SharedScheduleB
             note: row.note,
             category_key: Some(row.category_key),
             subject_sync_id: row.subject_id.and_then(|subject_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
                     .ok()
                     .flatten()
             }),
             source_today_item_sync_id: row.source_today_item_id.and_then(|today_item_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_TODAY_PLAN_ITEM, Some(today_item_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_TODAY_PLAN_ITEM, Some(today_item_id))
                     .ok()
                     .flatten()
             }),
             template_sync_id: row.template_id.and_then(|template_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_SCHEDULE_TEMPLATE, Some(template_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_SCHEDULE_TEMPLATE, Some(template_id))
                     .ok()
                     .flatten()
             }),
@@ -1194,12 +1649,12 @@ fn export_schedule_blocks(connection: &Connection) -> Result<Vec<SharedScheduleB
             end_minute: Some(row.end_minute),
             status: Some(row.status),
             linked_study_mode_sync_id: row.linked_study_mode_id.and_then(|study_mode_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_STUDY_MODE, Some(study_mode_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_STUDY_MODE, Some(study_mode_id))
                     .ok()
                     .flatten()
             }),
             linked_focus_session_sync_id: row.linked_focus_session_id.and_then(|session_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_FOCUS_SESSION, Some(session_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_FOCUS_SESSION, Some(session_id))
                     .ok()
                     .flatten()
             }),
@@ -1240,7 +1695,7 @@ fn export_schedule_templates(
             note: row.note,
             category_key: Some(row.category_key),
             subject_sync_id: row.subject_id.and_then(|subject_id| {
-                resolve_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
+                resolve_existing_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
                     .ok()
                     .flatten()
             }),
@@ -1286,6 +1741,37 @@ fn export_daily_reviews(connection: &Connection) -> Result<Vec<SharedDailyReview
     }
 
     payload.extend(export_tombstones(connection, ENTITY_DAILY_REVIEW)?);
+    Ok(payload)
+}
+
+fn export_weekly_reviews(connection: &Connection) -> Result<Vec<SharedWeeklyReview>, String> {
+    let rows = load_weekly_review_rows(connection)?;
+    let mut payload = Vec::new();
+    for row in rows {
+        let updated_at = parse_rfc3339_millis(&row.updated_at)?;
+        let sync_id =
+            resolve_or_create_sync_id(connection, ENTITY_WEEKLY_REVIEW, row.id, None, updated_at)?;
+        if get_sync_meta_by_sync_id(connection, &sync_id)?
+            .and_then(|item| item.deleted_at)
+            .is_some()
+        {
+            continue;
+        }
+
+        payload.push(SharedWeeklyReview {
+            sync_id,
+            week_start_date: Some(row.week_start_date),
+            summary: row.summary,
+            blockers: row.blockers,
+            next_week_focus: row.next_week_focus,
+            mood_score: Some(row.mood_score),
+            created_at: Some(parse_rfc3339_millis(&row.created_at)?),
+            updated_at,
+            deleted_at: None,
+        });
+    }
+
+    payload.extend(export_tombstones(connection, ENTITY_WEEKLY_REVIEW)?);
     Ok(payload)
 }
 
@@ -1341,6 +1827,7 @@ impl From<DeletedPayload> for SharedStudyMode {
     fn from(value: DeletedPayload) -> Self {
         Self {
             sync_id: value.sync_id,
+            state_revision: None,
             mode: None,
             subject_sync_id: None,
             planned_seconds: None,
@@ -1357,6 +1844,7 @@ impl From<DeletedPayload> for SharedStudyMode {
             accumulated_study_seconds: None,
             total_paused_seconds: None,
             phase_paused_seconds: None,
+            paused_stage_elapsed_seconds: None,
             current_break_type: None,
             ended_at: None,
             current_session_sync_id: None,
@@ -1510,10 +1998,30 @@ impl From<DeletedPayload> for SharedDailyReview {
     }
 }
 
+impl From<DeletedPayload> for SharedWeeklyReview {
+    fn from(value: DeletedPayload) -> Self {
+        Self {
+            sync_id: value.sync_id,
+            week_start_date: None,
+            summary: None,
+            blockers: None,
+            next_week_focus: None,
+            mood_score: None,
+            created_at: None,
+            updated_at: value.deleted_at.unwrap_or_default(),
+            deleted_at: value.deleted_at,
+        }
+    }
+}
+
 fn import_subjects(connection: &Connection, items: &[SharedSubject]) -> Result<(), String> {
     for item in items {
-        if item.deleted_at.is_some() {
-            delete_local_row_by_sync_id(connection, ENTITY_SUBJECT, &item.sync_id)?;
+        let sync_id = canonical_subject_sync_id_for_subject(&item.sync_id, item.name.as_deref());
+        if let Some(deleted_at) = item.deleted_at {
+            if is_default_subject_sync_id(&sync_id) {
+                continue;
+            }
+            delete_local_row_by_sync_id(connection, ENTITY_SUBJECT, &sync_id, deleted_at)?;
             continue;
         }
 
@@ -1532,7 +2040,7 @@ fn import_subjects(connection: &Connection, items: &[SharedSubject]) -> Result<(
 
         upsert_subject_row(
             connection,
-            &item.sync_id,
+            &sync_id,
             name,
             item.color.clone(),
             enabled,
@@ -1546,8 +2054,8 @@ fn import_subjects(connection: &Connection, items: &[SharedSubject]) -> Result<(
 
 fn import_study_modes(connection: &Connection, items: &[SharedStudyMode]) -> Result<(), String> {
     for item in items {
-        if item.deleted_at.is_some() {
-            delete_local_row_by_sync_id(connection, ENTITY_STUDY_MODE, &item.sync_id)?;
+        if let Some(deleted_at) = item.deleted_at {
+            delete_local_row_by_sync_id(connection, ENTITY_STUDY_MODE, &item.sync_id, deleted_at)?;
             continue;
         }
 
@@ -1576,22 +2084,22 @@ fn import_study_modes(connection: &Connection, items: &[SharedStudyMode]) -> Res
             continue;
         };
 
-        let subject_id = resolve_local_id_by_sync_id(
+        let subject_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SUBJECT,
             item.subject_sync_id.as_deref(),
         )?;
-        let current_session_id = resolve_local_id_by_sync_id(
+        let current_session_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_FOCUS_SESSION,
             item.current_session_sync_id.as_deref(),
         )?;
-        let schedule_block_id = resolve_local_id_by_sync_id(
+        let schedule_block_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SCHEDULE_BLOCK,
             item.schedule_block_sync_id.as_deref(),
         )?;
-        let today_plan_item_id = resolve_local_id_by_sync_id(
+        let today_plan_item_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_TODAY_PLAN_ITEM,
             item.today_plan_item_sync_id.as_deref(),
@@ -1617,6 +2125,7 @@ fn import_study_modes(connection: &Connection, items: &[SharedStudyMode]) -> Res
         upsert_study_mode_row(
             connection,
             &item.sync_id,
+            item.state_revision.unwrap_or(1).max(1),
             mode,
             subject_id,
             item.planned_seconds.unwrap_or(0),
@@ -1629,8 +2138,11 @@ fn import_study_modes(connection: &Connection, items: &[SharedStudyMode]) -> Res
             &millis_to_rfc3339(item.started_at.unwrap_or(item.updated_at)),
             &millis_to_rfc3339(item.phase_started_at.unwrap_or(item.updated_at)),
             paused_at,
+            item.accumulated_study_seconds.unwrap_or(0),
             item.total_paused_seconds.unwrap_or(0),
-            item.phase_paused_seconds.unwrap_or(0),
+            item.paused_stage_elapsed_seconds
+                .or(item.phase_paused_seconds)
+                .unwrap_or(0),
             item.ended_at
                 .as_ref()
                 .map(|value| millis_to_rfc3339(*value)),
@@ -1652,8 +2164,8 @@ fn import_focus_sessions(
     items: &[SharedFocusSession],
 ) -> Result<(), String> {
     for item in items {
-        if item.deleted_at.is_some() {
-            delete_local_row_by_sync_id(connection, ENTITY_FOCUS_SESSION, &item.sync_id)?;
+        if let Some(deleted_at) = item.deleted_at {
+            delete_local_row_by_sync_id(connection, ENTITY_FOCUS_SESSION, &item.sync_id, deleted_at)?;
             continue;
         }
 
@@ -1674,17 +2186,17 @@ fn import_focus_sessions(
             continue;
         };
 
-        let subject_id = resolve_local_id_by_sync_id(
+        let subject_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SUBJECT,
             item.subject_sync_id.as_deref(),
         )?;
-        let schedule_block_id = resolve_local_id_by_sync_id(
+        let schedule_block_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SCHEDULE_BLOCK,
             item.schedule_block_sync_id.as_deref(),
         )?;
-        let today_plan_item_id = resolve_local_id_by_sync_id(
+        let today_plan_item_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_TODAY_PLAN_ITEM,
             item.today_plan_item_sync_id.as_deref(),
@@ -1721,8 +2233,8 @@ fn import_focus_sessions(
 
 fn import_app_events(connection: &Connection, items: &[SharedAppEvent]) -> Result<(), String> {
     for item in items {
-        if item.deleted_at.is_some() {
-            delete_local_row_by_sync_id(connection, ENTITY_APP_EVENT, &item.sync_id)?;
+        if let Some(deleted_at) = item.deleted_at {
+            delete_local_row_by_sync_id(connection, ENTITY_APP_EVENT, &item.sync_id, deleted_at)?;
             continue;
         }
 
@@ -1743,7 +2255,7 @@ fn import_app_events(connection: &Connection, items: &[SharedAppEvent]) -> Resul
             continue;
         };
 
-        let focus_session_id = resolve_local_id_by_sync_id(
+        let focus_session_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_FOCUS_SESSION,
             item.focus_session_sync_id.as_deref(),
@@ -1770,8 +2282,8 @@ fn import_checklist_tasks(
     items: &[SharedChecklistTask],
 ) -> Result<(), String> {
     for item in items {
-        if item.deleted_at.is_some() {
-            delete_local_row_by_sync_id(connection, ENTITY_CHECKLIST_TASK, &item.sync_id)?;
+        if let Some(deleted_at) = item.deleted_at {
+            delete_local_row_by_sync_id(connection, ENTITY_CHECKLIST_TASK, &item.sync_id, deleted_at)?;
             continue;
         }
 
@@ -1794,7 +2306,7 @@ fn import_checklist_tasks(
 
         let board_scope = board_scope_for_category_key(category_key);
         ensure_checklist_column(&connection, &board_scope)?;
-        let subject_id = resolve_local_id_by_sync_id(
+        let subject_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SUBJECT,
             item.subject_sync_id.as_deref(),
@@ -1829,8 +2341,8 @@ fn import_today_plan_items(
     items: &[SharedTodayPlanItem],
 ) -> Result<(), String> {
     for item in items {
-        if item.deleted_at.is_some() {
-            delete_local_row_by_sync_id(connection, ENTITY_TODAY_PLAN_ITEM, &item.sync_id)?;
+        if let Some(deleted_at) = item.deleted_at {
+            delete_local_row_by_sync_id(connection, ENTITY_TODAY_PLAN_ITEM, &item.sync_id, deleted_at)?;
             continue;
         }
 
@@ -1851,12 +2363,12 @@ fn import_today_plan_items(
             continue;
         };
 
-        let source_task_id = resolve_local_id_by_sync_id(
+        let source_task_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_CHECKLIST_TASK,
             item.source_task_sync_id.as_deref(),
         )?;
-        let subject_id = resolve_local_id_by_sync_id(
+        let subject_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SUBJECT,
             item.subject_sync_id.as_deref(),
@@ -1891,8 +2403,8 @@ fn import_schedule_templates(
     items: &[SharedScheduleTemplate],
 ) -> Result<(), String> {
     for item in items {
-        if item.deleted_at.is_some() {
-            delete_local_row_by_sync_id(connection, ENTITY_SCHEDULE_TEMPLATE, &item.sync_id)?;
+        if let Some(deleted_at) = item.deleted_at {
+            delete_local_row_by_sync_id(connection, ENTITY_SCHEDULE_TEMPLATE, &item.sync_id, deleted_at)?;
             continue;
         }
 
@@ -1905,7 +2417,7 @@ fn import_schedule_templates(
             continue;
         };
 
-        let subject_id = resolve_local_id_by_sync_id(
+        let subject_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SUBJECT,
             item.subject_sync_id.as_deref(),
@@ -1943,8 +2455,8 @@ fn import_schedule_blocks(
     items: &[SharedScheduleBlock],
 ) -> Result<(), String> {
     for item in items {
-        if item.deleted_at.is_some() {
-            delete_local_row_by_sync_id(connection, ENTITY_SCHEDULE_BLOCK, &item.sync_id)?;
+        if let Some(deleted_at) = item.deleted_at {
+            delete_local_row_by_sync_id(connection, ENTITY_SCHEDULE_BLOCK, &item.sync_id, deleted_at)?;
             continue;
         }
 
@@ -1965,27 +2477,27 @@ fn import_schedule_blocks(
             continue;
         };
 
-        let subject_id = resolve_local_id_by_sync_id(
+        let subject_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SUBJECT,
             item.subject_sync_id.as_deref(),
         )?;
-        let source_today_item_id = resolve_local_id_by_sync_id(
+        let source_today_item_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_TODAY_PLAN_ITEM,
             item.source_today_item_sync_id.as_deref(),
         )?;
-        let template_id = resolve_local_id_by_sync_id(
+        let template_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SCHEDULE_TEMPLATE,
             item.template_sync_id.as_deref(),
         )?;
-        let linked_study_mode_id = resolve_local_id_by_sync_id(
+        let linked_study_mode_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_STUDY_MODE,
             item.linked_study_mode_sync_id.as_deref(),
         )?;
-        let linked_focus_session_id = resolve_local_id_by_sync_id(
+        let linked_focus_session_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_FOCUS_SESSION,
             item.linked_focus_session_sync_id.as_deref(),
@@ -2029,8 +2541,8 @@ fn import_daily_reviews(
     items: &[SharedDailyReview],
 ) -> Result<(), String> {
     for item in items {
-        if item.deleted_at.is_some() {
-            delete_local_row_by_sync_id(connection, ENTITY_DAILY_REVIEW, &item.sync_id)?;
+        if let Some(deleted_at) = item.deleted_at {
+            delete_local_row_by_sync_id(connection, ENTITY_DAILY_REVIEW, &item.sync_id, deleted_at)?;
             continue;
         }
 
@@ -2052,6 +2564,43 @@ fn import_daily_reviews(
             item.summary.clone(),
             item.blockers.clone(),
             item.tomorrow_focus.clone(),
+            item.mood_score.unwrap_or(3).clamp(1, 5),
+            &created_at,
+            &updated_at,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn import_weekly_reviews(
+    connection: &Connection,
+    items: &[SharedWeeklyReview],
+) -> Result<(), String> {
+    for item in items {
+        if let Some(deleted_at) = item.deleted_at {
+            delete_local_row_by_sync_id(connection, ENTITY_WEEKLY_REVIEW, &item.sync_id, deleted_at)?;
+            continue;
+        }
+
+        let Some(week_start_date) = item
+            .week_start_date
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+        let created_at = millis_to_rfc3339(item.created_at.unwrap_or(item.updated_at));
+        let updated_at = millis_to_rfc3339(item.updated_at);
+
+        upsert_weekly_review_row(
+            connection,
+            &item.sync_id,
+            week_start_date,
+            item.summary.clone(),
+            item.blockers.clone(),
+            item.next_week_focus.clone(),
             item.mood_score.unwrap_or(3).clamp(1, 5),
             &created_at,
             &updated_at,
@@ -2093,11 +2642,12 @@ fn load_study_mode_rows(connection: &Connection) -> Result<Vec<DesktopStudyModeR
     let mut statement = connection
         .prepare(
             "
-            SELECT id, mode, subject_id, planned_seconds, focus_seconds, break_seconds,
+            SELECT id, state_revision, mode, subject_id, planned_seconds, focus_seconds, break_seconds,
                    long_break_seconds, long_break_interval, phase, cycle_index,
                    started_at, phase_started_at, paused_at, total_paused_seconds,
-                   phase_paused_seconds, ended_at, current_session_id, status, finish_reason,
-                   created_at, updated_at, schedule_block_id, today_plan_item_id
+                   phase_paused_seconds, accumulated_study_seconds,
+                   paused_stage_elapsed_seconds, ended_at, current_session_id, status,
+                   finish_reason, created_at, updated_at, schedule_block_id, today_plan_item_id
             FROM study_modes
             ORDER BY id ASC
             ",
@@ -2108,28 +2658,31 @@ fn load_study_mode_rows(connection: &Connection) -> Result<Vec<DesktopStudyModeR
         .query_map([], |row| {
             Ok(DesktopStudyModeRow {
                 id: row.get(0)?,
-                mode: row.get(1)?,
-                subject_id: row.get(2)?,
-                planned_seconds: row.get(3)?,
-                focus_seconds: row.get(4)?,
-                break_seconds: row.get(5)?,
-                long_break_seconds: row.get(6)?,
-                long_break_interval: row.get(7)?,
-                phase: row.get(8)?,
-                cycle_index: row.get(9)?,
-                started_at: row.get(10)?,
-                phase_started_at: row.get(11)?,
-                paused_at: row.get(12)?,
-                total_paused_seconds: row.get(13)?,
-                phase_paused_seconds: row.get(14)?,
-                ended_at: row.get(15)?,
-                current_session_id: row.get(16)?,
-                status: row.get(17)?,
-                finish_reason: row.get(18)?,
-                created_at: row.get(19)?,
-                updated_at: row.get(20)?,
-                schedule_block_id: row.get(21)?,
-                today_plan_item_id: row.get(22)?,
+                state_revision: row.get(1)?,
+                mode: row.get(2)?,
+                subject_id: row.get(3)?,
+                planned_seconds: row.get(4)?,
+                focus_seconds: row.get(5)?,
+                break_seconds: row.get(6)?,
+                long_break_seconds: row.get(7)?,
+                long_break_interval: row.get(8)?,
+                phase: row.get(9)?,
+                cycle_index: row.get(10)?,
+                started_at: row.get(11)?,
+                phase_started_at: row.get(12)?,
+                paused_at: row.get(13)?,
+                total_paused_seconds: row.get(14)?,
+                _phase_paused_seconds: row.get(15)?,
+                accumulated_study_seconds: row.get(16)?,
+                paused_stage_elapsed_seconds: row.get(17)?,
+                ended_at: row.get(18)?,
+                current_session_id: row.get(19)?,
+                status: row.get(20)?,
+                finish_reason: row.get(21)?,
+                created_at: row.get(22)?,
+                updated_at: row.get(23)?,
+                schedule_block_id: row.get(24)?,
+                today_plan_item_id: row.get(25)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -2386,6 +2939,36 @@ fn load_daily_review_rows(connection: &Connection) -> Result<Vec<DesktopDailyRev
         .map_err(|error| error.to_string())
 }
 
+fn load_weekly_review_rows(connection: &Connection) -> Result<Vec<DesktopWeeklyReviewRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT id, week_start_date, summary, blockers, next_week_focus, mood_score, created_at, updated_at
+            FROM weekly_reviews
+            ORDER BY week_start_date ASC, id ASC
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(DesktopWeeklyReviewRow {
+                id: row.get(0)?,
+                week_start_date: row.get(1)?,
+                summary: row.get(2)?,
+                blockers: row.get(3)?,
+                next_week_focus: row.get(4)?,
+                mood_score: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
 fn ensure_checklist_column(connection: &Connection, board_scope: &str) -> Result<(), String> {
     let count: i64 = connection
         .query_row(
@@ -2504,6 +3087,7 @@ fn upsert_subject_row(
 fn upsert_study_mode_row(
     connection: &Connection,
     sync_id: &str,
+    state_revision: i64,
     mode: &str,
     subject_id: Option<i64>,
     planned_seconds: i64,
@@ -2516,8 +3100,9 @@ fn upsert_study_mode_row(
     started_at: &str,
     phase_started_at: &str,
     paused_at: Option<String>,
+    accumulated_study_seconds: i64,
     total_paused_seconds: i64,
-    phase_paused_seconds: i64,
+    paused_stage_elapsed_seconds: i64,
     ended_at: Option<String>,
     current_session_id: Option<i64>,
     schedule_block_id: Option<i64>,
@@ -2534,31 +3119,35 @@ fn upsert_study_mode_row(
             .execute(
                 "
                 UPDATE study_modes
-                SET mode = ?1,
-                    subject_id = ?2,
-                    planned_seconds = ?3,
-                    focus_seconds = ?4,
-                    break_seconds = ?5,
-                    long_break_seconds = ?6,
-                    long_break_interval = ?7,
-                    phase = ?8,
-                    cycle_index = ?9,
-                    started_at = ?10,
-                    phase_started_at = ?11,
-                    paused_at = ?12,
-                    total_paused_seconds = ?13,
-                    phase_paused_seconds = ?14,
-                    ended_at = ?15,
-                    current_session_id = ?16,
-                    schedule_block_id = ?17,
-                    today_plan_item_id = ?18,
-                    status = ?19,
-                    finish_reason = ?20,
-                    created_at = ?21,
-                    updated_at = ?22
-                WHERE id = ?23
+                SET state_revision = ?1,
+                    mode = ?2,
+                    subject_id = ?3,
+                    planned_seconds = ?4,
+                    focus_seconds = ?5,
+                    break_seconds = ?6,
+                    long_break_seconds = ?7,
+                    long_break_interval = ?8,
+                    phase = ?9,
+                    cycle_index = ?10,
+                    started_at = ?11,
+                    phase_started_at = ?12,
+                    paused_at = ?13,
+                    accumulated_study_seconds = ?14,
+                    total_paused_seconds = ?15,
+                    phase_paused_seconds = ?16,
+                    paused_stage_elapsed_seconds = ?16,
+                    ended_at = ?17,
+                    current_session_id = ?18,
+                    schedule_block_id = ?19,
+                    today_plan_item_id = ?20,
+                    status = ?21,
+                    finish_reason = ?22,
+                    created_at = ?23,
+                    updated_at = ?24
+                WHERE id = ?25
                 ",
                 params![
+                    state_revision.max(1),
                     mode,
                     subject_id,
                     planned_seconds,
@@ -2571,8 +3160,9 @@ fn upsert_study_mode_row(
                     started_at,
                     phase_started_at,
                     paused_at,
+                    accumulated_study_seconds,
                     total_paused_seconds,
-                    phase_paused_seconds,
+                    paused_stage_elapsed_seconds,
                     ended_at,
                     current_session_id,
                     schedule_block_id,
@@ -2600,14 +3190,16 @@ fn upsert_study_mode_row(
         .execute(
             "
             INSERT INTO study_modes (
-              mode, subject_id, planned_seconds, focus_seconds, break_seconds,
+              state_revision, mode, subject_id, planned_seconds, focus_seconds, break_seconds,
               long_break_seconds, long_break_interval, phase, cycle_index,
-              started_at, phase_started_at, paused_at, total_paused_seconds,
-              phase_paused_seconds, ended_at, current_session_id, schedule_block_id,
+              started_at, phase_started_at, paused_at, accumulated_study_seconds,
+              total_paused_seconds, phase_paused_seconds, paused_stage_elapsed_seconds,
+              ended_at, current_session_id, schedule_block_id,
               today_plan_item_id, status, finish_reason, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
             ",
             params![
+                state_revision.max(1),
                 mode,
                 subject_id,
                 planned_seconds,
@@ -2620,8 +3212,10 @@ fn upsert_study_mode_row(
                 started_at,
                 phase_started_at,
                 paused_at,
+                accumulated_study_seconds,
                 total_paused_seconds,
-                phase_paused_seconds,
+                paused_stage_elapsed_seconds,
+                paused_stage_elapsed_seconds,
                 ended_at,
                 current_session_id,
                 schedule_block_id,
@@ -2813,6 +3407,7 @@ fn resolve_local_active_conflicts(connection: &Connection) -> Result<(), String>
                 UPDATE study_modes
                 SET status = 'finished',
                     phase = 'finished',
+                    state_revision = state_revision + 1,
                     ended_at = COALESCE(ended_at, ?1),
                     current_session_id = NULL,
                     finish_reason = COALESCE(finish_reason, 'sync_takeover'),
@@ -3174,7 +3769,7 @@ fn upsert_schedule_block_row(
     updated_at: &str,
 ) -> Result<(), String> {
     if let Some(local_id) =
-        resolve_local_id_by_sync_id(connection, ENTITY_SCHEDULE_BLOCK, Some(sync_id))?
+        resolve_schedule_block_import_id(connection, sync_id, schedule_date, template_id)?
     {
         connection
             .execute(
@@ -3262,6 +3857,34 @@ fn upsert_schedule_block_row(
         parse_rfc3339_millis(updated_at)?,
         None,
     )
+}
+
+fn resolve_schedule_block_import_id(
+    connection: &Connection,
+    sync_id: &str,
+    schedule_date: &str,
+    template_id: Option<i64>,
+) -> Result<Option<i64>, String> {
+    let by_template_date = match template_id {
+        Some(template_id) => connection
+            .query_row(
+                "
+                SELECT id
+                FROM schedule_blocks
+                WHERE template_id = ?1 AND schedule_date = ?2
+                LIMIT 1
+                ",
+                params![template_id, schedule_date],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?,
+        None => None,
+    };
+
+    Ok(by_template_date.or(
+        resolve_local_id_by_sync_id(connection, ENTITY_SCHEDULE_BLOCK, Some(sync_id))?,
+    ))
 }
 
 fn upsert_daily_review_row(
@@ -3354,6 +3977,96 @@ fn upsert_daily_review_row(
     )
 }
 
+fn upsert_weekly_review_row(
+    connection: &Connection,
+    sync_id: &str,
+    week_start_date: &str,
+    summary: Option<String>,
+    blockers: Option<String>,
+    next_week_focus: Option<String>,
+    mood_score: i64,
+    created_at: &str,
+    updated_at: &str,
+) -> Result<(), String> {
+    let existing_id = resolve_local_id_by_sync_id(connection, ENTITY_WEEKLY_REVIEW, Some(sync_id))?
+        .or_else(|| {
+            connection
+                .query_row(
+                    "SELECT id FROM weekly_reviews WHERE week_start_date = ?1",
+                    params![week_start_date],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .ok()
+                .flatten()
+        });
+
+    if let Some(local_id) = existing_id {
+        connection
+            .execute(
+                "
+                UPDATE weekly_reviews
+                SET week_start_date = ?1,
+                    summary = ?2,
+                    blockers = ?3,
+                    next_week_focus = ?4,
+                    mood_score = ?5,
+                    created_at = ?6,
+                    updated_at = ?7
+                WHERE id = ?8
+                ",
+                params![
+                    week_start_date,
+                    summary,
+                    blockers,
+                    next_week_focus,
+                    mood_score,
+                    created_at,
+                    updated_at,
+                    local_id
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        upsert_sync_meta(
+            connection,
+            ENTITY_WEEKLY_REVIEW,
+            local_id,
+            sync_id,
+            parse_rfc3339_millis(updated_at)?,
+            None,
+        )?;
+        return Ok(());
+    }
+
+    connection
+        .execute(
+            "
+            INSERT INTO weekly_reviews (
+              week_start_date, summary, blockers, next_week_focus, mood_score, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            ",
+            params![
+                week_start_date,
+                summary,
+                blockers,
+                next_week_focus,
+                mood_score,
+                created_at,
+                updated_at
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    let local_id = connection.last_insert_rowid();
+    upsert_sync_meta(
+        connection,
+        ENTITY_WEEKLY_REVIEW,
+        local_id,
+        sync_id,
+        parse_rfc3339_millis(updated_at)?,
+        None,
+    )
+}
+
 fn resolve_or_create_sync_id(
     connection: &Connection,
     entity_type: &str,
@@ -3373,7 +4086,14 @@ fn resolve_or_create_sync_id(
         return Ok(meta.sync_id);
     }
 
-    let sync_id = preferred_sync_id.unwrap_or_else(|| format!("{entity_type}-{local_id}"));
+    let fallback_sync_id = format!("{entity_type}-{local_id}");
+    let sync_id = match preferred_sync_id {
+        Some(preferred) => match get_sync_meta_by_sync_id(connection, &preferred)? {
+            Some(existing) if existing.local_id != local_id => fallback_sync_id,
+            _ => preferred,
+        },
+        None => fallback_sync_id,
+    };
     upsert_sync_meta(
         connection,
         entity_type,
@@ -3416,9 +4136,30 @@ fn upsert_sync_meta(
             "
             INSERT INTO sync_meta (entity_type, local_id, sync_id, deleted_at, updated_at)
             VALUES (?1, ?2, ?3, ?4, ?5)
+            ON CONFLICT(entity_type, local_id) DO UPDATE SET
+                sync_id = excluded.sync_id,
+                deleted_at = excluded.deleted_at,
+                updated_at = excluded.updated_at
             ",
             params![entity_type, local_id, sync_id, deleted_at, updated_at],
         )
+        .or_else(|error| {
+            if !error.to_string().contains("UNIQUE constraint failed: sync_meta.sync_id") {
+                return Err(error);
+            }
+            connection.execute(
+                "DELETE FROM sync_meta WHERE sync_id = ?1 OR (entity_type = ?2 AND local_id = ?3)",
+                params![sync_id, entity_type, local_id],
+            )?;
+            connection.execute(
+                "
+                INSERT INTO sync_meta (entity_type, local_id, sync_id, deleted_at, updated_at)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+                ",
+                params![entity_type, local_id, sync_id, deleted_at, updated_at],
+            )?;
+            Ok(1)
+        })
         .map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -3476,6 +4217,7 @@ fn delete_local_row_by_sync_id(
     connection: &Connection,
     entity_type: &str,
     sync_id: &str,
+    deleted_at: i64,
 ) -> Result<(), String> {
     let local_id = resolve_local_id_by_sync_id(connection, entity_type, Some(sync_id))?;
     if let Some(local_id) = local_id {
@@ -3487,10 +4229,46 @@ fn delete_local_row_by_sync_id(
             }
             ENTITY_STUDY_MODE => {
                 connection
+                    .execute(
+                        "
+                        UPDATE schedule_blocks
+                        SET linked_study_mode_id = NULL
+                        WHERE linked_study_mode_id = ?1
+                        ",
+                        params![local_id],
+                    )
+                    .map_err(|error| error.to_string())?;
+                connection
                     .execute("DELETE FROM study_modes WHERE id = ?1", params![local_id])
                     .map_err(|error| error.to_string())?;
             }
             ENTITY_FOCUS_SESSION => {
+                connection
+                    .execute(
+                        "
+                        UPDATE study_modes
+                        SET current_session_id = NULL
+                        WHERE current_session_id = ?1
+                        ",
+                        params![local_id],
+                    )
+                    .map_err(|error| error.to_string())?;
+                connection
+                    .execute(
+                        "
+                        UPDATE schedule_blocks
+                        SET linked_focus_session_id = NULL
+                        WHERE linked_focus_session_id = ?1
+                        ",
+                        params![local_id],
+                    )
+                    .map_err(|error| error.to_string())?;
+                connection
+                    .execute(
+                        "DELETE FROM app_events WHERE session_id = ?1",
+                        params![local_id],
+                    )
+                    .map_err(|error| error.to_string())?;
                 connection
                     .execute(
                         "DELETE FROM focus_sessions WHERE id = ?1",
@@ -3552,13 +4330,20 @@ fn delete_local_row_by_sync_id(
                     .execute("DELETE FROM daily_reviews WHERE id = ?1", params![local_id])
                     .map_err(|error| error.to_string())?;
             }
+            ENTITY_WEEKLY_REVIEW => {
+                connection
+                    .execute(
+                        "DELETE FROM weekly_reviews WHERE id = ?1",
+                        params![local_id],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
             _ => {}
         }
     }
 
     let tombstone_local_id =
         local_id.unwrap_or_else(|| synthetic_local_id_for_sync_id(entity_type, sync_id));
-    let deleted_at = Utc::now().timestamp_millis();
     upsert_sync_meta(
         connection,
         entity_type,
@@ -3578,8 +4363,13 @@ fn resolve_local_id_by_sync_id(
     let Some(sync_id) = sync_id else {
         return Ok(None);
     };
+    let sync_id = if entity_type == ENTITY_SUBJECT {
+        canonical_subject_sync_id(sync_id)
+    } else {
+        sync_id.to_string()
+    };
 
-    let meta = get_sync_meta_by_sync_id(connection, sync_id)?;
+    let meta = get_sync_meta_by_sync_id(connection, &sync_id)?;
     if let Some(meta) = meta {
         if meta.deleted_at.is_some() {
             return Ok(None);
@@ -3591,6 +4381,22 @@ fn resolve_local_id_by_sync_id(
     Ok(None)
 }
 
+fn resolve_existing_local_id_by_sync_id(
+    connection: &Connection,
+    entity_type: &str,
+    sync_id: Option<&str>,
+) -> Result<Option<i64>, String> {
+    let Some(local_id) = resolve_local_id_by_sync_id(connection, entity_type, sync_id)? else {
+        return Ok(None);
+    };
+
+    if local_row_exists(connection, entity_type, local_id)? {
+        Ok(Some(local_id))
+    } else {
+        Ok(None)
+    }
+}
+
 fn resolve_sync_id_by_local_id(
     connection: &Connection,
     entity_type: &str,
@@ -3600,7 +4406,7 @@ fn resolve_sync_id_by_local_id(
         return Ok(None);
     };
 
-    connection
+    let sync_id = connection
         .query_row(
             "
             SELECT sync_id
@@ -3608,10 +4414,58 @@ fn resolve_sync_id_by_local_id(
             WHERE entity_type = ?1 AND local_id = ?2
             ",
             params![entity_type, local_id],
-            |row| row.get(0),
+            |row| row.get::<_, String>(0),
         )
         .optional()
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+
+    Ok(if entity_type == ENTITY_SUBJECT {
+        sync_id.map(|value| canonical_subject_sync_id(&value))
+    } else {
+        sync_id
+    })
+}
+
+fn resolve_existing_sync_id_by_local_id(
+    connection: &Connection,
+    entity_type: &str,
+    local_id: Option<i64>,
+) -> Result<Option<String>, String> {
+    let Some(local_id) = local_id else {
+        return Ok(None);
+    };
+    if !local_row_exists(connection, entity_type, local_id)? {
+        return Ok(None);
+    }
+    resolve_sync_id_by_local_id(connection, entity_type, Some(local_id))
+}
+
+fn local_row_exists(
+    connection: &Connection,
+    entity_type: &str,
+    local_id: i64,
+) -> Result<bool, String> {
+    let table = match entity_type {
+        ENTITY_SUBJECT => "subjects",
+        ENTITY_STUDY_MODE => "study_modes",
+        ENTITY_FOCUS_SESSION => "focus_sessions",
+        ENTITY_APP_EVENT => "app_events",
+        ENTITY_CHECKLIST_TASK => "checklist_tasks",
+        ENTITY_TODAY_PLAN_ITEM => "today_plan_items",
+        ENTITY_SCHEDULE_BLOCK => "schedule_blocks",
+        ENTITY_SCHEDULE_TEMPLATE => "schedule_templates",
+        ENTITY_DAILY_REVIEW => "daily_reviews",
+        ENTITY_WEEKLY_REVIEW => "weekly_reviews",
+        _ => return Ok(false),
+    };
+    let exists: i64 = connection
+        .query_row(
+            &format!("SELECT COUNT(*) FROM {table} WHERE id = ?1"),
+            params![local_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(exists > 0)
 }
 
 fn resolve_study_mode_sync_id_for_session(
@@ -3633,7 +4487,7 @@ fn resolve_study_mode_sync_id_for_session(
         .optional()
         .map_err(|error| error.to_string())?;
 
-    resolve_sync_id_by_local_id(connection, ENTITY_STUDY_MODE, study_mode_id)
+    resolve_existing_sync_id_by_local_id(connection, ENTITY_STUDY_MODE, study_mode_id)
 }
 
 fn synthetic_local_id_for_sync_id(entity_type: &str, sync_id: &str) -> i64 {
@@ -3678,13 +4532,9 @@ fn parse_weekdays_json(raw: &str) -> Vec<i64> {
 }
 
 fn default_subject_sync_id(name: &str, local_id: i64) -> String {
-    match normalize_name(name).as_str() {
-        "政治" => DEFAULT_SUBJECT_SYNC_IDS[0].to_string(),
-        "英语" => DEFAULT_SUBJECT_SYNC_IDS[1].to_string(),
-        "数学" => DEFAULT_SUBJECT_SYNC_IDS[2].to_string(),
-        "专业课" => DEFAULT_SUBJECT_SYNC_IDS[3].to_string(),
-        _ => format!("subject-{local_id}"),
-    }
+    canonical_subject_sync_id_for_name(name)
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("subject-{local_id}"))
 }
 
 fn normalize_name(value: &str) -> String {
@@ -3741,9 +4591,21 @@ pub fn load_or_create_device_id(connection: &Connection) -> Result<String, Strin
     ensure_device_id(connection)
 }
 
+pub fn ensure_sync_meta_for_local_id(
+    connection: &Connection,
+    entity_type: &str,
+    local_id: i64,
+    preferred_sync_id: Option<String>,
+    updated_at: i64,
+) -> Result<String, String> {
+    resolve_or_create_sync_id(connection, entity_type, local_id, preferred_sync_id, updated_at)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::db::open_database;
+    use tempfile::tempdir;
 
     fn empty_payload(device_id: &str, exported_at: i64) -> SharedSyncPayload {
         SharedSyncPayload {
@@ -3761,6 +4623,48 @@ mod tests {
             schedule_blocks: Vec::new(),
             schedule_templates: Vec::new(),
             daily_reviews: Vec::new(),
+            weekly_reviews: Vec::new(),
+        }
+    }
+
+    fn running_study_mode(
+        sync_id: &str,
+        round_number: i64,
+        phase: &str,
+        accumulated_study_seconds: i64,
+        phase_started_at: i64,
+        updated_at: i64,
+    ) -> SharedStudyMode {
+        SharedStudyMode {
+            sync_id: sync_id.to_string(),
+            state_revision: Some(round_number.max(1)),
+            mode: Some("normal".to_string()),
+            subject_sync_id: None,
+            planned_seconds: Some(3600),
+            focus_seconds: Some(1500),
+            break_seconds: Some(300),
+            long_break_seconds: Some(900),
+            long_break_interval: Some(4),
+            phase: Some(phase.to_string()),
+            round_number: Some(round_number),
+            started_at: Some(0),
+            phase_started_at: Some(phase_started_at),
+            paused_at: None,
+            paused_from_phase: None,
+            accumulated_study_seconds: Some(accumulated_study_seconds),
+            total_paused_seconds: Some(0),
+            phase_paused_seconds: Some(0),
+            paused_stage_elapsed_seconds: Some(0),
+            current_break_type: Some("short".to_string()),
+            ended_at: None,
+            current_session_sync_id: None,
+            schedule_block_sync_id: None,
+            today_plan_item_sync_id: None,
+            status: Some("running".to_string()),
+            finish_reason: None,
+            created_at: Some(0),
+            updated_at,
+            deleted_at: None,
         }
     }
 
@@ -3844,5 +4748,204 @@ mod tests {
         let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 3000);
         assert_eq!(merged.schedule_blocks.len(), 1);
         assert_eq!(merged.schedule_blocks[0].deleted_at, Some(2500));
+    }
+
+    #[test]
+    fn active_study_mode_never_rolls_back_to_older_round_even_with_newer_timestamp() {
+        let mut local = empty_payload("desktop", 60_000);
+        local.study_modes.push(running_study_mode(
+            "mode-1",
+            2,
+            "focus",
+            1500,
+            50_000,
+            2_000,
+        ));
+        let mut remote = empty_payload("phone", 60_000);
+        remote.study_modes.push(running_study_mode(
+            "mode-1",
+            1,
+            "focus",
+            0,
+            10_000,
+            3_000,
+        ));
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 60_000);
+        assert_eq!(merged.study_modes.len(), 1);
+        assert_eq!(merged.study_modes[0].round_number, Some(2));
+        assert_eq!(merged.study_modes[0].accumulated_study_seconds, Some(1500));
+    }
+
+    #[test]
+    fn schedule_blocks_with_same_stable_sync_id_do_not_duplicate() {
+        let mut local = empty_payload("desktop", 1000);
+        local.schedule_blocks.push(SharedScheduleBlock {
+            sync_id: "schedule_block:2026-05-20:template:7:480-540".to_string(),
+            schedule_date: Some("2026-05-20".to_string()),
+            title: Some("math".to_string()),
+            note: None,
+            category_key: Some("math".to_string()),
+            subject_sync_id: Some("subject-3".to_string()),
+            source_today_item_sync_id: None,
+            template_sync_id: Some("schedule_template-7".to_string()),
+            start_minute: Some(480),
+            end_minute: Some(540),
+            status: Some("planned".to_string()),
+            linked_study_mode_sync_id: None,
+            linked_focus_session_sync_id: None,
+            created_at: Some(1000),
+            updated_at: 1000,
+            deleted_at: None,
+        });
+        let mut remote = empty_payload("phone", 2000);
+        remote.schedule_blocks.push(SharedScheduleBlock {
+            sync_id: "schedule_block:2026-05-20:template:7:480-540".to_string(),
+            schedule_date: Some("2026-05-20".to_string()),
+            title: Some("math".to_string()),
+            note: Some("updated".to_string()),
+            category_key: Some("math".to_string()),
+            subject_sync_id: Some("subject-3".to_string()),
+            source_today_item_sync_id: None,
+            template_sync_id: Some("schedule_template-7".to_string()),
+            start_minute: Some(480),
+            end_minute: Some(540),
+            status: Some("planned".to_string()),
+            linked_study_mode_sync_id: None,
+            linked_focus_session_sync_id: None,
+            created_at: Some(1000),
+            updated_at: 2000,
+            deleted_at: None,
+        });
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 3000);
+        assert_eq!(merged.schedule_blocks.len(), 1);
+        assert_eq!(merged.schedule_blocks[0].note.as_deref(), Some("updated"));
+    }
+
+    #[test]
+    fn importing_remote_tombstone_preserves_remote_deleted_at() {
+        let directory = tempdir().expect("create temp directory");
+        let mut connection =
+            open_database(&directory.path().join("sync-test.sqlite3")).expect("open test db");
+        let mut payload = empty_payload("phone", 5_000);
+        payload.checklist_tasks.push(SharedChecklistTask {
+            sync_id: "task-deleted-remotely".to_string(),
+            category_key: None,
+            subject_sync_id: None,
+            title: None,
+            note: None,
+            due_date: None,
+            sort_order: None,
+            completed: None,
+            created_at: None,
+            updated_at: 2_000,
+            deleted_at: Some(2_000),
+        });
+
+        import_shared_sync_payload(&mut connection, &payload).expect("import payload");
+
+        let (deleted_at, updated_at): (i64, i64) = connection
+            .query_row(
+                "SELECT deleted_at, updated_at FROM sync_meta WHERE sync_id = ?1",
+                params!["task-deleted-remotely"],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read tombstone meta");
+        assert_eq!(deleted_at, 2_000);
+        assert_eq!(updated_at, 2_000);
+    }
+
+    #[test]
+    fn importing_schedule_block_reuses_existing_template_date_row() {
+        let directory = tempdir().expect("create temp directory");
+        let mut connection =
+            open_database(&directory.path().join("sync-test.sqlite3")).expect("open test db");
+        upsert_schedule_template_row(
+            &connection,
+            "template-1",
+            "template",
+            None,
+            "general",
+            None,
+            "[1]",
+            480,
+            540,
+            true,
+            &millis_to_rfc3339(1_000),
+            &millis_to_rfc3339(1_000),
+        )
+        .expect("insert template");
+        let template_id: i64 = connection
+            .query_row(
+                "SELECT id FROM schedule_templates WHERE title = ?1",
+                params!["template"],
+                |row| row.get(0),
+            )
+            .expect("read template id");
+        upsert_schedule_block_row(
+            &connection,
+            "local-block",
+            "2030-02-01",
+            "old block",
+            None,
+            "general",
+            None,
+            None,
+            Some(template_id),
+            480,
+            540,
+            "planned",
+            None,
+            None,
+            &millis_to_rfc3339(1_000),
+            &millis_to_rfc3339(1_000),
+        )
+        .expect("insert local generated block");
+
+        let mut payload = empty_payload("phone", 2_000);
+        payload.schedule_blocks.push(SharedScheduleBlock {
+            sync_id: "remote-block".to_string(),
+            schedule_date: Some("2030-02-01".to_string()),
+            title: Some("remote block".to_string()),
+            note: Some("updated".to_string()),
+            category_key: Some("general".to_string()),
+            subject_sync_id: None,
+            source_today_item_sync_id: None,
+            template_sync_id: Some("template-1".to_string()),
+            start_minute: Some(500),
+            end_minute: Some(560),
+            status: Some("planned".to_string()),
+            linked_study_mode_sync_id: None,
+            linked_focus_session_sync_id: None,
+            created_at: Some(2_000),
+            updated_at: 2_000,
+            deleted_at: None,
+        });
+
+        import_shared_sync_payload(&mut connection, &payload).expect("import payload");
+
+        let count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM schedule_blocks WHERE template_id = ?1 AND schedule_date = ?2",
+                params![template_id, "2030-02-01"],
+                |row| row.get(0),
+            )
+            .expect("count blocks");
+        let (title, sync_id): (String, String) = connection
+            .query_row(
+                "
+                SELECT b.title, m.sync_id
+                FROM schedule_blocks b
+                JOIN sync_meta m ON m.entity_type = 'schedule_block' AND m.local_id = b.id
+                WHERE b.template_id = ?1 AND b.schedule_date = ?2
+                ",
+                params![template_id, "2030-02-01"],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read merged block");
+        assert_eq!(count, 1);
+        assert_eq!(title, "remote block");
+        assert_eq!(sync_id, "remote-block");
     }
 }

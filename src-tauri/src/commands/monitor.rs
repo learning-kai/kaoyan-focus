@@ -52,15 +52,51 @@ pub fn check_focus_foreground_app_for_session(
     state: &AppState,
     session_id: i64,
 ) -> Result<FocusAppCheck, String> {
+    check_focus_foreground_app_internal(app, state, Some(session_id), session_id)
+}
+
+pub fn check_focus_foreground_app_for_active_mode(
+    app: &AppHandle,
+    state: &AppState,
+) -> Result<FocusAppCheck, String> {
+    let connection = open_database(&database_path(app)?)?;
+    let active: Option<(i64, Option<i64>)> = connection
+        .query_row(
+            "
+            SELECT id, current_session_id
+            FROM study_modes
+            WHERE status = 'active'
+            ORDER BY id DESC
+            LIMIT 1
+            ",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    let Some((study_mode_id, session_id)) = active else {
+        return Err("No active study mode to monitor.".to_string());
+    };
+    if let Some(session_id) = session_id {
+        return check_focus_foreground_app_for_session(app, state, session_id);
+    }
+
+    check_focus_foreground_app_internal(app, state, None, -study_mode_id)
+}
+
+fn check_focus_foreground_app_internal(
+    app: &AppHandle,
+    state: &AppState,
+    session_id: Option<i64>,
+    dedupe_scope_id: i64,
+) -> Result<FocusAppCheck, String> {
     let foreground_app = get_foreground_app()?;
     let connection = open_database(&database_path(app)?)?;
     let whitelist_processes = enabled_whitelist_processes(&connection)?;
     let whitelist_websites = enabled_whitelist_websites(&connection)?;
-    let match_result = is_foreground_app_allowed(
-        &foreground_app,
-        &whitelist_processes,
-        &whitelist_websites,
-    );
+    let match_result =
+        is_foreground_app_allowed(&foreground_app, &whitelist_processes, &whitelist_websites);
     let mut action_taken = None;
     let mut close_error = None;
 
@@ -68,7 +104,10 @@ pub fn check_focus_foreground_app_for_session(
         if maybe_auto_switch_subject(&connection, &match_result)? {
             let app = app.clone();
             std::thread::spawn(move || {
-                let _ = crate::commands::sync::auto_sync_object_storage_database_blocking(app);
+                let _ = crate::commands::sync::sync_object_storage_after_external_change(
+                    app,
+                    "focus_state_change",
+                );
             });
         }
         *state
@@ -91,7 +130,10 @@ pub fn check_focus_foreground_app_for_session(
                 .last_blocked_process
                 .lock()
                 .map_err(|error| error.to_string())?;
-            let current = (session_id, foreground_app.process_name.to_ascii_lowercase());
+            let current = (
+                dedupe_scope_id,
+                foreground_app.process_name.to_ascii_lowercase(),
+            );
             let should_record = last_blocked_process.as_ref() != Some(&current);
             *last_blocked_process = Some(current);
             should_record
@@ -99,51 +141,57 @@ pub fn check_focus_foreground_app_for_session(
 
         if should_record {
             let now = Utc::now().to_rfc3339();
-            connection
-                .execute(
-                    "
-                    INSERT INTO app_events (
-                      session_id,
-                      process_name,
-                      process_path,
-                      window_title,
-                      event_type,
-                      action_taken,
-                      created_at
-                    ) VALUES (?1, ?2, ?3, ?4, 'blocked_foreground_detected', ?5, ?6)
-                    ",
-                    params![
-                        session_id,
-                        foreground_app.process_name,
-                        foreground_app.process_path,
-                        foreground_app.window_title,
-                        action_taken.as_deref().unwrap_or("close_window"),
-                        now
-                    ],
-                )
-                .map_err(|error| error.to_string())?;
+            if let Some(session_id) = session_id {
+                connection
+                    .execute(
+                        "
+                        INSERT INTO app_events (
+                          session_id,
+                          process_name,
+                          process_path,
+                          window_title,
+                          event_type,
+                          action_taken,
+                          created_at
+                        ) VALUES (?1, ?2, ?3, ?4, 'blocked_foreground_detected', ?5, ?6)
+                        ",
+                        params![
+                            session_id,
+                            foreground_app.process_name,
+                            foreground_app.process_path,
+                            foreground_app.window_title,
+                            action_taken.as_deref().unwrap_or("close_window"),
+                            now
+                        ],
+                    )
+                    .map_err(|error| error.to_string())?;
 
-            connection
-                .execute(
-                    "
-                    UPDATE focus_sessions
-                    SET interruption_count = interruption_count + 1,
-                        updated_at = ?1
-                    WHERE id = ?2
-                    ",
-                    params![now, session_id],
-                )
-                .map_err(|error| error.to_string())?;
+                connection
+                    .execute(
+                        "
+                        UPDATE focus_sessions
+                        SET interruption_count = interruption_count + 1,
+                            updated_at = ?1
+                        WHERE id = ?2
+                        ",
+                        params![now, session_id],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
         }
     }
 
-    let interruption_count = connection
-        .query_row(
-            "SELECT interruption_count FROM focus_sessions WHERE id = ?1",
-            params![session_id],
-            |row| row.get(0),
-        )
-        .map_err(|error| error.to_string())?;
+    let interruption_count = if let Some(session_id) = session_id {
+        connection
+            .query_row(
+                "SELECT interruption_count FROM focus_sessions WHERE id = ?1",
+                params![session_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?
+    } else {
+        0
+    };
 
     Ok(FocusAppCheck {
         foreground_app,
