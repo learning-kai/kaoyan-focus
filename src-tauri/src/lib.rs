@@ -188,7 +188,7 @@ pub fn run() {
                             eprintln!("Desktop background object storage sync failed: {error}");
                         }
                     }
-                    thread::sleep(Duration::from_secs(180));
+                    thread::sleep(Duration::from_secs(120));
                 }
             });
             thread::spawn(move || loop {

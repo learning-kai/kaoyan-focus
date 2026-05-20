@@ -27,8 +27,8 @@ import { applyTheme, bootstrapTheme, storeTheme } from './theme';
 import type { AppTheme } from './types/settings';
 
 const AUTO_SYNC_STARTUP_DELAY_MS = 5000;
-const AUTO_SYNC_INTERVAL_MS = 3 * 60 * 1000;
-const ACTIVE_AUTO_SYNC_INTERVAL_MS = 30 * 1000;
+const AUTO_SYNC_INTERVAL_MS = 60 * 1000;
+const ACTIVE_AUTO_SYNC_INTERVAL_MS = 60 * 1000;
 const FEISHU_AUTO_SYNC_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_LOOKBACK_MINUTES = 1;

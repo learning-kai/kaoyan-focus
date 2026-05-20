@@ -56,7 +56,7 @@ const DEFAULT_OBJECT_REGION: &str = "auto";
 const R2_V3_SCHEMA_VERSION: i64 = 3;
 const R2_V3_DEFAULT_PREFIX: &str = "ultrafocus-sync/v3";
 const R2_V3_MANIFEST: &str = "manifest.json";
-const R2_V3_ACTIVE_LOCK_TTL_MILLIS: i64 = 30 * 60 * 1000;
+const R2_V3_ACTIVE_LOCK_TTL_MILLIS: i64 = 3 * 60 * 1000;
 const R2_V3_SNAPSHOT_OP_THRESHOLD: usize = 500;
 const R2_V3_SNAPSHOT_BYTES_THRESHOLD: usize = 2 * 1024 * 1024;
 const R2_V3_HLC_LOGICAL_MODULUS: i64 = 100_000;
@@ -1022,8 +1022,8 @@ fn sync_r2_v3_object_storage(
                 attempt + 1
             );
             let client = object_storage_client(&normalized).await?;
-            if !pull_only {
-                if let Some(active_snapshot) = local_active_snapshot.as_ref() {
+            if let Some(active_snapshot) = local_active_snapshot.as_ref() {
+                if !pull_only {
                     eprintln!(
                         "R2 v3 sync stage id={} attempt={} acquire_active_lock",
                         sync_id,
@@ -1039,14 +1039,14 @@ fn sync_r2_v3_object_storage(
                     {
                         return Err("r2_active_lock_conflict".to_string());
                     }
-                } else {
-                    eprintln!(
-                        "R2 v3 sync stage id={} attempt={} release_active_lock",
-                        sync_id,
-                        attempt + 1
-                    );
-                    release_r2_v3_active_lock_if_owned(&client, &normalized, &device_id).await?;
                 }
+            } else {
+                eprintln!(
+                    "R2 v3 sync stage id={} attempt={} release_active_lock",
+                    sync_id,
+                    attempt + 1
+                );
+                release_r2_v3_active_lock_if_owned(&client, &normalized, &device_id).await?;
             }
             if !pull_only {
                 eprintln!(

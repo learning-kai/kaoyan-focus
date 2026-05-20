@@ -378,4 +378,32 @@
 ### Android
 - No commits found.
 
+## v1.0.1 - 2026-05-20
+
+### Desktop
+#### Changed
+- release: build 1.0.0 (6460445)
+- release: 完整版第一版 (780bdf4)
+
+### Android
+#### Changed
+- release: build 1.0.0 (f371a6e)
+- release: 完整版第一版 (d4af92c)
+
+## v1.0.2 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.0.3 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
 
