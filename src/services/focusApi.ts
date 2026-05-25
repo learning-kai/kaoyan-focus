@@ -21,6 +21,7 @@ export function startStudyMode(
   longBreakInterval: number,
   mode: FocusMode,
   subjectId?: number | null,
+  whitelistEnabled?: boolean | null,
 ): Promise<StudyModeState> {
   return invokeCommand<StudyModeState>('start_study_mode', {
     plannedSeconds,
@@ -30,6 +31,7 @@ export function startStudyMode(
     longBreakInterval,
     mode,
     subjectId,
+    whitelistEnabled,
   });
 }
 

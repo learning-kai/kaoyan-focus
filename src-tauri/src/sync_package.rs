@@ -4366,23 +4366,16 @@ fn upsert_sync_meta(
     updated_at: i64,
     deleted_at: Option<i64>,
 ) -> Result<(), String> {
-    if let Some(existing) = get_sync_meta_by_sync_id(connection, sync_id)? {
-        connection
-            .execute(
-                "
-                UPDATE sync_meta
-                SET entity_type = ?1,
-                    local_id = ?2,
-                    deleted_at = ?3,
-                    updated_at = ?4
-                WHERE sync_id = ?5
-                ",
-                params![entity_type, local_id, deleted_at, updated_at, sync_id],
-            )
-            .map_err(|error| error.to_string())?;
-        let _ = existing;
-        return Ok(());
-    }
+    connection
+        .execute(
+            "
+            DELETE FROM sync_meta
+            WHERE sync_id = ?1
+              AND NOT (entity_type = ?2 AND local_id = ?3)
+            ",
+            params![sync_id, entity_type, local_id],
+        )
+        .map_err(|error| error.to_string())?;
 
     connection
         .execute(
@@ -4396,26 +4389,6 @@ fn upsert_sync_meta(
             ",
             params![entity_type, local_id, sync_id, deleted_at, updated_at],
         )
-        .or_else(|error| {
-            if !error
-                .to_string()
-                .contains("UNIQUE constraint failed: sync_meta.sync_id")
-            {
-                return Err(error);
-            }
-            connection.execute(
-                "DELETE FROM sync_meta WHERE sync_id = ?1 OR (entity_type = ?2 AND local_id = ?3)",
-                params![sync_id, entity_type, local_id],
-            )?;
-            connection.execute(
-                "
-                INSERT INTO sync_meta (entity_type, local_id, sync_id, deleted_at, updated_at)
-                VALUES (?1, ?2, ?3, ?4, ?5)
-                ",
-                params![entity_type, local_id, sync_id, deleted_at, updated_at],
-            )?;
-            Ok(1)
-        })
         .map_err(|error| error.to_string())?;
     Ok(())
 }

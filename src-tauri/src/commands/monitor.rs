@@ -52,6 +52,33 @@ pub fn check_focus_foreground_app_for_session(
     state: &AppState,
     session_id: i64,
 ) -> Result<FocusAppCheck, String> {
+    let connection = open_database(&database_path(app)?)?;
+    let active: Option<(String, bool, String)> = connection
+        .query_row(
+            "
+            SELECT mode, whitelist_enabled, phase
+            FROM study_modes
+            WHERE status = 'active' AND current_session_id = ?1
+            ORDER BY id DESC
+            LIMIT 1
+            ",
+            params![session_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    if let Some((mode, whitelist_enabled, phase)) = active {
+        if !study_mode_enforces_whitelist(&mode, whitelist_enabled, &phase) {
+            return build_non_enforcing_focus_check(
+                app,
+                state,
+                Some(session_id),
+                non_enforcing_reason(&mode, whitelist_enabled),
+            );
+        }
+    }
+
     check_focus_foreground_app_internal(app, state, Some(session_id), session_id)
 }
 
@@ -60,29 +87,98 @@ pub fn check_focus_foreground_app_for_active_mode(
     state: &AppState,
 ) -> Result<FocusAppCheck, String> {
     let connection = open_database(&database_path(app)?)?;
-    let active: Option<(i64, Option<i64>)> = connection
+    let active: Option<(i64, Option<i64>, String, bool, String)> = connection
         .query_row(
             "
-            SELECT id, current_session_id
+            SELECT id, current_session_id, mode, whitelist_enabled, phase
             FROM study_modes
             WHERE status = 'active'
             ORDER BY id DESC
             LIMIT 1
             ",
             [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
         )
         .optional()
         .map_err(|error| error.to_string())?;
 
-    let Some((study_mode_id, session_id)) = active else {
+    let Some((study_mode_id, session_id, mode, whitelist_enabled, phase)) = active else {
         return Err("No active study mode to monitor.".to_string());
     };
+    if !study_mode_enforces_whitelist(&mode, whitelist_enabled, &phase) {
+        return build_non_enforcing_focus_check(
+            app,
+            state,
+            session_id,
+            non_enforcing_reason(&mode, whitelist_enabled),
+        );
+    }
     if let Some(session_id) = session_id {
         return check_focus_foreground_app_for_session(app, state, session_id);
     }
 
     check_focus_foreground_app_internal(app, state, None, -study_mode_id)
+}
+
+fn study_mode_enforces_whitelist(mode: &str, whitelist_enabled: bool, phase: &str) -> bool {
+    (mode == "strict" || whitelist_enabled) && matches!(phase, "focus" | "awaiting_break")
+}
+
+fn non_enforcing_reason(mode: &str, whitelist_enabled: bool) -> &'static str {
+    if mode != "strict" && !whitelist_enabled {
+        "白名单已关闭"
+    } else {
+        "白名单未执行"
+    }
+}
+
+fn build_non_enforcing_focus_check(
+    app: &AppHandle,
+    state: &AppState,
+    session_id: Option<i64>,
+    reason: &'static str,
+) -> Result<FocusAppCheck, String> {
+    let foreground_app = get_foreground_app()?;
+    *state
+        .last_blocked_process
+        .lock()
+        .map_err(|error| error.to_string())? = None;
+    let interruption_count = if let Some(session_id) = session_id {
+        let connection = open_database(&database_path(app)?)?;
+        connection
+            .query_row(
+                "SELECT interruption_count FROM focus_sessions WHERE id = ?1",
+                params![session_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .unwrap_or(0)
+    } else {
+        0
+    };
+
+    Ok(FocusAppCheck {
+        foreground_app,
+        match_result: WhitelistMatchResult {
+            allowed: true,
+            reason: reason.to_string(),
+            matched_process_name: None,
+            detected_domain: None,
+            matched_subject_id: None,
+        },
+        interruption_count,
+        action_taken: None,
+        close_error: None,
+    })
 }
 
 fn check_focus_foreground_app_internal(

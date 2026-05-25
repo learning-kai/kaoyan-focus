@@ -406,4 +406,22 @@
 ### Android
 - No commits found.
 
+## v1.0.4 - 2026-05-20
+
+### Desktop
+#### Changed
+- 简单测试无bug第一版！ (c1a82a5)
+
+### Android
+#### Changed
+- 简单测试无bug第一版！ (5fdac7b)
+
+## v1.0.5 - 2026-05-20
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
 

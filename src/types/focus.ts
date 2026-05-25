@@ -75,5 +75,6 @@ export type StudyModeState = {
   phase_elapsed_seconds: number;
   phase_remaining_seconds: number;
   focus_enforcement_active: boolean;
+  whitelist_enabled: boolean;
   is_paused: boolean;
 };

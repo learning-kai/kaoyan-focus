@@ -69,6 +69,7 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               break_seconds INTEGER NOT NULL,
               long_break_seconds INTEGER NOT NULL DEFAULT 900,
               long_break_interval INTEGER NOT NULL DEFAULT 4,
+              whitelist_enabled INTEGER NOT NULL DEFAULT 1,
               phase TEXT NOT NULL,
               cycle_index INTEGER NOT NULL DEFAULT 1,
               started_at TEXT NOT NULL,
@@ -325,6 +326,12 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "study_modes",
         "long_break_interval",
         "INTEGER NOT NULL DEFAULT 4",
+    )?;
+    add_column_if_missing(
+        connection,
+        "study_modes",
+        "whitelist_enabled",
+        "INTEGER NOT NULL DEFAULT 1",
     )?;
     add_column_if_missing(connection, "study_modes", "paused_at", "TEXT")?;
     add_column_if_missing(
@@ -878,6 +885,10 @@ fn normalize_default_subjects(connection: &Connection) -> Result<(), String> {
                 "
                 INSERT INTO sync_meta (entity_type, local_id, sync_id, deleted_at, updated_at)
                 VALUES ('subject', ?1, ?2, NULL, ?3)
+                ON CONFLICT(entity_type, local_id) DO UPDATE SET
+                  sync_id = excluded.sync_id,
+                  deleted_at = excluded.deleted_at,
+                  updated_at = excluded.updated_at
                 ",
                 params![canonical_id, sync_id, now_millis],
             )

@@ -59,6 +59,7 @@ const idleStudyState: StudyModeState = {
   phase_elapsed_seconds: 0,
   phase_remaining_seconds: 0,
   focus_enforcement_active: false,
+  whitelist_enabled: true,
   is_paused: false,
 };
 
@@ -126,6 +127,7 @@ export default function FocusPage() {
   const [longBreakMinutes, setLongBreakMinutes] = useState(15);
   const [longBreakInterval, setLongBreakInterval] = useState(4);
   const [mode, setMode] = useState<FocusMode>('normal');
+  const [normalWhitelistEnabled, setNormalWhitelistEnabled] = useState(true);
   const [studyState, setStudyState] = useState<StudyModeState>(idleStudyState);
   const [history, setHistory] = useState<FocusSession[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -160,6 +162,7 @@ export default function FocusPage() {
   const todayTaskCount = checklistData?.today_items.length ?? 0;
   const timerValue = studyState.phase === 'idle' ? formatSeconds(focusMinutes * 60) : studyState.phase === 'awaiting_break' ? formatSeconds(studyState.phase_elapsed_seconds) : formatSeconds(studyState.phase_remaining_seconds);
   const activeClockLabel = studyState.is_paused ? '暂停中' : studyState.phase === 'awaiting_break' ? '等待确认休息' : phaseLabel[studyState.phase];
+  const whitelistStatusLabel = studyState.focus_enforcement_active ? '白名单执行中' : active && studyState.phase !== 'break' && !studyState.whitelist_enabled ? '白名单已关闭' : '休息阶段';
   const quietMeta = ['第 ' + studyState.cycle_index + ' 轮', '剩余 ' + formatSeconds(studyState.study_remaining_seconds), nextBreakLabel(studyState), latestAppCheck ? foregroundSummary(latestAppCheck) : '前台监控待命'];
 
   useEffect(() => { void initializePage(); }, []);
@@ -288,9 +291,9 @@ export default function FocusPage() {
     try {
       setError(null); setMonitorError(null); setLatestAppCheck(null); setNotice(null);
       const requestId = beginStudyStateRequest();
-      const nextState = await startStudyMode(studyMinutes * 60, focusMinutes * 60, breakMinutes * 60, longBreakMinutes * 60, longBreakInterval, mode, selectedSubjectId);
+      const nextState = await startStudyMode(studyMinutes * 60, focusMinutes * 60, breakMinutes * 60, longBreakMinutes * 60, longBreakInterval, mode, selectedSubjectId, mode === 'strict' ? true : normalWhitelistEnabled);
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
-      setNotice('学习模式已开始。窗口关闭后会进入托盘，后台继续计时并执行白名单。');
+      setNotice(nextState.focus_enforcement_active ? '学习模式已开始。窗口关闭后会进入托盘，后台继续计时并执行白名单。' : '学习模式已开始。窗口关闭后会进入托盘，后台继续计时，白名单已关闭。');
       reminderBaselineKey = reminderKey(nextState);
       void notifyStudyReminder({ title: '学习模式已开始', body: '第 ' + nextState.cycle_index + ' 轮番茄钟开始，专注 ' + formatDuration(nextState.focus_seconds) + '。' });
       await refreshDashboard();
@@ -318,7 +321,7 @@ export default function FocusPage() {
       const requestId = beginStudyStateRequest();
       const nextState = studyState.is_paused ? await resumeStudyMode() : await pauseStudyMode();
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
-      setNotice(nextState.is_paused ? '计时已暂停，白名单仍在执行。' : '已继续学习计时。');
+      setNotice(nextState.is_paused ? (nextState.focus_enforcement_active ? '计时已暂停，白名单仍在执行。' : '计时已暂停，白名单已关闭。') : '已继续学习计时。');
       reminderBaselineKey = reminderKey(nextState);
       if (!nextState.is_paused) {
         const refreshRequestId = beginStudyStateRequest();
@@ -515,7 +518,7 @@ export default function FocusPage() {
                   <strong>{scheduleData?.day_blocks.length ?? 0} 块</strong>
                 </span>
               </button>
-              <div className="live-badge"><span className={studyState.focus_enforcement_active ? 'live-dot on' : 'live-dot'} />{studyState.focus_enforcement_active ? '白名单执行中' : '休息阶段'}</div>
+              <div className="live-badge"><span className={studyState.focus_enforcement_active ? 'live-dot on' : 'live-dot'} />{whitelistStatusLabel}</div>
             </div>
           </header>
 
@@ -579,11 +582,17 @@ export default function FocusPage() {
           <PresetStrip items={studyPresetMinutes} prefix="学习 " selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} /><PresetStrip items={focusPresetMinutes} prefix="番茄 " selected={focusMinutes} suffix="m" onSelect={setFocusMinutes} /><PresetStrip items={breakPresetMinutes} prefix="短休 " selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} /><PresetStrip items={longBreakPresetMinutes} prefix="长休 " selected={longBreakMinutes} suffix="m" onSelect={setLongBreakMinutes} /><PresetStrip items={longBreakIntervalPresets} prefix="每 " selected={longBreakInterval} suffix=" 轮长休" onSelect={setLongBreakInterval} />
           <label className="field-block"><span>科目</span><select className="select-input" disabled={subjects.length === 0} onChange={(event) => setSelectedSubjectId(event.target.value ? Number(event.target.value) : null)} value={selectedSubjectId ?? ''}><option value="">不指定</option>{subjects.map((subject) => <option disabled={!subject.enabled} key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
           <div className="segmented-control"><button className={mode === 'normal' ? 'active' : ''} onClick={() => setMode('normal')} type="button">普通模式</button><button className={mode === 'strict' ? 'active' : ''} onClick={() => setMode('strict')} type="button">强制模式</button></div>
+          {mode === 'normal' && (
+            <label className="capability-row focus-whitelist-toggle">
+              <span>启用白名单</span>
+              <input checked={normalWhitelistEnabled} onChange={(event) => setNormalWhitelistEnabled(event.target.checked)} role="switch" type="checkbox" />
+            </label>
+          )}
         </aside>
       </div>
       <div className="dashboard-strip">
         <section className="soft-panel"><div className="panel-title"><div><p className="eyebrow">Today</p><h3>今日状态</h3></div><CheckCircle2 size={20} /></div><div className="stats-grid four"><Metric icon={Timer} label="今日" value={formatDuration(stats?.today_seconds ?? 0)} /><Metric icon={Timer} label="本周" value={formatDuration(stats?.week_seconds ?? 0)} /><Metric icon={Timer} label="本月" value={formatDuration(stats?.month_seconds ?? 0)} /><Metric icon={ShieldCheck} label="拦截" value={String(stats?.interruption_count ?? 0)} /></div></section>
-        <section className="soft-panel"><div className="panel-title"><div><p className="eyebrow">Monitor</p><h3>白名单状态</h3></div><Gauge size={20} /></div><div className="monitor-callout"><Leaf size={18} /><div><strong>准备就绪</strong><p>开始学习后会持续检查前台窗口，并关闭非白名单软件或网站。</p></div></div></section>
+        <section className="soft-panel"><div className="panel-title"><div><p className="eyebrow">Monitor</p><h3>白名单状态</h3></div><Gauge size={20} /></div><div className="monitor-callout"><Leaf size={18} /><div><strong>准备就绪</strong><p>{mode === 'normal' && !normalWhitelistEnabled ? '普通模式本次不执行白名单。' : '开始学习后会持续检查前台窗口，并关闭非白名单软件或网站。'}</p></div></div></section>
         <section className="soft-panel history-panel"><div className="panel-title"><div><p className="eyebrow">History</p><h3>最近记录</h3></div><BellRing size={20} /></div>{history.length === 0 ? <div className="empty-state compact">还没有专注记录。</div> : <div className="compact-history">{history.slice(0, 4).map((session) => <article className="list-row compact-row" key={session.id}><div><strong>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</strong><p>{formatSessionTimeRange(session)}</p></div><div className="history-meta"><span>{sessionStatusLabel(session.status)}</span><strong>{formatDuration(session.actual_seconds || session.planned_seconds)}</strong></div></article>)}</div>}</section>
       </div>
     </section>
@@ -593,7 +602,7 @@ export default function FocusPage() {
 function breakKindLabel(kind: StudyModeState['break_kind']) { return kind === 'long' ? '长休息' : '短休息'; }
 function nextBreakLabel(studyState: StudyModeState) { return breakKindLabel(studyState.break_kind) + ' ' + formatDuration(studyState.effective_break_seconds || studyState.break_seconds); }
 function buildPhaseMessage(studyState: StudyModeState) {
-  if (studyState.is_paused) return '计时暂停，白名单仍在强制执行';
+  if (studyState.is_paused) return studyState.focus_enforcement_active ? '计时暂停，白名单仍在强制执行' : '计时暂停，白名单已关闭';
   if (studyState.phase === 'focus') return '第 ' + studyState.cycle_index + ' 轮番茄钟进行中';
   if (studyState.phase === 'awaiting_break') return '本轮已到点，确认后进入 ' + nextBreakLabel(studyState);
   if (studyState.phase === 'break') return breakKindLabel(studyState.break_kind) + '进行中';

@@ -75,6 +75,7 @@ pub struct StudyModeState {
     pub phase_elapsed_seconds: i64,
     pub phase_remaining_seconds: i64,
     pub focus_enforcement_active: bool,
+    pub whitelist_enabled: bool,
     pub is_paused: bool,
 }
 
@@ -102,6 +103,7 @@ struct StudyModeRecord {
     break_seconds: i64,
     long_break_seconds: i64,
     long_break_interval: i64,
+    whitelist_enabled: bool,
     phase: String,
     cycle_index: i64,
     started_at: String,
@@ -148,6 +150,7 @@ pub fn start_study_mode(
     long_break_interval: i64,
     mode: String,
     subject_id: Option<i64>,
+    whitelist_enabled: Option<bool>,
 ) -> Result<StudyModeState, String> {
     if planned_seconds <= 0 {
         return Err("学习模式时长必须大于 0 秒".to_string());
@@ -173,6 +176,7 @@ pub fn start_study_mode(
         return Err("未知的专注模式".to_string());
     }
 
+    let whitelist_enabled = mode == "strict" || whitelist_enabled.unwrap_or(true);
     let connection = open_database(&database_path(&app)?)?;
     if get_active_study_mode_record(&connection)?.is_some() {
         return Err("已有学习模式正在进行中".to_string());
@@ -198,10 +202,11 @@ pub fn start_study_mode(
               phase_started_at,
               accumulated_study_seconds,
               current_session_id,
+              whitelist_enabled,
               status,
               created_at,
               updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 'focus', 1, ?8, ?8, 0, ?9, 'active', ?8, ?8)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 'focus', 1, ?8, ?8, 0, ?9, ?10, 'active', ?8, ?8)
             ",
             params![
                 mode,
@@ -212,7 +217,8 @@ pub fn start_study_mode(
                 long_break_seconds,
                 long_break_interval,
                 now,
-                session.id
+                session.id,
+                whitelist_enabled
             ],
         )
         .map_err(|error| error.to_string())?;
@@ -266,6 +272,7 @@ pub fn start_study_mode_with_links(
 
     let now = Utc::now().to_rfc3339();
     let session = insert_focus_session(&connection, focus_seconds, &mode, subject_id, &now)?;
+    let whitelist_enabled = true;
     connection
         .execute(
             "
@@ -286,10 +293,11 @@ pub fn start_study_mode_with_links(
               current_session_id,
               schedule_block_id,
               today_plan_item_id,
+              whitelist_enabled,
               status,
               created_at,
               updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 'focus', 1, ?8, ?8, 0, ?9, ?10, ?11, 'active', ?8, ?8)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 'focus', 1, ?8, ?8, 0, ?9, ?10, ?11, ?12, 'active', ?8, ?8)
             ",
             params![
                 mode,
@@ -302,7 +310,8 @@ pub fn start_study_mode_with_links(
                 now,
                 session.id,
                 links.schedule_block_id,
-                links.today_plan_item_id
+                links.today_plan_item_id,
+                whitelist_enabled
             ],
         )
         .map_err(|error| error.to_string())?;
@@ -1601,6 +1610,7 @@ fn idle_study_mode_state() -> StudyModeState {
         phase_elapsed_seconds: 0,
         phase_remaining_seconds: 0,
         focus_enforcement_active: false,
+        whitelist_enabled: true,
         is_paused: false,
     }
 }
@@ -1637,8 +1647,10 @@ fn study_mode_record_to_state(
         "break" => (effective_break_seconds - phase_elapsed_seconds).max(0),
         _ => 0,
     };
-    let focus_enforcement_active =
-        record.status == "active" && matches!(record.phase.as_str(), "focus" | "awaiting_break");
+    let whitelist_enabled = record.mode == "strict" || record.whitelist_enabled;
+    let focus_enforcement_active = whitelist_enabled
+        && record.status == "active"
+        && matches!(record.phase.as_str(), "focus" | "awaiting_break");
 
     Ok(StudyModeState {
         id: Some(record.id),
@@ -1665,6 +1677,7 @@ fn study_mode_record_to_state(
         phase_elapsed_seconds,
         phase_remaining_seconds,
         focus_enforcement_active,
+        whitelist_enabled,
         is_paused: record.paused_at.is_some(),
     })
 }
@@ -1680,7 +1693,7 @@ fn get_active_study_mode_record(
                    phase, cycle_index, started_at, phase_started_at, paused_at,
                    total_paused_seconds, phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at,
-                   current_session_id, schedule_block_id, today_plan_item_id, status
+                   current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status
             FROM study_modes
             WHERE status = 'active'
             ORDER BY state_revision DESC, updated_at DESC, id DESC
@@ -1704,7 +1717,7 @@ fn get_latest_study_mode_record(
                    phase, cycle_index, started_at, phase_started_at, paused_at,
                    total_paused_seconds, phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at,
-                   current_session_id, schedule_block_id, today_plan_item_id, status
+                   current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status
             FROM study_modes
             ORDER BY state_revision DESC, updated_at DESC, id DESC
             LIMIT 1
@@ -1728,7 +1741,7 @@ fn get_study_mode_record_by_id(
                    phase, cycle_index, started_at, phase_started_at, paused_at,
                    total_paused_seconds, phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at,
-                   current_session_id, schedule_block_id, today_plan_item_id, status
+                   current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status
             FROM study_modes
             WHERE id = ?1
             ",
@@ -1971,7 +1984,8 @@ fn row_to_study_mode_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<StudyMo
         current_session_id: row.get(19)?,
         schedule_block_id: row.get(20)?,
         _today_plan_item_id: row.get(21)?,
-        status: row.get(22)?,
+        whitelist_enabled: row.get(22)?,
+        status: row.get(23)?,
     })
 }
 

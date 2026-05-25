@@ -2869,6 +2869,17 @@ fn ensure_sync_meta(
     connection
         .execute(
             "
+            DELETE FROM sync_meta
+            WHERE sync_id = ?1
+              AND NOT (entity_type = ?2 AND local_id = ?3)
+            ",
+            params![sync_id, entity_type, local_id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    connection
+        .execute(
+            "
             INSERT INTO sync_meta (entity_type, local_id, sync_id, deleted_at, updated_at)
             VALUES (?1, ?2, ?3, ?4, ?5)
             ON CONFLICT(entity_type, local_id) DO UPDATE SET
