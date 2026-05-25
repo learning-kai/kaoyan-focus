@@ -1037,7 +1037,10 @@ fn sync_r2_v3_object_storage(
                     )
                     .await?
                     {
-                        return Err("r2_active_lock_conflict".to_string());
+                        eprintln!(
+                            "R2 v3 sync active lock conflict ignored before merge sync_id={}",
+                            active_snapshot.sync_id
+                        );
                     }
                 }
             } else {
