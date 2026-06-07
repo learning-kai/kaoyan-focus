@@ -1,7 +1,7 @@
 {
   "name": "kaoyan-focus",
   "private": false,
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "Windows local-first study focus app for exam preparation, built with Tauri, React, TypeScript and Rust.",
   "license": "MIT",
   "type": "module",
@@ -30,10 +30,14 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "lint": "tsc --noEmit",
-    "check:rust": "cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
-    "test": "npm.cmd run lint && npm.cmd run check:rust",
+    "typecheck": "tsc --noEmit",
+    "lint": "npm run typecheck",
+    "build": "npm run typecheck && vite build",
+    "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
+    "check": "npm run typecheck && npm run build && npm run check:rust",
+    "test": "npm run typecheck && npm run check:rust",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "preview": "vite preview",
     "tauri": "tauri",
     "release:prepare": "node scripts/prepare-release.mjs",
@@ -62,6 +66,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "prettier": "^3.6.2"
   }
 }

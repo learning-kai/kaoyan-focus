@@ -57,7 +57,10 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
               >
                 <Icon size={19} />
                 <span>
-                  <strong>{pages[page].title}</strong>
+                  <strong>
+                    <span className="nav-title-full">{pages[page].title}</span>
+                    <span className="nav-title-short">{pages[page].shortTitle ?? pages[page].title}</span>
+                  </strong>
                   <small>{pages[page].description}</small>
                 </span>
               </button>

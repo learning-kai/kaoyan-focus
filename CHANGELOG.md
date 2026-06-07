@@ -760,4 +760,11 @@
 #### Added
 - feat: update version to 1.7.4 and enhance release process with Android support (c3728aa)
 
+## v1.8.1 - 2026-06-07
+
+### Desktop
+#### Added
+- feat: add new components and hooks for improved user interaction and styling (4ff88b8)
+- feat: update version to 1.7.4 and enhance release process with Android support (c3728aa)
+
 

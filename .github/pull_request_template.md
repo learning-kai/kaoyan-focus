@@ -8,8 +8,9 @@
 
 ## 测试情况
 
-- [ ] `npm.cmd test`
+- [ ] `npm.cmd run typecheck`
 - [ ] `npm.cmd run build`
+- [ ] `npm.cmd test`
 - [ ] `cargo test`（工作目录：`src-tauri`）
 - [ ] 手动 smoke test
 

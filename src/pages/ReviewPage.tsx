@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, NotebookPen, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
 import {
   deleteDailyReview,
@@ -77,8 +77,12 @@ export default function ReviewPage() {
   const [draft, setDraft] = useState<DailyReviewDraft>(() => emptyDailyDraft(todayString()));
   const [weeklyDraft, setWeeklyDraft] = useState<WeeklyReviewDraft>(() => emptyWeeklyDraft(weekStartString(todayString())));
   const [saving, setSaving] = useState(false);
+  const [dailyDirty, setDailyDirty] = useState(false);
+  const [weeklyDirty, setWeeklyDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const dailyRefreshTokenRef = useRef(0);
+  const weeklyRefreshTokenRef = useRef(0);
 
   useEffect(() => {
     if (mode === 'daily') {
@@ -89,9 +93,14 @@ export default function ReviewPage() {
   }, [mode, selectedDate]);
 
   async function refreshDaily(date = selectedDate) {
+    const token = dailyRefreshTokenRef.current + 1;
+    dailyRefreshTokenRef.current = token;
     try {
       setError(null);
       const pageData = await getDailyReviewPageData(date);
+      if (dailyRefreshTokenRef.current !== token) {
+        return;
+      }
       setData(pageData);
       setDraft({
         reviewDate: pageData.review_date,
@@ -100,15 +109,23 @@ export default function ReviewPage() {
         tomorrowFocus: pageData.review?.tomorrow_focus ?? '',
         moodScore: pageData.review?.mood_score ?? 3,
       });
+      setDailyDirty(false);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      if (dailyRefreshTokenRef.current === token) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
     }
   }
 
   async function refreshWeekly(date = selectedDate) {
+    const token = weeklyRefreshTokenRef.current + 1;
+    weeklyRefreshTokenRef.current = token;
     try {
       setError(null);
       const pageData = await getWeeklyReviewPageData(date);
+      if (weeklyRefreshTokenRef.current !== token) {
+        return;
+      }
       setWeeklyData(pageData);
       setWeeklyDraft({
         weekStartDate: pageData.week_start_date,
@@ -117,9 +134,73 @@ export default function ReviewPage() {
         nextWeekFocus: pageData.review?.next_week_focus ?? '',
         moodScore: pageData.review?.mood_score ?? 3,
       });
+      setWeeklyDirty(false);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      if (weeklyRefreshTokenRef.current === token) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
     }
+  }
+
+  function activeDraftDirty() {
+    return mode === 'daily' ? dailyDirty : weeklyDirty;
+  }
+
+  async function confirmDiscardDraft() {
+    if (!activeDraftDirty()) {
+      return true;
+    }
+
+    return confirm({
+      cancelLabel: '继续编辑',
+      confirmLabel: '丢弃修改',
+      message: mode === 'daily'
+        ? '当前日复盘有未保存修改，继续操作会用选中日期的数据覆盖草稿。'
+        : '当前周复盘有未保存修改，继续操作会用选中周的数据覆盖草稿。',
+      title: '丢弃未保存复盘？',
+      tone: 'danger',
+    });
+  }
+
+  async function handleModeChange(nextMode: ReviewMode) {
+    if (nextMode === mode) return;
+    if (!(await confirmDiscardDraft())) return;
+    if (mode === 'daily') {
+      setDailyDirty(false);
+    } else {
+      setWeeklyDirty(false);
+    }
+    setMode(nextMode);
+  }
+
+  async function handleDateChange(nextDate: string) {
+    if (nextDate === selectedDate) return;
+    if (!(await confirmDiscardDraft())) return;
+    if (mode === 'daily') {
+      setDailyDirty(false);
+    } else {
+      setWeeklyDirty(false);
+    }
+    setSelectedDate(nextDate);
+  }
+
+  async function handleRefresh() {
+    if (!(await confirmDiscardDraft())) return;
+    if (mode === 'daily') {
+      await refreshDaily();
+    } else {
+      await refreshWeekly();
+    }
+  }
+
+  function updateDailyDraft(patch: Partial<DailyReviewDraft>) {
+    setDraft((current) => ({ ...current, ...patch }));
+    setDailyDirty(true);
+  }
+
+  function updateWeeklyDraft(patch: Partial<WeeklyReviewDraft>) {
+    setWeeklyDraft((current) => ({ ...current, ...patch }));
+    setWeeklyDirty(true);
   }
 
   async function handleSave() {
@@ -191,17 +272,17 @@ export default function ReviewPage() {
         </div>
         <div className="review-date-tools">
           <div className="segmented-control review-mode-toggle">
-            <button className={mode === 'daily' ? 'active' : ''} type="button" onClick={() => setMode('daily')}>日复盘</button>
-            <button className={mode === 'weekly' ? 'active' : ''} type="button" onClick={() => setMode('weekly')}>周复盘</button>
+            <button className={mode === 'daily' ? 'active' : ''} type="button" onClick={() => void handleModeChange('daily')}>日复盘</button>
+            <button className={mode === 'weekly' ? 'active' : ''} type="button" onClick={() => void handleModeChange('weekly')}>周复盘</button>
           </div>
-          <button aria-label={mode === 'daily' ? '前一天' : '前一周'} className="ghost-action icon-action" type="button" onClick={() => setSelectedDate(shiftDate(selectedDate, mode === 'daily' ? -1 : -7))}>
+          <button aria-label={mode === 'daily' ? '前一天' : '前一周'} className="ghost-action icon-action" type="button" onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? -1 : -7))}>
             <ChevronLeft size={16} />
           </button>
-          <input className="text-input" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
-          <button aria-label={mode === 'daily' ? '后一天' : '后一周'} className="ghost-action icon-action" type="button" onClick={() => setSelectedDate(shiftDate(selectedDate, mode === 'daily' ? 1 : 7))}>
+          <input className="text-input" type="date" value={selectedDate} onChange={(event) => void handleDateChange(event.target.value)} />
+          <button aria-label={mode === 'daily' ? '后一天' : '后一周'} className="ghost-action icon-action" type="button" onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? 1 : 7))}>
             <ChevronRight size={16} />
           </button>
-          <button className="ghost-action" type="button" onClick={() => mode === 'daily' ? void refreshDaily() : void refreshWeekly()}>
+          <button className="ghost-action" type="button" onClick={() => void handleRefresh()}>
             <RefreshCw size={16} /> 刷新
           </button>
         </div>
@@ -244,9 +325,9 @@ export default function ReviewPage() {
                 type="button"
                 onClick={() => {
                   if (mode === 'daily') {
-                    setDraft((current) => ({ ...current, moodScore: score }));
+                    updateDailyDraft({ moodScore: score });
                   } else {
-                    setWeeklyDraft((current) => ({ ...current, moodScore: score }));
+                    updateWeeklyDraft({ moodScore: score });
                   }
                 }}
               >
@@ -259,15 +340,15 @@ export default function ReviewPage() {
             <>
               <label className="field-block">
                 <span>今日总结</span>
-                <textarea className="text-input review-textarea" value={draft.summary ?? ''} onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))} placeholder="今天真正推进了什么？哪些安排有效？" />
+                <textarea className="text-input review-textarea" value={draft.summary ?? ''} onChange={(event) => updateDailyDraft({ summary: event.target.value })} placeholder="今天真正推进了什么？哪些安排有效？" />
               </label>
               <label className="field-block">
                 <span>问题卡点</span>
-                <textarea className="text-input review-textarea" value={draft.blockers ?? ''} onChange={(event) => setDraft((current) => ({ ...current, blockers: event.target.value }))} placeholder="卡住的题、分心原因、没有执行的原因。" />
+                <textarea className="text-input review-textarea" value={draft.blockers ?? ''} onChange={(event) => updateDailyDraft({ blockers: event.target.value })} placeholder="卡住的题、分心原因、没有执行的原因。" />
               </label>
               <label className="field-block">
                 <span>明日重点</span>
-                <textarea className="text-input review-textarea" value={draft.tomorrowFocus ?? ''} onChange={(event) => setDraft((current) => ({ ...current, tomorrowFocus: event.target.value }))} placeholder="明天最先做哪几件事？" />
+                <textarea className="text-input review-textarea" value={draft.tomorrowFocus ?? ''} onChange={(event) => updateDailyDraft({ tomorrowFocus: event.target.value })} placeholder="明天最先做哪几件事？" />
               </label>
             </>
           ) : (

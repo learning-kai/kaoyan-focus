@@ -12,6 +12,7 @@ import type { AppPage } from './types/navigation';
 
 export type PageMeta = {
   title: string;
+  shortTitle?: string;
   description: string;
   icon: LucideIcon;
   component: ReactNode;
@@ -50,6 +51,7 @@ export const pages: Record<AppPage, PageMeta> = {
   },
   whitelist: {
     title: '白名单',
+    shortTitle: '放行',
     description: '软件与网站放行',
     icon: ShieldCheck,
     component: <WhitelistPage />,

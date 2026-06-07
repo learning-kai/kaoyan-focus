@@ -3,3 +3,6 @@ contact_links:
   - name: 阅读项目文档
     url: https://github.com/learning-kai/kaoyan-focus
     about: 提交 issue 前建议先阅读 README 和项目文档。
+  - name: 安全漏洞报告
+    url: https://github.com/learning-kai/kaoyan-focus/security/policy
+    about: 请不要在公开 issue 中粘贴密钥、数据库、同步备份或漏洞利用细节。

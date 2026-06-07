@@ -4,6 +4,7 @@ import App from './App';
 import './styles.css';
 import './components.css';
 import './theme-light.css';
+import './professional-ui.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

@@ -1,10 +1,21 @@
 # 考研专注
 
+[![CI](https://github.com/learning-kai/kaoyan-focus/actions/workflows/ci.yml/badge.svg)](https://github.com/learning-kai/kaoyan-focus/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows-0078D4)
+![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB)
+![React](https://img.shields.io/badge/React-19-61DAFB)
+![Rust](https://img.shields.io/badge/Rust-stable-orange)
+
 > A local-first Windows study focus app built with Tauri, React, TypeScript and Rust. It helps exam candidates run structured focus sessions, enforce app/site allowlists, review learning records, and optionally sync data across devices.
 
 `考研专注` 是一个面向 Windows 桌面端的本地学习约束工具，目标是在备考期间把“开始学习、强制白名单、番茄节奏、任务计划、复盘统计、数据同步”串成一个可持续使用的学习工作台。
 
 本项目第一版 GitHub 公开范围以 Windows / Tauri 桌面端为主。Android 相关内容不作为当前公开仓库主线维护范围。
+
+## 为什么做这个项目
+
+普通番茄钟只负责倒计时；`考研专注` 更关注备考场景里的完整闭环：学习前规划、学习中约束、学习后复盘、跨设备备份和长期统计。它默认本地运行，尽量把用户数据和第三方凭据留在用户自己的设备上。
 
 ## 核心特性
 
@@ -18,13 +29,15 @@
 
 ## 截图与演示
 
-发布 GitHub 前建议补充以下素材：
+公开截图和短演示会放在 `docs/assets/`。在素材完成前，请参考 [FEATURES.md](./FEATURES.md) 了解完整功能清单。
 
-- 首屏主界面截图：`docs/assets/screenshot-focus.png`
-- 设置页同步配置截图：`docs/assets/screenshot-settings-sync.png`
-- 30 秒以内 GIF：展示开始学习模式、白名单拦截、统计回看。
+计划补充：
 
-不要提交包含真实个人数据、邮箱、飞书 App Secret、对象存储密钥或本机路径的截图。
+- `docs/assets/screenshot-focus.png`：专注页主界面。
+- `docs/assets/screenshot-settings-sync.png`：设置页同步配置。
+- `docs/assets/demo-focus-flow.gif`：30 秒以内演示开始学习模式、白名单提醒、统计回看。
+
+截图、GIF 和演示数据必须先脱敏。不要提交真实个人数据、邮箱、飞书 App Secret、对象存储密钥、本机路径、数据库或同步备份。详细规则见 [docs/assets/README.md](./docs/assets/README.md)。
 
 ## 快速开始
 
@@ -56,7 +69,7 @@ npm.cmd run tauri dev
 类型检查：
 
 ```powershell
-npm.cmd run lint
+npm.cmd run typecheck
 ```
 
 完整检查（TypeScript、Rust 格式、Clippy、Rust 测试）：
@@ -78,6 +91,25 @@ cd src-tauri
 cargo test
 ```
 
+## 工程质量
+
+本仓库用轻量但明确的工程入口保持可维护性：
+
+- GitHub Actions 在 Windows runner 上运行前端类型检查、前端构建、Rust 格式检查、Clippy 和 Rust 测试。
+- `.editorconfig` 固定基础换行、编码和缩进约定。
+- Prettier 提供格式化入口；第一轮不会强制重排历史文件，避免无意义大 diff。
+- Dependabot 每周检查 npm、Cargo 和 GitHub Actions 依赖。
+- Tauri command、SQLite schema、同步 payload 是稳定边界，修改前需要说明兼容策略。
+
+常用维护命令：
+
+```powershell
+npm.cmd run typecheck
+npm.cmd run build
+npm.cmd test
+npm.cmd run format:check
+```
+
 ## 项目文档
 
 建议按下面顺序阅读：
@@ -96,7 +128,7 @@ cargo test
 - 项目不实现驱动级拦截、不隐藏进程、不阻止任务管理器结束进程、不做恶意持久化。
 - 请不要提交 `.env*`、私钥、真实数据库、同步备份、日志或构建产物。
 
-更多说明见 [SECURITY.md](./SECURITY.md)。
+更多说明见 [SECURITY.md](./SECURITY.md)。需要使用支持请看 [SUPPORT.md](./SUPPORT.md)。资产来源和授权说明见 [NOTICE.md](./NOTICE.md)。
 
 ## 发布与更新
 
@@ -105,22 +137,29 @@ cargo test
 发布前先预检：
 
 ```powershell
-npm.cmd run release:auto -- --version 1.7.4 --dry-run
+npm.cmd run release:auto -- --version 1.8.1 --dry-run
 ```
 
-第一版公开仓库以桌面端为主。Android 相关发布步骤是维护者内部流程，只有显式传入 `--include-android` 或设置 `INCLUDE_ANDROID_RELEASE=1` 时才会参与版本同步和 tag 校验。
+默认发布路径只处理桌面端。Android 相关发布步骤是维护者内部流程，只有显式传入 `--include-android` 或设置 `INCLUDE_ANDROID_RELEASE=1` 时才会参与版本同步和 tag 校验。
+
+发布前请确认版本号同步：
+
+- [package.json](./package.json)
+- [src-tauri/Cargo.toml](./src-tauri/Cargo.toml)
+- [src-tauri/tauri.conf.json](./src-tauri/tauri.conf.json)
+- [CHANGELOG.md](./CHANGELOG.md)
 
 ## 路线图
 
 - 补齐公开截图、演示 GIF 和英文快速介绍。
-- 增加 GitHub Actions：前端类型检查、Rust 测试、Markdown 链接检查。
+- 增加 Markdown 链接检查和更细的前端测试。
 - 深化同步模块文档和备份恢复说明。
 - 继续控制大文件增长，优先拆分 `sync_package/identity.rs` 和 `commands/sync/object_storage_protocol.rs`。
 - 补充更细的贡献者任务标签，例如 `good first issue`、`docs`、`sync`、`windows`。
 
 ## 贡献
 
-欢迎提交 issue、文档改进和功能 PR。开始前请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+欢迎提交 issue、文档改进和功能 PR。开始前请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)，行为准则见 [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)。
 
 如果你使用 AI 协助开发，请先让 AI 阅读：
 
