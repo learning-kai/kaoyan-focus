@@ -384,13 +384,13 @@ fn import_checklist_tasks(
         };
 
         let board_scope = board_scope_for_category_key(category_key);
-        ensure_checklist_column(&connection, &board_scope)?;
+        ensure_checklist_column(connection, &board_scope)?;
         let subject_id = resolve_existing_local_id_by_sync_id(
             connection,
             ENTITY_SUBJECT,
             item.subject_sync_id.as_deref(),
         )?;
-        let column_id = get_first_checklist_column_id(&connection, &board_scope)?;
+        let column_id = get_first_checklist_column_id(connection, &board_scope)?;
         let created_at = millis_to_rfc3339(item.created_at.unwrap_or(item.updated_at));
         let updated_at = millis_to_rfc3339(item.updated_at);
 
@@ -713,4 +713,3 @@ fn import_weekly_reviews(
 
     Ok(())
 }
-

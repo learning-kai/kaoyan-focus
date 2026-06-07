@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from 'react';
 import { AlarmClock, BookOpenCheck, CircleDot, Lock, MoonStar, MonitorUp, SunMedium } from 'lucide-react';
-import type { PageMeta } from '../App';
+import type { PageMeta } from '../navigation';
 import type { Alarm } from '../types/alarm';
 import type { AppPage } from '../types/navigation';
 import type { AppTheme } from '../types/settings';
@@ -31,6 +31,7 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">跳到主内容</a>
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -73,7 +74,7 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
         </div>
       </aside>
 
-      <main className="main-panel">
+      <main className="main-panel" id="main-content">
         <div className="top-strip">
           <div className="top-strip-title">
             <CircleDot size={14} />

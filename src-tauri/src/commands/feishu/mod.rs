@@ -7,5 +7,5 @@ include!("links.rs");
 include!("auth.rs");
 include!("runs.rs");
 include!("rebuild.rs");
-include!("tests.rs");
 include!("utils.rs");
+include!("tests.rs");

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs, path::Path, time::SystemTime};
+use std::{cmp::Reverse, collections::HashSet, fs, path::Path, time::SystemTime};
 
 use serde::Serialize;
 use windows::Win32::{
@@ -50,18 +50,20 @@ pub fn get_current_potplayer_media() -> Result<PotPlayerMediaInfo, String> {
     let process = find_running_potplayer_process()?
         .ok_or_else(|| "未检测到正在运行的 PotPlayer。".to_string())?;
 
+    let fallback = PotPlayerMediaInfo {
+        process_name: process.process_name.clone(),
+        media_path: None,
+        media_directory: None,
+        window_title: process.window_title.clone(),
+        source: None,
+    };
+
     Ok(detect_potplayer_media_for_process(
         &process.process_name,
         process.process_path.as_deref(),
         Some(&process.window_title),
     )
-    .unwrap_or_else(|| PotPlayerMediaInfo {
-        process_name: process.process_name,
-        media_path: None,
-        media_directory: None,
-        window_title: process.window_title,
-        source: None,
-    }))
+    .unwrap_or(fallback))
 }
 
 pub fn detect_potplayer_media_for_process(
@@ -260,7 +262,7 @@ fn read_playlist_snapshots(playlist_dir: &Path) -> Option<Vec<PlaylistSnapshot>>
         })
         .collect::<Vec<_>>();
 
-    snapshots.sort_by(|left, right| right.modified_at.cmp(&left.modified_at));
+    snapshots.sort_by_key(|snapshot| Reverse(snapshot.modified_at));
     Some(snapshots)
 }
 

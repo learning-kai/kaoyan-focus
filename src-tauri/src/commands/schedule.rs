@@ -395,6 +395,7 @@ pub fn delete_schedule_template(app: AppHandle, id: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn start_study_mode_from_schedule_block(
     app: AppHandle,
     state: State<'_, AppState>,

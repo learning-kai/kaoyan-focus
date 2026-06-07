@@ -40,6 +40,7 @@
         )
     }
 }
+#[allow(clippy::too_many_arguments)]
 fn record_object_sync_result(
     app: &AppHandle,
     sync_id: &str,

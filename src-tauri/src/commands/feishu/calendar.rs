@@ -278,6 +278,7 @@ fn normalize_note(value: Option<&str>) -> String {
     value.unwrap_or("").trim().to_string()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sync_linked_event(
     connection: &Connection,
     feishu: &FeishuClient,

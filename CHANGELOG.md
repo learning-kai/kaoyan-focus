@@ -754,4 +754,10 @@
 #### Changed
 - chore: prepare project for GitHub publishing (29c3b1f)
 
+## v1.8.0 - 2026-06-07
+
+### Desktop
+#### Added
+- feat: update version to 1.7.4 and enhance release process with Android support (c3728aa)
+
 

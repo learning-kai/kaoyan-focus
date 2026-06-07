@@ -487,6 +487,7 @@ fn replace_remote_task_in_tasklist(
     Ok(remote)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sync_linked_task(
     connection: &Connection,
     feishu: &FeishuClient,

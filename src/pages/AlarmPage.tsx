@@ -11,6 +11,7 @@ import {
   updateAlarm,
 } from '../services/alarmApi';
 import { stopPersistentAlarmSound } from '../services/alertApi';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import type { Alarm, AlarmDraft } from '../types/alarm';
 
 const defaultAlarmTitle = '闹钟';
@@ -91,6 +92,7 @@ function isExpired(alarm: Alarm) {
 }
 
 export default function AlarmPage() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [draft, setDraft] = useState<AlarmDraft>(() => defaultDraft());
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -232,7 +234,14 @@ export default function AlarmPage() {
   }
 
   async function handleDelete(alarm: Alarm) {
-    if (!window.confirm(`删除闹钟「${alarm.title}」？`)) return;
+    const confirmed = await confirm({
+      confirmLabel: '删除闹钟',
+      message: `删除后不会再触发「${alarm.title}」，正在响铃的声音也会立即停止。`,
+      title: '删除闹钟？',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     await withSave(async () => {
       await deleteAlarm(alarm.id);
       stopPersistentAlarmSound(alarmKey(alarm.id));
@@ -379,6 +388,7 @@ export default function AlarmPage() {
       </section>
 
       {(error || message) && <div className={error ? 'alert error' : 'alert success'}>{error ?? message}</div>}
+      {confirmDialog}
 
       <section className="command-panel alarm-composer">
         <div className="panel-title">

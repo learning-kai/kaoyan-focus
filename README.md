@@ -56,6 +56,12 @@ npm.cmd run tauri dev
 类型检查：
 
 ```powershell
+npm.cmd run lint
+```
+
+完整检查（TypeScript、Rust 格式、Clippy、Rust 测试）：
+
+```powershell
 npm.cmd test
 ```
 

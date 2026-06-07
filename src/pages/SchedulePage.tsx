@@ -841,7 +841,7 @@ export default function SchedulePage() {
         </div>
       </section>
 
-      {(error || message) && <div className={error ? 'alert danger' : 'alert success'}>{error ?? message}</div>}
+      {(error || message) && <div className={error ? 'alert error' : 'alert success'}>{error ?? message}</div>}
 
       <section className="schedule-toolbar soft-panel">
         <div className="segmented-control">

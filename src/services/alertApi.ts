@@ -1,4 +1,5 @@
 import { getAppSettings, getCustomReminderSound } from './settingsApi';
+import { showStudyReminder } from './systemApi';
 import type { AppSettings, ReminderSoundId, ReminderSoundSource } from '../types/settings';
 
 type ReminderPayload = {
@@ -342,7 +343,6 @@ function stopPreviewAudio() {
 
 async function showDesktopNotification(payload: ReminderPayload, settings: ReminderSoundSettings, notificationId: string) {
   try {
-    const { showStudyReminder } = await import('./systemApi');
     await showStudyReminder(payload.title, payload.body, toastSoundId(settings), notificationId);
     return;
   } catch {

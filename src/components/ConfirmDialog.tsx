@@ -1,5 +1,5 @@
 import { AlertTriangle, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 export type ConfirmDialogTone = 'default' | 'danger';
 
@@ -28,6 +28,36 @@ export default function ConfirmDialog({
   title,
   tone = 'default',
 }: ConfirmDialogProps) {
+  const titleId = useId();
+  const messageId = useId();
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    cancelButtonRef.current?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !loading) {
+        onCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [loading, onCancel, open]);
+
   if (!open) {
     return null;
   }
@@ -35,7 +65,8 @@ export default function ConfirmDialog({
   return (
     <div className="confirm-backdrop" role="presentation">
       <section
-        aria-describedby="confirm-dialog-message"
+        aria-describedby={messageId}
+        aria-labelledby={titleId}
         aria-modal="true"
         className={`confirm-dialog tone-${tone}`}
         role="dialog"
@@ -45,8 +76,8 @@ export default function ConfirmDialog({
             <AlertTriangle size={20} />
           </span>
           <div>
-            <h3>{title}</h3>
-            <p id="confirm-dialog-message">{message}</p>
+            <h3 id={titleId}>{title}</h3>
+            <p id={messageId}>{message}</p>
           </div>
           <button aria-label="关闭确认面板" className="icon-button" disabled={loading} onClick={onCancel} type="button">
             <X size={17} />
@@ -54,7 +85,7 @@ export default function ConfirmDialog({
         </header>
         {children && <div className="confirm-dialog-body">{children}</div>}
         <footer className="confirm-dialog-actions">
-          <button className="secondary-action" disabled={loading} onClick={onCancel} type="button">
+          <button className="secondary-action" disabled={loading} onClick={onCancel} ref={cancelButtonRef} type="button">
             {cancelLabel}
           </button>
           <button

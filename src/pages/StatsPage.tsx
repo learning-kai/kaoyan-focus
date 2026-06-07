@@ -3,6 +3,7 @@ import { BarChart3, CalendarDays, Clock3, ExternalLink, Pencil, RefreshCw, Shiel
 import { deleteFocusSession, getFocusStatsSummary, listFocusSessions, listSubjects, updateFocusSessionSubject } from '../services/focusApi';
 import { listInterruptionSummary } from '../services/monitorApi';
 import { openStudyDashboard } from '../services/systemApi';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import type { FocusSession, FocusStatsSummary, Subject } from '../types/focus';
 import type { InterruptionSummary } from '../types/monitor';
 
@@ -39,6 +40,7 @@ function formatSessionTimeRange(session: FocusSession) {
 }
 
 export default function StatsPage() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [stats, setStats] = useState<FocusStatsSummary | null>(null);
   const [interruptions, setInterruptions] = useState<InterruptionSummary[]>([]);
   const [sessions, setSessions] = useState<FocusSession[]>([]);
@@ -92,7 +94,13 @@ export default function StatsPage() {
   }
 
   async function handleDeleteSession(sessionId: number) {
-    if (!window.confirm('确定删除这条学习记录吗？删除后统计会同步更新。')) {
+    const confirmed = await confirm({
+      confirmLabel: '删除记录',
+      message: '删除后今日、本周、本月与科目统计会立即重新计算；这条记录无法从统计页恢复。',
+      title: '删除学习记录？',
+      tone: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -146,6 +154,7 @@ export default function StatsPage() {
 
       {error && <p className="alert error">{error}</p>}
       {message && <p className="alert success">{message}</p>}
+      {confirmDialog}
 
       <div className="stats-hero-grid">
         <MetricCard icon={Clock3} label="今日学习" value={formatStudyTime(stats?.today_seconds ?? 0)} />

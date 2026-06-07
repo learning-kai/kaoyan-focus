@@ -1,7 +1,7 @@
 {
   "name": "kaoyan-focus",
   "private": false,
-  "version": "1.7.4",
+  "version": "1.8.0",
   "description": "Windows local-first study focus app for exam preparation, built with Tauri, React, TypeScript and Rust.",
   "license": "MIT",
   "type": "module",
@@ -32,7 +32,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "tsc --noEmit",
-    "test": "npm.cmd run lint",
+    "check:rust": "cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
+    "test": "npm.cmd run lint && npm.cmd run check:rust",
     "preview": "vite preview",
     "tauri": "tauri",
     "release:prepare": "node scripts/prepare-release.mjs",

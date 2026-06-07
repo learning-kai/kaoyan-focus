@@ -1256,6 +1256,7 @@ fn upsert_subject_row(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upsert_study_mode_row(
     connection: &Connection,
     sync_id: &str,
@@ -1570,6 +1571,7 @@ fn db_progress_to_shared_mode(progress: &DbStudyModeProgress) -> SharedStudyMode
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upsert_focus_session_row(
     connection: &Connection,
     sync_id: &str,
@@ -1754,6 +1756,7 @@ fn resolve_local_active_conflicts(connection: &Connection) -> Result<(), String>
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upsert_app_event_row(
     connection: &Connection,
     sync_id: &str,
@@ -1827,6 +1830,7 @@ fn upsert_app_event_row(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upsert_checklist_task_row(
     connection: &Connection,
     sync_id: &str,
@@ -1907,6 +1911,7 @@ fn upsert_checklist_task_row(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upsert_today_plan_item_row(
     connection: &Connection,
     sync_id: &str,
@@ -1990,6 +1995,7 @@ fn upsert_today_plan_item_row(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upsert_schedule_template_row(
     connection: &Connection,
     sync_id: &str,
@@ -2082,6 +2088,7 @@ fn upsert_schedule_template_row(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upsert_schedule_block_row(
     connection: &Connection,
     sync_id: &str,
@@ -2221,6 +2228,7 @@ fn resolve_schedule_block_import_id(
     )?))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upsert_daily_review_row(
     connection: &Connection,
     sync_id: &str,
@@ -2311,6 +2319,7 @@ fn upsert_daily_review_row(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upsert_weekly_review_row(
     connection: &Connection,
     sync_id: &str,

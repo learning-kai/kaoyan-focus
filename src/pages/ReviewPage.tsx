@@ -9,6 +9,7 @@ import {
   saveWeeklyReview,
 } from '../services/reviewApi';
 import { syncConfiguredStateChange } from '../services/syncApi';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import type { DailyReviewDraft, DailyReviewPageData, WeeklyReviewDraft, WeeklyReviewPageData } from '../types/review';
 
 type ReviewMode = 'daily' | 'weekly';
@@ -68,6 +69,7 @@ function emptyWeeklyDraft(weekStartDate: string): WeeklyReviewDraft {
 }
 
 export default function ReviewPage() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [mode, setMode] = useState<ReviewMode>('daily');
   const [selectedDate, setSelectedDate] = useState(todayString());
   const [data, setData] = useState<DailyReviewPageData | null>(null);
@@ -144,7 +146,15 @@ export default function ReviewPage() {
   async function handleDelete() {
     const reviewId = mode === 'daily' ? data?.review?.id : weeklyData?.review?.id;
     if (!reviewId) return;
-    if (!window.confirm(mode === 'daily' ? '确定删除这一天的复盘吗？' : '确定删除这一周的复盘吗？')) return;
+    const confirmed = await confirm({
+      confirmLabel: '删除复盘',
+      message: mode === 'daily'
+        ? '删除后这一天的总结、卡点和明日重点会被清空。'
+        : '删除后这一周的总结、卡点和下周重点会被清空。',
+      title: mode === 'daily' ? '删除每日复盘？' : '删除周复盘？',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       setSaving(true);
@@ -198,6 +208,7 @@ export default function ReviewPage() {
       </header>
 
       {(error || message) && <div className={error ? 'alert error' : 'alert success'}>{error ?? message}</div>}
+      {confirmDialog}
 
       <div className="review-grid">
         <aside className="review-summary-panel soft-panel">

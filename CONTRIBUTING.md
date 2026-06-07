@@ -24,10 +24,9 @@ npm.cmd run tauri dev
 常用检查：
 
 ```powershell
+npm.cmd run lint
 npm.cmd test
 npm.cmd run build
-cd src-tauri
-cargo test
 ```
 
 ## PR 要求

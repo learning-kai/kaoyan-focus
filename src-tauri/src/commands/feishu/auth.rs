@@ -271,7 +271,7 @@ fn receive_oauth_callback(listener: TcpListener, expected_state: &str) -> Result
     };
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
-        body.as_bytes().len(),
+        body.len(),
         body
     );
     let _ = stream.write_all(response.as_bytes());

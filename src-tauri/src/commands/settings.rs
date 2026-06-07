@@ -268,7 +268,11 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
     set_setting(
         &connection,
         LAUNCH_AT_STARTUP_KEY,
-        if normalized.launch_at_startup { "1" } else { "0" },
+        if normalized.launch_at_startup {
+            "1"
+        } else {
+            "0"
+        },
         &now,
     )?;
     set_setting(

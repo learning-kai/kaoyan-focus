@@ -13,6 +13,7 @@ import { SyncSettingsPanel } from './settings/SyncSettingsPanel';
 import { SystemPanel } from './settings/SystemPanel';
 import { formatBytes } from './settings/SettingsPrimitives';
 import type { SettingsPanelKey } from './settings/types';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { getStudyModeState } from '../services/focusApi';
 import { getCurrentForegroundApp } from '../services/monitorApi';
 import { isStudyModeLocked } from '../services/studyModeLock';
@@ -189,7 +190,13 @@ const settingsSections: Array<{ key: SettingsSectionKey; label: string; descript
   { key: 'system', label: '系统', description: '规则与诊断', icon: HardDrive },
 ];
 
-export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark', onThemeChange = () => {} }: SettingsPageProps) {
+export default function SettingsPage({
+  lastAutoSyncMessage = null,
+  lastAutoUpdateMessage = null,
+  theme = 'dark',
+  onThemeChange = () => {},
+}: SettingsPageProps) {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [foregroundApp, setForegroundApp] = useState<ForegroundApp | null>(null);
   const [studyState, setStudyState] = useState<StudyModeState | null>(null);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
@@ -238,6 +245,7 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
   });
 
   const settingsLocked = isStudyModeLocked(studyState);
+  const visibleUpdateMessage = updateMessage ?? lastAutoUpdateMessage;
 
   useEffect(() => {
     void initializeSettingsPage();
@@ -458,7 +466,14 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
   }
 
   async function handleRestoreBackup(entry: SyncBackupEntry) {
-    if (!window.confirm(`确认恢复备份「${entry.label}」吗？恢复前会先备份当前本地数据库。`)) return;
+    const confirmed = await confirm({
+      confirmLabel: '恢复备份',
+      message: `恢复「${entry.label}」前会先备份当前本地数据库。恢复完成后，页面会重新载入最新配置和同步记录。`,
+      title: '恢复同步备份？',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     await runObjectStorageAction(async () => {
       const message = await restoreSyncBackup(entry.source, entry.key);
       await refreshSyncDetails();
@@ -757,7 +772,14 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
   }
 
   async function handleRebuildFeishuTasklists() {
-    if (!window.confirm('确认按本地清单重建飞书任务清单吗？这会删除飞书端所有「考研专注*」任务清单并重新上传本地任务，飞书日历不会受影响。')) return;
+    const confirmed = await confirm({
+      confirmLabel: '重建任务清单',
+      message: '这会删除飞书端所有「考研专注*」任务清单并按本地清单重新上传任务，飞书日历不会受影响。',
+      title: '重建飞书任务清单？',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     await runFeishuAction(async () => {
       const result = await rebuildFeishuTasklistsFromLocal();
       return `${result.message} 本地备份：${result.backup_path}；飞书备份：${result.remote_backup_path}`;
@@ -791,6 +813,7 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
       {error && <p className="alert error">{error}</p>}
       {savedMessage && <p className="alert success">{savedMessage}</p>}
       {settingsLocked && <p className="alert neutral">学习模式正在运行，全部配置改动已锁定；当前页面只允许查看状态。</p>}
+      {confirmDialog}
 
       <nav className="settings-section-tabs" role="tablist" aria-label="设置分区">
         {settingsSections.map((section) => {
@@ -922,7 +945,7 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
           loading={loading}
           settingsLocked={settingsLocked}
           togglePanel={togglePanel}
-          updateMessage={updateMessage}
+          updateMessage={visibleUpdateMessage}
           updateProgress={updateProgress}
         />
       )}

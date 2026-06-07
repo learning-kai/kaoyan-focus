@@ -1,4 +1,5 @@
 ﻿#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod live_tests {
     use super::*;
 

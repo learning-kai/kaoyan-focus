@@ -1,4 +1,5 @@
 ﻿#[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn start_study_mode(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -89,6 +90,7 @@ pub fn start_study_mode(
     Ok(next_state)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn start_study_mode_with_links(
     app: AppHandle,
     state: &AppState,

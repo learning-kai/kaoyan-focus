@@ -588,88 +588,6 @@ html[data-study-fullscreen='true'] body {
   transform: translateY(0);
 }
 
-.confirm-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(2, 6, 17, 0.58);
-  backdrop-filter: blur(12px) saturate(130%);
-  -webkit-backdrop-filter: blur(12px) saturate(130%);
-}
-
-.confirm-dialog {
-  display: grid;
-  gap: 16px;
-  width: min(440px, calc(100vw - 32px));
-  max-height: calc(100dvh - 48px);
-  padding: 18px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  color: var(--ink);
-  background: linear-gradient(180deg, rgba(22, 34, 54, 0.98), rgba(12, 20, 33, 0.98));
-  box-shadow: 0 28px 80px rgba(1, 6, 15, 0.52);
-}
-
-.confirm-dialog-head {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
-}
-
-.confirm-dialog-head h3,
-.confirm-dialog-head p {
-  margin: 0;
-}
-
-.confirm-dialog-head h3 {
-  color: var(--ink);
-  font-size: 17px;
-  line-height: 1.25;
-}
-
-.confirm-dialog-head p {
-  margin-top: 5px;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.confirm-dialog-icon {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  border: 1px solid rgba(121, 167, 255, 0.22);
-  border-radius: 12px;
-  color: #cfe0ff;
-  background: rgba(121, 167, 255, 0.12);
-}
-
-.confirm-dialog.tone-danger .confirm-dialog-icon {
-  color: #ffd9d7;
-  border-color: rgba(255, 125, 115, 0.28);
-  background: rgba(255, 125, 115, 0.12);
-}
-
-.confirm-dialog-body {
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--muted);
-  background: rgba(9, 15, 25, 0.52);
-}
-
-.confirm-dialog-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
 .page-header .secondary-action {
   min-height: 40px;
 }
@@ -961,7 +879,6 @@ html[data-study-fullscreen='true'] body {
 .sync-backend-panel {
   margin-bottom: 0;
 }
-
 
 .reminder-sound-panel {
   display: grid;
@@ -5615,428 +5532,6 @@ html[data-theme='light'] .theme-toggle button.active {
   background: #fff2f1;
 }
 
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-backdrop {
-  background: rgba(31, 42, 58, 0.28);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog {
-  border-radius: 12px;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog-body {
-  border-color: var(--line);
-  background: #f8fafc;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog-icon {
-  color: #3869d4;
-  border-color: rgba(56, 105, 212, 0.22);
-  background: #f0f5ff;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog.tone-danger .confirm-dialog-icon {
-  color: #c7524d;
-  border-color: rgba(199, 82, 77, 0.24);
-  background: #fff2f1;
-}
-
-.theme-toggle {
-  display: inline-flex;
-  gap: 8px;
-}
-
-.theme-toggle button {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  min-height: 36px;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--ink);
-  background: rgba(16, 27, 43, 0.86);
-}
-
-.theme-toggle button.active {
-  color: #08111d;
-  background: linear-gradient(135deg, #8db8ff, #69dfb7);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) {
-  color: #162033;
-  background: #f4f7fb;
-  color-scheme: light;
-  --bg: #f4f7fb;
-  --bg-elevated: #ffffff;
-  --surface: #ffffff;
-  --surface-strong: #f8fafc;
-  --surface-soft: #f8fafc;
-  --ink: #162033;
-  --muted: #657387;
-  --line: rgba(113, 131, 159, 0.2);
-  --line-strong: rgba(75, 95, 124, 0.34);
-  --blue: #3869d4;
-  --blue-soft: rgba(56, 105, 212, 0.1);
-  --green: #269b76;
-  --green-soft: rgba(38, 155, 118, 0.1);
-  --amber: #bf7c27;
-  --amber-soft: rgba(191, 124, 39, 0.1);
-  --red: #c7524d;
-  --red-soft: rgba(199, 82, 77, 0.1);
-  --shadow: 0 12px 28px rgba(63, 82, 112, 0.1);
-  --shadow-soft: 0 8px 18px rgba(63, 82, 112, 0.07);
-  --shadow-strong: 0 18px 40px rgba(63, 82, 112, 0.12);
-  --focus-ring: 0 0 0 3px rgba(56, 105, 212, 0.18);
-  --radius: 12px;
-  --radius-lg: 14px;
-  --radius-control: 10px;
-  --radius-card: 12px;
-  --radius-panel: 14px;
-  --radius-shell: 16px;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) body {
-  color: var(--ink);
-  background:
-    radial-gradient(circle at 18% 0%, rgba(56, 105, 212, 0.06), transparent 24%),
-    radial-gradient(circle at 82% 8%, rgba(38, 155, 118, 0.05), transparent 22%),
-    linear-gradient(180deg, #fbfdff 0%, #eef3f8 100%);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .main-panel {
-  background: #eef3f8;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .sidebar {
-  color: var(--ink);
-  border-right-color: var(--line);
-  background: #f8fafc;
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.76);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .brand-mark {
-  color: #f8fbff;
-  background: linear-gradient(145deg, rgba(56, 105, 212, 0.96), rgba(38, 155, 118, 0.9));
-  box-shadow: 0 12px 24px rgba(56, 105, 212, 0.22);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .nav-item {
-  color: var(--muted);
-  border-color: transparent;
-  border-radius: var(--radius-card);
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: none;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .nav-item:hover,
-:is(html[data-theme='light'], html:not([data-theme])) .nav-item.active {
-  color: var(--ink);
-  border-color: var(--line-strong);
-  background: #ffffff;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-soft);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .nav-item[aria-current='page'] {
-  color: var(--ink);
-  border-color: rgba(56, 105, 212, 0.22);
-  background: #ffffff;
-  box-shadow: inset 3px 0 0 var(--blue), var(--shadow-soft);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .top-strip,
-:is(html[data-theme='light'], html:not([data-theme])) .page-shell,
-:is(html[data-theme='light'], html:not([data-theme])) .command-panel,
-:is(html[data-theme='light'], html:not([data-theme])) .soft-panel,
-:is(html[data-theme='light'], html:not([data-theme])) .start-console,
-:is(html[data-theme='light'], html:not([data-theme])) .control-panel,
-:is(html[data-theme='light'], html:not([data-theme])) .reminder-sound-panel,
-:is(html[data-theme='light'], html:not([data-theme])) .settings-save-row,
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog {
-  border-color: var(--line);
-  border-radius: var(--radius-panel);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: var(--shadow-strong);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .page-shell {
-  border-radius: var(--radius-shell);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .top-strip {
-  flex-wrap: wrap;
-  padding: 12px 16px;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .top-strip-title {
-  flex: 1 1 220px;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .top-strip-status {
-  flex: 1 1 340px;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle {
-  margin-left: auto;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .sidebar-foot {
-  border-color: var(--line);
-  border-radius: var(--radius-card);
-  background: #ffffff;
-  box-shadow: var(--shadow-soft);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .header-metrics article,
-:is(html[data-theme='light'], html:not([data-theme])) .metric-card,
-:is(html[data-theme='light'], html:not([data-theme])) .core-fact,
-:is(html[data-theme='light'], html:not([data-theme])) .details-card,
-:is(html[data-theme='light'], html:not([data-theme])) .phase-badge,
-:is(html[data-theme='light'], html:not([data-theme])) .alert,
-:is(html[data-theme='light'], html:not([data-theme])) .setting-row,
-:is(html[data-theme='light'], html:not([data-theme])) .capability-row,
-:is(html[data-theme='light'], html:not([data-theme])) .tool-row,
-:is(html[data-theme='light'], html:not([data-theme])) .list-row,
-:is(html[data-theme='light'], html:not([data-theme])) .record-row,
-:is(html[data-theme='light'], html:not([data-theme])) .subject-stat-row,
-:is(html[data-theme='light'], html:not([data-theme])) .blocked-option,
-:is(html[data-theme='light'], html:not([data-theme])) .process-option,
-:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card,
-:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-picker,
-:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-file,
-:is(html[data-theme='light'], html:not([data-theme])) .sound-volume-row,
-:is(html[data-theme='light'], html:not([data-theme])) .today-item-row,
-:is(html[data-theme='light'], html:not([data-theme])) .board-column,
-:is(html[data-theme='light'], html:not([data-theme])) .checklist-task-card,
-:is(html[data-theme='light'], html:not([data-theme])) .today-composer,
-:is(html[data-theme='light'], html:not([data-theme])) .task-composer,
-:is(html[data-theme='light'], html:not([data-theme])) .task-inline-editor,
-:is(html[data-theme='light'], html:not([data-theme])) .empty-state,
-:is(html[data-theme='light'], html:not([data-theme])) .schedule-loading-hint,
-:is(html[data-theme='light'], html:not([data-theme])) .whitelist-subject-heading,
-:is(html[data-theme='light'], html:not([data-theme])) .potplayer-hint,
-:is(html[data-theme='light'], html:not([data-theme])) .monitor-callout {
-  border-color: var(--line);
-  border-radius: var(--radius-card);
-  background: #ffffff;
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .start-console,
-:is(html[data-theme='light'], html:not([data-theme])) .control-panel {
-  background:
-    radial-gradient(circle at 18% 16%, rgba(56, 105, 212, 0.07), transparent 30%),
-    #ffffff;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .phase-badge {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(247, 250, 253, 0.9)),
-    #ffffff;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .alert.error {
-  border-color: rgba(199, 82, 77, 0.24);
-  background: linear-gradient(180deg, rgba(255, 240, 239, 0.98), rgba(255, 247, 247, 0.92));
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .alert.success {
-  border-color: rgba(38, 155, 118, 0.24);
-  background: linear-gradient(180deg, rgba(235, 251, 246, 0.98), rgba(247, 252, 250, 0.94));
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .alert.neutral {
-  background: #ffffff;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .text-input,
-:is(html[data-theme='light'], html:not([data-theme])) .number-input,
-:is(html[data-theme='light'], html:not([data-theme])) .select-input,
-:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button,
-:is(html[data-theme='light'], html:not([data-theme])) .secondary-action,
-:is(html[data-theme='light'], html:not([data-theme])) .ghost-action,
-:is(html[data-theme='light'], html:not([data-theme])) .small-action,
-:is(html[data-theme='light'], html:not([data-theme])) .chip,
-:is(html[data-theme='light'], html:not([data-theme])) .segmented-control button,
-:is(html[data-theme='light'], html:not([data-theme])) .stepper-control button,
-:is(html[data-theme='light'], html:not([data-theme])) .icon-button,
-:is(html[data-theme='light'], html:not([data-theme])) .settings-collapse-button {
-  color: var(--ink);
-  border-color: var(--line);
-  border-radius: var(--radius-control);
-  background: #ffffff;
-  box-shadow: none;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .secondary-action:hover,
-:is(html[data-theme='light'], html:not([data-theme])) .ghost-action:hover,
-:is(html[data-theme='light'], html:not([data-theme])) .small-action:hover,
-:is(html[data-theme='light'], html:not([data-theme])) .chip:hover,
-:is(html[data-theme='light'], html:not([data-theme])) .segmented-control button:hover,
-:is(html[data-theme='light'], html:not([data-theme])) .stepper-control button:hover,
-:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button:hover,
-:is(html[data-theme='light'], html:not([data-theme])) .icon-button:hover,
-:is(html[data-theme='light'], html:not([data-theme])) .settings-collapse-button:hover {
-  border-color: var(--line-strong);
-  background: #f8fafc;
-  box-shadow: var(--shadow-soft);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .primary-action,
-:is(html[data-theme='light'], html:not([data-theme])) .start-ritual-button,
-:is(html[data-theme='light'], html:not([data-theme])) .segmented-control .active,
-:is(html[data-theme='light'], html:not([data-theme])) .chip.active,
-:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-confirm,
-:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card.active,
-:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button.active,
-:is(html[data-theme='light'], html:not([data-theme])) .weekday-pills button.active,
-:is(html[data-theme='light'], html:not([data-theme])) .review-score-row button.active {
-  color: #ffffff;
-  border-color: transparent;
-  background: linear-gradient(135deg, #3869d4, #239a75);
-  box-shadow: 0 12px 24px rgba(56, 105, 212, 0.18);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .danger-action,
-:is(html[data-theme='light'], html:not([data-theme])) .secondary-action.danger-action {
-  color: #ffffff;
-  border-color: #b8433e;
-  background: linear-gradient(135deg, #d65c56, #b8433e);
-  box-shadow: 0 12px 24px rgba(199, 82, 77, 0.2);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .small-action.danger {
-  color: #b94e4a;
-  border-color: rgba(199, 82, 77, 0.25);
-  background: rgba(255, 240, 239, 0.9);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .small-action.enabled,
-:is(html[data-theme='light'], html:not([data-theme])) .row-icon.enabled {
-  color: #1b7e62;
-  border-color: rgba(38, 155, 118, 0.24);
-  background: rgba(233, 251, 245, 0.94);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .text-input::placeholder,
-:is(html[data-theme='light'], html:not([data-theme])) .number-input::placeholder {
-  color: #8b97a9;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card.active strong,
-:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card.active span {
-  color: #ffffff;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-picker-icon {
-  color: #f8fbff;
-  border-color: rgba(56, 105, 212, 0.18);
-  background:
-    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.4), transparent 42%),
-    linear-gradient(135deg, rgba(56, 105, 212, 0.92), rgba(38, 155, 118, 0.9));
-  box-shadow: 0 10px 22px rgba(56, 105, 212, 0.18);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .metric-card.danger,
-:is(html[data-theme='light'], html:not([data-theme])) .count-pill,
-:is(html[data-theme='light'], html:not([data-theme])) .row-icon.danger {
-  color: #a94942;
-  border-color: rgba(199, 82, 77, 0.24);
-  background: linear-gradient(180deg, rgba(255, 244, 243, 0.96), rgba(255, 250, 249, 0.78));
-  box-shadow: var(--shadow-soft);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .metric-card.danger strong,
-:is(html[data-theme='light'], html:not([data-theme])) .count-pill {
-  color: #8d3530;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .timer-orbit {
-  border-color: rgba(113, 131, 159, 0.22);
-  background:
-    radial-gradient(circle at 50% 30%, rgba(56, 105, 212, 0.1), transparent 60%),
-    #ffffff;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .focus-active-shell {
-  background:
-    radial-gradient(circle at 50% 48%, rgba(56, 105, 212, 0.1), transparent 29%),
-    linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .focus-active-bg {
-  background:
-    radial-gradient(circle at 50% 38%, rgba(56, 105, 212, 0.08), transparent 30%),
-    radial-gradient(circle at 52% 68%, rgba(38, 155, 118, 0.06), transparent 26%);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .focus-round-button {
-  color: #162033;
-  border-color: rgba(113, 131, 159, 0.2);
-  background: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 18px 40px rgba(63, 82, 112, 0.12);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .focus-round-button.primary {
-  color: #f8fbff;
-  background: linear-gradient(135deg, #3869d4, #239a75);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .focus-round-button.secondary {
-  color: #b87926;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .focus-quiet-action {
-  color: color-mix(in srgb, #162033 78%, #65758b);
-  border-color: rgba(113, 131, 159, 0.18);
-  background: rgba(255, 255, 255, 0.48);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 14px 30px rgba(84, 104, 136, 0.1);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .focus-quiet-action:hover {
-  color: #162033;
-  background: rgba(255, 255, 255, 0.62);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .focus-quiet-action.is-active {
-  color: #162033;
-  border-color: rgba(56, 105, 212, 0.26);
-  background: rgba(255, 255, 255, 0.78);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-backdrop {
-  background: rgba(31, 42, 58, 0.24);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog-body {
-  border-color: var(--line);
-  background: #f8fafc;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog-icon {
-  color: #3869d4;
-  border-color: rgba(56, 105, 212, 0.22);
-  background: #f0f5ff;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog.tone-danger .confirm-dialog-icon {
-  color: #c7524d;
-  border-color: rgba(199, 82, 77, 0.24);
-  background: #fff2f1;
-}
-
 @media (max-width: 960px) {
   html,
   body {
@@ -6087,7 +5582,28 @@ html[data-theme='light'] .theme-toggle button.active {
   }
 
   .top-strip {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
     padding: 12px;
+  }
+
+  .top-strip-status {
+    grid-column: 1 / -1;
+    gap: 8px;
+  }
+
+  .top-strip-status span {
+    max-width: 100%;
+  }
+
+  .top-strip-status .next-alarm-pill {
+    max-width: 100%;
+  }
+
+  .theme-toggle {
+    justify-self: end;
   }
 
   .page-shell {
@@ -6142,23 +5658,8 @@ html[data-theme='light'] .theme-toggle button.active {
   }
 
   .row-actions,
-  .alarm-row-actions,
-  .confirm-dialog-actions {
+  .alarm-row-actions {
     justify-content: flex-start;
-  }
-
-  .confirm-backdrop {
-    padding: 12px;
-  }
-
-  .confirm-dialog {
-    width: min(440px, calc(100vw - 24px));
-    max-height: calc(100dvh - 24px);
-    padding: 16px;
-  }
-
-  .confirm-dialog-actions button {
-    flex: 1 1 150px;
   }
 }
 
@@ -6190,14 +5691,6 @@ html[data-theme='light'] .theme-toggle button.active {
     flex-direction: column;
   }
 
-  .confirm-dialog-head {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .confirm-dialog-head .icon-button {
-    grid-column: 2;
-    justify-self: end;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

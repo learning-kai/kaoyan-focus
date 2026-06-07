@@ -31,6 +31,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import {
   addTaskToTodayPlan,
   completeChecklistTask,
@@ -197,6 +198,7 @@ function resolveActiveCategoryKey(pageData: ChecklistPageData, preferredCategory
 }
 
 export default function ChecklistPage() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [data, setData] = useState<ChecklistPageData | null>(null);
   const [studyState, setStudyState] = useState<StudyModeState | null>(null);
   const [activeCategoryKey, setActiveCategoryKey] = useState<string>('politics');
@@ -408,7 +410,13 @@ export default function ChecklistPage() {
   }
 
   async function handleDeleteTask(taskId: number) {
-    if (!window.confirm('删除这条待办后，关联的今日任务实例也会一起删除。继续吗？')) {
+    const confirmed = await confirm({
+      confirmLabel: '删除待办',
+      message: '删除后关联的今日任务实例也会一起删除，当前清单和今日任务区都会同步刷新。',
+      title: '删除待办？',
+      tone: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -483,7 +491,12 @@ export default function ChecklistPage() {
     let syncSourceCompletion = false;
 
     if (nextCompleted && item.source_task_id !== null) {
-      syncSourceCompletion = window.confirm('完成今日任务时，也同步完成源待办吗？');
+      syncSourceCompletion = await confirm({
+        cancelLabel: '只完成今日任务',
+        confirmLabel: '同步完成',
+        message: '这条今日任务来自清单待办。同步完成会把源待办也移入已完成；只完成今日任务则保留源待办。',
+        title: '同步完成源待办？',
+      });
     }
 
     await withRefresh(async () => {
@@ -697,6 +710,7 @@ export default function ChecklistPage() {
 
       {error && <p className="alert error">{error}</p>}
       {message && <p className="alert success">{message}</p>}
+      {confirmDialog}
 
       <TodayPlanDrawer
         dndContainerId={TODAY_CONTAINER_ID}

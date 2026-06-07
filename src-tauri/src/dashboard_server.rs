@@ -328,7 +328,9 @@ fn build_payload(app: &AppHandle) -> Result<StudyDataPayload, String> {
         .query_row("SELECT COUNT(*) FROM subjects", [], |row| row.get(0))
         .unwrap_or(0);
     let task_count: i64 = connection
-        .query_row("SELECT COUNT(*) FROM today_plan_items", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM today_plan_items", [], |row| {
+            row.get(0)
+        })
         .unwrap_or(0);
 
     Ok(StudyDataPayload {
@@ -435,7 +437,10 @@ fn load_records(connection: &Connection) -> Result<Vec<StudyDataRecord>, String>
     Ok(records)
 }
 
-fn map_focus_session(row: &Row<'_>, task_buckets: &[TaskBucket]) -> rusqlite::Result<StudyDataRecord> {
+fn map_focus_session(
+    row: &Row<'_>,
+    task_buckets: &[TaskBucket],
+) -> rusqlite::Result<StudyDataRecord> {
     let id: i64 = row.get(0)?;
     let subject_id: Option<i64> = row.get(1)?;
     let subject: String = row.get(2)?;
@@ -451,7 +456,11 @@ fn map_focus_session(row: &Row<'_>, task_buckets: &[TaskBucket]) -> rusqlite::Re
     let started = parse_local_datetime(&started_at)
         .unwrap_or_else(|| Utc::now().with_timezone(&local_offset()));
     let minutes = (actual_seconds.max(0) + 30) / 60;
-    let minutes = if actual_seconds > 0 && minutes == 0 { 1 } else { minutes };
+    let minutes = if actual_seconds > 0 && minutes == 0 {
+        1
+    } else {
+        minutes
+    };
     let date = started.date_naive().to_string();
     let session_finished = status == "finished" || end_reason.as_deref() == Some("completed");
     let (tasks_done, tasks_total) =
@@ -487,9 +496,9 @@ fn resolve_task_bucket(
         .iter()
         .find(|bucket| bucket.date == date && bucket.subject_id == subject_id && bucket.total > 0)
         .or_else(|| {
-            buckets
-                .iter()
-                .find(|bucket| bucket.date == date && bucket.subject_id.is_none() && bucket.total > 0)
+            buckets.iter().find(|bucket| {
+                bucket.date == date && bucket.subject_id.is_none() && bucket.total > 0
+            })
         })
     {
         return (bucket.done, bucket.total);
@@ -515,7 +524,11 @@ fn focus_score(
     } else {
         0.0
     };
-    let log_fit = if fit_ratio > 0.0 { fit_ratio.ln().abs() } else { 4.0 };
+    let log_fit = if fit_ratio > 0.0 {
+        fit_ratio.ln().abs()
+    } else {
+        4.0
+    };
 
     let duration_quality = 1.0 - (-actual / 3000.0).exp();
     let fit_quality = (-log_fit.powi(2) / (2.0 * 0.42f64.powi(2))).exp();
@@ -523,8 +536,8 @@ fn focus_score(
 
     let actual_hours = (actual / 3600.0).max(0.25);
     let interruption_load = interruptions.max(0) as f64 / actual_hours;
-    let stability_quality = 1.0
-        / (1.0 + interruption_load * 0.72 + emergencies.max(0) as f64 * 1.9);
+    let stability_quality =
+        1.0 / (1.0 + interruption_load * 0.72 + emergencies.max(0) as f64 * 1.9);
     let pause_ratio = clamp(paused_seconds.max(0) as f64 / meaningful_planned, 0.0, 1.5);
     let pause_quality = 1.0 / (1.0 + pause_ratio * 1.35);
     let termination_quality = match (status, end_reason) {
@@ -544,7 +557,10 @@ fn focus_score(
     let evidence_quality = 0.75 + 0.25 * clamp(actual / 1800.0, 0.0, 1.0);
     score *= evidence_quality;
 
-    if matches!((status, end_reason), (_, Some("emergency_exit")) | ("emergency_exited", _)) {
+    if matches!(
+        (status, end_reason),
+        (_, Some("emergency_exit")) | ("emergency_exited", _)
+    ) {
         score *= 0.85;
     }
 
@@ -608,15 +624,34 @@ mod tests {
 
     #[test]
     fn early_stop_is_substantially_lower_than_completion() {
-        let stopped = focus_score(45 * 60, 15 * 60, "interrupted", Some("user_marked_interrupted"), 1, 0, 0);
+        let stopped = focus_score(
+            45 * 60,
+            15 * 60,
+            "interrupted",
+            Some("user_marked_interrupted"),
+            1,
+            0,
+            0,
+        );
         let complete = focus_score(45 * 60, 45 * 60, "finished", Some("completed"), 0, 0, 0);
 
-        assert!(stopped < complete - 30, "stopped={stopped}, complete={complete}");
+        assert!(
+            stopped < complete - 30,
+            "stopped={stopped}, complete={complete}"
+        );
     }
 
     #[test]
     fn emergency_exit_has_strong_penalty() {
-        let score = focus_score(45 * 60, 30 * 60, "emergency_exited", Some("emergency_exit"), 1, 1, 0);
+        let score = focus_score(
+            45 * 60,
+            30 * 60,
+            "emergency_exited",
+            Some("emergency_exit"),
+            1,
+            1,
+            0,
+        );
 
         assert!(score <= 40, "score={score}");
     }
@@ -624,7 +659,15 @@ mod tests {
     #[test]
     fn pause_time_reduces_quality_without_erasing_the_session() {
         let clean = focus_score(45 * 60, 45 * 60, "finished", Some("completed"), 0, 0, 0);
-        let paused = focus_score(45 * 60, 45 * 60, "finished", Some("completed"), 0, 0, 20 * 60);
+        let paused = focus_score(
+            45 * 60,
+            45 * 60,
+            "finished",
+            Some("completed"),
+            0,
+            0,
+            20 * 60,
+        );
 
         assert!(paused < clean, "clean={clean}, paused={paused}");
         assert!(paused > 50, "paused={paused}");

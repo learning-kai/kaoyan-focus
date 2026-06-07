@@ -1382,7 +1382,7 @@ async fn fetch_object_storage_metadata(
                     last_modified: None,
                 })
             } else {
-                Err(format!("璇诲彇瀵硅薄瀛樺偍杩滅▼鏂囦欢鍏冩暟鎹け璐ワ細{error}"))
+                Err(format!("读取对象存储远程文件元数据失败：{error}"))
             }
         }
     }
