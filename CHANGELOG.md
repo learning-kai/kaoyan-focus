@@ -61,4 +61,9 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - chore: bump version to 1.8.1 and update dependencies (5fe5f68)
 
+## v1.8.3 - 2026-06-07
+
+### Desktop
+- No commits found.
+
 
