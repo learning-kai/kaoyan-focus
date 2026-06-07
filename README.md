@@ -94,9 +94,15 @@ cargo test
 
 ## 发布与更新
 
-桌面端发布脚本位于 `scripts/`。当前自动发布链路包含 Tauri Windows 构建、更新元数据生成、GitHub Release 上传等能力。
+桌面端发布脚本位于 `scripts/`。当前自动发布链路包含 Tauri Windows 构建、更新元数据生成、GitHub Release 上传等能力。公开发布资产、安装包签名和 `latest.json` 默认放在 [learning-kai/kaoyan-focus](https://github.com/learning-kai/kaoyan-focus) 的 GitHub Releases。
 
-注意：历史脚本里仍保留 Android 版本同步逻辑。第一版公开仓库以桌面端为主，Android 相关发布步骤应视为维护者内部流程，后续建议改成显式 opt-in。
+发布前先预检：
+
+```powershell
+npm.cmd run release:auto -- --version 1.7.4 --dry-run
+```
+
+第一版公开仓库以桌面端为主。Android 相关发布步骤是维护者内部流程，只有显式传入 `--include-android` 或设置 `INCLUDE_ANDROID_RELEASE=1` 时才会参与版本同步和 tag 校验。
 
 ## 路线图
 

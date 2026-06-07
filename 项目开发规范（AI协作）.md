@@ -200,7 +200,7 @@ cargo test
 - 白名单改动：检查软件、网站、PotPlayer、目录和大小写匹配。
 - 同步改动：检查手动上传、手动下载、自动同步、备份预检、恢复。
 - 飞书改动：检查设置保存、OAuth、手动同步、重建、运行记录。
-- 发布改动：跑 release dry run。
+- 发布改动：跑 `npm.cmd run release:auto -- --version 1.7.4 --dry-run`，并确认更新源指向 `learning-kai/kaoyan-focus`。
 
 ### 4.3 不允许的做法
 

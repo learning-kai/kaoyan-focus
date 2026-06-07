@@ -91,6 +91,8 @@ function parseArgs(args) {
     dryRun: false,
     prerelease: false,
     latest: true,
+    includeAndroid: isAndroidReleaseEnabled(process.env),
+    androidProjectDir: null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -159,6 +161,17 @@ function parseArgs(args) {
       continue;
     }
 
+    if (arg === '--include-android') {
+      options.includeAndroid = true;
+      continue;
+    }
+
+    if (flag === '--android-project-dir') {
+      options.androidProjectDir = takeValue(args, inlineValue, index, flag);
+      if (inlineValue === undefined) index += 1;
+      continue;
+    }
+
     throw new Error(`Unknown release:auto argument: ${arg}`);
   }
 
@@ -222,11 +235,22 @@ function bumpVersion(version, bump) {
 }
 
 function buildPrepareArgs(options) {
+  const args = [];
   if (options.version) {
-    return ['--version', options.version];
+    args.push('--version', options.version);
+  } else {
+    args.push(options.bump);
   }
 
-  return [options.bump];
+  if (options.includeAndroid) {
+    args.push('--include-android');
+  }
+
+  if (options.androidProjectDir) {
+    args.push('--android-project-dir', options.androidProjectDir);
+  }
+
+  return args;
 }
 
 async function readPackageJson() {
@@ -398,19 +422,21 @@ function printPlan({ packageName, version, updateBaseUrl, updateRepo, options })
   console.log(`Prepare: ${options.skipPrepare ? 'skip' : 'yes'}`);
   console.log(`Build/sign/latest.json: ${options.skipBuild ? 'skip' : 'yes'}`);
   console.log(`Publish GitHub Release: ${options.skipPublish ? 'skip' : 'yes'}`);
+  console.log(`Android sync: ${options.includeAndroid ? 'yes' : 'skip'}`);
 }
 
 function printUsage() {
   console.log(`
 Usage:
-  npm.cmd run release:auto -- --version 1.5.7
+  npm.cmd run release:auto -- --version 1.7.4
   npm.cmd run release:auto -- patch
-  npm.cmd run release:auto -- minor --repo learning-kai/kaoyan-focus-updates
+  npm.cmd run release:auto -- minor --repo learning-kai/kaoyan-focus
+  npm.cmd run release:auto -- --version 1.7.4 --include-android
 
 Options:
   --version X.Y.Z          Set an exact version instead of bumping.
   patch|minor|major        Bump type. Defaults to patch.
-  --update-base-url URL    Release download base URL. Defaults to scripts/release-base-url.txt.
+  --update-base-url URL    Release download base URL. Defaults to the GitHub origin or scripts/release-base-url.txt.
   --repo OWNER/REPO        GitHub repo that stores update assets.
   --notes TEXT             GitHub Release notes.
   --notes-file PATH        GitHub Release notes file.
@@ -420,5 +446,11 @@ Options:
   --dry-run                Print the plan only.
   --prerelease             Mark the GitHub Release as prerelease.
   --no-latest              Do not explicitly mark the release as latest.
+  --include-android        Also sync and validate the internal Android project.
+  --android-project-dir    Android project path used with --include-android.
 `);
+}
+
+function isAndroidReleaseEnabled(env) {
+  return /^(1|true|yes)$/i.test(env.INCLUDE_ANDROID_RELEASE ?? '');
 }

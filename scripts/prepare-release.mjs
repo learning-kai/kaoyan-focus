@@ -7,23 +7,25 @@ import { resolveUpdateBaseUrlFromArgs, updateTauriUpdaterEndpoint } from './rele
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(scriptDir, '..');
-const androidRoot = resolve(process.env.ANDROID_PROJECT_DIR ?? resolve(desktopRoot, '..', 'UltraFocus-master'));
+const defaultAndroidRoot = resolve(desktopRoot, '..', 'UltraFocus-master');
 const changelogPath = resolve(desktopRoot, 'CHANGELOG.md');
 
-const args = process.argv.slice(2);
+const rawArgs = process.argv.slice(2);
 const packageJsonPath = resolve(desktopRoot, 'package.json');
 const cargoTomlPath = resolve(desktopRoot, 'src-tauri', 'Cargo.toml');
 const tauriConfigPath = resolve(desktopRoot, 'src-tauri', 'tauri.conf.json');
+const releaseArgs = resolveUpdateBaseUrlFromArgs(rawArgs, process.env, 'preparing a release');
+const options = parseArgs(releaseArgs.args, process.env);
+const androidRoot = resolve(options.androidProjectDir);
 const androidGradlePath = resolve(androidRoot, 'app', 'build.gradle.kts');
-const releaseArgs = resolveUpdateBaseUrlFromArgs(process.argv.slice(2), process.env, 'preparing a release');
 
-if (!existsSync(androidGradlePath)) {
+if (options.includeAndroid && !existsSync(androidGradlePath)) {
   throw new Error(`Android project not found. Expected: ${androidGradlePath}`);
 }
 
 const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
 const currentVersion = packageJson.version;
-const nextVersion = resolveNextVersion(currentVersion, args);
+const nextVersion = resolveNextVersion(currentVersion, options.versionArgs);
 const today = formatLocalDate(new Date());
 
 await updatePackageJson(nextVersion);
@@ -32,12 +34,62 @@ await updateTauriConfig(nextVersion);
 if (releaseArgs.updateBaseUrl) {
   await updateTauriUpdaterEndpoint(tauriConfigPath, releaseArgs.updateBaseUrl);
 }
-await updateAndroidGradle(nextVersion);
-await updateChangelog(nextVersion, today);
+if (options.includeAndroid) {
+  await updateAndroidGradle(nextVersion);
+}
+await updateChangelog(nextVersion, today, options.includeAndroid);
 
 console.log(`Prepared release v${nextVersion}`);
 console.log(`Desktop: ${desktopRoot}`);
-console.log(`Android: ${androidRoot}`);
+if (options.includeAndroid) {
+  console.log(`Android: ${androidRoot}`);
+} else {
+  console.log('Android: skipped (pass --include-android or set INCLUDE_ANDROID_RELEASE=1 to sync it)');
+}
+
+function parseArgs(args, env) {
+  const versionArgs = [];
+  let includeAndroid = isAndroidReleaseEnabled(env);
+  let androidProjectDir = env.ANDROID_PROJECT_DIR ?? defaultAndroidRoot;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    const inline = arg.match(/^(--android-project-dir)=(.*)$/);
+
+    if (arg === '--include-android') {
+      includeAndroid = true;
+      continue;
+    }
+
+    if (inline) {
+      androidProjectDir = inline[2];
+      continue;
+    }
+
+    if (arg === '--android-project-dir') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) {
+        throw new Error('--android-project-dir requires a path.');
+      }
+
+      androidProjectDir = value;
+      index += 1;
+      continue;
+    }
+
+    versionArgs.push(arg);
+  }
+
+  return {
+    versionArgs,
+    includeAndroid,
+    androidProjectDir,
+  };
+}
+
+function isAndroidReleaseEnabled(env) {
+  return /^(1|true|yes)$/i.test(env.INCLUDE_ANDROID_RELEASE ?? '');
+}
 
 function formatLocalDate(date) {
   const year = date.getFullYear();
@@ -47,6 +99,13 @@ function formatLocalDate(date) {
 }
 
 function resolveNextVersion(current, rawArgs) {
+  const explicitInline = rawArgs.find((arg) => arg.startsWith('--version='));
+  if (explicitInline) {
+    const explicit = explicitInline.split('=', 2)[1];
+    assertVersion(explicit);
+    return explicit;
+  }
+
   const explicitIndex = rawArgs.indexOf('--version');
   if (explicitIndex !== -1) {
     const explicit = rawArgs[explicitIndex + 1];
@@ -103,20 +162,22 @@ async function replaceVersionInFile(filePath, pattern, replacement) {
   await writeFile(filePath, content.replace(pattern, replacement), 'utf8');
 }
 
-async function updateChangelog(version, date) {
+async function updateChangelog(version, date, includeAndroid) {
   const existing = existsSync(changelogPath) ? await readFile(changelogPath, 'utf8') : '# Changelog\n\n';
   const heading = `## v${version} - ${date}`;
   const withoutDuplicate = existing.replace(new RegExp(`\\n?## v${escapeRegExp(version)} - \\d{4}-\\d{2}-\\d{2}[\\s\\S]*?(?=\\n## v|$)`), '').trimEnd();
-  const entry = [
+  const sections = [
     heading,
     '',
     '### Desktop',
     formatCommitGroups(desktopRoot),
-    '',
-    '### Android',
-    formatCommitGroups(androidRoot),
-    '',
-  ].join('\n');
+  ];
+
+  if (includeAndroid) {
+    sections.push('', '### Android', formatCommitGroups(androidRoot));
+  }
+
+  const entry = [...sections, ''].join('\n');
 
   const base = withoutDuplicate.startsWith('# Changelog') ? withoutDuplicate : `# Changelog\n\n${withoutDuplicate}`;
   const normalizedBase = base.trimEnd() === '# Changelog' ? '# Changelog' : base.trimEnd();

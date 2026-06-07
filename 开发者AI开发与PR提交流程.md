@@ -118,10 +118,10 @@ cargo test
 发布流程相关改动建议 dry run：
 
 ```powershell
-npm.cmd run release:auto -- --dry-run --repo <owner>/<repo>
+npm.cmd run release:auto -- --version 1.7.4 --dry-run
 ```
 
-如果 dry run 因缺少真实仓库名失败，必须在回执里说明使用了什么占位值、失败点是什么。
+dry run 必须确认 `Update base URL` 为 `https://github.com/learning-kai/kaoyan-focus/releases/latest/download`，`GitHub update repo` 为 `learning-kai/kaoyan-focus`。没有开发者明确授权时，不得去掉 `--dry-run` 发布 GitHub Release。
 
 ### 阶段 6：提交前检查
 

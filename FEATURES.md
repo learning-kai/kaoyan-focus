@@ -400,10 +400,10 @@ PotPlayer 视频白名单只在前台进程是 `PotPlayer` 时生效，并且优
 当前 Tauri 配置中启用了 updater：
 
 - 使用内置公钥校验更新包签名。
-- 更新地址为 `https://github.com/learning-kai/kaoyan-focus-updates/releases/latest/download/latest.json`。
+- 更新地址为 `https://github.com/learning-kai/kaoyan-focus/releases/latest/download/latest.json`。
 - Windows 安装模式为 `passive`。
 
-注意：当前 endpoint 仍是占位地址，需要发布到真实 GitHub 仓库或其他下载服务器后替换。
+注意：当前 endpoint 指向公开仓库 `learning-kai/kaoyan-focus` 的 latest release 下载目录，发版时需要把安装包、签名和 `latest.json` 一起上传到该 Release。
 
 ### 7.3 发布元数据
 
@@ -637,7 +637,7 @@ kaoyan-focus.sqlite3
 - 当前不包含 macOS/Linux 发布配置。
 - 当前不包含开机自启。
 - WebDAV 同步是整库上传/下载，不做逐条记录合并。
-- 当前 updater endpoint 需要替换为真实发布地址，当前项目使用 `https://github.com/learning-kai/kaoyan-focus-updates/releases/latest/download/latest.json`。
+- 当前 updater endpoint 使用 `https://github.com/learning-kai/kaoyan-focus/releases/latest/download/latest.json`，发布资产需要随 GitHub Release 一起维护。
 
 ## 12. 推荐验证清单
 

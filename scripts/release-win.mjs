@@ -31,7 +31,7 @@ if (!outputBundleDir.startsWith(safeOutputRoot)) {
   throw new Error(`Refusing to write outside project target directory: ${outputBundleDir}`);
 }
 
-const { prepareArgs, shouldPrepare, shouldTag } = parseArgs(releaseArgs.args);
+const { prepareArgs, tagArgs, shouldPrepare, shouldTag, includeAndroid } = parseArgs(releaseArgs.args);
 const localBuildOnly = !updateBaseUrl;
 let releaseError;
 
@@ -74,7 +74,11 @@ try {
   console.log(`Copied NSIS bundle to ${outputBundleDir}`);
 
   if (shouldTag && !localBuildOnly) {
-    runStep('Creating desktop and Android release tags', tagReleasePath, []);
+    runStep(
+      includeAndroid ? 'Creating desktop and Android release tags' : 'Creating desktop release tag',
+      tagReleasePath,
+      tagArgs,
+    );
   } else if (shouldTag && localBuildOnly) {
     console.log('Skipping release tag for local build without update base URL.');
   } else {
@@ -93,20 +97,43 @@ if (releaseError) {
 
 function parseArgs(args) {
   const prepareArgs = [];
+  const tagArgs = [];
   let shouldPrepare = true;
   let shouldTag = true;
+  let includeAndroid = isAndroidReleaseEnabled(process.env);
 
-  for (const arg of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
     if (arg === '--no-prepare') {
       shouldPrepare = false;
     } else if (arg === '--no-tag') {
       shouldTag = false;
+    } else if (arg === '--include-android') {
+      includeAndroid = true;
+      prepareArgs.push(arg);
+      tagArgs.push(arg);
+    } else if (arg === '--android-project-dir') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) {
+        throw new Error('--android-project-dir requires a path.');
+      }
+
+      prepareArgs.push(arg, value);
+      tagArgs.push(arg, value);
+      index += 1;
+    } else if (arg.startsWith('--android-project-dir=')) {
+      prepareArgs.push(arg);
+      tagArgs.push(arg);
     } else {
       prepareArgs.push(arg);
     }
   }
 
-  return { prepareArgs, shouldPrepare, shouldTag };
+  return { prepareArgs, tagArgs, shouldPrepare, shouldTag, includeAndroid };
+}
+
+function isAndroidReleaseEnabled(env) {
+  return /^(1|true|yes)$/i.test(env.INCLUDE_ANDROID_RELEASE ?? '');
 }
 
 function runStep(label, scriptPath, args) {

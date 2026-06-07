@@ -745,4 +745,13 @@
 ### Android
 - No commits found.
 
+## v1.7.4 - 2026-06-07
+
+### Desktop
+#### Added
+- feat: add PotPlayer media detection and alarm management features (9f05a67)
+
+#### Changed
+- chore: prepare project for GitHub publishing (29c3b1f)
+
 

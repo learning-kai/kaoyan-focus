@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "考研专注",
-  "version": "1.7.3",
+  "version": "1.7.4",
   "identifier": "com.kaoyan.focus",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -36,7 +36,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMwRTgwMzYwNjQzNEQzMkEKUldRcTB6UmtZQVBvd0VhcTgxV2xqTEZUQUpXREQxUmdDUXNNZWxsWFZIYkE1L1BzOEpFOGFJY0wK",
       "endpoints": [
-        "https://github.com/learning-kai/kaoyan-focus-updates/releases/latest/download/latest.json"
+        "https://github.com/learning-kai/kaoyan-focus/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
