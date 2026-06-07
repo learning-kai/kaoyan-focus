@@ -6,6 +6,7 @@ import type { SettingsPanelKey } from './types';
 
 type SystemPanelProps = {
   availableUpdate: AppUpdate | null;
+  autoUpdateMessage: string | null;
   checkingUpdate: boolean;
   dataLocation: string | null;
   expandedPanels: Record<SettingsPanelKey, boolean>;
@@ -23,6 +24,7 @@ type SystemPanelProps = {
 
 export function SystemPanel({
   availableUpdate,
+  autoUpdateMessage,
   checkingUpdate,
   dataLocation,
   expandedPanels,
@@ -102,6 +104,7 @@ export function SystemPanel({
           {expandedPanels.update && (
             <>
               <p className="panel-copy">检查发布服务器上的新版本，下载完成后会自动重启应用。</p>
+              {autoUpdateMessage && <p className="alert neutral">自动检查：{autoUpdateMessage}</p>}
               {updateMessage && <p className="alert neutral">{updateMessage}</p>}
               {updateProgress !== null && <p className="alert neutral">下载进度 {updateProgress}%</p>}
               <div className="row-actions">

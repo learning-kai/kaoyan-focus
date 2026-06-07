@@ -1,9 +1,9 @@
 ---
 name: Bug report
 about: 报告一个可复现的问题
-title: "[Bug] "
+title: '[Bug] '
 labels: bug
-assignees: ""
+assignees: ''
 ---
 
 ## 问题描述

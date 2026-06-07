@@ -128,22 +128,118 @@
 
 .theme-toggle {
   display: inline-flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+  min-width: min(100%, 260px);
+}
+
+.top-strip {
+  flex-wrap: wrap;
+}
+
+.top-strip-title {
+  flex: 1 1 150px;
+}
+
+.top-strip-status {
+  flex: 2 1 320px;
 }
 
 .theme-toggle button {
   display: inline-flex;
-  gap: 6px;
+  gap: 7px;
   align-items: center;
   min-height: 36px;
-  padding: 8px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--ink);
   background: rgba(16, 27, 43, 0.86);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.theme-swatch {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(2, 6, 17, 0.12);
 }
 
 .theme-toggle button.active {
   color: #08111d;
   background: linear-gradient(135deg, #8db8ff, #69dfb7);
+}
+
+.theme-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 560px);
+}
+
+.theme-setting-row {
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.theme-choice-grid button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  text-align: left;
+  background: var(--surface-soft);
+  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.theme-choice-grid button:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-strong);
+  transform: translateY(-1px);
+}
+
+.theme-choice-grid button.active {
+  border-color: color-mix(in srgb, var(--blue) 56%, var(--line));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--blue) 18%, transparent), color-mix(in srgb, var(--green) 14%, transparent)),
+    var(--surface-soft);
+  box-shadow: var(--focus-ring);
+}
+
+.theme-choice-grid .theme-swatch {
+  width: 28px;
+  height: 28px;
+}
+
+.theme-choice-grid span:not(.theme-swatch) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.theme-choice-grid strong,
+.theme-choice-grid small {
+  min-width: 0;
+}
+
+.theme-choice-grid small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+@media (max-width: 680px) {
+  .theme-choice-grid {
+    grid-template-columns: 1fr;
+  }
 }

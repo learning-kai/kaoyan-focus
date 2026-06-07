@@ -7,6 +7,8 @@ import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import type { FocusSession, FocusStatsSummary, Subject } from '../types/focus';
 import type { InterruptionSummary } from '../types/monitor';
 
+const RECENT_SESSION_LIMIT = 100;
+
 function formatStudyTime(seconds: number) {
   if (seconds < 3600) {
     return `${Math.round(seconds / 60)} 分钟`;
@@ -63,7 +65,7 @@ export default function StatsPage() {
       const [statsData, interruptionData, sessionData, subjectData] = await Promise.all([
         getFocusStatsSummary(),
         listInterruptionSummary(),
-        listFocusSessions(),
+        listFocusSessions(RECENT_SESSION_LIMIT),
         listSubjects(),
       ]);
       setStats(statsData);
@@ -241,7 +243,7 @@ export default function StatsPage() {
         <div className="panel-title">
           <div>
             <p className="eyebrow">Records</p>
-            <h3>最近学习记录</h3>
+            <h3>最近学习记录（最多 {RECENT_SESSION_LIMIT} 条）</h3>
           </div>
           <Pencil size={20} />
         </div>

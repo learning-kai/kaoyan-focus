@@ -640,6 +640,14 @@ fn has_pending_object_storage_local_changes(app: AppHandle) -> Result<bool, Stri
     )
     .is_empty())
 }
+fn parse_https_url(value: &str, label: &str) -> Result<Url, String> {
+    let parsed = Url::parse(value).map_err(|_| format!("{label} is invalid; use an https URL."))?;
+    if parsed.scheme() != "https" {
+        return Err(format!("{label} must use https://."));
+    }
+    Ok(parsed)
+}
+
 fn normalize_settings(settings: WebDavSettings) -> Result<WebDavSettings, String> {
     let url = settings.url.trim().trim_end_matches('/').to_string();
     let username = settings.username.trim().to_string();
@@ -656,15 +664,13 @@ fn normalize_settings(settings: WebDavSettings) -> Result<WebDavSettings, String
             return Err("Please enter the WebDAV URL.".to_string());
         }
 
-        Url::parse(&url)
-            .map_err(|_| "WebDAV URL is invalid; use an http or https URL.".to_string())?;
+        parse_https_url(&url, "WebDAV URL")?;
 
         if remote_path.is_empty() {
             return Err("Please enter the remote file path.".to_string());
         }
     } else if !url.is_empty() {
-        Url::parse(&url)
-            .map_err(|_| "WebDAV URL is invalid; use an http or https URL.".to_string())?;
+        parse_https_url(&url, "WebDAV URL")?;
     }
 
     Ok(WebDavSettings {
@@ -698,8 +704,7 @@ fn normalize_object_storage_settings(
             return Err("Please enter the R2 endpoint.".to_string());
         }
 
-        Url::parse(&endpoint)
-            .map_err(|_| "R2 endpoint is invalid; use an http or https URL.".to_string())?;
+        parse_https_url(&endpoint, "R2 endpoint")?;
 
         if bucket.is_empty() {
             return Err("Please enter the R2 bucket.".to_string());
@@ -720,8 +725,7 @@ fn normalize_object_storage_settings(
             );
         }
     } else if !endpoint.is_empty() {
-        Url::parse(&endpoint)
-            .map_err(|_| "R2 endpoint is invalid; use an http or https URL.".to_string())?;
+        parse_https_url(&endpoint, "R2 endpoint")?;
     }
 
     Ok(ObjectStorageSettings {
@@ -839,5 +843,91 @@ fn redact_object_storage_settings(mut settings: ObjectStorageSettings) -> Object
         !settings.secret_access_key.is_empty() || settings.secret_access_key_configured;
     settings.secret_access_key.clear();
     settings
+}
+
+#[cfg(test)]
+mod object_storage_settings_tests {
+    use super::{normalize_object_storage_settings, normalize_settings, ObjectStorageSettings, WebDavSettings};
+
+    fn webdav_settings(url: &str, enabled: bool) -> WebDavSettings {
+        WebDavSettings {
+            enabled,
+            url: url.to_string(),
+            username: "user".to_string(),
+            password: "password".to_string(),
+            password_configured: true,
+            remote_path: "kaoyan-focus/kaoyan-focus.sqlite3".to_string(),
+        }
+    }
+
+    fn object_storage_settings(endpoint: &str, enabled: bool) -> ObjectStorageSettings {
+        ObjectStorageSettings {
+            enabled,
+            endpoint: endpoint.to_string(),
+            bucket: "bucket".to_string(),
+            access_key_id: "access-key".to_string(),
+            secret_access_key: "secret-key".to_string(),
+            secret_access_key_configured: true,
+            region: "auto".to_string(),
+            object_key: "study-sync.json".to_string(),
+        }
+    }
+
+    #[test]
+    fn webdav_settings_accept_https_url() {
+        let normalized = normalize_settings(webdav_settings("https://example.com/webdav/", true))
+            .expect("https webdav url should be accepted");
+
+        assert_eq!(normalized.url, "https://example.com/webdav");
+    }
+
+    #[test]
+    fn webdav_settings_reject_http_url_when_enabled() {
+        let error = normalize_settings(webdav_settings("http://example.com/webdav", true))
+            .expect_err("http webdav url should be rejected");
+
+        assert!(error.contains("https"));
+    }
+
+    #[test]
+    fn webdav_settings_reject_http_url_when_disabled_but_present() {
+        let error = normalize_settings(webdav_settings("http://example.com/webdav", false))
+            .expect_err("saved http webdav url should be rejected even when disabled");
+
+        assert!(error.contains("https"));
+    }
+
+    #[test]
+    fn object_storage_settings_accept_https_endpoint() {
+        let normalized = normalize_object_storage_settings(object_storage_settings(
+            "https://account.r2.cloudflarestorage.com/",
+            true,
+        ))
+        .expect("https object storage endpoint should be accepted");
+
+        assert_eq!(normalized.endpoint, "https://account.r2.cloudflarestorage.com");
+    }
+
+    #[test]
+    fn object_storage_settings_reject_http_endpoint_when_enabled() {
+        let error = normalize_object_storage_settings(object_storage_settings(
+            "http://account.r2.cloudflarestorage.com",
+            true,
+        ))
+        .expect_err("http object storage endpoint should be rejected");
+
+        assert!(error.contains("https"));
+    }
+
+    #[test]
+    fn object_storage_settings_reject_http_endpoint_when_disabled_but_present() {
+        let error = normalize_object_storage_settings(object_storage_settings(
+            "http://account.r2.cloudflarestorage.com",
+            false,
+        ))
+        .expect_err("saved http object storage endpoint should be rejected even when disabled");
+
+        assert!(error.contains("https"));
+    }
 }
 

@@ -10,14 +10,10 @@ import {
 } from '../services/reviewApi';
 import { syncConfiguredStateChange } from '../services/syncApi';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
+import { formatDateKey } from '../utils/date';
 import type { DailyReviewDraft, DailyReviewPageData, WeeklyReviewDraft, WeeklyReviewPageData } from '../types/review';
 
 type ReviewMode = 'daily' | 'weekly';
-
-function todayString() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
 
 function shiftDate(value: string, days: number) {
   const [year, month, day] = value.split('-').map(Number);
@@ -33,7 +29,7 @@ function shiftDate(value: string, days: number) {
 function weekStartString(value: string) {
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) {
-    return todayString();
+    return formatDateKey();
   }
   const date = new Date(year, month - 1, day);
   const dayIndex = (date.getDay() + 6) % 7;
@@ -71,11 +67,11 @@ function emptyWeeklyDraft(weekStartDate: string): WeeklyReviewDraft {
 export default function ReviewPage() {
   const { confirm, confirmDialog } = useConfirmDialog();
   const [mode, setMode] = useState<ReviewMode>('daily');
-  const [selectedDate, setSelectedDate] = useState(todayString());
+  const [selectedDate, setSelectedDate] = useState(formatDateKey());
   const [data, setData] = useState<DailyReviewPageData | null>(null);
   const [weeklyData, setWeeklyData] = useState<WeeklyReviewPageData | null>(null);
-  const [draft, setDraft] = useState<DailyReviewDraft>(() => emptyDailyDraft(todayString()));
-  const [weeklyDraft, setWeeklyDraft] = useState<WeeklyReviewDraft>(() => emptyWeeklyDraft(weekStartString(todayString())));
+  const [draft, setDraft] = useState<DailyReviewDraft>(() => emptyDailyDraft(formatDateKey()));
+  const [weeklyDraft, setWeeklyDraft] = useState<WeeklyReviewDraft>(() => emptyWeeklyDraft(weekStartString(formatDateKey())));
   const [saving, setSaving] = useState(false);
   const [dailyDirty, setDailyDirty] = useState(false);
   const [weeklyDirty, setWeeklyDirty] = useState(false);
@@ -211,9 +207,11 @@ export default function ReviewPage() {
       if (mode === 'daily') {
         await saveDailyReview(draft);
         await refreshDaily(draft.reviewDate);
+        setDailyDirty(false);
       } else {
         await saveWeeklyReview(weeklyDraft);
         await refreshWeekly(weeklyDraft.weekStartDate);
+        setWeeklyDirty(false);
       }
       setMessage('复盘已保存。');
       void syncConfiguredStateChange('local_data_change').catch(() => undefined);
@@ -244,9 +242,11 @@ export default function ReviewPage() {
       if (mode === 'daily') {
         await deleteDailyReview(reviewId);
         await refreshDaily(selectedDate);
+        setDailyDirty(false);
       } else {
         await deleteWeeklyReview(reviewId);
         await refreshWeekly(selectedDate);
+        setWeeklyDirty(false);
       }
       setMessage('复盘已删除。');
       void syncConfiguredStateChange('local_data_change').catch(() => undefined);
@@ -355,15 +355,15 @@ export default function ReviewPage() {
             <>
               <label className="field-block">
                 <span>本周总结</span>
-                <textarea className="text-input review-textarea" value={weeklyDraft.summary ?? ''} onChange={(event) => setWeeklyDraft((current) => ({ ...current, summary: event.target.value }))} placeholder="这一周最重要的推进是什么？" />
+                <textarea className="text-input review-textarea" value={weeklyDraft.summary ?? ''} onChange={(event) => updateWeeklyDraft({ summary: event.target.value })} placeholder="这一周最重要的推进是什么？" />
               </label>
               <label className="field-block">
                 <span>问题卡点</span>
-                <textarea className="text-input review-textarea" value={weeklyDraft.blockers ?? ''} onChange={(event) => setWeeklyDraft((current) => ({ ...current, blockers: event.target.value }))} placeholder="这周反复卡住在哪里？" />
+                <textarea className="text-input review-textarea" value={weeklyDraft.blockers ?? ''} onChange={(event) => updateWeeklyDraft({ blockers: event.target.value })} placeholder="这周反复卡住在哪里？" />
               </label>
               <label className="field-block">
                 <span>下周重点</span>
-                <textarea className="text-input review-textarea" value={weeklyDraft.nextWeekFocus ?? ''} onChange={(event) => setWeeklyDraft((current) => ({ ...current, nextWeekFocus: event.target.value }))} placeholder="下周最先守住哪几个重点？" />
+                <textarea className="text-input review-textarea" value={weeklyDraft.nextWeekFocus ?? ''} onChange={(event) => updateWeeklyDraft({ nextWeekFocus: event.target.value })} placeholder="下周最先守住哪几个重点？" />
               </label>
             </>
           )}

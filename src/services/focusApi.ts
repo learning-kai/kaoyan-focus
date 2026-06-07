@@ -84,8 +84,8 @@ export function recoverActiveFocusSession(): Promise<FocusSessionRecovery | null
   return invokeCommand<FocusSessionRecovery | null>('recover_active_focus_session');
 }
 
-export function listFocusSessions(): Promise<FocusSession[]> {
-  return invokeCommand<FocusSession[]>('list_focus_sessions');
+export function listFocusSessions(limit?: number): Promise<FocusSession[]> {
+  return invokeCommand<FocusSession[]>('list_focus_sessions', typeof limit === 'number' ? { limit } : undefined);
 }
 
 export function deleteFocusSession(sessionId: number): Promise<void> {

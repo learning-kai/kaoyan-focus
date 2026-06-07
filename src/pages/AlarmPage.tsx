@@ -12,19 +12,15 @@ import {
 } from '../services/alarmApi';
 import { stopPersistentAlarmSound } from '../services/alertApi';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
+import { formatDateKey } from '../utils/date';
 import type { Alarm, AlarmDraft } from '../types/alarm';
 
 const defaultAlarmTitle = '闹钟';
 
-function todayString() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
 function tomorrowString() {
   const date = new Date();
   date.setDate(date.getDate() + 1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return formatDateKey(date);
 }
 
 function localDateTime(dateString: string, timeString: string) {
@@ -41,7 +37,7 @@ function localDateTime(dateString: string, timeString: string) {
 }
 
 function todayDateIfFuture(timeString: string) {
-  const dateString = todayString();
+  const dateString = formatDateKey();
   const target = localDateTime(dateString, timeString);
   return target && target.getTime() > Date.now() ? dateString : null;
 }
@@ -59,7 +55,7 @@ function defaultDraft(): AlarmDraft {
   return {
     title: defaultAlarmTitle,
     note: '',
-    alarmDate: todayString(),
+    alarmDate: formatDateKey(),
     alarmTime: nextFiveMinuteTime(),
     enabled: true,
   };

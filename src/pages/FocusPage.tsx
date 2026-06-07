@@ -19,6 +19,7 @@ import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../ty
 import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
 import type { FocusAppCheck } from '../types/monitor';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData } from '../types/schedule';
+import { formatDateKey } from '../utils/date';
 
 const studyPresetMinutes = [60, 120, 180, 240];
 const focusPresetMinutes = [25, 45, 60, 90];
@@ -114,11 +115,6 @@ function formatSessionTimeRange(session: FocusSession) {
     : `${formatDateTime(session.started_at)} - ${formatDateTime(session.ended_at)}`;
 }
 
-function todayString() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
 function sessionStatusLabel(status: string) {
   const labels: Record<string, string> = { running: '进行中', finished: '已完成', interrupted: '已中断', emergency_exited: '已退出' };
   return labels[status] ?? status;
@@ -131,6 +127,7 @@ export default function FocusPage() {
   const [longBreakMinutes, setLongBreakMinutes] = useState(15);
   const [longBreakInterval, setLongBreakInterval] = useState(4);
   const [mode, setMode] = useState<FocusMode>('normal');
+  const [autoStartBreakAfterFocus, setAutoStartBreakAfterFocus] = useState(false);
   const [normalWhitelistEnabled, setNormalWhitelistEnabled] = useState(true);
   const [syncDeviceId, setSyncDeviceId] = useState<string | null>(null);
   const [primaryOwnerDeviceId, setPrimaryOwnerDeviceId] = useState<string | null>(null);
@@ -144,7 +141,7 @@ export default function FocusPage() {
   const [isChecklistDrawerOpen, setIsChecklistDrawerOpen] = useState(false);
   const [scheduleData, setScheduleData] = useState<SchedulePageData | null>(null);
   const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState(false);
-  const [scheduleDraft, setScheduleDraft] = useState<ScheduleBlockDraft>(() => emptyScheduleDraft(todayString()));
+  const [scheduleDraft, setScheduleDraft] = useState<ScheduleBlockDraft>(() => emptyScheduleDraft(formatDateKey()));
   const [showTodayComposer, setShowTodayComposer] = useState(false);
   const [todayDraft, setTodayDraft] = useState<TodayPlanItemDraft>(emptyTodayDraft);
   const [editingTodayId, setEditingTodayId] = useState<number | null>(null);
@@ -247,6 +244,7 @@ export default function FocusPage() {
       setLongBreakMinutes(settings.long_break_minutes);
       setLongBreakInterval(settings.long_break_interval);
       setMode(settings.default_focus_mode);
+      setAutoStartBreakAfterFocus(settings.auto_start_break_after_focus);
       setPrimaryOwnerDeviceId(settings.primary_owner_device_id);
       setSyncDeviceId(deviceId);
       setSubjects(subjectsData);
@@ -285,7 +283,7 @@ export default function FocusPage() {
 
   async function refreshScheduleData() {
     try {
-      const date = todayString();
+      const date = formatDateKey();
       setScheduleData(await getSchedulePageData(date));
       setScheduleDraft((current) => ({ ...current, scheduleDate: date, subjectId: studyState.subject_id ?? current.subjectId }));
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
@@ -361,6 +359,14 @@ export default function FocusPage() {
       queueConfiguredSync();
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
+
+  useEffect(() => {
+    if (!autoStartBreakAfterFocus || !active || studyState.phase !== 'awaiting_break' || studyState.is_paused) {
+      return;
+    }
+
+    void handleConfirmBreak();
+  }, [active, autoStartBreakAfterFocus, studyState.phase, studyState.is_paused, studyState.id, studyState.cycle_index]);
 
   async function handleTogglePause() {
     try {
@@ -532,7 +538,7 @@ export default function FocusPage() {
         subjectId,
         categoryKey: scheduleSubjectCategory(subjectId),
       });
-      setScheduleDraft(emptyScheduleDraft(todayString()));
+      setScheduleDraft(emptyScheduleDraft(formatDateKey()));
       await refreshScheduleData();
     }, '课表时间块已添加。');
   }

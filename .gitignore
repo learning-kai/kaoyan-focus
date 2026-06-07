@@ -6,6 +6,7 @@ src-tauri/updater/tauri-update.key
 .claude/
 .DS_Store
 *.log
+theme-check-*.png
 .env
 .env.*
 !.env.example

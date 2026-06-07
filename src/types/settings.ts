@@ -1,6 +1,6 @@
 import type { FocusMode } from './focus';
 
-export type AppTheme = 'dark' | 'light';
+export type AppTheme = 'dark' | 'light' | 'mono' | 'dawn' | 'forest' | 'sakura';
 export type SyncBackend = 'webdav' | 'object_storage';
 export type ReminderSoundSource = 'builtin' | 'custom';
 export type ReminderSoundId = 'classic' | 'bright' | 'soft' | 'urgent' | 'short';
@@ -15,6 +15,9 @@ export type AppSettings = {
   default_focus_mode: FocusMode;
   ui_theme: AppTheme;
   launch_at_startup: boolean;
+  auto_start_break_after_focus: boolean;
+  schedule_reminder_enabled: boolean;
+  schedule_reminder_lead_minutes: number;
   sync_backend: SyncBackend;
   primary_owner_device_id: string | null;
   primary_owner_updated_at: number | null;
@@ -25,6 +28,9 @@ export type AppSettings = {
   reminder_sound_file_name: string | null;
   reminder_sound_updated_at: number | null;
   reminder_sound_volume: number;
+  reminder_quiet_hours_enabled: boolean;
+  reminder_quiet_hours_start: string;
+  reminder_quiet_hours_end: string;
 };
 
 export type ReminderSoundFile = {

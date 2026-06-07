@@ -91,7 +91,7 @@ pub fn list_sync_backups(app: AppHandle) -> Result<Vec<SyncBackupEntry>, String>
             let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
                 continue;
             };
-            if !name.starts_with("kaoyan-focus.before-") || !name.ends_with(".sqlite3") {
+            if !is_local_sync_backup_file_name(name) {
                 continue;
             }
             let metadata = entry.metadata().ok();

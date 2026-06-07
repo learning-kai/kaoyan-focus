@@ -1,0 +1,1096 @@
+html[data-theme='mono'],
+html[data-theme='dawn'],
+html[data-theme='sakura'] {
+  color-scheme: light;
+  --surface-glass: color-mix(in srgb, var(--surface) 82%, transparent);
+  --surface-glass-strong: color-mix(in srgb, var(--surface-strong) 92%, transparent);
+  --surface-panel: color-mix(in srgb, var(--surface) 90%, transparent);
+  --shadow-panel: var(--shadow);
+  --shadow-hover: 0 18px 38px color-mix(in srgb, var(--blue) 18%, transparent);
+  --shadow-control: var(--shadow-soft);
+}
+
+html[data-theme='forest'] {
+  color-scheme: dark;
+  --surface-glass: rgba(12, 31, 24, 0.78);
+  --surface-glass-strong: rgba(13, 39, 30, 0.94);
+  --surface-panel: rgba(13, 35, 28, 0.88);
+  --shadow-panel: 0 22px 52px rgba(0, 10, 7, 0.48);
+  --shadow-hover: 0 18px 38px rgba(101, 219, 164, 0.14);
+  --shadow-control: 0 12px 26px rgba(0, 10, 7, 0.3);
+}
+
+html[data-theme='mono'] {
+  color: #25282d;
+  background: #ece9e2;
+  --bg: #ece9e2;
+  --bg-elevated: #f8f6f1;
+  --surface: #f6f3ed;
+  --surface-strong: #fffdf8;
+  --surface-soft: #ece7dd;
+  --ink: #25282d;
+  --muted: #6d706d;
+  --line: rgba(78, 82, 79, 0.2);
+  --line-strong: rgba(78, 82, 79, 0.36);
+  --blue: #34383e;
+  --blue-soft: rgba(52, 56, 62, 0.1);
+  --green: #717c72;
+  --green-soft: rgba(113, 124, 114, 0.12);
+  --amber: #9b743c;
+  --amber-soft: rgba(155, 116, 60, 0.14);
+  --red: #b6534c;
+  --red-soft: rgba(182, 83, 76, 0.12);
+  --shadow: 0 18px 44px rgba(73, 70, 63, 0.12);
+  --shadow-soft: 0 10px 22px rgba(73, 70, 63, 0.08);
+  --shadow-strong: 0 22px 54px rgba(73, 70, 63, 0.16);
+  --focus-ring: 0 0 0 3px rgba(52, 56, 62, 0.16);
+}
+
+html[data-theme='dawn'] {
+  color: #172033;
+  background: #f6f8f2;
+  --bg: #f6f8f2;
+  --bg-elevated: #ffffff;
+  --surface: #fffdf7;
+  --surface-strong: #ffffff;
+  --surface-soft: #f3f7ec;
+  --ink: #172033;
+  --muted: #697486;
+  --line: rgba(115, 127, 145, 0.2);
+  --line-strong: rgba(87, 99, 122, 0.36);
+  --blue: #356fd6;
+  --blue-soft: rgba(53, 111, 214, 0.11);
+  --green: #2f9d83;
+  --green-soft: rgba(47, 157, 131, 0.12);
+  --amber: #ef9160;
+  --amber-soft: rgba(239, 145, 96, 0.16);
+  --red: #cf5d55;
+  --red-soft: rgba(207, 93, 85, 0.13);
+  --shadow: 0 20px 48px rgba(119, 105, 82, 0.13);
+  --shadow-soft: 0 10px 24px rgba(119, 105, 82, 0.08);
+  --shadow-strong: 0 24px 58px rgba(119, 105, 82, 0.16);
+  --focus-ring: 0 0 0 3px rgba(53, 111, 214, 0.16);
+}
+
+html[data-theme='forest'] {
+  color: #dff7ea;
+  background: #06120f;
+  --bg: #06120f;
+  --bg-elevated: #0a1c16;
+  --surface: #0e241c;
+  --surface-strong: #153429;
+  --surface-soft: rgba(14, 36, 28, 0.78);
+  --ink: #e5f8ee;
+  --muted: #92b9a6;
+  --line: rgba(143, 211, 178, 0.16);
+  --line-strong: rgba(143, 211, 178, 0.3);
+  --blue: #88b9ff;
+  --blue-soft: rgba(136, 185, 255, 0.13);
+  --green: #65dba4;
+  --green-soft: rgba(101, 219, 164, 0.16);
+  --amber: #dfbb72;
+  --amber-soft: rgba(223, 187, 114, 0.16);
+  --red: #ff8d80;
+  --red-soft: rgba(255, 141, 128, 0.14);
+  --shadow: 0 22px 52px rgba(0, 10, 7, 0.48);
+  --shadow-soft: 0 12px 28px rgba(0, 10, 7, 0.3);
+  --shadow-strong: 0 28px 64px rgba(0, 10, 7, 0.56);
+  --focus-ring: 0 0 0 3px rgba(101, 219, 164, 0.24);
+}
+
+html[data-theme='sakura'] {
+  color: #202338;
+  background: #f7f5f8;
+  --bg: #f7f5f8;
+  --bg-elevated: #ffffff;
+  --surface: #fff9fb;
+  --surface-strong: #ffffff;
+  --surface-soft: #f2f6ff;
+  --ink: #202338;
+  --muted: #6f7284;
+  --line: rgba(134, 128, 154, 0.2);
+  --line-strong: rgba(105, 99, 130, 0.34);
+  --blue: #5579df;
+  --blue-soft: rgba(85, 121, 223, 0.11);
+  --green: #3ea991;
+  --green-soft: rgba(62, 169, 145, 0.12);
+  --amber: #d08b4a;
+  --amber-soft: rgba(208, 139, 74, 0.13);
+  --red: #d47791;
+  --red-soft: rgba(212, 119, 145, 0.14);
+  --shadow: 0 20px 48px rgba(114, 98, 128, 0.13);
+  --shadow-soft: 0 10px 24px rgba(114, 98, 128, 0.08);
+  --shadow-strong: 0 24px 58px rgba(114, 98, 128, 0.16);
+  --focus-ring: 0 0 0 3px rgba(212, 119, 145, 0.18);
+}
+
+html[data-theme='mono'] body {
+  color: var(--ink);
+  background:
+    linear-gradient(rgba(55, 58, 63, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(55, 58, 63, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.76), transparent 28%),
+    radial-gradient(circle at 82% 0%, rgba(129, 138, 130, 0.12), transparent 24%),
+    linear-gradient(180deg, #f5f2ea 0%, #e9e4d9 100%);
+  background-size: 32px 32px, 32px 32px, auto, auto, auto;
+}
+
+html[data-theme='dawn'] body {
+  color: var(--ink);
+  background:
+    linear-gradient(rgba(64, 91, 128, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(64, 91, 128, 0.028) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(239, 145, 96, 0.18), transparent 26%),
+    radial-gradient(circle at 88% 8%, rgba(53, 111, 214, 0.11), transparent 24%),
+    linear-gradient(180deg, #fbf9ef 0%, #eef6f4 100%);
+  background-size: 30px 30px, 30px 30px, auto, auto, auto;
+}
+
+html[data-theme='forest'] body {
+  color: var(--ink);
+  background:
+    linear-gradient(rgba(143, 211, 178, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(143, 211, 178, 0.028) 1px, transparent 1px),
+    radial-gradient(circle at 18% 8%, rgba(101, 219, 164, 0.12), transparent 25%),
+    radial-gradient(circle at 88% 0%, rgba(136, 185, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, #071612 0%, #04100d 100%);
+  background-size: 30px 30px, 30px 30px, auto, auto, auto;
+}
+
+html[data-theme='sakura'] body {
+  color: var(--ink);
+  background:
+    linear-gradient(rgba(104, 112, 151, 0.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(104, 112, 151, 0.026) 1px, transparent 1px),
+    radial-gradient(circle at 16% 2%, rgba(212, 119, 145, 0.16), transparent 25%),
+    radial-gradient(circle at 86% 10%, rgba(85, 121, 223, 0.1), transparent 24%),
+    linear-gradient(180deg, #fff8fb 0%, #eef5ff 100%);
+  background-size: 30px 30px, 30px 30px, auto, auto, auto;
+}
+
+html[data-theme='mono'] .main-panel,
+html[data-theme='dawn'] .main-panel,
+html[data-theme='sakura'] .main-panel {
+  background: color-mix(in srgb, var(--bg) 92%, white);
+}
+
+html[data-theme='forest'] .main-panel {
+  background: #06120f;
+}
+
+html[data-theme='mono'] .sidebar,
+html[data-theme='dawn'] .sidebar,
+html[data-theme='sakura'] .sidebar {
+  color: var(--ink);
+  border-right-color: var(--line);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 88%, transparent), color-mix(in srgb, var(--surface-soft) 82%, transparent)),
+    var(--bg);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.76), 12px 0 34px rgba(80, 87, 102, 0.08);
+}
+
+html[data-theme='forest'] .sidebar {
+  background:
+    linear-gradient(180deg, rgba(11, 31, 24, 0.96), rgba(5, 18, 14, 0.92)),
+    var(--bg);
+  box-shadow: inset -1px 0 0 rgba(143, 211, 178, 0.05), 12px 0 34px rgba(0, 10, 7, 0.25);
+}
+
+html[data-theme='mono'] .brand-mark,
+html[data-theme='dawn'] .brand-mark,
+html[data-theme='forest'] .brand-mark,
+html[data-theme='sakura'] .brand-mark {
+  color: var(--theme-mark-ink, #ffffff);
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--blue) 22%, transparent);
+}
+
+html[data-theme='mono'] {
+  --theme-accent-gradient: linear-gradient(145deg, #2b2d31, #8a928b);
+  --theme-mark-ink: #f8f6f1;
+}
+
+html[data-theme='dawn'] {
+  --theme-accent-gradient: linear-gradient(145deg, #356fd6, #ef9160);
+  --theme-mark-ink: #ffffff;
+}
+
+html[data-theme='forest'] {
+  --theme-accent-gradient: linear-gradient(145deg, #65dba4, #88b9ff);
+  --theme-mark-ink: #06120f;
+}
+
+html[data-theme='sakura'] {
+  --theme-accent-gradient: linear-gradient(145deg, #5579df, #d47791);
+  --theme-mark-ink: #ffffff;
+}
+
+html[data-theme='mono'] .top-strip,
+html[data-theme='mono'] .page-shell,
+html[data-theme='mono'] .command-panel,
+html[data-theme='mono'] .soft-panel,
+html[data-theme='mono'] .start-console,
+html[data-theme='mono'] .control-panel,
+html[data-theme='mono'] .reminder-sound-panel,
+html[data-theme='mono'] .settings-save-row,
+html[data-theme='mono'] .confirm-dialog,
+html[data-theme='dawn'] .top-strip,
+html[data-theme='dawn'] .page-shell,
+html[data-theme='dawn'] .command-panel,
+html[data-theme='dawn'] .soft-panel,
+html[data-theme='dawn'] .start-console,
+html[data-theme='dawn'] .control-panel,
+html[data-theme='dawn'] .reminder-sound-panel,
+html[data-theme='dawn'] .settings-save-row,
+html[data-theme='dawn'] .confirm-dialog,
+html[data-theme='sakura'] .top-strip,
+html[data-theme='sakura'] .page-shell,
+html[data-theme='sakura'] .command-panel,
+html[data-theme='sakura'] .soft-panel,
+html[data-theme='sakura'] .start-console,
+html[data-theme='sakura'] .control-panel,
+html[data-theme='sakura'] .reminder-sound-panel,
+html[data-theme='sakura'] .settings-save-row,
+html[data-theme='sakura'] .confirm-dialog {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--blue) 7%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 90%, transparent), color-mix(in srgb, var(--surface) 82%, transparent)),
+    var(--surface);
+  box-shadow: var(--shadow-strong);
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+}
+
+html[data-theme='forest'] .top-strip,
+html[data-theme='forest'] .page-shell,
+html[data-theme='forest'] .command-panel,
+html[data-theme='forest'] .soft-panel,
+html[data-theme='forest'] .start-console,
+html[data-theme='forest'] .control-panel,
+html[data-theme='forest'] .reminder-sound-panel,
+html[data-theme='forest'] .settings-save-row,
+html[data-theme='forest'] .confirm-dialog {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(101, 219, 164, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(16, 42, 33, 0.92), rgba(9, 27, 21, 0.88)),
+    var(--surface);
+  box-shadow: var(--shadow-strong);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+html[data-theme='mono'] .header-metrics article,
+html[data-theme='mono'] .metric-card,
+html[data-theme='mono'] .core-fact,
+html[data-theme='mono'] .details-card,
+html[data-theme='mono'] .phase-badge,
+html[data-theme='mono'] .alert,
+html[data-theme='mono'] .setting-row,
+html[data-theme='mono'] .capability-row,
+html[data-theme='mono'] .tool-row,
+html[data-theme='mono'] .list-row,
+html[data-theme='mono'] .record-row,
+html[data-theme='mono'] .subject-stat-row,
+html[data-theme='mono'] .blocked-option,
+html[data-theme='mono'] .process-option,
+html[data-theme='mono'] .sound-option-card,
+html[data-theme='mono'] .custom-sound-picker,
+html[data-theme='mono'] .custom-sound-file,
+html[data-theme='mono'] .sound-volume-row,
+html[data-theme='mono'] .today-item-row,
+html[data-theme='mono'] .board-column,
+html[data-theme='mono'] .checklist-task-card,
+html[data-theme='mono'] .today-composer,
+html[data-theme='mono'] .task-composer,
+html[data-theme='mono'] .task-inline-editor,
+html[data-theme='mono'] .empty-state,
+html[data-theme='mono'] .category-tab,
+html[data-theme='mono'] .category-task-row,
+html[data-theme='mono'] .review-metric,
+html[data-theme='mono'] .review-score-row,
+html[data-theme='dawn'] .header-metrics article,
+html[data-theme='dawn'] .metric-card,
+html[data-theme='dawn'] .core-fact,
+html[data-theme='dawn'] .details-card,
+html[data-theme='dawn'] .phase-badge,
+html[data-theme='dawn'] .alert,
+html[data-theme='dawn'] .setting-row,
+html[data-theme='dawn'] .capability-row,
+html[data-theme='dawn'] .tool-row,
+html[data-theme='dawn'] .list-row,
+html[data-theme='dawn'] .record-row,
+html[data-theme='dawn'] .subject-stat-row,
+html[data-theme='dawn'] .blocked-option,
+html[data-theme='dawn'] .process-option,
+html[data-theme='dawn'] .sound-option-card,
+html[data-theme='dawn'] .custom-sound-picker,
+html[data-theme='dawn'] .custom-sound-file,
+html[data-theme='dawn'] .sound-volume-row,
+html[data-theme='dawn'] .today-item-row,
+html[data-theme='dawn'] .board-column,
+html[data-theme='dawn'] .checklist-task-card,
+html[data-theme='dawn'] .today-composer,
+html[data-theme='dawn'] .task-composer,
+html[data-theme='dawn'] .task-inline-editor,
+html[data-theme='dawn'] .empty-state,
+html[data-theme='dawn'] .category-tab,
+html[data-theme='dawn'] .category-task-row,
+html[data-theme='dawn'] .review-metric,
+html[data-theme='dawn'] .review-score-row,
+html[data-theme='sakura'] .header-metrics article,
+html[data-theme='sakura'] .metric-card,
+html[data-theme='sakura'] .core-fact,
+html[data-theme='sakura'] .details-card,
+html[data-theme='sakura'] .phase-badge,
+html[data-theme='sakura'] .alert,
+html[data-theme='sakura'] .setting-row,
+html[data-theme='sakura'] .capability-row,
+html[data-theme='sakura'] .tool-row,
+html[data-theme='sakura'] .list-row,
+html[data-theme='sakura'] .record-row,
+html[data-theme='sakura'] .subject-stat-row,
+html[data-theme='sakura'] .blocked-option,
+html[data-theme='sakura'] .process-option,
+html[data-theme='sakura'] .sound-option-card,
+html[data-theme='sakura'] .custom-sound-picker,
+html[data-theme='sakura'] .custom-sound-file,
+html[data-theme='sakura'] .sound-volume-row,
+html[data-theme='sakura'] .today-item-row,
+html[data-theme='sakura'] .board-column,
+html[data-theme='sakura'] .checklist-task-card,
+html[data-theme='sakura'] .today-composer,
+html[data-theme='sakura'] .task-composer,
+html[data-theme='sakura'] .task-inline-editor,
+html[data-theme='sakura'] .empty-state,
+html[data-theme='sakura'] .category-tab,
+html[data-theme='sakura'] .category-task-row,
+html[data-theme='sakura'] .review-metric,
+html[data-theme='sakura'] .review-score-row {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='forest'] .header-metrics article,
+html[data-theme='forest'] .metric-card,
+html[data-theme='forest'] .core-fact,
+html[data-theme='forest'] .details-card,
+html[data-theme='forest'] .phase-badge,
+html[data-theme='forest'] .alert,
+html[data-theme='forest'] .setting-row,
+html[data-theme='forest'] .capability-row,
+html[data-theme='forest'] .tool-row,
+html[data-theme='forest'] .list-row,
+html[data-theme='forest'] .record-row,
+html[data-theme='forest'] .subject-stat-row,
+html[data-theme='forest'] .blocked-option,
+html[data-theme='forest'] .process-option,
+html[data-theme='forest'] .sound-option-card,
+html[data-theme='forest'] .custom-sound-picker,
+html[data-theme='forest'] .custom-sound-file,
+html[data-theme='forest'] .sound-volume-row,
+html[data-theme='forest'] .today-item-row,
+html[data-theme='forest'] .board-column,
+html[data-theme='forest'] .checklist-task-card,
+html[data-theme='forest'] .today-composer,
+html[data-theme='forest'] .task-composer,
+html[data-theme='forest'] .task-inline-editor,
+html[data-theme='forest'] .empty-state,
+html[data-theme='forest'] .category-tab,
+html[data-theme='forest'] .category-task-row,
+html[data-theme='forest'] .review-metric,
+html[data-theme='forest'] .review-score-row {
+  border-color: var(--line);
+  background:
+    linear-gradient(180deg, rgba(19, 49, 39, 0.88), rgba(10, 30, 23, 0.84)),
+    var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='mono'] .nav-item,
+html[data-theme='dawn'] .nav-item,
+html[data-theme='sakura'] .nav-item {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-strong) 64%, transparent);
+}
+
+html[data-theme='forest'] .nav-item {
+  color: var(--muted);
+  background: rgba(12, 31, 24, 0.5);
+}
+
+html[data-theme='mono'] .nav-item:hover,
+html[data-theme='mono'] .nav-item.active,
+html[data-theme='dawn'] .nav-item:hover,
+html[data-theme='dawn'] .nav-item.active,
+html[data-theme='sakura'] .nav-item:hover,
+html[data-theme='sakura'] .nav-item.active {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='forest'] .nav-item:hover,
+html[data-theme='forest'] .nav-item.active {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: rgba(18, 47, 37, 0.92);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='mono'] .nav-item[aria-current='page'],
+html[data-theme='dawn'] .nav-item[aria-current='page'],
+html[data-theme='sakura'] .nav-item[aria-current='page'] {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--blue) 12%, transparent), transparent 70%),
+    color-mix(in srgb, var(--surface-strong) 94%, transparent);
+}
+
+html[data-theme='forest'] .nav-item[aria-current='page'] {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--green) 36%, var(--line));
+  background:
+    linear-gradient(90deg, rgba(101, 219, 164, 0.14), transparent 70%),
+    rgba(18, 47, 37, 0.94);
+}
+
+html[data-theme='mono'] .secondary-action,
+html[data-theme='mono'] .ghost-action,
+html[data-theme='mono'] .small-action,
+html[data-theme='mono'] .chip,
+html[data-theme='mono'] .segmented-control button,
+html[data-theme='mono'] .stepper-control button,
+html[data-theme='mono'] .theme-toggle button,
+html[data-theme='mono'] .icon-button,
+html[data-theme='mono'] .theme-choice-grid button,
+html[data-theme='mono'] .settings-collapse-button,
+html[data-theme='dawn'] .secondary-action,
+html[data-theme='dawn'] .ghost-action,
+html[data-theme='dawn'] .small-action,
+html[data-theme='dawn'] .chip,
+html[data-theme='dawn'] .segmented-control button,
+html[data-theme='dawn'] .stepper-control button,
+html[data-theme='dawn'] .theme-toggle button,
+html[data-theme='dawn'] .icon-button,
+html[data-theme='dawn'] .theme-choice-grid button,
+html[data-theme='dawn'] .settings-collapse-button,
+html[data-theme='sakura'] .secondary-action,
+html[data-theme='sakura'] .ghost-action,
+html[data-theme='sakura'] .small-action,
+html[data-theme='sakura'] .chip,
+html[data-theme='sakura'] .segmented-control button,
+html[data-theme='sakura'] .stepper-control button,
+html[data-theme='sakura'] .theme-toggle button,
+html[data-theme='sakura'] .icon-button,
+html[data-theme='sakura'] .theme-choice-grid button,
+html[data-theme='sakura'] .settings-collapse-button {
+  color: var(--ink);
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+}
+
+html[data-theme='forest'] .secondary-action,
+html[data-theme='forest'] .ghost-action,
+html[data-theme='forest'] .small-action,
+html[data-theme='forest'] .chip,
+html[data-theme='forest'] .segmented-control button,
+html[data-theme='forest'] .stepper-control button,
+html[data-theme='forest'] .theme-toggle button,
+html[data-theme='forest'] .icon-button,
+html[data-theme='forest'] .theme-choice-grid button,
+html[data-theme='forest'] .settings-collapse-button {
+  color: var(--ink);
+  border-color: var(--line);
+  background: rgba(15, 39, 31, 0.88);
+}
+
+html[data-theme='mono'] .secondary-action:hover,
+html[data-theme='mono'] .ghost-action:hover,
+html[data-theme='mono'] .small-action:hover,
+html[data-theme='mono'] .chip:hover,
+html[data-theme='mono'] .segmented-control button:hover,
+html[data-theme='mono'] .stepper-control button:hover,
+html[data-theme='mono'] .theme-toggle button:hover,
+html[data-theme='mono'] .icon-button:hover,
+html[data-theme='mono'] .theme-choice-grid button:hover,
+html[data-theme='dawn'] .secondary-action:hover,
+html[data-theme='dawn'] .ghost-action:hover,
+html[data-theme='dawn'] .small-action:hover,
+html[data-theme='dawn'] .chip:hover,
+html[data-theme='dawn'] .segmented-control button:hover,
+html[data-theme='dawn'] .stepper-control button:hover,
+html[data-theme='dawn'] .theme-toggle button:hover,
+html[data-theme='dawn'] .icon-button:hover,
+html[data-theme='dawn'] .theme-choice-grid button:hover,
+html[data-theme='sakura'] .secondary-action:hover,
+html[data-theme='sakura'] .ghost-action:hover,
+html[data-theme='sakura'] .small-action:hover,
+html[data-theme='sakura'] .chip:hover,
+html[data-theme='sakura'] .segmented-control button:hover,
+html[data-theme='sakura'] .stepper-control button:hover,
+html[data-theme='sakura'] .theme-toggle button:hover,
+html[data-theme='sakura'] .icon-button:hover,
+html[data-theme='sakura'] .theme-choice-grid button:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='forest'] .secondary-action:hover,
+html[data-theme='forest'] .ghost-action:hover,
+html[data-theme='forest'] .small-action:hover,
+html[data-theme='forest'] .chip:hover,
+html[data-theme='forest'] .segmented-control button:hover,
+html[data-theme='forest'] .stepper-control button:hover,
+html[data-theme='forest'] .theme-toggle button:hover,
+html[data-theme='forest'] .icon-button:hover,
+html[data-theme='forest'] .theme-choice-grid button:hover {
+  border-color: var(--line-strong);
+  background: rgba(20, 52, 41, 0.96);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='mono'] .primary-action,
+html[data-theme='mono'] .start-ritual-button,
+html[data-theme='mono'] .segmented-control .active,
+html[data-theme='mono'] .chip.active,
+html[data-theme='mono'] .custom-sound-confirm,
+html[data-theme='mono'] .sound-option-card.active,
+html[data-theme='mono'] .theme-toggle button.active,
+html[data-theme='mono'] .theme-choice-grid button.active,
+html[data-theme='dawn'] .primary-action,
+html[data-theme='dawn'] .start-ritual-button,
+html[data-theme='dawn'] .segmented-control .active,
+html[data-theme='dawn'] .chip.active,
+html[data-theme='dawn'] .custom-sound-confirm,
+html[data-theme='dawn'] .sound-option-card.active,
+html[data-theme='dawn'] .theme-toggle button.active,
+html[data-theme='dawn'] .theme-choice-grid button.active,
+html[data-theme='forest'] .primary-action,
+html[data-theme='forest'] .start-ritual-button,
+html[data-theme='forest'] .segmented-control .active,
+html[data-theme='forest'] .chip.active,
+html[data-theme='forest'] .custom-sound-confirm,
+html[data-theme='forest'] .sound-option-card.active,
+html[data-theme='forest'] .theme-toggle button.active,
+html[data-theme='forest'] .theme-choice-grid button.active,
+html[data-theme='sakura'] .primary-action,
+html[data-theme='sakura'] .start-ritual-button,
+html[data-theme='sakura'] .segmented-control .active,
+html[data-theme='sakura'] .chip.active,
+html[data-theme='sakura'] .custom-sound-confirm,
+html[data-theme='sakura'] .sound-option-card.active,
+html[data-theme='sakura'] .theme-toggle button.active,
+html[data-theme='sakura'] .theme-choice-grid button.active {
+  color: var(--theme-active-ink, #ffffff);
+  border-color: transparent;
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--blue) 20%, transparent);
+}
+
+html[data-theme='forest'] .primary-action,
+html[data-theme='forest'] .start-ritual-button,
+html[data-theme='forest'] .segmented-control .active,
+html[data-theme='forest'] .chip.active,
+html[data-theme='forest'] .custom-sound-confirm,
+html[data-theme='forest'] .sound-option-card.active,
+html[data-theme='forest'] .theme-toggle button.active,
+html[data-theme='forest'] .theme-choice-grid button.active {
+  --theme-active-ink: #06120f;
+}
+
+html[data-theme='mono'] .sound-option-card.active strong,
+html[data-theme='mono'] .sound-option-card.active span,
+html[data-theme='dawn'] .sound-option-card.active strong,
+html[data-theme='dawn'] .sound-option-card.active span,
+html[data-theme='forest'] .sound-option-card.active strong,
+html[data-theme='forest'] .sound-option-card.active span,
+html[data-theme='sakura'] .sound-option-card.active strong,
+html[data-theme='sakura'] .sound-option-card.active span {
+  color: var(--theme-active-ink, #ffffff);
+}
+
+html[data-theme='mono'] .text-input,
+html[data-theme='mono'] .number-input,
+html[data-theme='mono'] .select-input,
+html[data-theme='mono'] .date-stepper input,
+html[data-theme='mono'] .schedule-composer input,
+html[data-theme='mono'] .schedule-composer select,
+html[data-theme='mono'] .schedule-block-editor input,
+html[data-theme='mono'] .schedule-quick-add input,
+html[data-theme='mono'] .schedule-quick-add select,
+html[data-theme='dawn'] .text-input,
+html[data-theme='dawn'] .number-input,
+html[data-theme='dawn'] .select-input,
+html[data-theme='dawn'] .date-stepper input,
+html[data-theme='dawn'] .schedule-composer input,
+html[data-theme='dawn'] .schedule-composer select,
+html[data-theme='dawn'] .schedule-block-editor input,
+html[data-theme='dawn'] .schedule-quick-add input,
+html[data-theme='dawn'] .schedule-quick-add select,
+html[data-theme='sakura'] .text-input,
+html[data-theme='sakura'] .number-input,
+html[data-theme='sakura'] .select-input,
+html[data-theme='sakura'] .date-stepper input,
+html[data-theme='sakura'] .schedule-composer input,
+html[data-theme='sakura'] .schedule-composer select,
+html[data-theme='sakura'] .schedule-block-editor input,
+html[data-theme='sakura'] .schedule-quick-add input,
+html[data-theme='sakura'] .schedule-quick-add select {
+  color: var(--ink);
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+}
+
+html[data-theme='forest'] .text-input,
+html[data-theme='forest'] .number-input,
+html[data-theme='forest'] .select-input,
+html[data-theme='forest'] .date-stepper input,
+html[data-theme='forest'] .schedule-composer input,
+html[data-theme='forest'] .schedule-composer select,
+html[data-theme='forest'] .schedule-block-editor input,
+html[data-theme='forest'] .schedule-quick-add input,
+html[data-theme='forest'] .schedule-quick-add select {
+  color: var(--ink);
+  border-color: var(--line);
+  background: rgba(7, 22, 17, 0.78);
+}
+
+html[data-theme='mono'] .text-input::placeholder,
+html[data-theme='mono'] .number-input::placeholder,
+html[data-theme='dawn'] .text-input::placeholder,
+html[data-theme='dawn'] .number-input::placeholder,
+html[data-theme='sakura'] .text-input::placeholder,
+html[data-theme='sakura'] .number-input::placeholder {
+  color: color-mix(in srgb, var(--muted) 76%, white);
+}
+
+html[data-theme='forest'] .text-input::placeholder,
+html[data-theme='forest'] .number-input::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, #06120f);
+}
+
+html[data-theme='mono'] .alert.error,
+html[data-theme='mono'] .alert.danger,
+html[data-theme='dawn'] .alert.error,
+html[data-theme='dawn'] .alert.danger,
+html[data-theme='sakura'] .alert.error,
+html[data-theme='sakura'] .alert.danger {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--red) 28%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--red-soft) 74%, white), color-mix(in srgb, var(--red-soft) 36%, white));
+}
+
+html[data-theme='forest'] .alert.error,
+html[data-theme='forest'] .alert.danger {
+  border-color: color-mix(in srgb, var(--red) 34%, var(--line));
+  background: linear-gradient(180deg, rgba(78, 31, 31, 0.88), rgba(45, 22, 22, 0.88));
+}
+
+html[data-theme='mono'] .alert.success,
+html[data-theme='dawn'] .alert.success,
+html[data-theme='sakura'] .alert.success {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--green) 28%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--green-soft) 74%, white), color-mix(in srgb, var(--green-soft) 36%, white));
+}
+
+html[data-theme='forest'] .alert.success {
+  border-color: color-mix(in srgb, var(--green) 34%, var(--line));
+  background: linear-gradient(180deg, rgba(18, 58, 43, 0.88), rgba(12, 40, 31, 0.88));
+}
+
+html[data-theme='mono'] .alert.neutral,
+html[data-theme='dawn'] .alert.neutral,
+html[data-theme='sakura'] .alert.neutral {
+  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+}
+
+html[data-theme='forest'] .alert.neutral {
+  background: rgba(15, 39, 31, 0.88);
+}
+
+html[data-theme='mono'] .top-strip-status span,
+html[data-theme='dawn'] .top-strip-status span,
+html[data-theme='sakura'] .top-strip-status span {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
+html[data-theme='forest'] .top-strip-status span {
+  border-color: var(--line);
+  background: rgba(15, 39, 31, 0.72);
+}
+
+html[data-theme='mono'] .top-strip-status .is-ready,
+html[data-theme='dawn'] .top-strip-status .is-ready,
+html[data-theme='sakura'] .top-strip-status .is-ready,
+html[data-theme='mono'] .small-action.enabled,
+html[data-theme='mono'] .row-icon.enabled,
+html[data-theme='dawn'] .small-action.enabled,
+html[data-theme='dawn'] .row-icon.enabled,
+html[data-theme='sakura'] .small-action.enabled,
+html[data-theme='sakura'] .row-icon.enabled {
+  color: color-mix(in srgb, var(--green) 74%, var(--ink));
+  border-color: color-mix(in srgb, var(--green) 28%, var(--line));
+  background: color-mix(in srgb, var(--green-soft) 70%, white);
+}
+
+html[data-theme='forest'] .top-strip-status .is-ready,
+html[data-theme='forest'] .small-action.enabled,
+html[data-theme='forest'] .row-icon.enabled {
+  color: #c9ffe5;
+  border-color: color-mix(in srgb, var(--green) 34%, var(--line));
+  background: rgba(101, 219, 164, 0.12);
+}
+
+html[data-theme='mono'] .top-strip-status .is-preview,
+html[data-theme='dawn'] .top-strip-status .is-preview,
+html[data-theme='sakura'] .top-strip-status .is-preview {
+  color: color-mix(in srgb, var(--blue) 76%, var(--ink));
+  border-color: color-mix(in srgb, var(--blue) 28%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 70%, white);
+}
+
+html[data-theme='forest'] .top-strip-status .is-preview {
+  color: #d8e7ff;
+  border-color: color-mix(in srgb, var(--blue) 34%, var(--line));
+  background: rgba(136, 185, 255, 0.11);
+}
+
+html[data-theme='mono'] .next-alarm-pill.active,
+html[data-theme='dawn'] .next-alarm-pill.active,
+html[data-theme='sakura'] .next-alarm-pill.active {
+  color: color-mix(in srgb, var(--blue) 82%, var(--ink));
+}
+
+html[data-theme='forest'] .next-alarm-pill.active {
+  color: #cfe0ff;
+}
+
+html[data-theme='mono'] .timer-orbit,
+html[data-theme='dawn'] .timer-orbit,
+html[data-theme='sakura'] .timer-orbit {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--blue) 12%, transparent), transparent 62%),
+    color-mix(in srgb, var(--surface-strong) 84%, transparent);
+}
+
+html[data-theme='forest'] .timer-orbit {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(101, 219, 164, 0.12), transparent 62%),
+    rgba(7, 22, 17, 0.88);
+}
+
+html[data-theme='mono'] .focus-active-shell,
+html[data-theme='dawn'] .focus-active-shell,
+html[data-theme='sakura'] .focus-active-shell {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--blue) 11%, transparent), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 92%, white) 0%, var(--bg) 100%);
+}
+
+html[data-theme='forest'] .focus-active-shell {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 50% 48%, rgba(101, 219, 164, 0.12), transparent 30%),
+    linear-gradient(180deg, #0a1c16 0%, #04100d 100%);
+}
+
+html[data-theme='mono'] .focus-active-bg,
+html[data-theme='dawn'] .focus-active-bg,
+html[data-theme='sakura'] .focus-active-bg {
+  background:
+    radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--blue) 9%, transparent), transparent 30%),
+    radial-gradient(circle at 52% 68%, color-mix(in srgb, var(--green) 7%, transparent), transparent 26%);
+}
+
+html[data-theme='forest'] .focus-active-bg {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(101, 219, 164, 0.09), transparent 30%),
+    radial-gradient(circle at 52% 68%, rgba(136, 185, 255, 0.07), transparent 26%);
+}
+
+html[data-theme='mono'] .focus-round-button,
+html[data-theme='dawn'] .focus-round-button,
+html[data-theme='sakura'] .focus-round-button {
+  color: var(--ink);
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  box-shadow: var(--shadow-strong);
+}
+
+html[data-theme='forest'] .focus-round-button {
+  color: var(--ink);
+  border-color: var(--line);
+  background: rgba(15, 39, 31, 0.66);
+  box-shadow: var(--shadow-strong);
+}
+
+html[data-theme='mono'] .focus-round-button.primary,
+html[data-theme='dawn'] .focus-round-button.primary,
+html[data-theme='forest'] .focus-round-button.primary,
+html[data-theme='sakura'] .focus-round-button.primary {
+  color: var(--theme-active-ink, #ffffff);
+  background: var(--theme-accent-gradient);
+}
+
+html[data-theme='mono'] .focus-round-button.secondary,
+html[data-theme='dawn'] .focus-round-button.secondary,
+html[data-theme='sakura'] .focus-round-button.secondary {
+  color: color-mix(in srgb, var(--amber) 74%, var(--ink));
+}
+
+html[data-theme='forest'] .focus-round-button.secondary {
+  color: #f1cf88;
+}
+
+html[data-theme='mono'] .focus-quiet-action,
+html[data-theme='dawn'] .focus-quiet-action,
+html[data-theme='sakura'] .focus-quiet-action {
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='forest'] .focus-quiet-action {
+  color: color-mix(in srgb, var(--ink) 80%, var(--muted));
+  border-color: var(--line);
+  background: rgba(15, 39, 31, 0.62);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='mono'] .focus-quiet-action:hover,
+html[data-theme='mono'] .focus-quiet-action.is-active,
+html[data-theme='dawn'] .focus-quiet-action:hover,
+html[data-theme='dawn'] .focus-quiet-action.is-active,
+html[data-theme='sakura'] .focus-quiet-action:hover,
+html[data-theme='sakura'] .focus-quiet-action.is-active {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+}
+
+html[data-theme='forest'] .focus-quiet-action:hover,
+html[data-theme='forest'] .focus-quiet-action.is-active {
+  color: var(--ink);
+  background: rgba(20, 52, 41, 0.82);
+}
+
+html[data-theme='mono'] .schedule-lane,
+html[data-theme='dawn'] .schedule-lane,
+html[data-theme='sakura'] .schedule-lane {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 54%, transparent);
+}
+
+html[data-theme='forest'] .schedule-lane {
+  border-color: var(--line);
+  background: rgba(7, 22, 17, 0.66);
+}
+
+html[data-theme='mono'] .schedule-block,
+html[data-theme='dawn'] .schedule-block,
+html[data-theme='sakura'] .schedule-block {
+  border-color: color-mix(in srgb, var(--blue) 18%, var(--line));
+  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='forest'] .schedule-block {
+  border-color: color-mix(in srgb, var(--green) 22%, var(--line));
+  background: rgba(19, 49, 39, 0.86);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme='mono'] .category-politics,
+html[data-theme='mono'] .schedule-block.category-politics,
+html[data-theme='mono'] .week-block.category-politics {
+  border-color: rgba(77, 78, 82, 0.25);
+  background: linear-gradient(180deg, rgba(71, 73, 78, 0.13), rgba(255, 255, 255, 0.56));
+}
+
+html[data-theme='mono'] .category-english,
+html[data-theme='mono'] .schedule-block.category-english,
+html[data-theme='mono'] .week-block.category-english {
+  border-color: rgba(111, 119, 113, 0.28);
+  background: linear-gradient(180deg, rgba(111, 119, 113, 0.14), rgba(255, 255, 255, 0.56));
+}
+
+html[data-theme='mono'] .category-math,
+html[data-theme='mono'] .schedule-block.category-math,
+html[data-theme='mono'] .week-block.category-math {
+  border-color: rgba(143, 105, 55, 0.28);
+  background: linear-gradient(180deg, rgba(143, 105, 55, 0.14), rgba(255, 255, 255, 0.56));
+}
+
+html[data-theme='mono'] .category-major,
+html[data-theme='mono'] .schedule-block.category-major,
+html[data-theme='mono'] .week-block.category-major {
+  border-color: rgba(71, 89, 105, 0.28);
+  background: linear-gradient(180deg, rgba(71, 89, 105, 0.14), rgba(255, 255, 255, 0.56));
+}
+
+html[data-theme='dawn'] .category-politics,
+html[data-theme='dawn'] .schedule-block.category-politics,
+html[data-theme='dawn'] .week-block.category-politics,
+html[data-theme='sakura'] .category-politics,
+html[data-theme='sakura'] .schedule-block.category-politics,
+html[data-theme='sakura'] .week-block.category-politics {
+  border-color: color-mix(in srgb, var(--red) 26%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--red-soft) 70%, white), color-mix(in srgb, var(--surface-strong) 72%, transparent));
+}
+
+html[data-theme='dawn'] .category-english,
+html[data-theme='dawn'] .schedule-block.category-english,
+html[data-theme='dawn'] .week-block.category-english,
+html[data-theme='sakura'] .category-english,
+html[data-theme='sakura'] .schedule-block.category-english,
+html[data-theme='sakura'] .week-block.category-english {
+  border-color: color-mix(in srgb, var(--blue) 24%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--blue-soft) 70%, white), color-mix(in srgb, var(--surface-strong) 72%, transparent));
+}
+
+html[data-theme='dawn'] .category-math,
+html[data-theme='dawn'] .schedule-block.category-math,
+html[data-theme='dawn'] .week-block.category-math,
+html[data-theme='sakura'] .category-math,
+html[data-theme='sakura'] .schedule-block.category-math,
+html[data-theme='sakura'] .week-block.category-math {
+  border-color: color-mix(in srgb, var(--amber) 28%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--amber-soft) 74%, white), color-mix(in srgb, var(--surface-strong) 72%, transparent));
+}
+
+html[data-theme='dawn'] .category-major,
+html[data-theme='dawn'] .schedule-block.category-major,
+html[data-theme='dawn'] .week-block.category-major,
+html[data-theme='sakura'] .category-major,
+html[data-theme='sakura'] .schedule-block.category-major,
+html[data-theme='sakura'] .week-block.category-major {
+  border-color: color-mix(in srgb, var(--green) 26%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--green-soft) 72%, white), color-mix(in srgb, var(--surface-strong) 72%, transparent));
+}
+
+html[data-theme='forest'] .category-politics,
+html[data-theme='forest'] .schedule-block.category-politics,
+html[data-theme='forest'] .week-block.category-politics {
+  border-color: rgba(255, 141, 128, 0.24);
+  background: linear-gradient(180deg, rgba(88, 39, 36, 0.52), rgba(19, 49, 39, 0.82));
+}
+
+html[data-theme='forest'] .category-english,
+html[data-theme='forest'] .schedule-block.category-english,
+html[data-theme='forest'] .week-block.category-english {
+  border-color: rgba(136, 185, 255, 0.24);
+  background: linear-gradient(180deg, rgba(43, 62, 94, 0.5), rgba(19, 49, 39, 0.82));
+}
+
+html[data-theme='forest'] .category-math,
+html[data-theme='forest'] .schedule-block.category-math,
+html[data-theme='forest'] .week-block.category-math {
+  border-color: rgba(223, 187, 114, 0.26);
+  background: linear-gradient(180deg, rgba(88, 69, 36, 0.5), rgba(19, 49, 39, 0.82));
+}
+
+html[data-theme='forest'] .category-major,
+html[data-theme='forest'] .schedule-block.category-major,
+html[data-theme='forest'] .week-block.category-major {
+  border-color: rgba(101, 219, 164, 0.26);
+  background: linear-gradient(180deg, rgba(38, 92, 67, 0.5), rgba(19, 49, 39, 0.82));
+}
+
+html[data-theme='mono'] .confirm-backdrop,
+html[data-theme='dawn'] .confirm-backdrop,
+html[data-theme='sakura'] .confirm-backdrop {
+  background: rgba(42, 45, 52, 0.24);
+}
+
+html[data-theme='forest'] .confirm-backdrop {
+  background: rgba(0, 10, 7, 0.58);
+}
+
+html[data-theme='mono'] .confirm-dialog-body,
+html[data-theme='dawn'] .confirm-dialog-body,
+html[data-theme='sakura'] .confirm-dialog-body {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 72%, white);
+}
+
+html[data-theme='forest'] .confirm-dialog-body {
+  border-color: var(--line);
+  background: rgba(7, 22, 17, 0.68);
+}
+
+html[data-theme='mono'] .confirm-dialog-icon,
+html[data-theme='dawn'] .confirm-dialog-icon,
+html[data-theme='sakura'] .confirm-dialog-icon {
+  color: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 24%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 78%, white);
+}
+
+html[data-theme='forest'] .confirm-dialog-icon {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 28%, var(--line));
+  background: rgba(101, 219, 164, 0.12);
+}
+
+@media (max-width: 680px) {
+  html[data-theme='mono'] .sidebar,
+  html[data-theme='dawn'] .sidebar,
+  html[data-theme='sakura'] .sidebar {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 94%, transparent), color-mix(in srgb, var(--surface-soft) 88%, transparent)),
+      var(--bg);
+    box-shadow: 0 12px 28px rgba(80, 87, 102, 0.1);
+  }
+
+  html[data-theme='forest'] .sidebar {
+    background:
+      linear-gradient(180deg, rgba(11, 31, 24, 0.98), rgba(5, 18, 14, 0.94)),
+      var(--bg);
+    box-shadow: 0 12px 28px rgba(0, 10, 7, 0.28);
+  }
+}
+
+html[data-theme='mono'] .automation-settings-panel,
+html[data-theme='dawn'] .automation-settings-panel,
+html[data-theme='sakura'] .automation-settings-panel {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--blue) 7%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 90%, transparent), color-mix(in srgb, var(--surface) 82%, transparent)),
+    var(--surface);
+  box-shadow: var(--shadow-strong);
+}
+
+html[data-theme='forest'] .automation-settings-panel {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(101, 219, 164, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(16, 42, 33, 0.92), rgba(9, 27, 21, 0.88)),
+    var(--surface);
+  box-shadow: var(--shadow-strong);
+}
+
+html[data-theme='mono'] .time-input,
+html[data-theme='dawn'] .time-input,
+html[data-theme='sakura'] .time-input {
+  color: var(--ink);
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+}
+
+html[data-theme='forest'] .time-input {
+  color: var(--ink);
+  border-color: var(--line);
+  background: rgba(7, 22, 17, 0.78);
+}

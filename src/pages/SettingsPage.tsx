@@ -85,6 +85,9 @@ const defaultSettings: AppSettings = {
   default_focus_mode: 'normal',
   ui_theme: 'dark',
   launch_at_startup: false,
+  auto_start_break_after_focus: false,
+  schedule_reminder_enabled: true,
+  schedule_reminder_lead_minutes: 5,
   sync_backend: 'webdav',
   primary_owner_device_id: null,
   primary_owner_updated_at: null,
@@ -95,6 +98,9 @@ const defaultSettings: AppSettings = {
   reminder_sound_file_name: null,
   reminder_sound_updated_at: null,
   reminder_sound_volume: 100,
+  reminder_quiet_hours_enabled: false,
+  reminder_quiet_hours_start: '22:30',
+  reminder_quiet_hours_end: '07:00',
 };
 
 const defaultWebDavSettings: WebDavSettings = {
@@ -245,7 +251,7 @@ export default function SettingsPage({
   });
 
   const settingsLocked = isStudyModeLocked(studyState);
-  const visibleUpdateMessage = updateMessage ?? lastAutoUpdateMessage;
+  const visibleUpdateMessage = updateMessage;
 
   useEffect(() => {
     void initializeSettingsPage();
@@ -934,6 +940,7 @@ export default function SettingsPage({
       {activeSection === 'system' && (
         <SystemPanel
           availableUpdate={availableUpdate}
+          autoUpdateMessage={lastAutoUpdateMessage}
           checkingUpdate={checkingUpdate}
           dataLocation={dataLocation}
           expandedPanels={expandedPanels}

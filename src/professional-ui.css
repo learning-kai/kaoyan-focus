@@ -199,6 +199,7 @@ button {
 .soft-panel,
 .start-console,
 .control-panel,
+.automation-settings-panel,
 .reminder-sound-panel,
 .settings-save-row {
   background:
@@ -247,6 +248,49 @@ button {
 
 .dashboard-strip {
   gap: 14px;
+}
+
+.automation-settings-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.automation-settings-grid,
+.quiet-hours-inputs {
+  display: grid;
+  gap: 12px;
+}
+
+.automation-settings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quiet-hours-inputs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: min(360px, 100%);
+}
+
+.quiet-hours-inputs label {
+  display: grid;
+  gap: 6px;
+}
+
+.quiet-hours-inputs span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.time-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: rgba(9, 15, 25, 0.9);
 }
 
 .start-console {
@@ -549,6 +593,16 @@ button {
     min-height: 360px;
     padding: 18px;
   }
+
+  .automation-settings-panel {
+    padding: 14px;
+  }
+
+  .automation-settings-grid,
+  .quiet-hours-row,
+  .quiet-hours-inputs {
+    grid-template-columns: 1fr;
+  }
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) {
@@ -581,6 +635,7 @@ button {
 :is(html[data-theme='light'], html:not([data-theme])) .soft-panel,
 :is(html[data-theme='light'], html:not([data-theme])) .start-console,
 :is(html[data-theme='light'], html:not([data-theme])) .control-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .automation-settings-panel,
 :is(html[data-theme='light'], html:not([data-theme])) .reminder-sound-panel,
 :is(html[data-theme='light'], html:not([data-theme])) .settings-save-row {
   background:
@@ -618,6 +673,13 @@ button {
 :is(html[data-theme='light'], html:not([data-theme])) .top-strip-status span {
   border-color: rgba(113, 131, 159, 0.18);
   background: rgba(248, 250, 252, 0.82);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .time-input {
+  color: var(--ink);
+  border-color: rgba(115, 133, 160, 0.26);
+  background: #ffffff;
+  box-shadow: inset 0 1px 2px rgba(63, 82, 112, 0.06);
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .nav-item:hover,

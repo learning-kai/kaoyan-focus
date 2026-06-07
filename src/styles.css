@@ -435,7 +435,8 @@ html[data-study-fullscreen='true'] body {
   color: var(--ink);
 }
 
-.alert.error {
+.alert.error,
+.alert.danger {
   border-color: rgba(255, 125, 115, 0.35);
   background: linear-gradient(180deg, rgba(61, 25, 30, 0.9), rgba(37, 19, 24, 0.9));
 }
@@ -454,6 +455,8 @@ html[data-study-fullscreen='true'] body {
 .secondary-action,
 .ghost-action,
 .danger-action,
+.schedule-page .primary-button,
+.schedule-page .ghost-button,
 .icon-button,
 .small-action,
 .start-ritual-button,
@@ -3593,10 +3596,16 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 }
 
 .schedule-task-row > div,
-.template-row > div {
+.template-row > div:not(.template-row-actions) {
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+
+.template-row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .schedule-task-row button {
@@ -4455,7 +4464,8 @@ html[data-theme='light'] .settings-save-copy b {
   color: #2f5fd4;
 }
 
-html[data-theme='light'] .alert.error {
+html[data-theme='light'] .alert.error,
+html[data-theme='light'] .alert.danger {
   border-color: rgba(217, 110, 103, 0.3);
   background: linear-gradient(180deg, rgba(255, 240, 239, 0.96), rgba(255, 247, 247, 0.9));
 }
@@ -5477,7 +5487,8 @@ html[data-theme='light'] .theme-toggle button.active {
 :is(html[data-theme='light'], html:not([data-theme])) .metric-card.danger,
 :is(html[data-theme='light'], html:not([data-theme])) .count-pill,
 :is(html[data-theme='light'], html:not([data-theme])) .row-icon.danger,
-:is(html[data-theme='light'], html:not([data-theme])) .alert.error {
+:is(html[data-theme='light'], html:not([data-theme])) .alert.error,
+:is(html[data-theme='light'], html:not([data-theme])) .alert.danger {
   color: #9d3834;
   border-color: rgba(199, 82, 77, 0.24);
   background: #fff2f1;

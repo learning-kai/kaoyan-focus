@@ -1,9 +1,9 @@
 ---
 name: Feature request
 about: 提出一个新功能或改进建议
-title: "[Feature] "
+title: '[Feature] '
 labels: enhancement
-assignees: ""
+assignees: ''
 ---
 
 ## 需求背景

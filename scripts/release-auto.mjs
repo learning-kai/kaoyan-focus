@@ -14,11 +14,7 @@ if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
   process.exit(0);
 }
 
-const releaseArgs = resolveUpdateBaseUrlFromArgs(
-  rawArgs,
-  process.env,
-  'running the automatic release workflow',
-);
+const releaseArgs = resolveUpdateBaseUrlFromArgs(rawArgs, process.env, 'running the automatic release workflow');
 const options = parseArgs(releaseArgs.args);
 const updateBaseUrl = releaseArgs.updateBaseUrl;
 const packageBefore = await readPackageJson();
@@ -34,6 +30,8 @@ if (options.dryRun) {
   process.exit(0);
 }
 
+await runReleaseCheck(['--require-clean']);
+
 if (!options.skipPrepare) {
   await runNodeScript('scripts/prepare-release.mjs', [
     ...buildPrepareArgs(options),
@@ -42,21 +40,31 @@ if (!options.skipPrepare) {
   ]);
 }
 
-if (!options.skipBuild) {
-  await runNodeScript('scripts/release-win-update.mjs', [
-    '--update-base-url',
-    updateBaseUrl,
-  ]);
+await runReleaseCheck();
+
+let packageJson = await readPackageJson();
+let version = packageJson.version;
+let tagName = `v${version}`;
+
+if (!options.skipGit) {
+  await createReleaseCommitAndTag(tagName);
 }
 
-const packageJson = await readPackageJson();
-const version = packageJson.version;
-const tagName = `v${version}`;
+if (!options.skipBuild) {
+  await runNodeScript('scripts/release-win-update.mjs', ['--update-base-url', updateBaseUrl]);
+}
+
+packageJson = await readPackageJson();
+version = packageJson.version;
+tagName = `v${version}`;
 const assets = resolveReleaseAssets(packageJson.name, version);
 assertReleaseAssets(assets);
 
 if (!options.skipPublish) {
   assertGhReady();
+  if (!options.skipGit && !options.skipPush) {
+    pushReleaseGitState(tagName);
+  }
   const notesFile = await resolveNotesFile(version, options);
   await publishGithubRelease({
     repo: updateRepo,
@@ -88,6 +96,8 @@ function parseArgs(args) {
     skipPrepare: false,
     skipBuild: false,
     skipPublish: false,
+    skipGit: false,
+    skipPush: false,
     dryRun: false,
     prerelease: false,
     latest: true,
@@ -142,6 +152,17 @@ function parseArgs(args) {
 
     if (arg === '--skip-publish') {
       options.skipPublish = true;
+      continue;
+    }
+
+    if (arg === '--skip-git') {
+      options.skipGit = true;
+      options.skipPush = true;
+      continue;
+    }
+
+    if (arg === '--skip-push') {
+      options.skipPush = true;
       continue;
     }
 
@@ -261,6 +282,52 @@ async function runNodeScript(scriptPath, args) {
   run(process.execPath, [scriptPath, ...args]);
 }
 
+async function runReleaseCheck(args = []) {
+  run(process.execPath, ['scripts/release-check.mjs', ...args]);
+}
+
+async function createReleaseCommitAndTag(tagName) {
+  stageReleaseMetadata();
+
+  if (runQuiet('git', ['diff', '--cached', '--quiet']).status !== 0) {
+    run('git', ['commit', '-m', `chore: release ${tagName}`]);
+  }
+
+  await runReleaseCheck(['--require-clean']);
+  ensureLocalTag(tagName);
+}
+
+function stageReleaseMetadata() {
+  const files = [
+    'package.json',
+    'package-lock.json',
+    'src-tauri/Cargo.toml',
+    'src-tauri/tauri.conf.json',
+    'CHANGELOG.md',
+  ].filter((file) => existsSync(resolve(projectRoot, file)));
+
+  run('git', ['add', ...files]);
+}
+
+function ensureLocalTag(tagName) {
+  const exists = runQuiet('git', ['rev-parse', '-q', '--verify', `refs/tags/${tagName}`]).status === 0;
+  if (exists) {
+    return;
+  }
+
+  run('git', ['tag', tagName]);
+}
+
+function pushReleaseGitState(tagName) {
+  const branch = runQuiet('git', ['branch', '--show-current']).stdout.trim();
+  if (!branch) {
+    throw new Error('Cannot push release commit from a detached HEAD. Check out a branch or pass --skip-push.');
+  }
+
+  run('git', ['push', 'origin', `HEAD:${branch}`]);
+  run('git', ['push', 'origin', tagName]);
+}
+
 function assertGhReady() {
   run('gh', ['auth', 'status']);
 }
@@ -313,11 +380,7 @@ function resolveSpawnInvocation(command, args) {
 function resolveReleaseAssets(packageName, version) {
   const bundleDir = resolve(projectRoot, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
   const installer = resolve(bundleDir, `${packageName}_${version}_x64-setup.exe`);
-  return [
-    installer,
-    `${installer}.sig`,
-    resolve(bundleDir, 'latest.json'),
-  ];
+  return [installer, `${installer}.sig`, resolve(bundleDir, 'latest.json')];
 }
 
 function assertReleaseAssets(assets) {
@@ -340,7 +403,7 @@ async function resolveNotesFile(version, options) {
   const targetDir = resolve(projectRoot, 'src-tauri', 'target');
   await mkdir(targetDir, { recursive: true });
   const notesPath = resolve(targetDir, `release-notes-v${version}.md`);
-  const notes = options.notes ?? await readChangelogNotes(version) ?? `kaoyan-focus v${version} update`;
+  const notes = options.notes ?? (await readChangelogNotes(version)) ?? `kaoyan-focus v${version} update`;
   await writeFile(notesPath, `${notes.trim()}\n`, 'utf8');
   return notesPath;
 }
@@ -404,9 +467,7 @@ function inferGithubRepoFromUpdateBaseUrl(updateBaseUrl) {
 }
 
 function formatCommand(command, args) {
-  return [command, ...args].map((part) => (
-    /[\s"`]/.test(part) ? `"${part.replace(/"/g, '\\"')}"` : part
-  )).join(' ');
+  return [command, ...args].map((part) => (/[\s"`]/.test(part) ? `"${part.replace(/"/g, '\\"')}"` : part)).join(' ');
 }
 
 function escapeRegExp(value) {
@@ -421,6 +482,8 @@ function printPlan({ packageName, version, updateBaseUrl, updateRepo, options })
   console.log(`GitHub update repo: ${updateRepo}`);
   console.log(`Prepare: ${options.skipPrepare ? 'skip' : 'yes'}`);
   console.log(`Build/sign/latest.json: ${options.skipBuild ? 'skip' : 'yes'}`);
+  console.log(`Release commit/tag: ${options.skipGit ? 'skip' : 'yes'}`);
+  console.log(`Push commit/tag: ${options.skipGit || options.skipPush ? 'skip' : 'yes'}`);
   console.log(`Publish GitHub Release: ${options.skipPublish ? 'skip' : 'yes'}`);
   console.log(`Android sync: ${options.includeAndroid ? 'yes' : 'skip'}`);
 }
@@ -443,6 +506,8 @@ Options:
   --skip-prepare           Do not update version/changelog/config.
   --skip-build             Do not rebuild/sign; publish existing assets.
   --skip-publish           Build only; do not upload to GitHub.
+  --skip-git               Do not create or push the release commit/tag.
+  --skip-push              Create the local release commit/tag but do not push them.
   --dry-run                Print the plan only.
   --prerelease             Mark the GitHub Release as prerelease.
   --no-latest              Do not explicitly mark the release as latest.

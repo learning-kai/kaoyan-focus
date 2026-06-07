@@ -12,6 +12,7 @@ const changelogPath = resolve(desktopRoot, 'CHANGELOG.md');
 
 const rawArgs = process.argv.slice(2);
 const packageJsonPath = resolve(desktopRoot, 'package.json');
+const packageLockPath = resolve(desktopRoot, 'package-lock.json');
 const cargoTomlPath = resolve(desktopRoot, 'src-tauri', 'Cargo.toml');
 const tauriConfigPath = resolve(desktopRoot, 'src-tauri', 'tauri.conf.json');
 const releaseArgs = resolveUpdateBaseUrlFromArgs(rawArgs, process.env, 'preparing a release');
@@ -133,6 +134,20 @@ function assertVersion(value) {
 async function updatePackageJson(version) {
   const next = { ...packageJson, version };
   await writeFile(packageJsonPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  await updatePackageLock(version);
+}
+
+async function updatePackageLock(version) {
+  if (!existsSync(packageLockPath)) {
+    return;
+  }
+
+  const lock = JSON.parse(await readFile(packageLockPath, 'utf8'));
+  lock.version = version;
+  if (lock.packages?.['']) {
+    lock.packages[''].version = version;
+  }
+  await writeFile(packageLockPath, `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
 }
 
 async function updateTauriConfig(version) {

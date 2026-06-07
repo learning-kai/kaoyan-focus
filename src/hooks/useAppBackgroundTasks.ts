@@ -17,6 +17,7 @@ import {
 } from '../services/feishuApi';
 import { getStudyModeState } from '../services/focusApi';
 import { getSchedulePageData } from '../services/scheduleApi';
+import { getAppSettings } from '../services/settingsApi';
 import { listenTauriEvent } from '../services/tauriEvents';
 import { isTauriRuntime } from '../services/tauriInvoke';
 import { checkForAppUpdate } from '../services/updateApi';
@@ -26,6 +27,7 @@ import {
   STUDY_SYNC_STATE_CHANGED_EVENT,
   syncConfiguredStateChange,
 } from '../services/syncApi';
+import { currentMinuteOfDay, formatDateKey } from '../utils/date';
 import type { Alarm } from '../types/alarm';
 import type { AppPage } from '../types/navigation';
 
@@ -48,16 +50,6 @@ const SILENT_AUTO_SYNC_SKIP_REASONS = new Set([
   'object_storage_sync_in_flight',
   'study_mode_active',
 ]);
-
-function todayString() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function currentMinuteOfDay() {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes();
-}
 
 export function useAutoSync(setLastAutoSyncMessage: (message: string | null) => void) {
   useEffect(() => {
@@ -247,15 +239,24 @@ export function useScheduleReminders() {
 
     async function checkScheduleReminders() {
       try {
-        const date = todayString();
+        const settings = await getAppSettings();
+        if (!settings.schedule_reminder_enabled) {
+          return;
+        }
+
+        const date = formatDateKey();
         const nowMinute = currentMinuteOfDay();
         const pageData = await getSchedulePageData(date);
         if (disposed) return;
 
         for (const block of pageData.day_blocks) {
           if (block.status === 'completed') continue;
-          const distance = nowMinute - block.start_minute;
-          if (distance < 0 || distance > SCHEDULE_REMINDER_LOOKBACK_MINUTES) continue;
+          const minutesUntilStart = block.start_minute - nowMinute;
+          const isInLeadWindow = minutesUntilStart >= 0
+            && minutesUntilStart <= settings.schedule_reminder_lead_minutes;
+          const isRecentlyStarted = minutesUntilStart < 0
+            && Math.abs(minutesUntilStart) <= SCHEDULE_REMINDER_LOOKBACK_MINUTES;
+          if (!isInLeadWindow && !isRecentlyStarted) continue;
 
           const key = `${block.id}:${block.schedule_date}:${block.start_minute}`;
           if (remindedKeys.has(key)) continue;

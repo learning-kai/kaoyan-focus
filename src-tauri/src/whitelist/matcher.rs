@@ -194,9 +194,9 @@ fn match_potplayer_media(
 ) -> WhitelistMatchResult {
     let Some(media_path) = app.potplayer_media_path.as_deref() else {
         return WhitelistMatchResult {
-            allowed: true,
-            reason: "PotPlayer 未识别到当前播放视频，按空播放器放行".to_string(),
-            matched_process_name: Some(app.process_name.clone()),
+            allowed: false,
+            reason: "PotPlayer 未识别到当前播放视频，默认拦截".to_string(),
+            matched_process_name: None,
             detected_domain: None,
             matched_subject_id: None,
             potplayer_media_path: None,
@@ -470,12 +470,30 @@ mod tests {
     }
 
     #[test]
-    fn empty_potplayer_is_allowed() {
+    fn unidentified_potplayer_media_is_blocked() {
         let app = foreground_app("PotPlayerMini64.exe", None);
         let result = is_foreground_app_allowed(&app, &[], &[], &[]);
 
-        assert!(result.allowed);
-        assert!(result.reason.contains("空播放器"));
+        assert!(!result.allowed);
+        assert!(result.reason.contains("未识别"));
+        assert!(result.reason.contains("拦截"));
+    }
+
+    #[test]
+    fn unidentified_potplayer_media_ignores_process_whitelist() {
+        let app = foreground_app("PotPlayerMini64.exe", None);
+        let result = is_foreground_app_allowed(
+            &app,
+            &[ProcessWhitelistRule {
+                process_name: "PotPlayerMini64.exe".to_string(),
+                subject_id: Some(1),
+            }],
+            &[],
+            &[],
+        );
+
+        assert!(!result.allowed);
+        assert_eq!(result.matched_subject_id, None);
     }
 
     #[test]

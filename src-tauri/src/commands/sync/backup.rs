@@ -3,6 +3,41 @@
     app_data_dir.join(format!("kaoyan-focus.before-{prefix}-{stamp}.sqlite3"))
 }
 
+fn is_local_sync_backup_file_name(name: &str) -> bool {
+    name.starts_with("kaoyan-focus.before-") && name.ends_with(".sqlite3")
+}
+
+fn resolve_local_sync_backup_path(app_data_dir: &Path, key: &str) -> Result<PathBuf, String> {
+    let requested = PathBuf::from(key);
+    let name = requested
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "Invalid local backup key.".to_string())?;
+
+    if !is_local_sync_backup_file_name(name) {
+        return Err("Invalid local backup key.".to_string());
+    }
+
+    let candidate = if requested.is_absolute() {
+        requested
+    } else if requested.components().count() == 1 {
+        app_data_dir.join(requested)
+    } else {
+        return Err("Invalid local backup key.".to_string());
+    };
+
+    let canonical_app_data_dir = fs::canonicalize(app_data_dir)
+        .map_err(|error| format!("Resolve app data dir failed: {error}"))?;
+    let canonical_candidate = fs::canonicalize(&candidate)
+        .map_err(|error| format!("Resolve local backup failed: {error}"))?;
+
+    if canonical_candidate.parent() != Some(canonical_app_data_dir.as_path()) || !canonical_candidate.is_file() {
+        return Err("Invalid local backup key.".to_string());
+    }
+
+    Ok(canonical_candidate)
+}
+
 fn create_local_sync_backup(
     app: &AppHandle,
     local_database_path: &Path,
@@ -90,7 +125,7 @@ fn prune_local_sync_backups(app_data_dir: &Path) -> Result<(), String> {
         let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
             continue;
         };
-        if !name.starts_with("kaoyan-focus.before-") || !name.ends_with(".sqlite3") {
+        if !is_local_sync_backup_file_name(name) {
             continue;
         }
         let modified_at = match entry.metadata() {
@@ -190,8 +225,15 @@ pub(crate) fn prune_sync_backups_best_effort(app: &AppHandle) {
 
 fn load_backup_bytes(app: &AppHandle, source: &str, key: &str) -> Result<Vec<u8>, String> {
     if source == "local" {
-        let path = PathBuf::from(key);
+        let app_data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?;
+        let path = resolve_local_sync_backup_path(&app_data_dir, key)?;
         return fs::read(&path).map_err(|error| format!("Read local backup failed: {error}"));
+    }
+    if source != "r2" {
+        return Err("Unknown backup source.".to_string());
     }
     let connection = open_database(&database_path(app)?)?;
     let settings =
@@ -213,6 +255,76 @@ fn load_backup_bytes(app: &AppHandle, source: &str, key: &str) -> Result<Vec<u8>
             .into_bytes();
         Ok(bytes.to_vec())
     })
+}
+
+#[cfg(test)]
+mod backup_tests {
+    use super::{is_local_sync_backup_file_name, resolve_local_sync_backup_path};
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn local_backup_file_name_accepts_expected_pattern() {
+        assert!(is_local_sync_backup_file_name(
+            "kaoyan-focus.before-r2-v3-auto-20260607000000.sqlite3"
+        ));
+        assert!(!is_local_sync_backup_file_name("kaoyan-focus.sqlite3"));
+        assert!(!is_local_sync_backup_file_name(
+            "kaoyan-focus.before-r2-v3-auto-20260607000000.txt"
+        ));
+    }
+
+    #[test]
+    fn local_backup_key_accepts_file_under_app_data() {
+        let app_data_dir = tempdir().expect("tempdir");
+        let backup_path = app_data_dir
+            .path()
+            .join("kaoyan-focus.before-r2-v3-auto-20260607000000.sqlite3");
+        fs::write(&backup_path, b"backup").expect("write backup");
+
+        let resolved = resolve_local_sync_backup_path(app_data_dir.path(), &backup_path.to_string_lossy())
+            .expect("resolve absolute backup path");
+        assert_eq!(resolved, fs::canonicalize(&backup_path).expect("canonical backup"));
+
+        let resolved_by_name = resolve_local_sync_backup_path(
+            app_data_dir.path(),
+            "kaoyan-focus.before-r2-v3-auto-20260607000000.sqlite3",
+        )
+        .expect("resolve backup file name");
+        assert_eq!(resolved_by_name, resolved);
+    }
+
+    #[test]
+    fn local_backup_key_rejects_file_outside_app_data() {
+        let app_data_dir = tempdir().expect("app data tempdir");
+        let outside_dir = tempdir().expect("outside tempdir");
+        let outside_backup = outside_dir
+            .path()
+            .join("kaoyan-focus.before-r2-v3-auto-20260607000000.sqlite3");
+        fs::write(&outside_backup, b"backup").expect("write outside backup");
+
+        assert!(resolve_local_sync_backup_path(app_data_dir.path(), &outside_backup.to_string_lossy()).is_err());
+    }
+
+    #[test]
+    fn local_backup_key_rejects_non_backup_file_inside_app_data() {
+        let app_data_dir = tempdir().expect("tempdir");
+        let local_database = app_data_dir.path().join("kaoyan-focus.sqlite3");
+        fs::write(&local_database, b"database").expect("write database");
+
+        assert!(resolve_local_sync_backup_path(app_data_dir.path(), &local_database.to_string_lossy()).is_err());
+    }
+
+    #[test]
+    fn local_backup_key_rejects_relative_path_with_parent_component() {
+        let app_data_dir = tempdir().expect("app data tempdir");
+
+        assert!(resolve_local_sync_backup_path(
+            app_data_dir.path(),
+            "../kaoyan-focus.before-r2-v3-auto-20260607000000.sqlite3"
+        )
+        .is_err());
+    }
 }
 
 

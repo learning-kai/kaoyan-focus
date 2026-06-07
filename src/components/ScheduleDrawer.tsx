@@ -59,7 +59,7 @@ export default function ScheduleDrawer({
   const nowTop = currentTopPercent();
 
   return (
-    <section aria-hidden={!isOpen} className={`schedule-drawer${isOpen ? ' is-open' : ''}`}>
+    <section aria-hidden={!isOpen ? true : undefined} className={`schedule-drawer${isOpen ? ' is-open' : ''}`} inert={!isOpen ? true : undefined}>
       <div className="panel-title schedule-drawer-head">
         <div>
           <p className="eyebrow">Schedule</p>

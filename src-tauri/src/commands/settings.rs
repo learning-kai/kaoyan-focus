@@ -11,6 +11,9 @@ const DEFAULT_STUDY_MINUTES_KEY: &str = "default_study_minutes";
 const DEFAULT_FOCUS_MODE_KEY: &str = "default_focus_mode";
 const UI_THEME_KEY: &str = "ui_theme";
 const LAUNCH_AT_STARTUP_KEY: &str = "launch_at_startup";
+const AUTO_START_BREAK_AFTER_FOCUS_KEY: &str = "auto_start_break_after_focus";
+const SCHEDULE_REMINDER_ENABLED_KEY: &str = "schedule_reminder_enabled";
+const SCHEDULE_REMINDER_LEAD_MINUTES_KEY: &str = "schedule_reminder_lead_minutes";
 const BREAK_MINUTES_KEY: &str = "break_minutes";
 const LONG_BREAK_MINUTES_KEY: &str = "long_break_minutes";
 const LONG_BREAK_INTERVAL_KEY: &str = "long_break_interval";
@@ -24,6 +27,9 @@ const REMINDER_SOUND_ID_KEY: &str = "reminder_sound_id";
 const REMINDER_SOUND_FILE_NAME_KEY: &str = "reminder_sound_file_name";
 const REMINDER_SOUND_UPDATED_AT_KEY: &str = "reminder_sound_updated_at";
 const REMINDER_SOUND_VOLUME_KEY: &str = "reminder_sound_volume";
+const REMINDER_QUIET_HOURS_ENABLED_KEY: &str = "reminder_quiet_hours_enabled";
+const REMINDER_QUIET_HOURS_START_KEY: &str = "reminder_quiet_hours_start";
+const REMINDER_QUIET_HOURS_END_KEY: &str = "reminder_quiet_hours_end";
 const DEFAULT_REMINDER_SOUND_SOURCE: &str = "builtin";
 const DEFAULT_REMINDER_SOUND_ID: &str = "classic";
 const CUSTOM_REMINDER_SOUND_FILE: &str = "custom-reminder-sound";
@@ -38,6 +44,9 @@ pub struct AppSettings {
     pub default_focus_mode: String,
     pub ui_theme: String,
     pub launch_at_startup: bool,
+    pub auto_start_break_after_focus: bool,
+    pub schedule_reminder_enabled: bool,
+    pub schedule_reminder_lead_minutes: i64,
     pub sync_backend: String,
     pub primary_owner_device_id: Option<String>,
     pub primary_owner_updated_at: Option<i64>,
@@ -48,6 +57,9 @@ pub struct AppSettings {
     pub reminder_sound_file_name: Option<String>,
     pub reminder_sound_updated_at: Option<i64>,
     pub reminder_sound_volume: i64,
+    pub reminder_quiet_hours_enabled: bool,
+    pub reminder_quiet_hours_start: String,
+    pub reminder_quiet_hours_end: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -81,6 +93,9 @@ impl Default for AppSettings {
             default_focus_mode: "normal".to_string(),
             ui_theme: "dark".to_string(),
             launch_at_startup: false,
+            auto_start_break_after_focus: false,
+            schedule_reminder_enabled: true,
+            schedule_reminder_lead_minutes: 5,
             sync_backend: "webdav".to_string(),
             primary_owner_device_id: None,
             primary_owner_updated_at: None,
@@ -93,6 +108,9 @@ impl Default for AppSettings {
             reminder_sound_file_name: None,
             reminder_sound_updated_at: None,
             reminder_sound_volume: 100,
+            reminder_quiet_hours_enabled: false,
+            reminder_quiet_hours_start: "22:30".to_string(),
+            reminder_quiet_hours_end: "07:00".to_string(),
         }
     }
 }
@@ -144,6 +162,22 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             LAUNCH_AT_STARTUP_KEY,
             defaults.launch_at_startup,
         )?,
+        auto_start_break_after_focus: get_bool_setting(
+            &connection,
+            AUTO_START_BREAK_AFTER_FOCUS_KEY,
+            defaults.auto_start_break_after_focus,
+        )?,
+        schedule_reminder_enabled: get_bool_setting(
+            &connection,
+            SCHEDULE_REMINDER_ENABLED_KEY,
+            defaults.schedule_reminder_enabled,
+        )?,
+        schedule_reminder_lead_minutes: get_i64_setting(
+            &connection,
+            SCHEDULE_REMINDER_LEAD_MINUTES_KEY,
+            defaults.schedule_reminder_lead_minutes,
+        )?
+        .clamp(0, 60),
         sync_backend: normalize_sync_backend(&get_string_setting(
             &connection,
             SYNC_BACKEND_KEY,
@@ -194,6 +228,21 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             defaults.reminder_sound_volume,
         )?
         .clamp(0, 100),
+        reminder_quiet_hours_enabled: get_bool_setting(
+            &connection,
+            REMINDER_QUIET_HOURS_ENABLED_KEY,
+            defaults.reminder_quiet_hours_enabled,
+        )?,
+        reminder_quiet_hours_start: normalize_time_of_day(&get_string_setting(
+            &connection,
+            REMINDER_QUIET_HOURS_START_KEY,
+            &defaults.reminder_quiet_hours_start,
+        )?),
+        reminder_quiet_hours_end: normalize_time_of_day(&get_string_setting(
+            &connection,
+            REMINDER_QUIET_HOURS_END_KEY,
+            &defaults.reminder_quiet_hours_end,
+        )?),
     })
 }
 
@@ -209,6 +258,9 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         default_focus_mode: normalize_mode(&settings.default_focus_mode),
         ui_theme: normalize_theme(&settings.ui_theme),
         launch_at_startup: settings.launch_at_startup,
+        auto_start_break_after_focus: settings.auto_start_break_after_focus,
+        schedule_reminder_enabled: settings.schedule_reminder_enabled,
+        schedule_reminder_lead_minutes: settings.schedule_reminder_lead_minutes.clamp(0, 60),
         sync_backend: normalize_sync_backend(&settings.sync_backend),
         primary_owner_device_id: settings
             .primary_owner_device_id
@@ -225,6 +277,9 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
             .and_then(normalize_optional_string),
         reminder_sound_updated_at: settings.reminder_sound_updated_at,
         reminder_sound_volume: settings.reminder_sound_volume.clamp(0, 100),
+        reminder_quiet_hours_enabled: settings.reminder_quiet_hours_enabled,
+        reminder_quiet_hours_start: normalize_time_of_day(&settings.reminder_quiet_hours_start),
+        reminder_quiet_hours_end: normalize_time_of_day(&settings.reminder_quiet_hours_end),
     };
     let now = Utc::now().to_rfc3339();
 
@@ -273,6 +328,32 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         } else {
             "0"
         },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        AUTO_START_BREAK_AFTER_FOCUS_KEY,
+        if normalized.auto_start_break_after_focus {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        SCHEDULE_REMINDER_ENABLED_KEY,
+        if normalized.schedule_reminder_enabled {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        SCHEDULE_REMINDER_LEAD_MINUTES_KEY,
+        &normalized.schedule_reminder_lead_minutes.to_string(),
         &now,
     )?;
     set_setting(
@@ -336,6 +417,28 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         REMINDER_SOUND_VOLUME_KEY,
         &normalized.reminder_sound_volume.to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        REMINDER_QUIET_HOURS_ENABLED_KEY,
+        if normalized.reminder_quiet_hours_enabled {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        REMINDER_QUIET_HOURS_START_KEY,
+        &normalized.reminder_quiet_hours_start,
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        REMINDER_QUIET_HOURS_END_KEY,
+        &normalized.reminder_quiet_hours_end,
         &now,
     )?;
     sync_launch_at_startup(&app, normalized.launch_at_startup)?;
@@ -549,10 +652,9 @@ fn normalize_mode(mode: &str) -> String {
 }
 
 fn normalize_theme(theme: &str) -> String {
-    if theme == "light" || theme == "mono" {
-        "light".to_string()
-    } else {
-        "dark".to_string()
+    match theme {
+        "light" | "mono" | "dawn" | "forest" | "sakura" => theme.to_string(),
+        _ => "dark".to_string(),
     }
 }
 
@@ -577,6 +679,25 @@ fn normalize_reminder_sound_id(value: &str) -> String {
         "classic" | "bright" | "soft" | "urgent" | "short" => value.to_string(),
         _ => DEFAULT_REMINDER_SOUND_ID.to_string(),
     }
+}
+
+fn normalize_time_of_day(value: &str) -> String {
+    let Some((hour, minute)) = value.trim().split_once(':') else {
+        return "00:00".to_string();
+    };
+
+    let Ok(hour) = hour.parse::<u32>() else {
+        return "00:00".to_string();
+    };
+    let Ok(minute) = minute.parse::<u32>() else {
+        return "00:00".to_string();
+    };
+
+    if hour > 23 || minute > 59 {
+        return "00:00".to_string();
+    }
+
+    format!("{hour:02}:{minute:02}")
 }
 
 fn normalize_optional_device_id(value: &str) -> Option<String> {

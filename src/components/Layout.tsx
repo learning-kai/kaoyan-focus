@@ -1,10 +1,11 @@
 import type { PropsWithChildren } from 'react';
-import { AlarmClock, BookOpenCheck, CircleDot, Lock, MoonStar, MonitorUp, SunMedium } from 'lucide-react';
+import { AlarmClock, BookOpenCheck, CircleDot, Lock, MonitorUp } from 'lucide-react';
 import type { PageMeta } from '../navigation';
 import type { Alarm } from '../types/alarm';
 import type { AppPage } from '../types/navigation';
 import type { AppTheme } from '../types/settings';
 import { DESKTOP_RUNTIME_MESSAGE, isTauriRuntime } from '../services/tauriInvoke';
+import { APP_THEME_OPTIONS } from '../theme';
 
 type LayoutProps = PropsWithChildren<{
   activePage: AppPage;
@@ -93,24 +94,23 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
             <span><Lock size={14} /> 学习中自动锁定配置</span>
           </div>
           <div className="theme-toggle" role="group" aria-label="主题切换">
-            <button
-              aria-pressed={theme === 'dark'}
-              className={theme === 'dark' ? 'active' : ''}
-              onClick={() => onThemeChange('dark')}
-              type="button"
-            >
-              <MoonStar size={14} />
-              黑色
-            </button>
-            <button
-              aria-pressed={theme === 'light'}
-              className={theme === 'light' ? 'active' : ''}
-              onClick={() => onThemeChange('light')}
-              type="button"
-            >
-              <SunMedium size={14} />
-              白色
-            </button>
+            {APP_THEME_OPTIONS.map((option) => (
+              <button
+                aria-pressed={theme === option.id}
+                className={theme === option.id ? 'active' : ''}
+                key={option.id}
+                onClick={() => onThemeChange(option.id)}
+                title={option.description}
+                type="button"
+              >
+                <span
+                  aria-hidden="true"
+                  className="theme-swatch"
+                  style={{ background: `linear-gradient(135deg, ${option.swatch[0]}, ${option.swatch[1]} 58%, ${option.swatch[2]})` }}
+                />
+                {option.shortLabel}
+              </button>
+            ))}
           </div>
         </div>
         {children}

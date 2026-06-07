@@ -14,7 +14,6 @@ import {
   Play,
   Plus,
   RefreshCw,
-  Save,
   Trash2,
 } from 'lucide-react';
 import { getAppSettings } from '../services/settingsApi';
@@ -30,11 +29,13 @@ import {
   moveScheduleBlock,
   startStudyModeFromScheduleBlock,
   updateScheduleBlock,
+  updateScheduleTemplate,
 } from '../services/scheduleApi';
 import { listSubjects } from '../services/focusApi';
 import type { AppSettings } from '../types/settings';
 import type { Subject } from '../types/focus';
-import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData, ScheduleTemplateDraft } from '../types/schedule';
+import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData, ScheduleTemplate, ScheduleTemplateDraft } from '../types/schedule';
+import { currentMinuteOfDay, formatDateKey } from '../utils/date';
 
 const categories = [
   { key: 'politics', label: '政治' },
@@ -73,14 +74,6 @@ const emptyTemplateDraft: ScheduleTemplateDraft = {
   endMinute: 9 * 60,
   enabled: true,
 };
-
-function todayString() {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
 
 function shiftDate(value: string, days: number) {
   const [year, month, day] = value.split('-').map(Number);
@@ -217,17 +210,31 @@ function subjectName(subjects: Subject[], subjectId: number | null) {
   return subjectId ? subjects.find((subject) => subject.id === subjectId)?.name ?? '未知科目' : '未指定';
 }
 
+function draftFromTemplate(template: ScheduleTemplate): ScheduleTemplateDraft {
+  return {
+    title: template.title,
+    note: template.note,
+    categoryKey: template.category_key,
+    subjectId: template.subject_id,
+    weekdays: template.weekdays,
+    startMinute: template.start_minute,
+    endMinute: template.end_minute,
+    enabled: template.enabled,
+  };
+}
+
 export default function SchedulePage() {
   const [data, setData] = useState<SchedulePageData | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [selectedDate, setSelectedDate] = useState(todayString());
-  const [dateDraft, setDateDraft] = useState(todayString());
+  const [selectedDate, setSelectedDate] = useState(formatDateKey());
+  const [dateDraft, setDateDraft] = useState(formatDateKey());
   const [view, setView] = useState<'day' | 'week'>('day');
-  const [blockDraft, setBlockDraft] = useState<ScheduleBlockDraft>(() => emptyBlockDraft(todayString()));
+  const [blockDraft, setBlockDraft] = useState<ScheduleBlockDraft>(() => emptyBlockDraft(formatDateKey()));
   const [templateDraft, setTemplateDraft] = useState<ScheduleTemplateDraft>(emptyTemplateDraft);
   const [showBlockComposer, setShowBlockComposer] = useState(false);
   const [showTemplateComposer, setShowTemplateComposer] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [editingBlockId, setEditingBlockId] = useState<number | null>(null);
   const [editingBlockDraft, setEditingBlockDraft] = useState<ScheduleBlockDraft | null>(null);
   const [quickAddDraft, setQuickAddDraft] = useState<ScheduleBlockDraft | null>(null);
@@ -293,9 +300,8 @@ export default function SchedulePage() {
   );
 
   const currentMinute = useMemo(() => {
-    if (selectedDate !== todayString()) return null;
-    const now = new Date();
-    return now.getHours() * 60 + now.getMinutes();
+    if (selectedDate !== formatDateKey()) return null;
+    return currentMinuteOfDay();
   }, [selectedDate]);
 
   async function initialize() {
@@ -349,7 +355,7 @@ export default function SchedulePage() {
     }
   }
 
-  async function handleSaveSchedule() {
+  async function handleSyncSchedule() {
     try {
       setSaving(true);
       setError(null);
@@ -362,7 +368,7 @@ export default function SchedulePage() {
         setError(feishuResult.message || '飞书日历同步失败。');
         return;
       }
-      setMessage(feishuResult.status === 'synced' ? '课表已保存并同步到飞书日历。' : '课表已保存。');
+      setMessage(feishuResult.status === 'synced' ? '课表已同步到飞书日历。' : '课表已刷新，本地修改已自动保存。');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -679,6 +685,12 @@ export default function SchedulePage() {
     openQuickAddAt(startMinute);
   }
 
+  function resetTemplateEditor() {
+    setEditingTemplateId(null);
+    setTemplateDraft(emptyTemplateDraft);
+    setMessage(null);
+  }
+
   function applySubjectToDraft(subjectId: number | null) {
     setBlockDraft((draft) => ({
       ...draft,
@@ -773,13 +785,47 @@ export default function SchedulePage() {
     }, quickAddSourceTodayItemId !== null ? '今日任务已安排到课表。' : '课表块已添加。');
   }
 
-  async function handleCreateTemplate() {
+  function cancelTemplateEdit() {
+    resetTemplateEditor();
+    setShowTemplateComposer(false);
+  }
+
+  function handleToggleTemplateComposer() {
+    if (showTemplateComposer) {
+      cancelTemplateEdit();
+      return;
+    }
+    resetTemplateEditor();
+    setShowTemplateComposer(true);
+  }
+
+  function beginEditTemplate(template: ScheduleTemplate) {
+    setEditingTemplateId(template.id);
+    setTemplateDraft(draftFromTemplate(template));
+    setShowTemplateComposer(true);
+    setMessage(null);
+  }
+
+  async function handleSaveTemplate() {
     if (!templateDraft.title.trim()) return;
     await withSave(async () => {
-      await createScheduleTemplate(templateDraft);
-      setTemplateDraft(emptyTemplateDraft);
+      if (editingTemplateId !== null) {
+        await updateScheduleTemplate(editingTemplateId, templateDraft);
+      } else {
+        await createScheduleTemplate(templateDraft);
+      }
+      resetTemplateEditor();
       setShowTemplateComposer(false);
-    }, '周模板已保存。');
+    }, editingTemplateId !== null ? '周模板已更新。' : '周模板已保存。');
+  }
+
+  async function handleDeleteTemplate(templateId: number) {
+    await withSave(async () => {
+      await deleteScheduleTemplate(templateId);
+      if (editingTemplateId === templateId) {
+        cancelTemplateEdit();
+      }
+    }, '模板已删除。');
   }
 
   function beginEditBlock(block: ScheduleBlock) {
@@ -826,11 +872,11 @@ export default function SchedulePage() {
         <div>
           <p className="eyebrow">Schedule</p>
           <h2>今日课表</h2>
-          <p>把今日任务和手动安排放进一天的时间轴，到点提醒，但不自动开始专注。</p>
+          <p>把今日任务和手动安排放进一天的时间轴。新增、拖拽、删除会自动保存；需要时可手动同步飞书/云端。</p>
         </div>
         <div className="schedule-actions">
-          <button className="primary-button" disabled={saving || loadingSchedule} type="button" onClick={() => void handleSaveSchedule()}>
-            <Save size={16} /> 保存
+          <button className="primary-button" disabled={saving || loadingSchedule} type="button" onClick={() => void handleSyncSchedule()}>
+            <RefreshCw size={16} /> 同步课表
           </button>
           <button className="ghost-button" type="button" onClick={() => void refresh()}>
             <RefreshCw size={16} /> 刷新
@@ -868,7 +914,7 @@ export default function SchedulePage() {
             <ChevronRight size={16} />
           </button>
         </div>
-        <button className="ghost-button" type="button" onClick={() => setShowTemplateComposer((value) => !value)}>
+        <button className="ghost-button" type="button" onClick={handleToggleTemplateComposer}>
           <CopyPlus size={16} /> 周模板
         </button>
       </section>
@@ -903,7 +949,7 @@ export default function SchedulePage() {
             value={templateDraft.title}
             onChange={(event) => setTemplateDraft({ ...templateDraft, title: event.target.value })}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.nativeEvent.isComposing) void handleCreateTemplate();
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) void handleSaveTemplate();
             }}
           />
           <select value={templateDraft.subjectId ?? ''} onChange={(event) => applyTemplateSubject(event.target.value ? Number(event.target.value) : null)}>
@@ -931,7 +977,8 @@ export default function SchedulePage() {
               );
             })}
           </div>
-          <button className="primary-button" disabled={saving} type="button" onClick={() => void handleCreateTemplate()}>保存模板</button>
+          <button className="primary-button" disabled={saving} type="button" onClick={() => void handleSaveTemplate()}>{editingTemplateId !== null ? '更新模板' : '保存模板'}</button>
+          {editingTemplateId !== null && <button className="ghost-button" disabled={saving} type="button" onClick={cancelTemplateEdit}>取消编辑</button>}
         </section>
       )}
 
@@ -1154,7 +1201,10 @@ export default function SchedulePage() {
                 <strong>{template.title}</strong>
                 <span>{template.weekdays.map((day) => weekdays[day - 1]).join('、')} · {formatMinute(template.start_minute)}-{formatMinute(template.end_minute)}</span>
               </div>
-              <button aria-label="删除模板" type="button" onClick={() => void withSave(() => deleteScheduleTemplate(template.id), '模板已删除。')}><Trash2 size={14} /></button>
+              <div className="template-row-actions">
+                <button aria-label={`编辑模板 ${template.title}`} type="button" onClick={() => beginEditTemplate(template)}><PencilLine size={14} />编辑</button>
+                <button aria-label="删除模板" type="button" onClick={() => void handleDeleteTemplate(template.id)}><Trash2 size={14} /></button>
+              </div>
             </article>
           )) : <div className="empty-state compact">还没有周模板。</div>}
         </aside>

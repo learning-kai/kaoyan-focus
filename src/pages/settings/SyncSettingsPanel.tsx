@@ -149,7 +149,7 @@ export function SyncSettingsPanel({
                 </label>
               </div>
 
-              {lastAutoSyncMessage && <p className="alert neutral">启动自动同步：{lastAutoSyncMessage}</p>}
+              {lastAutoSyncMessage && <p className="alert neutral">最近自动同步：{lastAutoSyncMessage}</p>}
               {!webDavSettings.enabled && <p className="alert neutral">WebDAV 同步已关闭，保存配置后不会参与启动自动同步。</p>}
               {webDavMessage && <p className="alert success">{webDavMessage}</p>}
               <div className="row-actions">

@@ -27,6 +27,8 @@ if (options.includeAndroid) {
   }
 }
 
+ensureReleaseReady();
+
 ensureTagAvailable(desktopRoot, tag, 'Desktop');
 if (options.includeAndroid) {
   ensureTagAvailable(androidRoot, tag, 'Android');
@@ -81,6 +83,32 @@ function parseArgs(args, env) {
 
 function isAndroidReleaseEnabled(env) {
   return /^(1|true|yes)$/i.test(env.INCLUDE_ANDROID_RELEASE ?? '');
+}
+
+function ensureReleaseReady() {
+  runNodeScript(['scripts/release-check.mjs', '--require-clean']);
+  if (options.includeAndroid) {
+    ensureCleanWorkingTree(androidRoot, 'Android');
+  }
+}
+
+function ensureCleanWorkingTree(repoRoot, label) {
+  const status = git(repoRoot, ['status', '--porcelain=v1', '--untracked-files=all']).trim();
+  if (status) {
+    throw new Error(`${label} working tree is not clean; commit or discard changes before creating a release tag.`);
+  }
+}
+
+function runNodeScript(args) {
+  const result = spawnSync(process.execPath, args, {
+    cwd: desktopRoot,
+    encoding: 'utf8',
+    stdio: 'inherit',
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${process.execPath} ${args.join(' ')} failed with exit code ${result.status ?? 1}`);
+  }
 }
 
 function ensureTagAvailable(repoRoot, tagName, label) {

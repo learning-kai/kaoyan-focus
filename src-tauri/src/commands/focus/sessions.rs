@@ -206,13 +206,14 @@ pub fn recover_active_focus_session(
 }
 
 #[tauri::command]
-pub fn list_focus_sessions(app: AppHandle) -> Result<Vec<FocusSession>, String> {
+pub fn list_focus_sessions(app: AppHandle, limit: Option<i64>) -> Result<Vec<FocusSession>, String> {
     let db_path = app
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?
         .join("kaoyan-focus.sqlite3");
     let connection = open_database(&db_path)?;
+    let session_limit = limit.unwrap_or(20).clamp(1, 500);
 
     let mut statement = connection
         .prepare(
@@ -223,13 +224,13 @@ pub fn list_focus_sessions(app: AppHandle) -> Result<Vec<FocusSession>, String> 
             FROM focus_sessions
             WHERE status != 'running' AND actual_seconds >= ?1
             ORDER BY id DESC
-            LIMIT 20
+            LIMIT ?2
             ",
         )
         .map_err(|error| error.to_string())?;
 
     let sessions = statement
-        .query_map(params![MIN_RECORDED_FOCUS_SECONDS], row_to_focus_session)
+        .query_map(params![MIN_RECORDED_FOCUS_SECONDS, session_limit], row_to_focus_session)
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;

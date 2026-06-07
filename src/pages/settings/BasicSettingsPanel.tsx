@@ -1,6 +1,7 @@
 import type { ChangeEvent, CSSProperties } from 'react';
-import { Music2, Play, Power, RotateCcw, Save, Settings2, UploadCloud } from 'lucide-react';
+import { BellRing, Coffee, Music2, Play, Power, RotateCcw, Save, Settings2, UploadCloud, VolumeX } from 'lucide-react';
 import type { AppSettings, AppTheme, ReminderSoundId, ReminderSoundSource } from '../../types/settings';
+import { APP_THEME_OPTIONS } from '../../theme';
 import { SettingNumber } from './SettingsPrimitives';
 
 type ReminderSoundSourceOption = {
@@ -100,14 +101,33 @@ export function BasicSettingsPanel({
             </div>
           </div>
 
-          <div className="setting-row mode-setting">
+          <div className="setting-row mode-setting theme-setting-row">
             <div>
               <strong>界面配色</strong>
-              <p>黑色保留当前暗色界面，白色切换为磨砂玻璃风格。</p>
+              <p>选择适合当前学习状态的界面风格，顶部也可以快速切换。</p>
             </div>
-            <div className="segmented-control">
-              <button className={theme === 'dark' ? 'active' : ''} disabled={settingsLocked} onClick={() => { onThemeChange('dark'); updateSettings({ ui_theme: 'dark' }); }} type="button">黑色</button>
-              <button className={theme === 'light' ? 'active' : ''} disabled={settingsLocked} onClick={() => { onThemeChange('light'); updateSettings({ ui_theme: 'light' }); }} type="button">白色磨砂</button>
+            <div className="theme-choice-grid" role="radiogroup" aria-label="界面配色">
+              {APP_THEME_OPTIONS.map((option) => (
+                <button
+                  aria-checked={theme === option.id}
+                  className={theme === option.id ? 'active' : ''}
+                  disabled={settingsLocked}
+                  key={option.id}
+                  onClick={() => { onThemeChange(option.id); updateSettings({ ui_theme: option.id }); }}
+                  role="radio"
+                  type="button"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="theme-swatch"
+                    style={{ background: `linear-gradient(135deg, ${option.swatch[0]}, ${option.swatch[1]} 58%, ${option.swatch[2]})` }}
+                  />
+                  <span>
+                    <strong>{option.label}</strong>
+                    <small>{option.description}</small>
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -119,6 +139,79 @@ export function BasicSettingsPanel({
             <div className="segmented-control">
               <button className={settings.launch_at_startup ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ launch_at_startup: true })} type="button"><Power size={15} />开启</button>
               <button className={!settings.launch_at_startup ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ launch_at_startup: false })} type="button">关闭</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="automation-settings-panel">
+          <div className="reminder-sound-heading">
+            <div>
+              <span>Automation</span>
+              <h4>自动化与提醒策略</h4>
+              <p className="panel-copy">把高频动作交给应用处理：休息确认、课表提前提醒、夜间静音都可以在这里统一控制。</p>
+            </div>
+            <BellRing size={20} />
+          </div>
+
+          <div className="automation-settings-grid">
+            <div className="setting-row mode-setting">
+              <div>
+                <strong>番茄结束后自动休息</strong>
+                <p>番茄钟到点后直接进入短休或长休，不再停在等待休息确认。</p>
+              </div>
+              <div className="segmented-control">
+                <button className={settings.auto_start_break_after_focus ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ auto_start_break_after_focus: true })} type="button"><Coffee size={15} />开启</button>
+                <button className={!settings.auto_start_break_after_focus ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ auto_start_break_after_focus: false })} type="button">手动确认</button>
+              </div>
+            </div>
+
+            <div className="setting-row mode-setting">
+              <div>
+                <strong>课表提前提醒</strong>
+                <p>今日课表开始前提前通知，关闭后只保留闹钟和专注阶段提醒。</p>
+              </div>
+              <div className="segmented-control">
+                <button className={settings.schedule_reminder_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ schedule_reminder_enabled: true })} type="button"><BellRing size={15} />开启</button>
+                <button className={!settings.schedule_reminder_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ schedule_reminder_enabled: false })} type="button">关闭</button>
+              </div>
+            </div>
+
+            <SettingNumber
+              disabled={settingsLocked || !settings.schedule_reminder_enabled}
+              label="课表提醒提前量"
+              max={60}
+              min={0}
+              onChange={(value) => updateSettings({ schedule_reminder_lead_minutes: value })}
+              text="0 表示到点提醒；建议 5-10 分钟，足够收尾并切换状态。"
+              value={settings.schedule_reminder_lead_minutes}
+            />
+
+            <div className="setting-row mode-setting">
+              <div>
+                <strong>免打扰时段</strong>
+                <p>该时段内通知仍显示，但提醒声音会静音，适合夜间复盘或宿舍场景。</p>
+              </div>
+              <div className="segmented-control">
+                <button className={settings.reminder_quiet_hours_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ reminder_quiet_hours_enabled: true })} type="button"><VolumeX size={15} />开启</button>
+                <button className={!settings.reminder_quiet_hours_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ reminder_quiet_hours_enabled: false })} type="button">关闭</button>
+              </div>
+            </div>
+
+            <div className="setting-row quiet-hours-row">
+              <div>
+                <strong>静音时间</strong>
+                <p>支持跨天时段，例如 22:30 到 07:00。</p>
+              </div>
+              <div className="quiet-hours-inputs">
+                <label>
+                  <span>开始</span>
+                  <input className="time-input" disabled={settingsLocked || !settings.reminder_quiet_hours_enabled} onChange={(event) => updateSettings({ reminder_quiet_hours_start: event.target.value })} type="time" value={settings.reminder_quiet_hours_start} />
+                </label>
+                <label>
+                  <span>结束</span>
+                  <input className="time-input" disabled={settingsLocked || !settings.reminder_quiet_hours_enabled} onChange={(event) => updateSettings({ reminder_quiet_hours_end: event.target.value })} type="time" value={settings.reminder_quiet_hours_end} />
+                </label>
+              </div>
             </div>
           </div>
         </div>

@@ -16,6 +16,9 @@ type ReminderSoundSettings = Pick<
   | 'reminder_sound_file_name'
   | 'reminder_sound_updated_at'
   | 'reminder_sound_volume'
+  | 'reminder_quiet_hours_enabled'
+  | 'reminder_quiet_hours_start'
+  | 'reminder_quiet_hours_end'
 >;
 
 type BuiltInNote = {
@@ -37,6 +40,9 @@ const defaultReminderSoundSettings: ReminderSoundSettings = {
   reminder_sound_file_name: null,
   reminder_sound_updated_at: null,
   reminder_sound_volume: 100,
+  reminder_quiet_hours_enabled: false,
+  reminder_quiet_hours_start: '22:30',
+  reminder_quiet_hours_end: '07:00',
 };
 
 const builtInSoundPresets: Record<ReminderSoundId, BuiltInPreset> = {
@@ -99,7 +105,7 @@ const activeNotificationSounds = new Map<string, { stop: SoundStop; timeoutId: n
 export async function notifyStudyReminder(payload: ReminderPayload) {
   const settings = await loadReminderSoundSettings();
   const notificationId = createNotificationId('reminder');
-  const stopSound = await playReminderSound(settings);
+  const stopSound = isQuietHoursActive(settings) ? null : await playReminderSound(settings);
   if (stopSound) {
     registerNotificationSound(notificationId, stopSound, SINGLE_NOTIFICATION_SOUND_MAX_MS);
   }
@@ -107,12 +113,14 @@ export async function notifyStudyReminder(payload: ReminderPayload) {
 }
 
 export async function notifyPersistentAlarm(key: string, payload: ReminderPayload) {
-  if (!persistentAlarmSounds.has(key)) {
+  const settings = await loadReminderSoundSettings();
+  if (!isQuietHoursActive(settings) && !persistentAlarmSounds.has(key)) {
     await startPersistentAlarmSound(key);
   }
 
-  const settings = await loadReminderSoundSettings();
-  registerNotificationSound(key, () => stopPersistentAlarmAudio(key), null);
+  if (persistentAlarmSounds.has(key)) {
+    registerNotificationSound(key, () => stopPersistentAlarmAudio(key), null);
+  }
   await showDesktopNotification(payload, settings, key);
 }
 
@@ -460,6 +468,9 @@ function normalizeReminderSoundSettings(settings?: Partial<ReminderSoundSettings
     reminder_sound_file_name: settings?.reminder_sound_file_name ?? null,
     reminder_sound_updated_at: settings?.reminder_sound_updated_at ?? null,
     reminder_sound_volume: normalizeReminderSoundVolume(settings?.reminder_sound_volume),
+    reminder_quiet_hours_enabled: settings?.reminder_quiet_hours_enabled ?? false,
+    reminder_quiet_hours_start: normalizeTimeOfDay(settings?.reminder_quiet_hours_start, '22:30'),
+    reminder_quiet_hours_end: normalizeTimeOfDay(settings?.reminder_quiet_hours_end, '07:00'),
   };
 }
 
@@ -480,6 +491,38 @@ function normalizeReminderSoundVolume(value?: number) {
 
 function volumeToRatio(volume: number) {
   return normalizeReminderSoundVolume(volume) / 100;
+}
+
+function isQuietHoursActive(settings: ReminderSoundSettings, now = new Date()) {
+  if (!settings.reminder_quiet_hours_enabled) {
+    return false;
+  }
+
+  const start = timeOfDayToMinutes(settings.reminder_quiet_hours_start);
+  const end = timeOfDayToMinutes(settings.reminder_quiet_hours_end);
+  const current = now.getHours() * 60 + now.getMinutes();
+  if (start === end) {
+    return false;
+  }
+  return start < end
+    ? current >= start && current < end
+    : current >= start || current < end;
+}
+
+function normalizeTimeOfDay(value: string | undefined, fallback: string) {
+  if (!value || !/^\d{2}:\d{2}$/.test(value)) {
+    return fallback;
+  }
+  const [hour, minute] = value.split(':').map(Number);
+  if (hour > 23 || minute > 59) {
+    return fallback;
+  }
+  return value;
+}
+
+function timeOfDayToMinutes(value: string) {
+  const [hour, minute] = value.split(':').map(Number);
+  return hour * 60 + minute;
 }
 
 function toastSoundId(_settings: ReminderSoundSettings) {

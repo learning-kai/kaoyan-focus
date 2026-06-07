@@ -321,6 +321,7 @@ export default function TodayPlanDrawer({
   const canSort = sortable && Boolean(dndContainerId) && Boolean(getItemDragId);
   const sortableIds = canSort && getItemDragId ? items.map((item) => getItemDragId(item)) : [];
   const isDrawerVariant = variant === 'drawer';
+  const drawerHidden = isDrawerVariant && !isOpen;
   const content = items.length === 0 ? (
     <div className={`empty-state empty-drop-zone${compact ? ' compact' : ''}`}>
       <strong>{emptyTitle}</strong>
@@ -354,7 +355,7 @@ export default function TodayPlanDrawer({
   );
 
   return (
-    <section aria-hidden={!isOpen} className={rootClassName}>
+    <section aria-hidden={drawerHidden ? true : undefined} className={rootClassName} inert={drawerHidden ? true : undefined}>
       <div className="panel-title today-drawer-head">
         <div>
           <p className="eyebrow">{subtitle}</p>

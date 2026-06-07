@@ -28,6 +28,11 @@ const els = {
   dataSourcePath: document.getElementById('data-source-path'),
   dataSourceMeta: document.getElementById('data-source-meta'),
   dailySnapshot: document.getElementById('daily-snapshot'),
+  summaryHeadline: document.getElementById('summary-headline'),
+  summaryBody: document.getElementById('summary-body'),
+  summaryTrend: document.getElementById('summary-trend'),
+  summaryRisk: document.getElementById('summary-risk'),
+  summaryAction: document.getElementById('summary-action'),
   targetProgressValue: document.getElementById('target-progress-value'),
   targetProgressBar: document.getElementById('target-progress-bar'),
   targetProgressMeta: document.getElementById('target-progress-meta'),
@@ -133,6 +138,7 @@ function bindControls() {
 
 async function loadProjectData() {
   loadingProjectData = true;
+  document.body.classList.add('is-loading-data');
   render('正在从项目数据库只读读取...');
   try {
     const response = await fetch(PROJECT_DATA_ENDPOINT, { cache: 'no-store' });
@@ -161,6 +167,7 @@ async function loadProjectData() {
     render(datasetMessage);
   } finally {
     loadingProjectData = false;
+    document.body.classList.remove('is-loading-data');
     render(datasetMessage);
   }
 }
@@ -214,8 +221,17 @@ function render(message = datasetMessage) {
     timeWindowSeries,
     dataQuality,
   });
+  const summary = buildExecutiveSummary({
+    overview,
+    comparison,
+    risks,
+    prescription,
+    dataQuality,
+    filteredCount: filtered.length,
+  });
 
   syncRangeButtons();
+  renderExecutiveSummary(summary);
   renderMetrics(overview, anchorDate, filtered.length);
   renderTargetProgress(target);
   renderComparisonPanel(comparison);
@@ -281,6 +297,14 @@ function renderMetrics(overview, anchorDate, filteredCount) {
   els.metricWindowNote.textContent = overview.bestWindowNote || '根据专注分和学习时长综合判断';
   els.metricDays.textContent = String(activeDays);
   els.metricDaysNote.textContent = '有学习记录的日期数';
+}
+
+function renderExecutiveSummary(summary) {
+  els.summaryHeadline.textContent = summary.headline;
+  els.summaryBody.textContent = summary.body;
+  els.summaryTrend.textContent = summary.trend;
+  els.summaryRisk.textContent = summary.risk;
+  els.summaryAction.textContent = summary.action;
 }
 
 function renderTrendChart(dailySeries) {
@@ -1544,6 +1568,40 @@ function buildInsights(context) {
     .sort((a, b) => b.priority - a.priority)
     .slice(0, 5)
     .map(({ title, body }) => ({ title, body }));
+}
+
+function buildExecutiveSummary({ overview, comparison, risks, prescription, dataQuality, filteredCount }) {
+  if (!filteredCount) {
+    return {
+      headline: '还没有可分析的学习记录',
+      body: '先积累几次带科目和任务的专注记录，看板会自动汇总周期趋势、风险和下一轮动作。',
+      trend: '无样本',
+      risk: '待判断',
+      action: '先记录',
+    };
+  }
+
+  const topRisk = risks[0];
+  const topAction = prescription.items[0];
+  const trend = comparison && comparison.minuteDelta != null
+    ? `${comparison.minuteDelta >= 0 ? '提升' : '回落'} ${formatNumber(Math.abs(comparison.minuteDelta) * 100, 0)}%`
+    : `${formatHours(overview.totalMinutes)} 累计`;
+  const qualityLabel = overview.avgFocus >= 78 ? '质量稳定' : overview.avgFocus >= 65 ? '质量可用' : '质量偏低';
+  const headline = topRisk
+    ? `当前优先处理：${topRisk.title}`
+    : `${qualityLabel}，可以继续加厚记录`;
+  const body = topAction
+    ? `${formatHours(overview.totalMinutes)} 学习量、${formatNumber(overview.avgFocus, 1)} 专注分、${formatNumber(overview.taskRate * 100, 0)}% 任务兑现。下一步：${topAction.body}`
+    : `${formatHours(overview.totalMinutes)} 学习量、${formatNumber(overview.avgFocus, 1)} 专注分；先保持记录连续性。`;
+
+  return {
+    headline,
+    body,
+    trend,
+    risk: topRisk ? topRisk.title : '低风险',
+    action: topAction ? topAction.title : '保持节奏',
+    quality: dataQuality.label,
+  };
 }
 
 function buildFooterStatus(overview, anchorDate, filteredCount, comparison) {
