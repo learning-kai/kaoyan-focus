@@ -727,4 +727,22 @@
 ### Android
 - No commits found.
 
+## v1.7.2 - 2026-06-07
+
+### Desktop
+#### Added
+- feat: add PotPlayer media detection and alarm management features (9f05a67)
+
+### Android
+- No commits found.
+
+## v1.7.3 - 2026-06-07
+
+### Desktop
+#### Added
+- feat: add PotPlayer media detection and alarm management features (9f05a67)
+
+### Android
+- No commits found.
+
 

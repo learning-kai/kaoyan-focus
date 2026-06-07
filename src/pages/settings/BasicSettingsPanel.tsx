@@ -1,0 +1,242 @@
+import type { ChangeEvent, CSSProperties } from 'react';
+import { Music2, Play, Power, RotateCcw, Save, Settings2, UploadCloud } from 'lucide-react';
+import type { AppSettings, AppTheme, ReminderSoundId, ReminderSoundSource } from '../../types/settings';
+import { SettingNumber } from './SettingsPrimitives';
+
+type ReminderSoundSourceOption = {
+  value: ReminderSoundSource;
+  label: string;
+  description: string;
+};
+
+type ReminderSoundOption = {
+  id: ReminderSoundId;
+  label: string;
+  description: string;
+};
+
+type BasicSettingsPanelProps = {
+  currentReminderSoundOption: ReminderSoundOption;
+  currentReminderSoundSourceOption: ReminderSoundSourceOption;
+  customReminderSoundFile: File | null;
+  customReminderSoundInputKey: number;
+  handlePreviewReminderSound: () => Promise<void>;
+  handleReminderSoundFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  handleReminderSoundSourceChange: (source: ReminderSoundSource) => void;
+  handleResetReminderSound: () => Promise<void>;
+  handleSaveSettings: () => Promise<void>;
+  handleUploadReminderSound: () => Promise<void>;
+  onThemeChange: (theme: AppTheme) => void;
+  reminderSoundActionDisabled: boolean;
+  reminderSoundBusy: boolean;
+  reminderSoundMessage: string | null;
+  reminderSoundOptions: ReminderSoundOption[];
+  reminderSoundSourceOptions: ReminderSoundSourceOption[];
+  reminderSoundVolumeStyle: CSSProperties;
+  saving: boolean;
+  settings: AppSettings;
+  settingsLocked: boolean;
+  theme: AppTheme;
+  updateReminderSoundSettings: (patch: Partial<Pick<AppSettings, 'reminder_sound_source' | 'reminder_sound_id' | 'reminder_sound_volume'>>) => void;
+  updateSettings: (patch: Partial<AppSettings>) => void;
+};
+
+export function BasicSettingsPanel({
+  currentReminderSoundOption,
+  currentReminderSoundSourceOption,
+  customReminderSoundFile,
+  customReminderSoundInputKey,
+  handlePreviewReminderSound,
+  handleReminderSoundFileChange,
+  handleReminderSoundSourceChange,
+  handleResetReminderSound,
+  handleSaveSettings,
+  handleUploadReminderSound,
+  onThemeChange,
+  reminderSoundActionDisabled,
+  reminderSoundBusy,
+  reminderSoundMessage,
+  reminderSoundOptions,
+  reminderSoundSourceOptions,
+  reminderSoundVolumeStyle,
+  saving,
+  settings,
+  settingsLocked,
+  theme,
+  updateReminderSoundSettings,
+  updateSettings,
+}: BasicSettingsPanelProps) {
+  return (
+    <div
+      aria-labelledby="settings-tab-basic"
+      className="settings-tab-panel"
+      id="settings-panel-basic"
+      role="tabpanel"
+    >
+      <section className="command-panel rhythm-section">
+        <div className="panel-title">
+          <div>
+            <p className="eyebrow">Rhythm</p>
+            <h3>学习节奏</h3>
+          </div>
+          <Settings2 size={20} />
+        </div>
+
+        <div className="rhythm-grid">
+          <SettingNumber label="学习模式时长" max={720} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_study_minutes: value })} text="进入学习模式后的总约束时间。" value={settings.default_study_minutes} />
+          <SettingNumber label="番茄专注时长" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_focus_minutes: value })} text="学习模式内每轮番茄钟的专注分钟数。" value={settings.default_focus_minutes} />
+          <SettingNumber label="短休" max={60} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ break_minutes: value })} text="普通番茄轮次结束后的休息分钟数。" value={settings.break_minutes} />
+          <SettingNumber label="长休" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_minutes: value })} text="达到长休息轮次后的休息分钟数。" value={settings.long_break_minutes} />
+          <SettingNumber label="长休间隔" max={12} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_interval: value })} text="每几个番茄钟进入一次长休息。" value={settings.long_break_interval} unit="轮" />
+
+          <div className="setting-row mode-setting">
+            <div>
+              <strong>默认专注模式</strong>
+              <p>普通模式更轻量，强制模式会保持更严格的学习约束。</p>
+            </div>
+            <div className="segmented-control">
+              <button className={settings.default_focus_mode === 'normal' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ default_focus_mode: 'normal' })} type="button">普通</button>
+              <button className={settings.default_focus_mode === 'strict' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ default_focus_mode: 'strict' })} type="button">强制</button>
+            </div>
+          </div>
+
+          <div className="setting-row mode-setting">
+            <div>
+              <strong>界面配色</strong>
+              <p>黑色保留当前暗色界面，白色切换为磨砂玻璃风格。</p>
+            </div>
+            <div className="segmented-control">
+              <button className={theme === 'dark' ? 'active' : ''} disabled={settingsLocked} onClick={() => { onThemeChange('dark'); updateSettings({ ui_theme: 'dark' }); }} type="button">黑色</button>
+              <button className={theme === 'light' ? 'active' : ''} disabled={settingsLocked} onClick={() => { onThemeChange('light'); updateSettings({ ui_theme: 'light' }); }} type="button">白色磨砂</button>
+            </div>
+          </div>
+
+          <div className="setting-row mode-setting">
+            <div>
+              <strong>开机自启</strong>
+              <p>随 Windows 登录自动启动，方便后台提醒和同步。</p>
+            </div>
+            <div className="segmented-control">
+              <button className={settings.launch_at_startup ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ launch_at_startup: true })} type="button"><Power size={15} />开启</button>
+              <button className={!settings.launch_at_startup ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ launch_at_startup: false })} type="button">关闭</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="reminder-sound-panel">
+          <div className="reminder-sound-heading">
+            <div>
+              <span>Reminder Sound</span>
+              <h4>提醒音效</h4>
+              <p className="panel-copy">当前：{currentReminderSoundSourceOption.label} · {currentReminderSoundOption.label}。可试听内置音色，也可上传自己的提醒音频。</p>
+            </div>
+            <button className="secondary-action" disabled={reminderSoundActionDisabled} onClick={() => void handlePreviewReminderSound()} type="button">
+              <Play size={17} />
+              {reminderSoundBusy ? '处理中' : '试听'}
+            </button>
+          </div>
+
+          <div className="segmented-control secondary-segmented">
+            {reminderSoundSourceOptions.map((option) => (
+              <button
+                className={settings.reminder_sound_source === option.value ? 'active' : ''}
+                disabled={settingsLocked}
+                key={option.value}
+                onClick={() => handleReminderSoundSourceChange(option.value)}
+                type="button"
+              >
+                <Music2 size={15} />
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          {settings.reminder_sound_source === 'builtin' ? (
+            <div className="sound-option-grid">
+              {reminderSoundOptions.map((option) => (
+                <button
+                  className={settings.reminder_sound_id === option.id ? 'sound-option-card active' : 'sound-option-card'}
+                  disabled={settingsLocked}
+                  key={option.id}
+                  onClick={() => updateReminderSoundSettings({ reminder_sound_id: option.id })}
+                  type="button"
+                >
+                  <strong>{option.label}</strong>
+                  <span>{option.description}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="custom-sound-row">
+              <label className={settingsLocked ? 'custom-sound-picker disabled' : 'custom-sound-picker'}>
+                <span className="custom-sound-picker-icon"><UploadCloud size={20} /></span>
+                <span className="custom-sound-picker-copy">
+                  <strong>{customReminderSoundFile?.name ?? '选择音频文件'}</strong>
+                  <small>{settings.reminder_sound_file_name ? `当前已保存：${settings.reminder_sound_file_name}` : '支持系统可播放的本地音频文件。'}</small>
+                </span>
+                <input
+                  className="custom-sound-input"
+                  disabled={settingsLocked}
+                  key={customReminderSoundInputKey}
+                  onChange={handleReminderSoundFileChange}
+                  type="file"
+                />
+              </label>
+              {settings.reminder_sound_file_name && (
+                <div className="custom-sound-file">
+                  <span>当前自定义音频</span>
+                  <strong>{settings.reminder_sound_file_name}</strong>
+                  {settings.reminder_sound_updated_at && <small>{settings.reminder_sound_updated_at}</small>}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="sound-volume-row">
+            <div>
+              <span>音量</span>
+              <strong>{settings.reminder_sound_volume}%</strong>
+              <small>试听和保存后的提醒都会使用这个音量。</small>
+            </div>
+            <input
+              className="sound-volume-slider"
+              disabled={settingsLocked}
+              max={100}
+              min={0}
+              onChange={(event) => updateReminderSoundSettings({ reminder_sound_volume: Number(event.target.value) })}
+              style={reminderSoundVolumeStyle}
+              type="range"
+              value={settings.reminder_sound_volume}
+            />
+          </div>
+
+          {reminderSoundMessage && <p className="alert success">{reminderSoundMessage}</p>}
+          <div className="row-actions">
+            <button className="custom-sound-confirm" disabled={reminderSoundActionDisabled || !customReminderSoundFile} onClick={() => void handleUploadReminderSound()} type="button"><UploadCloud size={17} />上传并启用</button>
+            <button className="secondary-action" disabled={reminderSoundActionDisabled || (!settings.reminder_sound_file_name && !customReminderSoundFile)} onClick={() => void handleResetReminderSound()} type="button"><RotateCcw size={17} />恢复默认</button>
+          </div>
+        </div>
+
+        <div className="settings-save-row">
+          <div className="settings-save-copy">
+            <span>当前默认节奏</span>
+            <strong>
+              <b>{settings.default_focus_minutes}</b>
+              <small>专注</small>
+              <b>{settings.break_minutes}</b>
+              <small>短休</small>
+              <b>{settings.long_break_minutes}</b>
+              <small>长休</small>
+              <b>{settings.long_break_interval}</b>
+              <small>轮一次</small>
+            </strong>
+          </div>
+          <button className="primary-action" disabled={saving || settingsLocked} onClick={() => void handleSaveSettings()} type="button">
+            <Save size={18} />
+            {saving ? '保存中' : '保存设置'}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}

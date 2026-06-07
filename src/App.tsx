@@ -23,15 +23,16 @@ import {
 import { getStudyModeState } from './services/focusApi';
 import { getSchedulePageData } from './services/scheduleApi';
 import {
-  FEISHU_SYNC_REFRESH_EVENT,
-  STUDY_SYNC_STATE_CHANGED_EVENT,
   autoSyncConfiguredDatabase,
-  checkDueTaskEmailReminders,
-  getAppSettings,
-  saveAppSettings,
   syncConfiguredStateChange,
+  STUDY_SYNC_STATE_CHANGED_EVENT,
+} from './services/syncApi';
+import {
+  FEISHU_SYNC_REFRESH_EVENT,
   syncFeishuBridge,
-} from './services/settingsApi';
+} from './services/feishuApi';
+import { checkDueTaskEmailReminders } from './services/emailApi';
+import { getAppSettings, saveAppSettings } from './services/settingsApi';
 import type { AppPage } from './types/navigation';
 import { applyTheme, bootstrapTheme, storeTheme } from './theme';
 import type { Alarm } from './types/alarm';

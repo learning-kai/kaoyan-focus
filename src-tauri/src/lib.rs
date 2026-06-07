@@ -1,4 +1,4 @@
-use std::{sync::Mutex, thread, time::Duration};
+use std::sync::Mutex;
 
 #[cfg(windows)]
 use ::windows::{
@@ -27,6 +27,7 @@ mod commands {
     pub mod sync;
     pub mod whitelist;
 }
+mod background_tasks;
 mod credential;
 mod dashboard_server;
 mod focus;
@@ -209,7 +210,9 @@ fn open_external_url(url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_study_dashboard(app: tauri::AppHandle) -> Result<dashboard_server::DashboardLaunch, String> {
+fn open_study_dashboard(
+    app: tauri::AppHandle,
+) -> Result<dashboard_server::DashboardLaunch, String> {
     let launch = dashboard_server::ensure_running(app)?;
     open_external_url(launch.url.clone())?;
     Ok(launch)
@@ -233,75 +236,16 @@ pub fn run() {
         })
         .setup(|app| {
             let app_handle = app.handle().clone();
-            let tick_app_handle = app_handle.clone();
-            let prune_app_handle = app_handle.clone();
-            let sync_poll_app_handle = app_handle.clone();
             let _ = commands::focus::sync_study_runtime_state(&app_handle);
             if let Ok(settings) = commands::settings::get_app_settings(app_handle.clone()) {
-                if let Err(error) =
-                    commands::settings::sync_launch_at_startup(&app_handle, settings.launch_at_startup)
-                {
+                if let Err(error) = commands::settings::sync_launch_at_startup(
+                    &app_handle,
+                    settings.launch_at_startup,
+                ) {
                     eprintln!("Failed to sync autostart setting: {error}");
                 }
             }
-            commands::sync::prune_sync_backups_best_effort(&app_handle);
-            thread::spawn(move || loop {
-                match commands::focus::tick_background_study_mode(&tick_app_handle) {
-                    Ok(()) => runtime_health::mark_task_success("study_runtime_tick", Some(3)),
-                    Err(error) => {
-                        runtime_health::mark_task_error("study_runtime_tick", &error, Some(3));
-                    }
-                }
-                thread::sleep(Duration::from_secs(3));
-            });
-            thread::spawn(move || {
-                thread::sleep(Duration::from_secs(10));
-                loop {
-                    eprintln!("Starting desktop background object storage sync poll");
-                    match commands::sync::poll_object_storage_for_remote_changes(
-                        sync_poll_app_handle.clone(),
-                    ) {
-                        Ok(result) => {
-                            eprintln!(
-                                "Desktop background object storage sync finished: status={} message={}",
-                                result.status, result.message
-                            );
-                            if result.status == "skipped" {
-                                runtime_health::mark_task_success(
-                                    "object_storage_background_poll",
-                                    Some(15),
-                                );
-                            } else {
-                                runtime_health::mark_task_success(
-                                    "object_storage_background_poll",
-                                    Some(120),
-                                );
-                            }
-                            if result
-                                .skipped_reason
-                                .as_deref()
-                                .is_some_and(|reason| reason == "object_storage_sync_in_flight")
-                            {
-                                thread::sleep(Duration::from_secs(15));
-                                continue;
-                            }
-                        }
-                        Err(error) => {
-                            eprintln!("Desktop background object storage sync failed: {error}");
-                            runtime_health::mark_task_error(
-                                "object_storage_background_poll",
-                                &error,
-                                Some(120),
-                            );
-                        }
-                    }
-                    thread::sleep(Duration::from_secs(120));
-                }
-            });
-            thread::spawn(move || loop {
-                commands::sync::prune_sync_backups_best_effort(&prune_app_handle);
-                thread::sleep(Duration::from_secs(60 * 60));
-            });
+            background_tasks::start(&app_handle);
 
             let show_item =
                 MenuItem::with_id(app, "tray_show", "显示主界面", true, Option::<&str>::None)?;

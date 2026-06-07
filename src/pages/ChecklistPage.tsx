@@ -46,7 +46,8 @@ import {
   updateTodayPlanItem,
 } from '../services/checklistApi';
 import { getStudyModeState } from '../services/focusApi';
-import { FEISHU_SYNC_REFRESH_EVENT, syncConfiguredStateChange } from '../services/settingsApi';
+import { syncConfiguredStateChange } from '../services/syncApi';
+import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
 import type {
   ChecklistCategory,
   ChecklistPageData,

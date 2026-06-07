@@ -1,8 +1,33 @@
 {
   "name": "kaoyan-focus",
-  "private": true,
-  "version": "1.7.1",
+  "private": false,
+  "version": "1.7.3",
+  "description": "Windows local-first study focus app for exam preparation, built with Tauri, React, TypeScript and Rust.",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/learning-kai/kaoyan-focus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/learning-kai/kaoyan-focus/issues"
+  },
+  "homepage": "https://github.com/learning-kai/kaoyan-focus#readme",
+  "keywords": [
+    "tauri",
+    "react",
+    "typescript",
+    "rust",
+    "windows",
+    "study",
+    "focus",
+    "pomodoro",
+    "productivity",
+    "exam-preparation",
+    "sqlite",
+    "webdav",
+    "s3"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

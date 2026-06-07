@@ -8,7 +8,7 @@ import {
   saveDailyReview,
   saveWeeklyReview,
 } from '../services/reviewApi';
-import { syncConfiguredStateChange } from '../services/settingsApi';
+import { syncConfiguredStateChange } from '../services/syncApi';
 import type { DailyReviewDraft, DailyReviewPageData, WeeklyReviewDraft, WeeklyReviewPageData } from '../types/review';
 
 type ReviewMode = 'daily' | 'weekly';

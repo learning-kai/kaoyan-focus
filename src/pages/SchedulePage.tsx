@@ -17,7 +17,9 @@ import {
   Save,
   Trash2,
 } from 'lucide-react';
-import { FEISHU_SYNC_REFRESH_EVENT, getAppSettings, syncConfiguredStateChange, syncFeishuBridge } from '../services/settingsApi';
+import { getAppSettings } from '../services/settingsApi';
+import { syncConfiguredStateChange } from '../services/syncApi';
+import { FEISHU_SYNC_REFRESH_EVENT, syncFeishuBridge } from '../services/feishuApi';
 import {
   createScheduleBlock,
   createScheduleBlockFromTodayItem,

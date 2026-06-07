@@ -10,7 +10,9 @@ import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSe
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { createScheduleBlock, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
-import { FEISHU_SYNC_REFRESH_EVENT, STUDY_SYNC_STATE_CHANGED_EVENT, getAppSettings, getSyncDeviceId, saveAppSettings, syncConfiguredStateChange } from '../services/settingsApi';
+import { getAppSettings, getSyncDeviceId, saveAppSettings } from '../services/settingsApi';
+import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange } from '../services/syncApi';
+import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
 import { setStudyFullscreen } from '../services/systemApi';
 import { listenTauriEvent } from '../services/tauriEvents';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';

@@ -1,0 +1,11 @@
+include!("settings.rs");
+include!("sync.rs");
+include!("client.rs");
+include!("tasks.rs");
+include!("calendar.rs");
+include!("links.rs");
+include!("auth.rs");
+include!("runs.rs");
+include!("rebuild.rs");
+include!("tests.rs");
+include!("utils.rs");

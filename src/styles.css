@@ -885,7 +885,7 @@ html[data-study-fullscreen='true'] body {
 
 .settings-section-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   padding: 6px;
   overflow-x: auto;
@@ -896,19 +896,70 @@ html[data-study-fullscreen='true'] body {
 }
 
 .settings-section-tabs button {
+  display: flex;
   min-width: 0;
-  min-height: 44px;
+  min-height: 54px;
+  gap: 9px;
+  align-items: center;
   overflow: hidden;
   padding: 10px 12px;
+  border: 1px solid transparent;
   border-radius: 10px;
+  color: var(--muted);
+  background: transparent;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+.settings-section-tabs button:hover {
+  color: var(--ink);
+  border-color: var(--line);
+  background: rgba(16, 27, 43, 0.72);
+}
+
+.settings-section-tabs button span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.settings-section-tabs button strong,
+.settings-section-tabs button small {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.settings-section-tabs button strong {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-section-tabs button small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .settings-section-tabs button[role='tab'][aria-selected='true'] {
   color: #07111c;
   border-color: transparent;
   background: linear-gradient(135deg, #8db8ff, #69dfb7);
+}
+
+.settings-section-tabs button[role='tab'][aria-selected='true'] small {
+  color: rgba(7, 17, 28, 0.72);
+}
+
+.settings-tab-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sync-backend-panel {
+  margin-bottom: 0;
 }
 
 
@@ -6053,6 +6104,10 @@ html[data-theme='light'] .theme-toggle button.active {
     font-size: 24px;
   }
 
+  .settings-section-tabs {
+    grid-template-columns: repeat(4, minmax(128px, 1fr));
+  }
+
   .header-metrics {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6108,6 +6163,18 @@ html[data-theme='light'] .theme-toggle button.active {
 }
 
 @media (max-width: 680px) {
+  .settings-section-tabs {
+    grid-template-columns: repeat(4, minmax(112px, 1fr));
+  }
+
+  .settings-section-tabs button {
+    min-height: 48px;
+  }
+
+  .settings-section-tabs button small {
+    display: none;
+  }
+
   .header-metrics,
   .sound-option-grid,
   .schedule-composer,
