@@ -14,6 +14,7 @@ const rawArgs = process.argv.slice(2);
 const packageJsonPath = resolve(desktopRoot, 'package.json');
 const packageLockPath = resolve(desktopRoot, 'package-lock.json');
 const cargoTomlPath = resolve(desktopRoot, 'src-tauri', 'Cargo.toml');
+const cargoLockPath = resolve(desktopRoot, 'src-tauri', 'Cargo.lock');
 const tauriConfigPath = resolve(desktopRoot, 'src-tauri', 'tauri.conf.json');
 const releaseArgs = resolveUpdateBaseUrlFromArgs(rawArgs, process.env, 'preparing a release');
 const options = parseArgs(releaseArgs.args, process.env);
@@ -31,6 +32,7 @@ const today = formatLocalDate(new Date());
 
 await updatePackageJson(nextVersion);
 await replaceVersionInFile(cargoTomlPath, /^version = "([^"]+)"/m, `version = "${nextVersion}"`);
+await updateCargoLock(nextVersion);
 await updateTauriConfig(nextVersion);
 if (releaseArgs.updateBaseUrl) {
   await updateTauriUpdaterEndpoint(tauriConfigPath, releaseArgs.updateBaseUrl);
@@ -114,8 +116,10 @@ function resolveNextVersion(current, rawArgs) {
     return explicit;
   }
 
-  const bump = rawArgs.find((arg) => ['major', 'minor', 'patch', '--major', '--minor', '--patch'].includes(arg))
-    ?.replace(/^--/, '') ?? 'patch';
+  const bump =
+    rawArgs
+      .find((arg) => ['major', 'minor', 'patch', '--major', '--minor', '--patch'].includes(arg))
+      ?.replace(/^--/, '') ?? 'patch';
   const parts = current.split('.').map(Number);
   if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) {
     throw new Error(`Current version is not semver-like: ${current}`);
@@ -150,6 +154,19 @@ async function updatePackageLock(version) {
   await writeFile(packageLockPath, `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
 }
 
+async function updateCargoLock(version) {
+  if (!existsSync(cargoLockPath)) {
+    return;
+  }
+
+  const content = await readFile(cargoLockPath, 'utf8');
+  const next = content.replace(/(\[\[package\]\]\r?\nname = "kaoyan-focus"\r?\nversion = ")[^"]+(")/, `$1${version}$2`);
+  if (next === content) {
+    throw new Error(`Unable to find kaoyan-focus package version in ${cargoLockPath}`);
+  }
+  await writeFile(cargoLockPath, next, 'utf8');
+}
+
 async function updateTauriConfig(version) {
   const config = JSON.parse(await readFile(tauriConfigPath, 'utf8'));
   config.version = version;
@@ -180,13 +197,10 @@ async function replaceVersionInFile(filePath, pattern, replacement) {
 async function updateChangelog(version, date, includeAndroid) {
   const existing = existsSync(changelogPath) ? await readFile(changelogPath, 'utf8') : '# Changelog\n\n';
   const heading = `## v${version} - ${date}`;
-  const withoutDuplicate = existing.replace(new RegExp(`\\n?## v${escapeRegExp(version)} - \\d{4}-\\d{2}-\\d{2}[\\s\\S]*?(?=\\n## v|$)`), '').trimEnd();
-  const sections = [
-    heading,
-    '',
-    '### Desktop',
-    formatCommitGroups(desktopRoot),
-  ];
+  const withoutDuplicate = existing
+    .replace(new RegExp(`\\n?## v${escapeRegExp(version)} - \\d{4}-\\d{2}-\\d{2}[\\s\\S]*?(?=\\n## v|$)`), '')
+    .trimEnd();
+  const sections = [heading, '', '### Desktop', formatCommitGroups(desktopRoot)];
 
   if (includeAndroid) {
     sections.push('', '### Android', formatCommitGroups(androidRoot));
@@ -196,7 +210,11 @@ async function updateChangelog(version, date, includeAndroid) {
 
   const base = withoutDuplicate.startsWith('# Changelog') ? withoutDuplicate : `# Changelog\n\n${withoutDuplicate}`;
   const normalizedBase = base.trimEnd() === '# Changelog' ? '# Changelog' : base.trimEnd();
-  await writeFile(changelogPath, `${normalizedBase}\n\n${entry}${normalizedBase === '# Changelog' ? '' : '\n'}\n`, 'utf8');
+  await writeFile(
+    changelogPath,
+    `${normalizedBase}\n\n${entry}${normalizedBase === '# Changelog' ? '' : '\n'}\n`,
+    'utf8',
+  );
 }
 
 function formatCommitGroups(repoRoot) {
@@ -217,19 +235,31 @@ function formatCommitGroups(repoRoot) {
 }
 
 function getReleaseCommits(repoRoot) {
-  const lastTag = git(repoRoot, ['-c', 'i18n.logOutputEncoding=utf-8', 'describe', '--tags', '--match', 'v*', '--abbrev=0'], { allowFailure: true }).trim();
+  const lastTag = git(
+    repoRoot,
+    ['-c', 'i18n.logOutputEncoding=utf-8', 'describe', '--tags', '--match', 'v*', '--abbrev=0'],
+    { allowFailure: true },
+  ).trim();
   const rangeArgs = lastTag ? [`${lastTag}..HEAD`] : ['-30'];
-  const output = git(repoRoot, ['-c', 'i18n.logOutputEncoding=utf-8', 'log', ...rangeArgs, '--pretty=format:%h%x09%s'], { allowFailure: true }).trim();
+  const output = git(
+    repoRoot,
+    ['-c', 'i18n.logOutputEncoding=utf-8', 'log', ...rangeArgs, '--pretty=format:%h%x09%s'],
+    { allowFailure: true },
+  ).trim();
   if (!output) return [];
-  return output.split('\n').map((line) => {
-    const [hash, ...subjectParts] = line.split('\t');
-    return { hash, subject: subjectParts.join('\t').trim() };
-  }).filter((item) => item.hash && item.subject);
+  return output
+    .split('\n')
+    .map((line) => {
+      const [hash, ...subjectParts] = line.split('\t');
+      return { hash, subject: subjectParts.join('\t').trim() };
+    })
+    .filter((item) => item.hash && item.subject);
 }
 
 function classifyCommit(subject) {
   const normalized = subject.trim().toLowerCase();
-  if (/^(feat|feature|add)(\b|[:(])/.test(normalized) || subject.includes('新增') || subject.includes('增加')) return 'Added';
+  if (/^(feat|feature|add)(\b|[:(])/.test(normalized) || subject.includes('新增') || subject.includes('增加'))
+    return 'Added';
   if (/^(fix|bugfix)(\b|[:(])/.test(normalized) || subject.includes('修复')) return 'Fixed';
   return 'Changed';
 }

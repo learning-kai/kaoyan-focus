@@ -6,6 +6,7 @@ use crate::{commands, runtime_health};
 
 pub fn start(app: &AppHandle) {
     commands::sync::prune_sync_backups_best_effort(app);
+    runtime_health::mark_task_success("sync_backup_prune", Some(60 * 60));
     start_study_runtime_tick(app.clone());
     start_object_storage_poll(app.clone());
     start_sync_backup_prune(app.clone());
@@ -71,6 +72,7 @@ fn start_object_storage_poll(app: AppHandle) {
 fn start_sync_backup_prune(app: AppHandle) {
     thread::spawn(move || loop {
         commands::sync::prune_sync_backups_best_effort(&app);
+        runtime_health::mark_task_success("sync_backup_prune", Some(60 * 60));
         thread::sleep(Duration::from_secs(60 * 60));
     });
 }

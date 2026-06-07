@@ -30,6 +30,7 @@ import {
   setWhitelistAppEnabled,
   updateWhitelistSubject,
 } from '../services/whitelistApi';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import type { StudyModeState, Subject } from '../types/focus';
 import type { PotPlayerMediaInfo, RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
 
@@ -60,6 +61,7 @@ function pathBaseName(path: string | null) {
 }
 
 export default function WhitelistPage() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [apps, setApps] = useState<WhitelistApp[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [entryType, setEntryType] = useState<WhitelistEntryType>('app');
@@ -77,7 +79,9 @@ export default function WhitelistPage() {
   const [processPickerOpen, setProcessPickerOpen] = useState(false);
   const [blockedPickerOpen, setBlockedPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deletingAppId, setDeletingAppId] = useState<number | null>(null);
   const [processLoading, setProcessLoading] = useState(false);
   const [blockedLoading, setBlockedLoading] = useState(false);
   const [potPlayerLoading, setPotPlayerLoading] = useState(false);
@@ -88,15 +92,14 @@ export default function WhitelistPage() {
   const potPlayerCount = apps.filter(isPotPlayerRule).length;
   const appCount = apps.length - websiteCount - potPlayerCount;
   const whitelistLocked = isStudyModeLocked(studyState);
-  const canCreate = !whitelistLocked
-    && name.trim().length > 0
-    && (
-      entryType === 'website'
-        ? domain.trim().length > 0
-        : entryType === 'potplayer'
-          ? potPlayerPath.trim().length > 0
-          : processName.trim().length > 0
-    );
+  const canCreate =
+    !whitelistLocked &&
+    name.trim().length > 0 &&
+    (entryType === 'website'
+      ? domain.trim().length > 0
+      : entryType === 'potplayer'
+        ? potPlayerPath.trim().length > 0
+        : processName.trim().length > 0);
   const groupedApps = useMemo(() => {
     const groups = [
       { id: null as number | null, name: '未指定科目', items: apps.filter((app) => app.subject_id === null) },
@@ -253,9 +256,7 @@ export default function WhitelistPage() {
       setCurrentPotPlayerMedia(media);
       const nextRuleType = media.media_path ? 'file' : 'directory';
       setPotPlayerRuleType(nextRuleType);
-      const nextPath = nextRuleType === 'file'
-        ? media.media_path ?? ''
-        : media.media_directory ?? '';
+      const nextPath = nextRuleType === 'file' ? (media.media_path ?? '') : (media.media_directory ?? '');
       setPotPlayerPath(nextPath);
       setName(
         nextRuleType === 'file'
@@ -291,7 +292,13 @@ export default function WhitelistPage() {
     try {
       setError(null);
       const displayName = blockedApp.process_name.replace(/\.exe$/i, '');
-      await createWhitelistApp(displayName, blockedApp.process_name, '从最近拦截记录加入', blockedApp.process_path, subjectId);
+      await createWhitelistApp(
+        displayName,
+        blockedApp.process_name,
+        '从最近拦截记录加入',
+        blockedApp.process_path,
+        subjectId,
+      );
       setBlockedPickerOpen(false);
       await refreshApps();
       await refreshRecentBlockedApps();
@@ -329,17 +336,32 @@ export default function WhitelistPage() {
     }
   }
 
-  async function handleDelete(id: number) {
+  async function handleDelete(app: WhitelistApp) {
     if (whitelistLocked) {
       return;
     }
 
+    const confirmed = await confirm({
+      confirmLabel: '删除规则',
+      message: `删除后学习阶段不会再放行「${app.name}」。这条规则无法从白名单页恢复。`,
+      title: '删除白名单规则？',
+      tone: 'danger',
+    });
+    if (!confirmed) {
+      return;
+    }
+
     try {
+      setDeletingAppId(app.id);
       setError(null);
-      await deleteWhitelistApp(id);
+      setMessage(null);
+      await deleteWhitelistApp(app.id);
       await refreshApps();
+      setMessage('白名单规则已删除。');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setDeletingAppId(null);
     }
   }
 
@@ -398,8 +420,20 @@ export default function WhitelistPage() {
         </div>
       </header>
 
-      {error && <p className="alert error">{error}</p>}
-      {whitelistLocked && <p className="alert neutral">学习模式正在运行，白名单配置已锁定；当前页面只允许查看规则和记录。</p>}
+      {error && (
+        <p className="alert error" role="alert">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p className="alert success" aria-live="polite">
+          {message}
+        </p>
+      )}
+      {whitelistLocked && (
+        <p className="alert neutral">学习模式正在运行，白名单配置已锁定；当前页面只允许查看规则和记录。</p>
+      )}
+      {confirmDialog}
 
       <div className="whitelist-workbench">
         <section className="command-panel add-rule-panel">
@@ -412,15 +446,30 @@ export default function WhitelistPage() {
           </div>
 
           <div className="segmented-control">
-            <button className={entryType === 'app' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setEntryType('app')} type="button">
+            <button
+              className={entryType === 'app' ? 'active' : ''}
+              disabled={whitelistLocked}
+              onClick={() => setEntryType('app')}
+              type="button"
+            >
               <ShieldCheck size={16} />
               软件
             </button>
-            <button className={entryType === 'website' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setEntryType('website')} type="button">
+            <button
+              className={entryType === 'website' ? 'active' : ''}
+              disabled={whitelistLocked}
+              onClick={() => setEntryType('website')}
+              type="button"
+            >
               <Globe2 size={16} />
               网站
             </button>
-            <button className={entryType === 'potplayer' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setEntryType('potplayer')} type="button">
+            <button
+              className={entryType === 'potplayer' ? 'active' : ''}
+              disabled={whitelistLocked}
+              onClick={() => setEntryType('potplayer')}
+              type="button"
+            >
               <Video size={16} />
               PotPlayer 视频
             </button>
@@ -428,11 +477,21 @@ export default function WhitelistPage() {
 
           {entryType === 'potplayer' && (
             <div className="segmented-control secondary-segmented">
-              <button className={potPlayerRuleType === 'file' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setPotPlayerRuleType('file')} type="button">
+              <button
+                className={potPlayerRuleType === 'file' ? 'active' : ''}
+                disabled={whitelistLocked}
+                onClick={() => setPotPlayerRuleType('file')}
+                type="button"
+              >
                 <PlaySquare size={16} />
                 单个视频
               </button>
-              <button className={potPlayerRuleType === 'directory' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setPotPlayerRuleType('directory')} type="button">
+              <button
+                className={potPlayerRuleType === 'directory' ? 'active' : ''}
+                disabled={whitelistLocked}
+                onClick={() => setPotPlayerRuleType('directory')}
+                type="button"
+              >
                 <FolderSearch size={16} />
                 整个目录
               </button>
@@ -445,7 +504,9 @@ export default function WhitelistPage() {
                 {entryType === 'website'
                   ? '网站名称'
                   : entryType === 'potplayer'
-                    ? potPlayerRuleType === 'file' ? '视频名称' : '目录名称'
+                    ? potPlayerRuleType === 'file'
+                      ? '视频名称'
+                      : '目录名称'
                     : '软件名称'}
               </span>
               <input
@@ -456,7 +517,9 @@ export default function WhitelistPage() {
                   entryType === 'website'
                     ? '例如：中国大学 MOOC'
                     : entryType === 'potplayer'
-                      ? potPlayerRuleType === 'file' ? '例如：线代第 07 讲' : '例如：张宇高数强化'
+                      ? potPlayerRuleType === 'file'
+                        ? '例如：线代第 07 讲'
+                        : '例如：张宇高数强化'
                       : '例如：Anki'
                 }
                 value={name}
@@ -480,7 +543,9 @@ export default function WhitelistPage() {
                   className="text-input"
                   disabled={whitelistLocked}
                   onChange={(event) => setPotPlayerPath(event.target.value)}
-                  placeholder={potPlayerRuleType === 'file' ? '例如：D:\\Videos\\课程\\lesson01.mkv' : '例如：D:\\Videos\\课程'}
+                  placeholder={
+                    potPlayerRuleType === 'file' ? '例如：D:\\Videos\\课程\\lesson01.mkv' : '例如：D:\\Videos\\课程'
+                  }
                   value={potPlayerPath}
                 />
               </label>
@@ -506,15 +571,28 @@ export default function WhitelistPage() {
               >
                 <option value="">不自动切科</option>
                 {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>{subject.name}</option>
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
                 ))}
               </select>
             </label>
             <label className="field-block">
               <span>备注</span>
-              <input className="text-input" disabled={whitelistLocked} onChange={(event) => setNote(event.target.value)} placeholder="可选" value={note} />
+              <input
+                className="text-input"
+                disabled={whitelistLocked}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="可选"
+                value={note}
+              />
             </label>
-            <button className="primary-action" disabled={!canCreate || loading} onClick={() => void handleCreate()} type="button">
+            <button
+              className="primary-action"
+              disabled={!canCreate || loading}
+              onClick={() => void handleCreate()}
+              type="button"
+            >
               <ListPlus size={18} />
               {loading ? '添加中' : '加入白名单'}
             </button>
@@ -545,7 +623,12 @@ export default function WhitelistPage() {
                 <h4>从运行进程选择</h4>
                 <p>适合把当前打开的阅读器、词典、笔记软件快速加入白名单。</p>
               </div>
-              <button className="secondary-action" disabled={processLoading || whitelistLocked} onClick={() => void handleLoadRunningProcesses()} type="button">
+              <button
+                className="secondary-action"
+                disabled={processLoading || whitelistLocked}
+                onClick={() => void handleLoadRunningProcesses()}
+                type="button"
+              >
                 <FolderSearch size={17} />
                 {processLoading ? '读取中' : '读取进程'}
               </button>
@@ -556,7 +639,12 @@ export default function WhitelistPage() {
                 <h4>读取当前 PotPlayer</h4>
                 <p>自动识别当前正在播放的视频或所在目录，适合一键加入 PotPlayer 视频白名单。</p>
               </div>
-              <button className="secondary-action" disabled={potPlayerLoading || whitelistLocked} onClick={() => void handleReadCurrentPotPlayerMedia()} type="button">
+              <button
+                className="secondary-action"
+                disabled={potPlayerLoading || whitelistLocked}
+                onClick={() => void handleReadCurrentPotPlayerMedia()}
+                type="button"
+              >
                 <Clapperboard size={17} />
                 {potPlayerLoading ? '读取中' : '读取当前播放'}
               </button>
@@ -567,7 +655,12 @@ export default function WhitelistPage() {
                 <h4>最近拦截记录</h4>
                 <p>把误判或临时需要的软件从拦截记录中一键放行。</p>
               </div>
-              <button className="secondary-action" disabled={blockedLoading} onClick={() => void handleLoadRecentBlockedApps()} type="button">
+              <button
+                className="secondary-action"
+                disabled={blockedLoading}
+                onClick={() => void handleLoadRecentBlockedApps()}
+                type="button"
+              >
                 <History size={17} />
                 {blockedLoading ? '读取中' : '查看记录'}
               </button>
@@ -583,14 +676,22 @@ export default function WhitelistPage() {
               <p className="eyebrow">Processes</p>
               <h3>选择运行进程</h3>
             </div>
-            <button className="ghost-action" onClick={() => setProcessPickerOpen(false)} type="button">收起</button>
+            <button className="ghost-action" onClick={() => setProcessPickerOpen(false)} type="button">
+              收起
+            </button>
           </div>
           {runningProcesses.length === 0 ? (
             <p className="empty-state compact">没有读取到可用进程，请稍后重试。</p>
           ) : (
             <div className="process-picker">
               {runningProcesses.map((process) => (
-                <button className="process-option" disabled={whitelistLocked} key={`${process.process_name}-${process.process_id}`} onClick={() => handleSelectProcess(process)} type="button">
+                <button
+                  className="process-option"
+                  disabled={whitelistLocked}
+                  key={`${process.process_name}-${process.process_id}`}
+                  onClick={() => handleSelectProcess(process)}
+                  type="button"
+                >
                   <strong>{process.process_name}</strong>
                   <span>{process.process_path ?? '无法读取路径'}</span>
                 </button>
@@ -607,7 +708,9 @@ export default function WhitelistPage() {
               <p className="eyebrow">Blocked</p>
               <h3>最近拦截记录</h3>
             </div>
-            <button className="ghost-action" onClick={() => setBlockedPickerOpen(false)} type="button">收起</button>
+            <button className="ghost-action" onClick={() => setBlockedPickerOpen(false)} type="button">
+              收起
+            </button>
           </div>
           {recentBlockedApps.length === 0 ? (
             <p className="empty-state compact">暂无可加入的拦截记录。</p>
@@ -619,9 +722,16 @@ export default function WhitelistPage() {
                     <strong>{blockedApp.process_name}</strong>
                     <span>{blockedApp.window_title || '无窗口标题'}</span>
                     <span>{blockedApp.process_path ?? '无法读取路径'}</span>
-                    <span>最近：{new Date(blockedApp.last_blocked_at).toLocaleString()} / {blockedApp.blocked_count} 次</span>
+                    <span>
+                      最近：{new Date(blockedApp.last_blocked_at).toLocaleString()} / {blockedApp.blocked_count} 次
+                    </span>
                   </div>
-                  <button className="secondary-action compact-button" disabled={whitelistLocked} onClick={() => void handleAddBlockedApp(blockedApp)} type="button">
+                  <button
+                    className="secondary-action compact-button"
+                    disabled={whitelistLocked}
+                    onClick={() => void handleAddBlockedApp(blockedApp)}
+                    type="button"
+                  >
                     加入
                   </button>
                 </div>
@@ -657,11 +767,13 @@ export default function WhitelistPage() {
                   <article className="list-row whitelist-row" key={app.id}>
                     <div className="row-main">
                       <span className={app.enabled ? 'row-icon enabled' : 'row-icon'}>
-                        {app.match_type === 'website_domain'
-                          ? <Globe2 size={18} />
-                          : isPotPlayerRule(app)
-                            ? <Video size={18} />
-                            : <ShieldCheck size={18} />}
+                        {app.match_type === 'website_domain' ? (
+                          <Globe2 size={18} />
+                        ) : isPotPlayerRule(app) ? (
+                          <Video size={18} />
+                        ) : (
+                          <ShieldCheck size={18} />
+                        )}
                       </span>
                       <div>
                         <strong>{app.name}</strong>
@@ -680,7 +792,9 @@ export default function WhitelistPage() {
                       >
                         <option value="">不自动切科</option>
                         {subjects.map((subject) => (
-                          <option key={subject.id} value={subject.id}>{subject.name}</option>
+                          <option key={subject.id} value={subject.id}>
+                            {subject.name}
+                          </option>
                         ))}
                       </select>
                       {app.match_type === 'website_domain' && (
@@ -689,13 +803,23 @@ export default function WhitelistPage() {
                           打开
                         </button>
                       )}
-                      <button className={app.enabled ? 'small-action enabled' : 'small-action'} disabled={whitelistLocked} onClick={() => void handleToggle(app)} type="button">
+                      <button
+                        className={app.enabled ? 'small-action enabled' : 'small-action'}
+                        disabled={whitelistLocked}
+                        onClick={() => void handleToggle(app)}
+                        type="button"
+                      >
                         {app.enabled ? <Power size={15} /> : <PowerOff size={15} />}
                         {app.enabled ? '启用中' : '已停用'}
                       </button>
-                      <button className="small-action danger" disabled={whitelistLocked} onClick={() => void handleDelete(app.id)} type="button">
+                      <button
+                        className="small-action danger"
+                        disabled={whitelistLocked || deletingAppId === app.id}
+                        onClick={() => void handleDelete(app)}
+                        type="button"
+                      >
                         <Trash2 size={15} />
-                        删除
+                        {deletingAppId === app.id ? '删除中' : '删除'}
                       </button>
                     </div>
                   </article>

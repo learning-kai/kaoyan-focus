@@ -31,9 +31,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(options.requireClean
-  ? 'Release check passed with a clean working tree.'
-  : 'Release check passed.');
+console.log(options.requireClean ? 'Release check passed with a clean working tree.' : 'Release check passed.');
 
 function parseArgs(rawArgs) {
   const parsed = {
@@ -67,7 +65,9 @@ async function checkVersionConsistency() {
     }
     const rootPackage = packageLock.packages?.[''];
     if (rootPackage?.version !== version) {
-      failures.push(`package-lock.json packages[""].version ${rootPackage?.version} does not match package.json ${version}`);
+      failures.push(
+        `package-lock.json packages[""].version ${rootPackage?.version} does not match package.json ${version}`,
+      );
     }
   }
 
@@ -75,6 +75,16 @@ async function checkVersionConsistency() {
   const cargoVersion = cargoToml.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
   if (cargoVersion !== version) {
     failures.push(`src-tauri/Cargo.toml version ${cargoVersion ?? '<missing>'} does not match package.json ${version}`);
+  }
+
+  if (existsSync(resolve(projectRoot, 'src-tauri/Cargo.lock'))) {
+    const cargoLock = await readText('src-tauri/Cargo.lock');
+    const cargoLockVersion = cargoLock.match(/\[\[package\]\]\r?\nname = "kaoyan-focus"\r?\nversion = "([^"]+)"/)?.[1];
+    if (cargoLockVersion !== version) {
+      failures.push(
+        `src-tauri/Cargo.lock kaoyan-focus version ${cargoLockVersion ?? '<missing>'} does not match package.json ${version}`,
+      );
+    }
   }
 
   const tauriConfig = await readJson('src-tauri/tauri.conf.json');
@@ -99,12 +109,8 @@ async function checkChangelog() {
 }
 
 function checkSensitivePaths() {
-  const tracked = git(['ls-files', '-z'])
-    .split('\0')
-    .filter(Boolean);
-  const untracked = git(['ls-files', '--others', '--exclude-standard', '-z'])
-    .split('\0')
-    .filter(Boolean);
+  const tracked = git(['ls-files', '-z']).split('\0').filter(Boolean);
+  const untracked = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
 
   for (const path of [...tracked, ...untracked]) {
     if (isSensitivePath(path)) {
@@ -141,8 +147,9 @@ function isSensitivePath(path) {
     return true;
   }
 
-  return ['.pem', '.p12', '.pfx', '.key', '.sqlite', '.sqlite3', '.db', '.log', '.sig']
-    .some((extension) => lower.endsWith(extension));
+  return ['.pem', '.p12', '.pfx', '.key', '.sqlite', '.sqlite3', '.db', '.log', '.sig'].some((extension) =>
+    lower.endsWith(extension),
+  );
 }
 
 async function readJson(relativePath) {

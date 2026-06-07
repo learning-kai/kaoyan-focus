@@ -1,12 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type CSSProperties } from 'react';
-import {
-  Cloud,
-  ExternalLink,
-  HardDrive,
-  RefreshCw,
-  Settings2,
-  type LucideIcon,
-} from 'lucide-react';
+import { Cloud, ExternalLink, HardDrive, RefreshCw, Settings2, type LucideIcon } from 'lucide-react';
 import { BasicSettingsPanel } from './settings/BasicSettingsPanel';
 import { IntegrationsPanel } from './settings/IntegrationsPanel';
 import { SyncSettingsPanel } from './settings/SyncSettingsPanel';
@@ -14,6 +7,7 @@ import { SystemPanel } from './settings/SystemPanel';
 import { formatBytes } from './settings/SettingsPrimitives';
 import type { SettingsPanelKey } from './settings/types';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
+import { getRuntimeHealth } from '../services/healthApi';
 import { getStudyModeState } from '../services/focusApi';
 import { getCurrentForegroundApp } from '../services/monitorApi';
 import { isStudyModeLocked } from '../services/studyModeLock';
@@ -52,11 +46,7 @@ import {
   startFeishuOAuthLogin,
   syncFeishuBridge,
 } from '../services/feishuApi';
-import {
-  getEmailReminderSettings,
-  saveEmailReminderSettings,
-  testEmailReminder,
-} from '../services/emailApi';
+import { getEmailReminderSettings, saveEmailReminderSettings, testEmailReminder } from '../services/emailApi';
 import { openExternalUrl } from '../services/systemApi';
 import { checkForAppUpdate, installAppUpdate, type AppUpdate } from '../services/updateApi';
 import type { StudyModeState } from '../types/focus';
@@ -73,6 +63,7 @@ import type {
   SyncRunSummary,
   ReminderSoundId,
   ReminderSoundSource,
+  RuntimeHealth,
   WebDavSettings,
 } from '../types/settings';
 
@@ -207,7 +198,8 @@ export default function SettingsPage({
   const [studyState, setStudyState] = useState<StudyModeState | null>(null);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [webDavSettings, setWebDavSettings] = useState<WebDavSettings>(defaultWebDavSettings);
-  const [objectStorageSettings, setObjectStorageSettings] = useState<ObjectStorageSettings>(defaultObjectStorageSettings);
+  const [objectStorageSettings, setObjectStorageSettings] =
+    useState<ObjectStorageSettings>(defaultObjectStorageSettings);
   const [emailSettings, setEmailSettings] = useState<EmailReminderSettings>(defaultEmailReminderSettings);
   const [feishuSettings, setFeishuSettings] = useState<FeishuSyncSettings>(defaultFeishuSettings);
   const [feishuStatus, setFeishuStatus] = useState<FeishuSyncStatus | null>(null);
@@ -224,6 +216,8 @@ export default function SettingsPage({
   const [syncDetailMessage, setSyncDetailMessage] = useState<string | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<AppUpdate | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [runtimeHealth, setRuntimeHealth] = useState<RuntimeHealth | null>(null);
+  const [runtimeHealthMessage, setRuntimeHealthMessage] = useState<string | null>(null);
   const [updateProgress, setUpdateProgress] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -248,6 +242,8 @@ export default function SettingsPage({
     rules: false,
     update: false,
     foreground: false,
+    runtimeHealth: false,
+    privacyData: false,
   });
 
   const settingsLocked = isStudyModeLocked(studyState);
@@ -269,11 +265,18 @@ export default function SettingsPage({
     setExpandedPanels((current) => ({
       ...current,
       webdav: current.webdav || settings.sync_backend === 'webdav',
-      objectStorage: current.objectStorage || settings.sync_backend === 'object_storage' || objectStorageSettings.enabled,
+      objectStorage:
+        current.objectStorage || settings.sync_backend === 'object_storage' || objectStorageSettings.enabled,
       feishu: current.feishu || feishuSettings.enabled,
       email: current.email || emailSettings.enabled,
     }));
-  }, [settingsLoaded, objectStorageSettings.enabled, settings.sync_backend, feishuSettings.enabled, emailSettings.enabled]);
+  }, [
+    settingsLoaded,
+    objectStorageSettings.enabled,
+    settings.sync_backend,
+    feishuSettings.enabled,
+    emailSettings.enabled,
+  ]);
 
   useEffect(() => {
     if (!settingsLocked) {
@@ -298,6 +301,7 @@ export default function SettingsPage({
       refreshEmailSettings(),
       refreshFeishuSettings(),
       refreshSyncDetails(),
+      refreshRuntimeHealth(),
     ]);
     setSettingsLoaded(true);
   }
@@ -350,10 +354,7 @@ export default function SettingsPage({
   async function refreshFeishuSettings() {
     try {
       setError(null);
-      const [settings, status] = await Promise.all([
-        getFeishuSyncSettings(),
-        getFeishuSyncStatus(),
-      ]);
+      const [settings, status] = await Promise.all([getFeishuSyncSettings(), getFeishuSyncStatus()]);
       setFeishuSettings(settings);
       setFeishuStatus(status);
     } catch (reason) {
@@ -378,6 +379,16 @@ export default function SettingsPage({
       setSyncBackups(backups);
     } catch {
       // Sync detail is observational; keep settings usable if a backup provider is offline.
+    }
+  }
+
+  async function refreshRuntimeHealth() {
+    try {
+      setRuntimeHealth(await getRuntimeHealth());
+      setRuntimeHealthMessage(null);
+    } catch (reason) {
+      setRuntimeHealth(null);
+      setRuntimeHealthMessage(reason instanceof Error ? reason.message : String(reason));
     }
   }
 
@@ -422,9 +433,7 @@ export default function SettingsPage({
   async function handleDownloadWebDav() {
     await runWebDavAction(async () => {
       const result = await downloadDatabaseFromWebDav(webDavSettings);
-      return result.backup_path
-        ? `${result.message} 备份路径：${result.backup_path}`
-        : result.message;
+      return result.backup_path ? `${result.message} 备份路径：${result.backup_path}` : result.message;
     });
     await initializeSettingsPage();
   }
@@ -456,9 +465,7 @@ export default function SettingsPage({
   async function handleDownloadObjectStorage() {
     await runObjectStorageAction(async () => {
       const result = await downloadDatabaseFromObjectStorage(objectStorageSettings);
-      return result.backup_path
-        ? `${result.message} 备份路径：${result.backup_path}`
-        : result.message;
+      return result.backup_path ? `${result.message} 备份路径：${result.backup_path}` : result.message;
     });
     await initializeSettingsPage();
   }
@@ -552,7 +559,9 @@ export default function SettingsPage({
     setFeishuSettings((current) => ({ ...current, ...patch }));
   }
 
-  function updateReminderSoundSettings(patch: Partial<Pick<AppSettings, 'reminder_sound_source' | 'reminder_sound_id' | 'reminder_sound_volume'>>) {
+  function updateReminderSoundSettings(
+    patch: Partial<Pick<AppSettings, 'reminder_sound_source' | 'reminder_sound_id' | 'reminder_sound_volume'>>,
+  ) {
     setReminderSoundMessage(null);
     updateSettings(patch);
   }
@@ -589,8 +598,11 @@ export default function SettingsPage({
   const emailActionDisabled = emailBusy || settingsLocked || !emailSettings.enabled;
   const feishuActionDisabled = feishuBusy || settingsLocked || !feishuSettings.enabled;
   const reminderSoundActionDisabled = reminderSoundBusy || settingsLocked;
-  const currentReminderSoundOption = reminderSoundOptions.find((option) => option.id === settings.reminder_sound_id) ?? reminderSoundOptions[0];
-  const currentReminderSoundSourceOption = reminderSoundSourceOptions.find((option) => option.value === settings.reminder_sound_source) ?? reminderSoundSourceOptions[0];
+  const currentReminderSoundOption =
+    reminderSoundOptions.find((option) => option.id === settings.reminder_sound_id) ?? reminderSoundOptions[0];
+  const currentReminderSoundSourceOption =
+    reminderSoundSourceOptions.find((option) => option.value === settings.reminder_sound_source) ??
+    reminderSoundSourceOptions[0];
   const reminderSoundVolumeStyle = {
     '--sound-volume-percent': `${settings.reminder_sound_volume}%`,
   } as CSSProperties;
@@ -818,7 +830,9 @@ export default function SettingsPage({
 
       {error && <p className="alert error">{error}</p>}
       {savedMessage && <p className="alert success">{savedMessage}</p>}
-      {settingsLocked && <p className="alert neutral">学习模式正在运行，全部配置改动已锁定；当前页面只允许查看状态。</p>}
+      {settingsLocked && (
+        <p className="alert neutral">学习模式正在运行，全部配置改动已锁定；当前页面只允许查看状态。</p>
+      )}
       {confirmDialog}
 
       <nav className="settings-section-tabs" role="tablist" aria-label="设置分区">
@@ -948,12 +962,21 @@ export default function SettingsPage({
           handleCheckUpdate={handleCheckUpdate}
           handleDetectForegroundApp={handleDetectForegroundApp}
           handleInstallUpdate={handleInstallUpdate}
+          handleRefreshRuntimeHealth={refreshRuntimeHealth}
           installingUpdate={installingUpdate}
           loading={loading}
+          emailSettings={emailSettings}
+          feishuSettings={feishuSettings}
+          feishuStatus={feishuStatus}
+          objectStorageSettings={objectStorageSettings}
+          runtimeHealth={runtimeHealth}
+          runtimeHealthMessage={runtimeHealthMessage}
+          settings={settings}
           settingsLocked={settingsLocked}
           togglePanel={togglePanel}
           updateMessage={visibleUpdateMessage}
           updateProgress={updateProgress}
+          webDavSettings={webDavSettings}
         />
       )}
     </section>

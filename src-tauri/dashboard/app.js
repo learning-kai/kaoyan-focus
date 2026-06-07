@@ -8,6 +8,12 @@ const RANGE_LABELS = {
   90: '近 90 天',
   all: '全部数据',
 };
+const RECORD_FILTER_LABELS = {
+  all: '全部',
+  'low-focus': '低专注',
+  'task-debt': '有欠账',
+  'long-session': '长时段',
+};
 const THEME_LABELS = {
   console: 'Console',
   paper: 'Paper',
@@ -139,8 +145,13 @@ function bindControls() {
 async function loadProjectData() {
   loadingProjectData = true;
   document.body.classList.add('is-loading-data');
+  document.body.setAttribute('aria-busy', 'true');
   render('正在从项目数据库只读读取...');
   try {
+    if (!DASHBOARD_TOKEN) {
+      throw new Error('缺少只读访问令牌');
+    }
+
     const response = await fetch(PROJECT_DATA_ENDPOINT, { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`只读服务返回 ${response.status}`);
@@ -168,6 +179,7 @@ async function loadProjectData() {
   } finally {
     loadingProjectData = false;
     document.body.classList.remove('is-loading-data');
+    document.body.removeAttribute('aria-busy');
     render(datasetMessage);
   }
 }
@@ -246,7 +258,7 @@ function render(message = datasetMessage) {
   renderHeatmapChart(heatmapSeries);
   renderSubjectTable(subjectSeries);
   renderSubjectFilter(records);
-  renderRecordFilterButtons();
+  renderRecordFilterButtons(filtered);
   renderSessionTable(applyRecordFilters(filtered));
   renderInsights(insights);
   renderPrescription(prescription);
@@ -347,25 +359,44 @@ function renderTrendChart(dailySeries) {
     focusPoints.push({ x, y: focusY, item });
 
     const barHeight = height - margin.bottom - minuteY;
-    addRect(els.trendChart, x - barWidth / 2, minuteY, barWidth, Math.max(0, barHeight), {
-      rx: 6,
-      fill: minutesColor,
-      stroke: minutesStroke,
-    }, `${formatDateLabel(item.date)}：${item.minutes} 分钟`);
+    addRect(
+      els.trendChart,
+      x - barWidth / 2,
+      minuteY,
+      barWidth,
+      Math.max(0, barHeight),
+      {
+        rx: 6,
+        fill: minutesColor,
+        stroke: minutesStroke,
+      },
+      `${formatDateLabel(item.date)}：${item.minutes} 分钟`,
+    );
 
     if (item.avgFocus != null) {
-      addCircle(els.trendChart, x, focusY, 4.2, {
-        fill: focusColor,
-        stroke: pointStroke,
-        'stroke-width': 1,
-      }, `${formatDateLabel(item.date)}：平均专注 ${formatNumber(item.avgFocus, 1)}`);
+      addCircle(
+        els.trendChart,
+        x,
+        focusY,
+        4.2,
+        {
+          fill: focusColor,
+          stroke: pointStroke,
+          'stroke-width': 1,
+        },
+        `${formatDateLabel(item.date)}：平均专注 ${formatNumber(item.avgFocus, 1)}`,
+      );
     }
   }
 
-  drawLineSeries(els.trendChart, focusPoints.filter((point) => point.y != null), {
-    stroke: focusColor,
-    'stroke-width': 3,
-  });
+  drawLineSeries(
+    els.trendChart,
+    focusPoints.filter((point) => point.y != null),
+    {
+      stroke: focusColor,
+      'stroke-width': 3,
+    },
+  );
 
   drawXLabels(els.trendChart, dailySeries, margin, width, height);
 }
@@ -410,17 +441,31 @@ function renderSubjectChart(subjectSeries) {
       fill: trackColor,
     });
 
-    addRect(els.subjectChart, margin.left, barY, Math.max(8, widthPx), barHeight, {
-      rx: 8,
-      fill: color,
-      stroke: barStroke,
-    }, `${item.subject}：${item.minutes} 分钟，平均专注 ${formatNumber(item.avgFocus, 1)}`);
+    addRect(
+      els.subjectChart,
+      margin.left,
+      barY,
+      Math.max(8, widthPx),
+      barHeight,
+      {
+        rx: 8,
+        fill: color,
+        stroke: barStroke,
+      },
+      `${item.subject}：${item.minutes} 分钟，平均专注 ${formatNumber(item.avgFocus, 1)}`,
+    );
 
-    addText(els.subjectChart, width - margin.right, y + rowHeight / 2 + 5, `${item.minutes} 分钟 · ${formatNumber(item.share * 100, 0)}% · ${formatNumber(item.avgFocus, 1)} 分`, {
-      fill: 'var(--muted)',
-      'text-anchor': 'end',
-      'font-size': '13',
-    });
+    addText(
+      els.subjectChart,
+      width - margin.right,
+      y + rowHeight / 2 + 5,
+      `${item.minutes} 分钟 · ${formatNumber(item.share * 100, 0)}% · ${formatNumber(item.avgFocus, 1)} 分`,
+      {
+        fill: 'var(--muted)',
+        'text-anchor': 'end',
+        'font-size': '13',
+      },
+    );
   });
 }
 
@@ -475,11 +520,19 @@ function renderHeatmapChart(heatmapSeries) {
     const intensity = cell.minutes / maxMinutes;
     const alpha = 0.08 + intensity * 0.78;
     const hue = cell.avgFocus >= 80 ? heatHigh : cell.avgFocus >= 65 ? heatMid : heatLow;
-    addRect(els.heatmapChart, x, y, cellW, cellH, {
-      rx: 6,
-      fill: `rgba(${hue}, ${alpha.toFixed(3)})`,
-      stroke: heatStroke,
-    }, `${cell.rowLabel} ${String(cell.hour).padStart(2, '0')}:00 - ${cell.minutes} 分钟，平均专注 ${cell.avgFocus == null ? '暂无' : formatNumber(cell.avgFocus, 1)}`);
+    addRect(
+      els.heatmapChart,
+      x,
+      y,
+      cellW,
+      cellH,
+      {
+        rx: 6,
+        fill: `rgba(${hue}, ${alpha.toFixed(3)})`,
+        stroke: heatStroke,
+      },
+      `${cell.rowLabel} ${String(cell.hour).padStart(2, '0')}:00 - ${cell.minutes} 分钟，平均专注 ${cell.avgFocus == null ? '暂无' : formatNumber(cell.avgFocus, 1)}`,
+    );
   }
 
   addText(els.heatmapChart, width - 14, 18, '小时', {
@@ -496,32 +549,31 @@ function renderSubjectTable(subjectSeries) {
   }
 
   els.subjectTable.innerHTML = subjectSeries
-    .map((item) => `
+    .map(
+      (item) => `
       <tr>
         <td>${escapeHtml(item.subject)}</td>
         <td>${formatNumber(item.minutes, 0)}</td>
         <td>${formatNumber(item.share * 100, 0)}%</td>
         <td>${formatNumber(item.avgFocus, 1)}</td>
-      </tr>`)
+      </tr>`,
+    )
     .join('');
 }
 
 function renderSessionTable(records) {
   if (!records.length) {
-    const emptyMessage = state.subjectFilter !== 'all' || state.recordFilter !== 'all'
-      ? '当前筛选没有匹配记录。'
-      : '暂无学习记录；只读服务连接后会自动显示项目数据。';
+    const emptyMessage =
+      state.subjectFilter !== 'all' || state.recordFilter !== 'all'
+        ? '当前筛选没有匹配记录。'
+        : '暂无学习记录；只读服务连接后会自动显示项目数据。';
     syncSessionRowsControls(0, 0);
     els.sessionTableBody.innerHTML = `<tr><td colspan="6">${emptyMessage}</td></tr>`;
     return;
   }
 
-  const sortedRecords = records
-    .slice()
-    .sort((a, b) => compareDateKey(b.date, a.date) || b.startHour - a.startHour);
-  const visibleRecords = state.sessionRowsExpanded
-    ? sortedRecords
-    : sortedRecords.slice(0, SESSION_PREVIEW_LIMIT);
+  const sortedRecords = records.slice().sort((a, b) => compareDateKey(b.date, a.date) || b.startHour - a.startHour);
+  const visibleRecords = state.sessionRowsExpanded ? sortedRecords : sortedRecords.slice(0, SESSION_PREVIEW_LIMIT);
 
   syncSessionRowsControls(sortedRecords.length, visibleRecords.length);
 
@@ -569,11 +621,13 @@ function renderComparisonPanel(comparison) {
     ['专注', `${formatSignedNumber(comparison.focusDelta, 1)} 分`],
     ['任务', formatSignedPercent(comparison.taskRateDelta)],
   ]
-    .map(([label, value]) => `
+    .map(
+      ([label, value]) => `
       <span class="delta-item">
         <small>${label}</small>
         <strong>${value}</strong>
-      </span>`)
+      </span>`,
+    )
     .join('');
 }
 
@@ -582,7 +636,12 @@ function renderTaskFunnel(taskFulfillment) {
   const rows = [
     { label: '已完成', value: taskFulfillment.done, total: taskFulfillment.total, className: 'is-done' },
     { label: '欠账', value: taskFulfillment.debt, total: taskFulfillment.total, className: 'is-debt' },
-    { label: '无计划记录', value: taskFulfillment.unplannedSessions, total: taskFulfillment.sessionCount, className: 'is-muted' },
+    {
+      label: '无计划记录',
+      value: taskFulfillment.unplannedSessions,
+      total: taskFulfillment.sessionCount,
+      className: 'is-muted',
+    },
   ];
 
   els.taskFunnelBars.innerHTML = rows
@@ -620,7 +679,8 @@ function renderDailySnapshot(snapshot) {
   }
 
   els.dailySnapshot.innerHTML = snapshot
-    .map((item) => `
+    .map(
+      (item) => `
       <article class="snapshot-card ${escapeHtml(item.tone)}">
         <div class="snapshot-head">
           <span>${escapeHtml(item.label)}</span>
@@ -632,7 +692,8 @@ function renderDailySnapshot(snapshot) {
         </div>
         <div class="snapshot-meter" aria-hidden="true"><span style="width: ${formatNumber(item.level, 0)}%"></span></div>
         <p>${escapeHtml(item.note)}</p>
-      </article>`)
+      </article>`,
+    )
     .join('');
 }
 
@@ -652,14 +713,28 @@ function renderQualityChart(quality) {
   setSvgViewBox(els.qualityChart, width, height);
   drawChartGrid(els.qualityChart, margin, width, height, 4);
 
-  addLine(els.qualityChart, scale(quality.minuteThreshold, 0, quality.maxMinutes, margin.left, right), margin.top, scale(quality.minuteThreshold, 0, quality.maxMinutes, margin.left, right), bottom, {
-    stroke: axisLine,
-    'stroke-dasharray': '6 6',
-  });
-  addLine(els.qualityChart, margin.left, scale(quality.focusThreshold, 0, 100, bottom, margin.top), right, scale(quality.focusThreshold, 0, 100, bottom, margin.top), {
-    stroke: axisLine,
-    'stroke-dasharray': '6 6',
-  });
+  addLine(
+    els.qualityChart,
+    scale(quality.minuteThreshold, 0, quality.maxMinutes, margin.left, right),
+    margin.top,
+    scale(quality.minuteThreshold, 0, quality.maxMinutes, margin.left, right),
+    bottom,
+    {
+      stroke: axisLine,
+      'stroke-dasharray': '6 6',
+    },
+  );
+  addLine(
+    els.qualityChart,
+    margin.left,
+    scale(quality.focusThreshold, 0, 100, bottom, margin.top),
+    right,
+    scale(quality.focusThreshold, 0, 100, bottom, margin.top),
+    {
+      stroke: axisLine,
+      'stroke-dasharray': '6 6',
+    },
+  );
 
   if (!quality.points.length) {
     addText(els.qualityChart, width / 2, height / 2, '暂无质量数据', {
@@ -674,12 +749,19 @@ function renderQualityChart(quality) {
     const x = scale(point.minutes, 0, quality.maxMinutes, margin.left, right);
     const y = scale(point.focus, 0, 100, bottom, margin.top);
     const radius = Math.max(4, Math.min(12, 4 + point.sessions * 1.8));
-    addCircle(els.qualityChart, x, y, radius, {
-      fill: point.color,
-      stroke: pointStroke,
-      'stroke-width': 1,
-      opacity: 0.92,
-    }, `${formatDateLabel(point.date)}：${point.minutes} 分钟，专注 ${formatNumber(point.focus, 1)}，${point.label}`);
+    addCircle(
+      els.qualityChart,
+      x,
+      y,
+      radius,
+      {
+        fill: point.color,
+        stroke: pointStroke,
+        'stroke-width': 1,
+        opacity: 0.92,
+      },
+      `${formatDateLabel(point.date)}：${point.minutes} 分钟，专注 ${formatNumber(point.focus, 1)}，${point.label}`,
+    );
   }
 
   addText(els.qualityChart, margin.left, height - 14, '学习分钟', {
@@ -704,12 +786,14 @@ function renderQualityChart(quality) {
 
 function renderQuadrantSummary(quality) {
   els.quadrantSummary.innerHTML = quality.quadrants
-    .map((item) => `
+    .map(
+      (item) => `
       <div class="quadrant-card">
         <span class="quadrant-dot" style="background: ${item.color}"></span>
         <strong>${item.count}</strong>
         <span>${item.label}</span>
-      </div>`)
+      </div>`,
+    )
     .join('');
 }
 
@@ -724,7 +808,14 @@ function renderConsistencyGrid(dailySeries) {
     .map((item) => {
       const intensity = item.minutes / maxMinutes;
       const activeClass = item.active ? 'is-active' : 'is-empty';
-      const qualityClass = item.avgFocus == null ? 'is-empty' : item.avgFocus >= 78 ? 'is-high' : item.avgFocus >= 65 ? 'is-mid' : 'is-low';
+      const qualityClass =
+        item.avgFocus == null
+          ? 'is-empty'
+          : item.avgFocus >= 78
+            ? 'is-high'
+            : item.avgFocus >= 65
+              ? 'is-mid'
+              : 'is-low';
       const taskLabel = item.tasksTotal ? `${item.tasksDone}/${item.tasksTotal}` : '无计划';
       const title = `${formatDateLabel(item.date)}：${item.minutes} 分钟，专注 ${item.avgFocus == null ? '暂无' : formatNumber(item.avgFocus, 1)}，任务 ${taskLabel}`;
       return `<span class="consistency-cell ${activeClass} ${qualityClass}" style="--level: ${intensity.toFixed(3)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;
@@ -740,16 +831,31 @@ function renderSubjectFilter(records) {
 
   els.subjectFilter.innerHTML = [
     `<option value="all">全部科目</option>`,
-    ...subjects.map((subject) => `<option value="${escapeHtml(subject)}"${subject === state.subjectFilter ? ' selected' : ''}>${escapeHtml(subject)}</option>`),
+    ...subjects.map(
+      (subject) =>
+        `<option value="${escapeHtml(subject)}"${subject === state.subjectFilter ? ' selected' : ''}>${escapeHtml(subject)}</option>`,
+    ),
   ].join('');
   els.subjectFilter.value = state.subjectFilter;
 }
 
-function renderRecordFilterButtons() {
+function renderRecordFilterButtons(records) {
+  const scopedRecords = records.filter(
+    (record) => state.subjectFilter === 'all' || record.subject === state.subjectFilter,
+  );
+  const counts = {
+    all: scopedRecords.length,
+    'low-focus': scopedRecords.filter((record) => record.focusScore < 65).length,
+    'task-debt': scopedRecords.filter((record) => record.tasksTotal > record.tasksDone).length,
+    'long-session': scopedRecords.filter((record) => record.minutes >= 120).length,
+  };
+
   for (const button of els.recordFilterButtons) {
-    const active = button.dataset.recordFilter === state.recordFilter;
+    const key = button.dataset.recordFilter || 'all';
+    const active = key === state.recordFilter;
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-pressed', String(active));
+    button.textContent = `${RECORD_FILTER_LABELS[key] || key} ${counts[key] ?? 0}`;
   }
 }
 
@@ -771,14 +877,16 @@ function renderWindowList(timeWindowSeries) {
 
   els.windowList.innerHTML = timeWindowSeries
     .slice(0, 5)
-    .map((item, index) => `
+    .map(
+      (item, index) => `
       <li>
         <span class="rank">${index + 1}</span>
         <div>
           <strong>${item.label}</strong>
           <span>${formatHours(item.minutes)} · 专注 ${formatNumber(item.avgFocus, 1)} · ${formatNumber(item.sessionCount, 0)} 次</span>
         </div>
-      </li>`)
+      </li>`,
+    )
     .join('');
 }
 
@@ -789,11 +897,13 @@ function renderInsights(insights) {
   }
 
   els.insightsList.innerHTML = insights
-    .map((item) => `
+    .map(
+      (item) => `
       <li>
         <div class="insight-title">${escapeHtml(item.title)}</div>
         <div class="insight-body">${escapeHtml(item.body)}</div>
-      </li>`)
+      </li>`,
+    )
     .join('');
 }
 
@@ -808,12 +918,14 @@ function renderPrescription(prescription) {
   }
 
   els.prescriptionList.innerHTML = prescription.items
-    .map((item) => `
+    .map(
+      (item) => `
       <li class="${escapeHtml(item.tone)}">
         <strong>${escapeHtml(item.title)}</strong>
         <span>${escapeHtml(item.body)}</span>
         <small>${escapeHtml(item.meta)}</small>
-      </li>`)
+      </li>`,
+    )
     .join('');
 }
 
@@ -827,11 +939,13 @@ function renderDataQuality(dataQuality) {
     <p>${escapeHtml(dataQuality.summary)}</p>`;
 
   els.dataQualityList.innerHTML = dataQuality.checks
-    .map((item) => `
+    .map(
+      (item) => `
       <li class="${escapeHtml(item.status)}">
         <strong>${escapeHtml(item.title)} · ${escapeHtml(item.value)}</strong>
         <span>${escapeHtml(item.body)}</span>
-      </li>`)
+      </li>`,
+    )
     .join('');
 }
 
@@ -1053,9 +1167,7 @@ function buildRhythmAdvice(dailySeries, rangeDays) {
 
   const activeMinutes = dailySeries.filter((item) => item.active).map((item) => item.minutes);
   const avgMinutes = average(activeMinutes);
-  const variance = activeMinutes.length
-    ? average(activeMinutes.map((minutes) => (minutes - avgMinutes) ** 2))
-    : 0;
+  const variance = activeMinutes.length ? average(activeMinutes.map((minutes) => (minutes - avgMinutes) ** 2)) : 0;
   let longestGap = 0;
   let currentGap = 0;
   for (const item of dailySeries) {
@@ -1094,7 +1206,12 @@ function buildQualityQuadrants(dailySeries) {
     { key: 'deep', label: '高效深学', color: qualityColors.deep, count: 0 },
     { key: 'grind', label: '低效硬撑', color: qualityColors.grind, count: 0 },
     { key: 'light', label: '轻量维护', color: qualityColors.light, count: 0 },
-    { key: 'empty', label: '空窗风险', color: qualityColors.empty, count: Math.max(0, dailySeries.length - activeDays.length) },
+    {
+      key: 'empty',
+      label: '空窗风险',
+      color: qualityColors.empty,
+      count: Math.max(0, dailySeries.length - activeDays.length),
+    },
   ];
   const quadrants = new Map(templates.map((item) => [item.key, { ...item }]));
   const points = [];
@@ -1141,7 +1258,9 @@ function buildDailySnapshot(dailySeries) {
     return bScore - aScore || b.avgFocus - a.avgFocus || b.minutes - a.minutes;
   })[0];
 
-  const longest = [...activeDays].sort((a, b) => b.minutes - a.minutes || b.avgFocus - a.avgFocus || b.taskRate - a.taskRate)[0];
+  const longest = [...activeDays].sort(
+    (a, b) => b.minutes - a.minutes || b.avgFocus - a.avgFocus || b.taskRate - a.taskRate,
+  )[0];
 
   const typical = [...activeDays].sort((a, b) => {
     const aDistance =
@@ -1160,8 +1279,14 @@ function buildDailySnapshot(dailySeries) {
   const risky = [...activeDays].sort((a, b) => {
     const aShortfall = Math.max(0, a.tasksTotal - a.tasksDone);
     const bShortfall = Math.max(0, b.tasksTotal - b.tasksDone);
-    const aScore = a.minutes * Math.max(0, 100 - a.avgFocus) + aShortfall * 900 + (a.tasksTotal > 0 ? Math.max(0, 0.75 - a.taskRate) * 700 : 0);
-    const bScore = b.minutes * Math.max(0, 100 - b.avgFocus) + bShortfall * 900 + (b.tasksTotal > 0 ? Math.max(0, 0.75 - b.taskRate) * 700 : 0);
+    const aScore =
+      a.minutes * Math.max(0, 100 - a.avgFocus) +
+      aShortfall * 900 +
+      (a.tasksTotal > 0 ? Math.max(0, 0.75 - a.taskRate) * 700 : 0);
+    const bScore =
+      b.minutes * Math.max(0, 100 - b.avgFocus) +
+      bShortfall * 900 +
+      (b.tasksTotal > 0 ? Math.max(0, 0.75 - b.taskRate) * 700 : 0);
     return bScore - aScore || a.avgFocus - b.avgFocus || b.minutes - a.minutes;
   })[0];
 
@@ -1169,7 +1294,11 @@ function buildDailySnapshot(dailySeries) {
     1,
     ...activeDays.map((item) => {
       const shortfall = Math.max(0, item.tasksTotal - item.tasksDone);
-      return item.minutes * Math.max(0, 100 - item.avgFocus) + shortfall * 900 + (item.tasksTotal > 0 ? Math.max(0, 0.75 - item.taskRate) * 700 : 0);
+      return (
+        item.minutes * Math.max(0, 100 - item.avgFocus) +
+        shortfall * 900 +
+        (item.tasksTotal > 0 ? Math.max(0, 0.75 - item.taskRate) * 700 : 0)
+      );
     }),
   );
 
@@ -1199,11 +1328,17 @@ function buildDailySnapshot(dailySeries) {
       value: '接近中位',
       meta: `${formatHours(typical.minutes)} · 专注 ${formatNumber(typical.avgFocus, 1)} 分`,
       note: '这更像你这个周期的常态节奏，比峰值更适合做基线。',
-      level: clampNumber((1 - (
-        Math.abs(typical.minutes - minuteMedian) / Math.max(minuteMedian, 1) +
-        Math.abs(typical.avgFocus - focusMedian) / 12 +
-        Math.abs(typical.taskRate - taskRateAverage) * 1.2
-      ) / 3) * 100, 0, 100, 0),
+      level: clampNumber(
+        (1 -
+          (Math.abs(typical.minutes - minuteMedian) / Math.max(minuteMedian, 1) +
+            Math.abs(typical.avgFocus - focusMedian) / 12 +
+            Math.abs(typical.taskRate - taskRateAverage) * 1.2) /
+            3) *
+          100,
+        0,
+        100,
+        0,
+      ),
     },
     {
       tone: 'is-risk',
@@ -1212,13 +1347,16 @@ function buildDailySnapshot(dailySeries) {
       value: `${formatNumber(risky.avgFocus, 1)} 分`,
       meta: `${formatHours(risky.minutes)} · ${Math.max(0, risky.tasksTotal - risky.tasksDone)} 个任务未兑现`,
       note: '高投入但质量塌下来的日子，最适合拆块、换题型、提前收口。',
-      level: clampNumber((
-        (
-          risky.minutes * Math.max(0, 100 - risky.avgFocus) +
+      level: clampNumber(
+        ((risky.minutes * Math.max(0, 100 - risky.avgFocus) +
           Math.max(0, risky.tasksTotal - risky.tasksDone) * 900 +
-          (risky.tasksTotal > 0 ? Math.max(0, 0.75 - risky.taskRate) * 700 : 0)
-        ) / riskMax
-      ) * 100, 0, 100, 0),
+          (risky.tasksTotal > 0 ? Math.max(0, 0.75 - risky.taskRate) * 700 : 0)) /
+          riskMax) *
+          100,
+        0,
+        100,
+        0,
+      ),
     },
   ];
 }
@@ -1302,7 +1440,10 @@ function buildDataQuality(records, dailySeries, subjectSeries, taskFulfillment, 
       score: records.length ? (taskPlannedRecords.length / records.length) * 100 : 0,
       title: '任务字段',
       value: `${formatNumber(records.length ? (taskPlannedRecords.length / records.length) * 100 : 0, 0)}%`,
-      body: taskPlannedRecords.length === records.length ? '任务完成率可信。' : '部分记录没有计划任务，任务兑现指标会偏保守。',
+      body:
+        taskPlannedRecords.length === records.length
+          ? '任务完成率可信。'
+          : '部分记录没有计划任务，任务兑现指标会偏保守。',
     },
     {
       key: 'focus',
@@ -1356,15 +1497,18 @@ function buildPrescription(context) {
   const items = [];
   const bestWindow = timeWindowSeries[0];
   const fallbackWindow = bestWindow ? bestWindow.label : '你的固定学习窗口';
-  const weakSubject = subjectGaps.find((item) => item.deltaShare <= -0.08)
-    || subjectSeries.slice().sort((a, b) => a.avgFocus - b.avgFocus || a.minutes - b.minutes)[0];
+  const weakSubject =
+    subjectGaps.find((item) => item.deltaShare <= -0.08) ||
+    subjectSeries.slice().sort((a, b) => a.avgFocus - b.avgFocus || a.minutes - b.minutes)[0];
   const focusSubject = weakSubject?.subject || subjectSeries[0]?.subject || '重点科目';
-  const recommendedMinutes = Math.round(Math.max(45, Math.min(120, (target.targetMinutes - target.actualMinutes) / 3 || 75)) / 15) * 15;
+  const recommendedMinutes =
+    Math.round(Math.max(45, Math.min(120, (target.targetMinutes - target.actualMinutes) / 3 || 75)) / 15) * 15;
 
   if (weakSubject) {
-    const gapLabel = weakSubject.deltaShare < 0
-      ? `相对${weakSubject.baselineLabel}少 ${formatNumber(Math.abs(weakSubject.deltaShare) * 100, 0)} 个百分点`
-      : `当前专注 ${formatNumber(weakSubject.avgFocus, 1)} 分`;
+    const gapLabel =
+      weakSubject.deltaShare < 0
+        ? `相对${weakSubject.baselineLabel}少 ${formatNumber(Math.abs(weakSubject.deltaShare) * 100, 0)} 个百分点`
+        : `当前专注 ${formatNumber(weakSubject.avgFocus, 1)} 分`;
     items.push({
       tone: 'is-priority',
       title: `补位 ${focusSubject}`,
@@ -1583,13 +1727,12 @@ function buildExecutiveSummary({ overview, comparison, risks, prescription, data
 
   const topRisk = risks[0];
   const topAction = prescription.items[0];
-  const trend = comparison && comparison.minuteDelta != null
-    ? `${comparison.minuteDelta >= 0 ? '提升' : '回落'} ${formatNumber(Math.abs(comparison.minuteDelta) * 100, 0)}%`
-    : `${formatHours(overview.totalMinutes)} 累计`;
+  const trend =
+    comparison && comparison.minuteDelta != null
+      ? `${comparison.minuteDelta >= 0 ? '提升' : '回落'} ${formatNumber(Math.abs(comparison.minuteDelta) * 100, 0)}%`
+      : `${formatHours(overview.totalMinutes)} 累计`;
   const qualityLabel = overview.avgFocus >= 78 ? '质量稳定' : overview.avgFocus >= 65 ? '质量可用' : '质量偏低';
-  const headline = topRisk
-    ? `当前优先处理：${topRisk.title}`
-    : `${qualityLabel}，可以继续加厚记录`;
+  const headline = topRisk ? `当前优先处理：${topRisk.title}` : `${qualityLabel}，可以继续加厚记录`;
   const body = topAction
     ? `${formatHours(overview.totalMinutes)} 学习量、${formatNumber(overview.avgFocus, 1)} 专注分、${formatNumber(overview.taskRate * 100, 0)}% 任务兑现。下一步：${topAction.body}`
     : `${formatHours(overview.totalMinutes)} 学习量、${formatNumber(overview.avgFocus, 1)} 专注分；先保持记录连续性。`;
@@ -1606,9 +1749,10 @@ function buildExecutiveSummary({ overview, comparison, risks, prescription, data
 
 function buildFooterStatus(overview, anchorDate, filteredCount, comparison) {
   const dateLabel = formatDateLabel(anchorDate);
-  const comparisonPart = comparison && comparison.minuteDelta != null
-    ? `，较上一周期 ${comparison.minuteDelta >= 0 ? '提升' : '下降'} ${formatNumber(Math.abs(comparison.minuteDelta) * 100, 0)}%`
-    : '';
+  const comparisonPart =
+    comparison && comparison.minuteDelta != null
+      ? `，较上一周期 ${comparison.minuteDelta >= 0 ? '提升' : '下降'} ${formatNumber(Math.abs(comparison.minuteDelta) * 100, 0)}%`
+      : '';
   return `当前范围 ${filteredCount} 条记录，平均专注 ${formatNumber(overview.avgFocus, 1)} 分，任务完成率 ${formatNumber(overview.taskRate * 100, 0)}%，截至 ${dateLabel}${comparisonPart}。`;
 }
 
@@ -1616,12 +1760,8 @@ function buildDailySeries(records, anchorDate, rangeDays) {
   if (!records.length) return [];
 
   const days = [];
-  const count = rangeDays === 'all'
-    ? Math.max(1, daysBetween(getEarliestDate(records), anchorDate) + 1)
-    : rangeDays;
-  const startDate = rangeDays === 'all'
-    ? getEarliestDate(records)
-    : addDays(anchorDate, -(count - 1));
+  const count = rangeDays === 'all' ? Math.max(1, daysBetween(getEarliestDate(records), anchorDate) + 1) : rangeDays;
+  const startDate = rangeDays === 'all' ? getEarliestDate(records) : addDays(anchorDate, -(count - 1));
 
   const grouped = groupBy(records, (item) => item.date);
   for (let index = 0; index < count; index += 1) {
@@ -1634,9 +1774,10 @@ function buildDailySeries(records, anchorDate, rangeDays) {
       avgFocus: bucket.length ? average(bucket.map((item) => item.focusScore)) : null,
       tasksDone: sum(bucket, (item) => Math.min(item.tasksDone, item.tasksTotal)),
       tasksTotal: sum(bucket, (item) => item.tasksTotal),
-      taskRate: sum(bucket, (item) => item.tasksTotal) > 0
-        ? sum(bucket, (item) => Math.min(item.tasksDone, item.tasksTotal)) / sum(bucket, (item) => item.tasksTotal)
-        : 0,
+      taskRate:
+        sum(bucket, (item) => item.tasksTotal) > 0
+          ? sum(bucket, (item) => Math.min(item.tasksDone, item.tasksTotal)) / sum(bucket, (item) => item.tasksTotal)
+          : 0,
       sessionCount: bucket.length,
       subjectCount: uniqueCount(bucket, (item) => item.subject),
       efficiencyScore: bucket.length
@@ -1784,7 +1925,10 @@ function drawXLabels(svg, dailySeries, margin, width, height) {
   dailySeries.forEach((item, index) => {
     if (index % every !== 0 && index !== dailySeries.length - 1) return;
     const x = margin.left + index * step;
-    const [month, day] = item.date.split('-').slice(1).map((value) => Number(value));
+    const [month, day] = item.date
+      .split('-')
+      .slice(1)
+      .map((value) => Number(value));
     addText(svg, x, height - 20, `${month}/${day}`, {
       fill: 'var(--muted)',
       'text-anchor': 'middle',
@@ -1916,7 +2060,10 @@ function dedupeRecords(records) {
 }
 
 function sortRecords(records) {
-  return [...records].sort((a, b) => compareDateKey(a.date, b.date) || a.startHour - b.startHour || a.subject.localeCompare(b.subject, 'zh-Hans-CN'));
+  return [...records].sort(
+    (a, b) =>
+      compareDateKey(a.date, b.date) || a.startHour - b.startHour || a.subject.localeCompare(b.subject, 'zh-Hans-CN'),
+  );
 }
 
 function filterByRange(records, rangeDays, anchorDate) {
@@ -1970,7 +2117,9 @@ function computeBestWindow(records) {
 }
 
 function averageWindowFocus(heatmapSeries, startHour, endHour) {
-  const cells = heatmapSeries.cells.filter((cell) => cell.hour >= startHour && cell.hour <= endHour && cell.avgFocus != null);
+  const cells = heatmapSeries.cells.filter(
+    (cell) => cell.hour >= startHour && cell.hour <= endHour && cell.avgFocus != null,
+  );
   if (!cells.length) return null;
   return average(cells.map((cell) => cell.avgFocus));
 }
@@ -2013,7 +2162,12 @@ function generateSampleData() {
       const subject = SUBJECTS[(dayIndex + sessionIndex) % SUBJECTS.length];
       const base = 95 + ((dayIndex * 13 + sessionIndex * 11) % 70);
       const minutes = base + (sessionIndex % 2) * 35;
-      const focusScore = clampNumber(74 + ((dayIndex * 5 + sessionIndex * 9) % 18) - (sessionIndex === 1 ? 4 : 0), 0, 100, 78);
+      const focusScore = clampNumber(
+        74 + ((dayIndex * 5 + sessionIndex * 9) % 18) - (sessionIndex === 1 ? 4 : 0),
+        0,
+        100,
+        78,
+      );
       const tasksTotal = 3 + ((dayIndex + sessionIndex) % 4);
       const tasksDone = Math.min(tasksTotal, 1 + ((dayIndex * 3 + sessionIndex) % tasksTotal));
       const startHour = [7, 9, 13, 15, 19, 21][(dayIndex + sessionIndex) % 6];

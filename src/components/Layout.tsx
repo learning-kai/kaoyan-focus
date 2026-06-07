@@ -113,7 +113,9 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
             ))}
           </div>
         </div>
-        {children}
+        <div className="page-transition" key={activePage}>
+          {children}
+        </div>
       </main>
     </div>
   );

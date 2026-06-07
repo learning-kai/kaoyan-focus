@@ -49,3 +49,16 @@ Earlier versions built the foundation of the product:
 - Release automation for Windows installers and updater metadata.
 
 Old auto-generated changelog entries with empty `No commits found` sections were collapsed here to keep the public history readable. Detailed archaeology remains available through Git tags and commit history.
+
+## v1.8.2 - 2026-06-07
+
+### Desktop
+#### Added
+- feat: polish app experience and release workflow (c527744)
+- feat: add new components and hooks for improved user interaction and styling (4ff88b8)
+- feat: update version to 1.7.4 and enhance release process with Android support (c3728aa)
+
+#### Changed
+- chore: bump version to 1.8.1 and update dependencies (5fe5f68)
+
+

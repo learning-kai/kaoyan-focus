@@ -45,7 +45,9 @@ if (isEncryptedSigningKey(keyPath)) {
 }
 
 if (!updateBaseUrl) {
-  console.error('Missing UPDATE_BASE_URL. Pass --update-base-url <https://...> or set the environment variable before building the update release.');
+  console.error(
+    'Missing UPDATE_BASE_URL. Pass --update-base-url <https://...> or set the environment variable before building the update release.',
+  );
   process.exit(1);
 }
 
@@ -55,14 +57,18 @@ try {
   await writeTauriReleaseConfig(tauriConfigPath, releaseConfigPath, updateBaseUrl);
   console.log(`Using update base URL: ${updateBaseUrl}`);
 
-  const build = spawnSync(process.execPath, [tauriCliPath, 'build', '--config', releaseConfigPath, '--bundles', 'nsis'], {
-    cwd: projectRoot,
-    env: {
-      ...buildEnv,
+  const build = spawnSync(
+    process.execPath,
+    [tauriCliPath, 'build', '--config', releaseConfigPath, '--bundles', 'nsis'],
+    {
+      cwd: projectRoot,
+      env: {
+        ...buildEnv,
+      },
+      shell: false,
+      stdio: 'inherit',
     },
-    shell: false,
-    stdio: 'inherit',
-  });
+  );
 
   if (build.error) {
     throw build.error;
@@ -94,19 +100,15 @@ try {
     throw new Error(`tauri signer failed with exit code ${sign.status ?? 1}`);
   }
 
-  const metadata = spawnSync(
-    process.execPath,
-    ['scripts/generate-latest-json.mjs', publishInstallerPath],
-    {
-      cwd: projectRoot,
-      env: {
-        ...process.env,
-        UPDATE_BASE_URL: updateBaseUrl,
-      },
-      shell: false,
-      stdio: 'inherit',
+  const metadata = spawnSync(process.execPath, ['scripts/generate-latest-json.mjs', publishInstallerPath], {
+    cwd: projectRoot,
+    env: {
+      ...process.env,
+      UPDATE_BASE_URL: updateBaseUrl,
     },
-  );
+    shell: false,
+    stdio: 'inherit',
+  });
 
   if (metadata.error) {
     throw metadata.error;
@@ -144,7 +146,7 @@ function loadLocalEnvFile(filePath) {
     }
 
     const [, key, rawValue] = match;
-    if (process.env[key] !== undefined && key !== 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD') {
+    if (process.env[key] !== undefined) {
       continue;
     }
 
@@ -158,11 +160,9 @@ function findNsisInstaller(version) {
     process.exit(1);
   }
 
-  const allMatches = readdirSync(nsisBundleDir)
-    .filter((fileName) => (
-      fileName.endsWith('-setup.exe')
-      && fileName.includes(`_${version}_`)
-    ));
+  const allMatches = readdirSync(nsisBundleDir).filter(
+    (fileName) => fileName.endsWith('-setup.exe') && fileName.includes(`_${version}_`),
+  );
   const publishFileName = getPublishInstallerFileName(version);
   const matches = allMatches.filter((fileName) => fileName !== publishFileName);
   if (matches.length === 0 && allMatches.length === 1) {
@@ -233,7 +233,9 @@ async function assertSigningPasswordWorks() {
 
     if (sign.status !== 0) {
       console.error('The updater signing key password is incorrect.');
-      console.error('Update TAURI_SIGNING_PRIVATE_KEY_PASSWORD in .env.local, or regenerate the updater key pair if this app has not been distributed yet.');
+      console.error(
+        'Update TAURI_SIGNING_PRIVATE_KEY_PASSWORD in .env.local, or regenerate the updater key pair if this app has not been distributed yet.',
+      );
       if (sign.stderr?.trim()) {
         console.error(sign.stderr.trim());
       }

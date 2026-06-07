@@ -1,6 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, Clock3, ExternalLink, Pencil, RefreshCw, ShieldAlert, TimerReset, Trash2 } from 'lucide-react';
-import { deleteFocusSession, getFocusStatsSummary, listFocusSessions, listSubjects, updateFocusSessionSubject } from '../services/focusApi';
+import {
+  BarChart3,
+  CalendarDays,
+  Clock3,
+  ExternalLink,
+  Pencil,
+  RefreshCw,
+  ShieldAlert,
+  TimerReset,
+  Trash2,
+} from 'lucide-react';
+import {
+  deleteFocusSession,
+  getFocusStatsSummary,
+  listFocusSessions,
+  listSubjects,
+  updateFocusSessionSubject,
+} from '../services/focusApi';
 import { listInterruptionSummary } from '../services/monitorApi';
 import { openStudyDashboard } from '../services/systemApi';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
@@ -49,6 +65,7 @@ export default function StatsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [savingSessionId, setSavingSessionId] = useState<number | null>(null);
   const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
   const [openingDashboard, setOpeningDashboard] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,8 +76,11 @@ export default function StatsPage() {
     void refreshStats();
   }, []);
 
-  async function refreshStats() {
+  async function refreshStats(showLoading = true) {
     try {
+      if (showLoading) {
+        setLoadingStats(true);
+      }
       setError(null);
       const [statsData, interruptionData, sessionData, subjectData] = await Promise.all([
         getFocusStatsSummary(),
@@ -74,6 +94,10 @@ export default function StatsPage() {
       setSubjects(subjectData);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      if (showLoading) {
+        setLoadingStats(false);
+      }
     }
   }
 
@@ -111,7 +135,7 @@ export default function StatsPage() {
       setError(null);
       setMessage(null);
       await deleteFocusSession(sessionId);
-      await refreshStats();
+      await refreshStats(false);
       setMessage('学习记录已删除。');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -143,19 +167,42 @@ export default function StatsPage() {
           <p>按今日、本周、本月和科目汇总本地专注记录，同时保留非白名单干扰排行。</p>
         </div>
         <div className="page-header-actions">
-          <button className="secondary-action" disabled={openingDashboard} onClick={() => void handleOpenDashboard()} type="button">
+          <button
+            className="secondary-action"
+            disabled={openingDashboard}
+            onClick={() => void handleOpenDashboard()}
+            type="button"
+          >
             <ExternalLink size={17} />
             {openingDashboard ? '打开中' : '打开数据看板'}
           </button>
-          <button className="secondary-action" onClick={() => void refreshStats()} type="button">
+          <button
+            className="secondary-action"
+            disabled={loadingStats}
+            onClick={() => void refreshStats()}
+            type="button"
+          >
             <RefreshCw size={17} />
-            刷新
+            {loadingStats ? '刷新中' : '刷新'}
           </button>
         </div>
       </header>
 
-      {error && <p className="alert error">{error}</p>}
-      {message && <p className="alert success">{message}</p>}
+      {error && (
+        <p className="alert error" role="alert">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p className="alert success" aria-live="polite">
+          {message}
+        </p>
+      )}
+      {loadingStats && (
+        <p className="alert neutral" aria-live="polite">
+          正在更新统计数据...
+        </p>
+      )}
       {confirmDialog}
 
       <div className="stats-hero-grid">
@@ -185,7 +232,9 @@ export default function StatsPage() {
               {interruptions.map((item) => (
                 <article className="list-row interruption-row" key={item.process_name}>
                   <div className="row-main">
-                    <span className="row-icon danger"><ShieldAlert size={18} /></span>
+                    <span className="row-icon danger">
+                      <ShieldAlert size={18} />
+                    </span>
                     <div>
                       <strong>{item.process_name}</strong>
                       <p>{item.window_title || '无窗口标题'}</p>
@@ -258,14 +307,20 @@ export default function StatsPage() {
             {sessions.map((session) => (
               <article className="record-row" key={session.id}>
                 <div className="record-time">
-                  <span className="row-icon enabled"><TimerReset size={18} /></span>
+                  <span className="row-icon enabled">
+                    <TimerReset size={18} />
+                  </span>
                   <div>
                     <strong>{formatStudyTime(session.actual_seconds || session.planned_seconds)}</strong>
-                    <p>{formatSessionTimeRange(session)} / {sessionStatusLabel(session.status)}</p>
+                    <p>
+                      {formatSessionTimeRange(session)} / {sessionStatusLabel(session.status)}
+                    </p>
                   </div>
                 </div>
                 <div className="record-subject">
-                  <span>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</span>
+                  <span>
+                    {session.subject_id ? (subjectNameMap.get(session.subject_id) ?? '未知科目') : '未指定科目'}
+                  </span>
                   <div className="record-subject-actions">
                     <select
                       aria-label="修改记录科目"
@@ -276,7 +331,9 @@ export default function StatsPage() {
                     >
                       <option value="">未指定</option>
                       {subjects.map((subject) => (
-                        <option key={subject.id} value={subject.id}>{subject.name}</option>
+                        <option key={subject.id} value={subject.id}>
+                          {subject.name}
+                        </option>
                       ))}
                     </select>
                     <button

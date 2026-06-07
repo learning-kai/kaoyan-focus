@@ -187,13 +187,7 @@ pub fn restore_sync_backup(app: AppHandle, source: String, key: String) -> Resul
         let temp_path = app_data_dir.join("kaoyan-focus.restore.tmp");
         fs::write(&temp_path, &bytes).map_err(|error| error.to_string())?;
         validate_sqlite_database(&temp_path)?;
-        let _ = create_local_sync_backup(&app, &local_database_path, "restore-current")?;
-        fs::rename(&temp_path, &local_database_path)
-            .or_else(|_| {
-                fs::copy(&temp_path, &local_database_path)?;
-                fs::remove_file(&temp_path)
-            })
-            .map_err(|error| format!("Replace local database failed: {error}"))?;
+        replace_local_database_from_temp(&app, &local_database_path, &temp_path, "restore-current")?;
         return Ok("Restored the database from local backup.".to_string());
     }
 

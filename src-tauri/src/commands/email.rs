@@ -1,4 +1,4 @@
-use crate::{credential, storage::db::open_database};
+use crate::{credential, runtime_health, storage::db::open_database};
 use chrono::{Duration, Local, Timelike, Utc};
 use lettre::{
     message::Mailbox, transport::smtp::authentication::Credentials, Message, SmtpTransport,
@@ -128,6 +128,19 @@ pub fn test_email_reminder(
 
 #[tauri::command]
 pub fn check_due_task_email_reminders(app: AppHandle) -> Result<EmailReminderResult, String> {
+    match check_due_task_email_reminders_inner(app) {
+        Ok(result) => {
+            runtime_health::mark_task_success("email_reminder_check", Some(300));
+            Ok(result)
+        }
+        Err(error) => {
+            runtime_health::mark_task_error("email_reminder_check", &error, Some(300));
+            Err(error)
+        }
+    }
+}
+
+fn check_due_task_email_reminders_inner(app: AppHandle) -> Result<EmailReminderResult, String> {
     let connection = open_database(&database_path(&app)?)?;
     let settings = read_email_settings_for_send(&connection)?;
     if !settings.enabled {

@@ -8,7 +8,7 @@ pub fn upload_database_to_object_storage(
     let normalized =
         normalize_object_storage_settings(resolve_object_storage_secret(&connection, settings)?)?;
     persist_object_storage_settings(&connection, &normalized, secret_changed)?;
-    let auto = sync_r2_v3_object_storage(app, "manual_upload", false)?;
+    let auto = with_object_storage_sync_lock(|| sync_r2_v3_object_storage(app, "manual_upload", false))?;
     Ok(ObjectStorageSyncResult {
         success: auto.status == "synced",
         message: auto.message,
@@ -33,7 +33,7 @@ pub fn download_database_from_object_storage(
     let normalized =
         normalize_object_storage_settings(resolve_object_storage_secret(&connection, settings)?)?;
     persist_object_storage_settings(&connection, &normalized, secret_changed)?;
-    let auto = sync_r2_v3_object_storage(app, "manual_download", true)?;
+    let auto = with_object_storage_sync_lock(|| sync_r2_v3_object_storage(app, "manual_download", true))?;
     Ok(ObjectStorageSyncResult {
         success: auto.status == "synced",
         message: auto.message,

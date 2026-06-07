@@ -1,0 +1,723 @@
+:root {
+  --motion-enter: 260ms;
+  --motion-panel: 320ms;
+  --motion-drawer: 260ms;
+  --motion-list: 220ms;
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-sheen: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+@keyframes page-settle {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.996);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes panel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes compact-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes card-settle {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes active-sheen {
+  from {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  45% {
+    opacity: 0.58;
+  }
+  to {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+@keyframes bar-fill {
+  from {
+    opacity: 0.45;
+    transform: scaleX(0.06);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes status-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px rgba(79, 208, 161, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(79, 208, 161, 0.06);
+  }
+}
+
+@keyframes clock-breathe {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: translate(-50%, -50%) scale(0.98);
+  }
+  50% {
+    opacity: 0.48;
+    transform: translate(-50%, -50%) scale(1.03);
+  }
+}
+
+@keyframes timeline-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scaleX(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes focus-ambient-drift {
+  from {
+    background-position:
+      0% 0%,
+      100% 0%;
+  }
+  to {
+    background-position:
+      10% 6%,
+      88% 10%;
+  }
+}
+
+@keyframes timer-glow {
+  0%,
+  100% {
+    text-shadow: 0 20px 70px color-mix(in srgb, var(--blue) 10%, transparent);
+  }
+  50% {
+    text-shadow: 0 26px 86px color-mix(in srgb, var(--blue) 18%, transparent);
+  }
+}
+
+@keyframes drop-zone-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgba(121, 167, 255, 0.08),
+      0 0 0 0 rgba(121, 167, 255, 0.14);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1px rgba(121, 167, 255, 0.16),
+      0 0 0 5px rgba(121, 167, 255, 0.04);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-transition {
+  display: grid;
+  min-width: 0;
+  animation: page-settle var(--motion-enter) var(--ease-emphasized) backwards;
+}
+
+.top-strip,
+.sidebar .brand,
+.sidebar-foot {
+  animation: compact-rise var(--motion-panel) var(--ease-emphasized) backwards;
+}
+
+.nav-list .nav-item {
+  animation: compact-rise var(--motion-panel) var(--ease-emphasized) backwards;
+}
+
+.nav-list .nav-item:nth-child(2) {
+  animation-delay: 25ms;
+}
+
+.nav-list .nav-item:nth-child(3) {
+  animation-delay: 50ms;
+}
+
+.nav-list .nav-item:nth-child(4) {
+  animation-delay: 75ms;
+}
+
+.nav-list .nav-item:nth-child(5) {
+  animation-delay: 100ms;
+}
+
+.nav-list .nav-item:nth-child(6) {
+  animation-delay: 125ms;
+}
+
+.nav-item::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(100deg, transparent 12%, var(--motion-sheen) 50%, transparent 82%);
+  opacity: 0;
+  transform: translateX(-120%);
+}
+
+.nav-item[aria-current='page']::after {
+  animation: active-sheen 620ms var(--ease-emphasized) both;
+}
+
+.page-shell > .page-header,
+.schedule-hero,
+.settings-section-tabs {
+  animation: panel-rise var(--motion-panel) var(--ease-emphasized) backwards;
+}
+
+.prepare-grid,
+.dashboard-strip,
+.stats-hero-grid,
+.stats-board,
+.whitelist-workbench,
+.schedule-toolbar,
+.schedule-composer,
+.schedule-grid-shell,
+.settings-tab-panel,
+.checklist-categories-panel,
+.today-plan-panel,
+.command-panel,
+.soft-panel {
+  animation: panel-rise var(--motion-panel) var(--ease-emphasized) backwards;
+}
+
+.page-shell > :nth-child(2) {
+  animation-delay: 20ms;
+}
+
+.page-shell > :nth-child(3) {
+  animation-delay: 50ms;
+}
+
+.page-shell > :nth-child(4) {
+  animation-delay: 80ms;
+}
+
+.page-shell > :nth-child(5) {
+  animation-delay: 110ms;
+}
+
+.metric-card,
+.core-fact,
+.details-card,
+.phase-badge,
+.setting-row,
+.capability-row,
+.tool-row,
+.list-row,
+.record-row,
+.subject-stat-row,
+.blocked-option,
+.process-option,
+.sound-option-card,
+.custom-sound-picker,
+.today-item-row,
+.category-task-row,
+.schedule-task-row,
+.template-row,
+.week-day,
+.week-block,
+.alarm-row,
+.checklist-task-card {
+  transition:
+    transform var(--motion-list) var(--ease-standard),
+    border-color var(--motion-list) var(--ease-standard),
+    background var(--motion-list) var(--ease-standard),
+    box-shadow var(--motion-list) var(--ease-standard),
+    opacity var(--motion-list) var(--ease-standard);
+}
+
+:is(
+  .metric-card,
+  .core-fact,
+  .details-card,
+  .phase-badge,
+  .setting-row,
+  .capability-row,
+  .tool-row,
+  .list-row,
+  .record-row,
+  .subject-stat-row,
+  .blocked-option,
+  .process-option,
+  .sound-option-card,
+  .custom-sound-picker,
+  .today-item-row,
+  .category-task-row,
+  .schedule-task-row,
+  .template-row,
+  .week-day,
+  .week-block,
+  .alarm-row,
+  .checklist-task-card
+):hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-hover, var(--shadow));
+  transform: translateY(-1px);
+}
+
+:is(.today-item-row.is-dragging, .category-task-row.is-dragging, .schedule-block.is-dragging):hover {
+  transform: none;
+}
+
+.today-item-row:hover,
+.category-task-row:hover {
+  transform: none;
+}
+
+.stats-hero-grid .metric-card,
+.console-facts .core-fact,
+.dashboard-strip .soft-panel,
+.category-task-row,
+.today-item-row,
+.schedule-task-row,
+.template-row,
+.week-day,
+.details-card {
+  animation: card-settle var(--motion-panel) var(--ease-emphasized) backwards;
+}
+
+.stats-hero-grid .metric-card:nth-child(2),
+.console-facts .core-fact:nth-child(2),
+.dashboard-strip .soft-panel:nth-child(2),
+.category-task-row:nth-child(2),
+.today-item-row:nth-child(2),
+.schedule-task-row:nth-child(2),
+.template-row:nth-child(2),
+.week-day:nth-child(2),
+.details-card:nth-child(2) {
+  animation-delay: 35ms;
+}
+
+.stats-hero-grid .metric-card:nth-child(3),
+.console-facts .core-fact:nth-child(3),
+.dashboard-strip .soft-panel:nth-child(3),
+.category-task-row:nth-child(3),
+.today-item-row:nth-child(3),
+.schedule-task-row:nth-child(3),
+.template-row:nth-child(3),
+.week-day:nth-child(3),
+.details-card:nth-child(3) {
+  animation-delay: 70ms;
+}
+
+.stats-hero-grid .metric-card:nth-child(4),
+.console-facts .core-fact:nth-child(4),
+.category-task-row:nth-child(4),
+.today-item-row:nth-child(4),
+.schedule-task-row:nth-child(4),
+.template-row:nth-child(4),
+.week-day:nth-child(4),
+.details-card:nth-child(4) {
+  animation-delay: 105ms;
+}
+
+.stats-hero-grid .metric-card:nth-child(5),
+.category-task-row:nth-child(5),
+.today-item-row:nth-child(5),
+.schedule-task-row:nth-child(5),
+.template-row:nth-child(5),
+.week-day:nth-child(5) {
+  animation-delay: 140ms;
+}
+
+.stats-hero-grid .metric-card:nth-child(6),
+.category-task-row:nth-child(6),
+.today-item-row:nth-child(6),
+.schedule-task-row:nth-child(6),
+.template-row:nth-child(6),
+.week-day:nth-child(6) {
+  animation-delay: 175ms;
+}
+
+.subject-bar i,
+.progress-track i {
+  display: block;
+  transform-origin: left center;
+  transition:
+    transform 420ms var(--ease-emphasized),
+    opacity 220ms var(--ease-standard);
+  animation: bar-fill 520ms var(--ease-emphasized) backwards;
+}
+
+.settings-tab-panel,
+.completed-task-list,
+.task-composer,
+.task-inline-editor,
+.today-composer,
+.schedule-drag-preview,
+.confirm-dialog {
+  animation: dialog-enter var(--motion-drawer) var(--ease-emphasized) backwards;
+}
+
+.schedule-quick-add {
+  animation: fade-in var(--motion-drawer) var(--ease-emphasized) backwards;
+}
+
+.settings-section-tabs button[role='tab'][aria-selected='true'],
+.segmented-control button.active,
+.category-tab.active,
+.theme-choice-grid button.active {
+  animation: compact-rise 190ms var(--ease-emphasized) backwards;
+}
+
+.settings-collapse-button svg,
+.completed-toggle svg,
+.theme-toggle button,
+.settings-section-tabs button,
+.segmented-control button,
+.category-tab,
+.weekday-pills button {
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-base) var(--ease-standard),
+    background var(--motion-base) var(--ease-standard),
+    color var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard),
+    opacity var(--motion-base) var(--ease-standard);
+}
+
+.confirm-backdrop {
+  animation: backdrop-enter 180ms var(--ease-standard) backwards;
+}
+
+.confirm-dialog {
+  transform-origin: center top;
+}
+
+.today-plan-drawer,
+.schedule-drawer {
+  transition:
+    transform var(--motion-drawer) var(--ease-emphasized),
+    opacity var(--motion-drawer) var(--ease-standard),
+    box-shadow var(--motion-drawer) var(--ease-standard);
+}
+
+.today-plan-drawer.is-open > *,
+.schedule-drawer.is-open > * {
+  animation: compact-rise 260ms var(--ease-emphasized) backwards;
+}
+
+.today-plan-drawer.is-open > :nth-child(2),
+.schedule-drawer.is-open > :nth-child(2) {
+  animation-delay: 35ms;
+}
+
+.today-plan-drawer.is-open > :nth-child(3),
+.schedule-drawer.is-open > :nth-child(3) {
+  animation-delay: 70ms;
+}
+
+.today-plan-drawer.is-open > :nth-child(4),
+.schedule-drawer.is-open > :nth-child(4) {
+  animation-delay: 105ms;
+}
+
+.today-drop-area.is-over,
+.category-drop-area.is-over,
+.schedule-lane.picking,
+.schedule-lane.dragging {
+  transition:
+    border-color var(--motion-base) var(--ease-standard),
+    background var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard);
+}
+
+.today-drop-area.is-over,
+.category-drop-area.is-over {
+  animation: drop-zone-pulse 900ms var(--ease-standard) infinite;
+  transform: scale(1.002);
+}
+
+.schedule-block {
+  transition:
+    opacity var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard),
+    border-color var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard),
+    background var(--motion-base) var(--ease-standard);
+}
+
+.schedule-block:hover {
+  border-color: var(--line-strong);
+  box-shadow: 0 18px 38px rgba(31, 85, 168, 0.18);
+  transform: translateY(-1px);
+}
+
+.schedule-block.is-dragging,
+.schedule-block.is-dragging:hover {
+  transform: scale(0.995);
+}
+
+.schedule-now-line {
+  transform-origin: center;
+  animation: timeline-pulse 2400ms var(--ease-standard) infinite;
+}
+
+.schedule-quick-add {
+  transform-origin: top right;
+}
+
+.schedule-quick-add.is-above {
+  transform-origin: bottom right;
+}
+
+.status-dot,
+.live-dot.on {
+  animation: status-breathe 3200ms var(--ease-standard) infinite;
+}
+
+.focus-active-shell {
+  animation: page-settle 360ms var(--ease-emphasized) backwards;
+}
+
+.focus-active-bg {
+  animation: compact-rise 700ms var(--ease-emphasized) backwards;
+  background-size:
+    100% 100%,
+    100% 100%;
+}
+
+.focus-active-shell.phase-focus:not(.is-paused) .focus-active-bg,
+.focus-active-shell.phase-break:not(.is-paused) .focus-active-bg,
+.focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-active-bg {
+  animation:
+    compact-rise 700ms var(--ease-emphasized) backwards,
+    focus-ambient-drift 14000ms var(--ease-standard) 700ms infinite alternate;
+}
+
+.focus-clock-zone {
+  position: relative;
+  z-index: 0;
+}
+
+.focus-clock-zone::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 0;
+  width: min(680px, 72vw);
+  aspect-ratio: 1.8;
+  pointer-events: none;
+  content: '';
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--blue) 16%, transparent), transparent 62%);
+  filter: blur(10px);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.98);
+}
+
+.focus-clock-zone > * {
+  position: relative;
+  z-index: 1;
+}
+
+.focus-active-shell.phase-focus:not(.is-paused) .focus-clock-zone::before,
+.focus-active-shell.phase-break:not(.is-paused) .focus-clock-zone::before,
+.focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-clock-zone::before {
+  animation: clock-breathe 5200ms var(--ease-standard) infinite;
+}
+
+.focus-active-shell.phase-break:not(.is-paused) .focus-clock-zone::before {
+  background: radial-gradient(circle, color-mix(in srgb, var(--green) 18%, transparent), transparent 62%);
+}
+
+.focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-clock-zone::before {
+  background: radial-gradient(circle, color-mix(in srgb, var(--amber) 18%, transparent), transparent 62%);
+}
+
+.focus-active-shell.phase-focus:not(.is-paused) .focus-clock-zone strong,
+.focus-active-shell.phase-break:not(.is-paused) .focus-clock-zone strong,
+.focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-clock-zone strong {
+  animation: timer-glow 6800ms var(--ease-standard) infinite;
+}
+
+.focus-active-shell.phase-break:not(.is-paused) .focus-clock-zone strong {
+  animation-duration: 7600ms;
+}
+
+.focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-clock-zone strong {
+  animation-duration: 4200ms;
+}
+
+.focus-hud-card:hover .focus-hud-icon {
+  transform: translateY(-1px) scale(1.04);
+}
+
+.focus-hud-card,
+.focus-round-button,
+.live-badge,
+.start-ritual-button {
+  transition:
+    transform var(--motion-base) var(--ease-standard),
+    border-color var(--motion-base) var(--ease-standard),
+    background var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard),
+    opacity var(--motion-base) var(--ease-standard);
+}
+
+.focus-round-button:hover,
+.start-ritual-button:hover {
+  transform: translateY(-1px);
+}
+
+.focus-round-button:active,
+.start-ritual-button:active {
+  transform: scale(0.985);
+}
+
+.alert {
+  animation: compact-rise 220ms var(--ease-emphasized) backwards;
+}
+
+.theme-swatch {
+  transition:
+    transform var(--motion-base) var(--ease-standard),
+    filter var(--motion-base) var(--ease-standard);
+}
+
+button:hover .theme-swatch,
+.theme-choice-grid button:hover .theme-swatch {
+  transform: scale(1.08);
+  filter: saturate(1.08);
+}
+
+@media (max-width: 680px) {
+  .page-transition,
+  .page-shell > .page-header,
+  .schedule-hero,
+  .settings-section-tabs,
+  .prepare-grid,
+  .dashboard-strip,
+  .stats-hero-grid,
+  .stats-board,
+  .whitelist-workbench,
+  .schedule-toolbar,
+  .schedule-composer,
+  .schedule-grid-shell,
+  .settings-tab-panel,
+  .checklist-categories-panel,
+  .today-plan-panel,
+  .command-panel,
+  .soft-panel {
+    animation-duration: 220ms;
+  }
+
+  :is(
+    .metric-card,
+    .core-fact,
+    .details-card,
+    .phase-badge,
+    .setting-row,
+    .capability-row,
+    .tool-row,
+    .list-row,
+    .record-row,
+    .subject-stat-row,
+    .blocked-option,
+    .process-option,
+    .sound-option-card,
+    .custom-sound-picker,
+    .today-item-row,
+    .category-task-row,
+    .schedule-task-row,
+    .template-row,
+    .week-day,
+    .week-block,
+    .alarm-row,
+    .checklist-task-card
+  ):hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    animation-delay: 0ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+
+  .status-dot,
+  .live-dot.on,
+  .schedule-now-line,
+  .focus-active-shell.phase-focus:not(.is-paused) .focus-clock-zone::before,
+  .focus-active-shell.phase-break:not(.is-paused) .focus-clock-zone::before,
+  .focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-clock-zone::before {
+    animation: none !important;
+  }
+}

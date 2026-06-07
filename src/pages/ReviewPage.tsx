@@ -71,8 +71,11 @@ export default function ReviewPage() {
   const [data, setData] = useState<DailyReviewPageData | null>(null);
   const [weeklyData, setWeeklyData] = useState<WeeklyReviewPageData | null>(null);
   const [draft, setDraft] = useState<DailyReviewDraft>(() => emptyDailyDraft(formatDateKey()));
-  const [weeklyDraft, setWeeklyDraft] = useState<WeeklyReviewDraft>(() => emptyWeeklyDraft(weekStartString(formatDateKey())));
+  const [weeklyDraft, setWeeklyDraft] = useState<WeeklyReviewDraft>(() =>
+    emptyWeeklyDraft(weekStartString(formatDateKey())),
+  );
   const [saving, setSaving] = useState(false);
+  const [loadingReview, setLoadingReview] = useState(false);
   const [dailyDirty, setDailyDirty] = useState(false);
   const [weeklyDirty, setWeeklyDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -88,10 +91,13 @@ export default function ReviewPage() {
     }
   }, [mode, selectedDate]);
 
-  async function refreshDaily(date = selectedDate) {
+  async function refreshDaily(date = selectedDate, showLoading = true) {
     const token = dailyRefreshTokenRef.current + 1;
     dailyRefreshTokenRef.current = token;
     try {
+      if (showLoading) {
+        setLoadingReview(true);
+      }
       setError(null);
       const pageData = await getDailyReviewPageData(date);
       if (dailyRefreshTokenRef.current !== token) {
@@ -110,13 +116,20 @@ export default function ReviewPage() {
       if (dailyRefreshTokenRef.current === token) {
         setError(reason instanceof Error ? reason.message : String(reason));
       }
+    } finally {
+      if (dailyRefreshTokenRef.current === token && showLoading) {
+        setLoadingReview(false);
+      }
     }
   }
 
-  async function refreshWeekly(date = selectedDate) {
+  async function refreshWeekly(date = selectedDate, showLoading = true) {
     const token = weeklyRefreshTokenRef.current + 1;
     weeklyRefreshTokenRef.current = token;
     try {
+      if (showLoading) {
+        setLoadingReview(true);
+      }
       setError(null);
       const pageData = await getWeeklyReviewPageData(date);
       if (weeklyRefreshTokenRef.current !== token) {
@@ -135,6 +148,10 @@ export default function ReviewPage() {
       if (weeklyRefreshTokenRef.current === token) {
         setError(reason instanceof Error ? reason.message : String(reason));
       }
+    } finally {
+      if (weeklyRefreshTokenRef.current === token && showLoading) {
+        setLoadingReview(false);
+      }
     }
   }
 
@@ -150,9 +167,10 @@ export default function ReviewPage() {
     return confirm({
       cancelLabel: '继续编辑',
       confirmLabel: '丢弃修改',
-      message: mode === 'daily'
-        ? '当前日复盘有未保存修改，继续操作会用选中日期的数据覆盖草稿。'
-        : '当前周复盘有未保存修改，继续操作会用选中周的数据覆盖草稿。',
+      message:
+        mode === 'daily'
+          ? '当前日复盘有未保存修改，继续操作会用选中日期的数据覆盖草稿。'
+          : '当前周复盘有未保存修改，继续操作会用选中周的数据覆盖草稿。',
       title: '丢弃未保存复盘？',
       tone: 'danger',
     });
@@ -206,11 +224,11 @@ export default function ReviewPage() {
       setMessage(null);
       if (mode === 'daily') {
         await saveDailyReview(draft);
-        await refreshDaily(draft.reviewDate);
+        await refreshDaily(draft.reviewDate, false);
         setDailyDirty(false);
       } else {
         await saveWeeklyReview(weeklyDraft);
-        await refreshWeekly(weeklyDraft.weekStartDate);
+        await refreshWeekly(weeklyDraft.weekStartDate, false);
         setWeeklyDirty(false);
       }
       setMessage('复盘已保存。');
@@ -227,9 +245,10 @@ export default function ReviewPage() {
     if (!reviewId) return;
     const confirmed = await confirm({
       confirmLabel: '删除复盘',
-      message: mode === 'daily'
-        ? '删除后这一天的总结、卡点和明日重点会被清空。'
-        : '删除后这一周的总结、卡点和下周重点会被清空。',
+      message:
+        mode === 'daily'
+          ? '删除后这一天的总结、卡点和明日重点会被清空。'
+          : '删除后这一周的总结、卡点和下周重点会被清空。',
       title: mode === 'daily' ? '删除每日复盘？' : '删除周复盘？',
       tone: 'danger',
     });
@@ -241,11 +260,11 @@ export default function ReviewPage() {
       setMessage(null);
       if (mode === 'daily') {
         await deleteDailyReview(reviewId);
-        await refreshDaily(selectedDate);
+        await refreshDaily(selectedDate, false);
         setDailyDirty(false);
       } else {
         await deleteWeeklyReview(reviewId);
-        await refreshWeekly(selectedDate);
+        await refreshWeekly(selectedDate, false);
         setWeeklyDirty(false);
       }
       setMessage('复盘已删除。');
@@ -258,9 +277,10 @@ export default function ReviewPage() {
   }
 
   const activeSummary = mode === 'daily' ? data?.summary : weeklyData?.summary;
-  const activeLabel = mode === 'daily'
-    ? data?.review_date ?? selectedDate
-    : `${weeklyData?.week_start_date ?? weekStartString(selectedDate)} ~ ${weeklyData?.week_end_date ?? shiftDate(weekStartString(selectedDate), 6)}`;
+  const activeLabel =
+    mode === 'daily'
+      ? (data?.review_date ?? selectedDate)
+      : `${weeklyData?.week_start_date ?? weekStartString(selectedDate)} ~ ${weeklyData?.week_end_date ?? shiftDate(weekStartString(selectedDate), 6)}`;
 
   return (
     <section className="page-shell review-shell">
@@ -268,27 +288,76 @@ export default function ReviewPage() {
         <div>
           <p className="eyebrow">Review</p>
           <h2>{mode === 'daily' ? '每日复盘' : '周复盘'}</h2>
-          <p>{mode === 'daily' ? '把今天的学习节奏、问题卡点和明日重点收拢起来。' : '按周一到周日复盘本周推进、卡点和下周重点。'}</p>
+          <p>
+            {mode === 'daily'
+              ? '把今天的学习节奏、问题卡点和明日重点收拢起来。'
+              : '按周一到周日复盘本周推进、卡点和下周重点。'}
+          </p>
         </div>
         <div className="review-date-tools">
           <div className="segmented-control review-mode-toggle">
-            <button className={mode === 'daily' ? 'active' : ''} type="button" onClick={() => void handleModeChange('daily')}>日复盘</button>
-            <button className={mode === 'weekly' ? 'active' : ''} type="button" onClick={() => void handleModeChange('weekly')}>周复盘</button>
+            <button
+              className={mode === 'daily' ? 'active' : ''}
+              type="button"
+              onClick={() => void handleModeChange('daily')}
+            >
+              日复盘
+            </button>
+            <button
+              className={mode === 'weekly' ? 'active' : ''}
+              type="button"
+              onClick={() => void handleModeChange('weekly')}
+            >
+              周复盘
+            </button>
           </div>
-          <button aria-label={mode === 'daily' ? '前一天' : '前一周'} className="ghost-action icon-action" type="button" onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? -1 : -7))}>
+          <button
+            aria-label={mode === 'daily' ? '前一天' : '前一周'}
+            className="ghost-action icon-action"
+            type="button"
+            onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? -1 : -7))}
+          >
             <ChevronLeft size={16} />
           </button>
-          <input className="text-input" type="date" value={selectedDate} onChange={(event) => void handleDateChange(event.target.value)} />
-          <button aria-label={mode === 'daily' ? '后一天' : '后一周'} className="ghost-action icon-action" type="button" onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? 1 : 7))}>
+          <input
+            className="text-input"
+            type="date"
+            value={selectedDate}
+            onChange={(event) => void handleDateChange(event.target.value)}
+          />
+          <button
+            aria-label={mode === 'daily' ? '后一天' : '后一周'}
+            className="ghost-action icon-action"
+            type="button"
+            onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? 1 : 7))}
+          >
             <ChevronRight size={16} />
           </button>
-          <button className="ghost-action" type="button" onClick={() => void handleRefresh()}>
-            <RefreshCw size={16} /> 刷新
+          <button
+            className="ghost-action"
+            disabled={loadingReview || saving}
+            type="button"
+            onClick={() => void handleRefresh()}
+          >
+            <RefreshCw size={16} /> {loadingReview ? '刷新中' : '刷新'}
           </button>
         </div>
       </header>
 
-      {(error || message) && <div className={error ? 'alert error' : 'alert success'}>{error ?? message}</div>}
+      {(error || message) && (
+        <div
+          className={error ? 'alert error' : 'alert success'}
+          role={error ? 'alert' : undefined}
+          aria-live={error ? undefined : 'polite'}
+        >
+          {error ?? message}
+        </div>
+      )}
+      {loadingReview && (
+        <p className="alert neutral" aria-live="polite">
+          正在更新复盘数据...
+        </p>
+      )}
       {confirmDialog}
 
       <div className="review-grid">
@@ -340,39 +409,79 @@ export default function ReviewPage() {
             <>
               <label className="field-block">
                 <span>今日总结</span>
-                <textarea className="text-input review-textarea" value={draft.summary ?? ''} onChange={(event) => updateDailyDraft({ summary: event.target.value })} placeholder="今天真正推进了什么？哪些安排有效？" />
+                <textarea
+                  className="text-input review-textarea"
+                  value={draft.summary ?? ''}
+                  onChange={(event) => updateDailyDraft({ summary: event.target.value })}
+                  placeholder="今天真正推进了什么？哪些安排有效？"
+                />
               </label>
               <label className="field-block">
                 <span>问题卡点</span>
-                <textarea className="text-input review-textarea" value={draft.blockers ?? ''} onChange={(event) => updateDailyDraft({ blockers: event.target.value })} placeholder="卡住的题、分心原因、没有执行的原因。" />
+                <textarea
+                  className="text-input review-textarea"
+                  value={draft.blockers ?? ''}
+                  onChange={(event) => updateDailyDraft({ blockers: event.target.value })}
+                  placeholder="卡住的题、分心原因、没有执行的原因。"
+                />
               </label>
               <label className="field-block">
                 <span>明日重点</span>
-                <textarea className="text-input review-textarea" value={draft.tomorrowFocus ?? ''} onChange={(event) => updateDailyDraft({ tomorrowFocus: event.target.value })} placeholder="明天最先做哪几件事？" />
+                <textarea
+                  className="text-input review-textarea"
+                  value={draft.tomorrowFocus ?? ''}
+                  onChange={(event) => updateDailyDraft({ tomorrowFocus: event.target.value })}
+                  placeholder="明天最先做哪几件事？"
+                />
               </label>
             </>
           ) : (
             <>
               <label className="field-block">
                 <span>本周总结</span>
-                <textarea className="text-input review-textarea" value={weeklyDraft.summary ?? ''} onChange={(event) => updateWeeklyDraft({ summary: event.target.value })} placeholder="这一周最重要的推进是什么？" />
+                <textarea
+                  className="text-input review-textarea"
+                  value={weeklyDraft.summary ?? ''}
+                  onChange={(event) => updateWeeklyDraft({ summary: event.target.value })}
+                  placeholder="这一周最重要的推进是什么？"
+                />
               </label>
               <label className="field-block">
                 <span>问题卡点</span>
-                <textarea className="text-input review-textarea" value={weeklyDraft.blockers ?? ''} onChange={(event) => updateWeeklyDraft({ blockers: event.target.value })} placeholder="这周反复卡住在哪里？" />
+                <textarea
+                  className="text-input review-textarea"
+                  value={weeklyDraft.blockers ?? ''}
+                  onChange={(event) => updateWeeklyDraft({ blockers: event.target.value })}
+                  placeholder="这周反复卡住在哪里？"
+                />
               </label>
               <label className="field-block">
                 <span>下周重点</span>
-                <textarea className="text-input review-textarea" value={weeklyDraft.nextWeekFocus ?? ''} onChange={(event) => updateWeeklyDraft({ nextWeekFocus: event.target.value })} placeholder="下周最先守住哪几个重点？" />
+                <textarea
+                  className="text-input review-textarea"
+                  value={weeklyDraft.nextWeekFocus ?? ''}
+                  onChange={(event) => updateWeeklyDraft({ nextWeekFocus: event.target.value })}
+                  placeholder="下周最先守住哪几个重点？"
+                />
               </label>
             </>
           )}
 
           <div className="review-actions">
-            <button className="primary-action" disabled={saving} type="button" onClick={() => void handleSave()}>
+            <button
+              className="primary-action"
+              disabled={saving || loadingReview}
+              type="button"
+              onClick={() => void handleSave()}
+            >
               <Save size={16} /> 保存复盘
             </button>
-            <button className="small-action danger" disabled={saving || (mode === 'daily' ? !data?.review : !weeklyData?.review)} type="button" onClick={() => void handleDelete()}>
+            <button
+              className="small-action danger"
+              disabled={saving || loadingReview || (mode === 'daily' ? !data?.review : !weeklyData?.review)}
+              type="button"
+              onClick={() => void handleDelete()}
+            >
               <Trash2 size={15} /> 删除
             </button>
           </div>

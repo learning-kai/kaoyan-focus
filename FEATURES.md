@@ -1,6 +1,6 @@
 # 考研专注功能说明
 
-当前版本：`1.8.1`
+当前版本：`1.8.2`
 
 `考研专注` 是一个面向 Windows 的本地学习约束工具，核心目标是在一段学习模式时间内强制执行番茄钟、休息流程和软件/网站白名单，减少非学习应用对考研复习的干扰。应用使用 Tauri 2 + React + TypeScript + Rust 构建，数据存储在本机 SQLite 数据库中。
 
@@ -437,7 +437,7 @@ PotPlayer 视频白名单只在前台进程是 `PotPlayer` 时生效，并且优
 当前配置：
 
 - `productName`：`考研专注`
-- `version`：`1.5.5`
+- `version`：以 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的当前版本为准。
 - `identifier`：`com.kaoyan.focus`
 - `bundle.targets`：`nsis`
 - `bundle.icon`：`icons/icon.ico`
@@ -455,7 +455,7 @@ PotPlayer 视频白名单只在前台进程是 `PotPlayer` 时生效，并且优
 `release-win-update.mjs` 会根据 `package.json` 的版本号自动拼出安装包路径，例如：
 
 ```text
-src-tauri/target/release/bundle/nsis/考研专注_0.1.4_x64-setup.exe
+src-tauri/target/release/bundle/nsis/kaoyan-focus_<version>_x64-setup.exe
 ```
 
 ### 8.3 签名状态

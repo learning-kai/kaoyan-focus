@@ -73,13 +73,13 @@ html[data-theme='dawn'] {
 }
 
 html[data-theme='forest'] {
-  color: #dff7ea;
-  background: #06120f;
-  --bg: #06120f;
-  --bg-elevated: #0a1c16;
-  --surface: #0e241c;
-  --surface-strong: #153429;
-  --surface-soft: rgba(14, 36, 28, 0.78);
+  color: #e1f7eb;
+  background: #0a1713;
+  --bg: #0a1713;
+  --bg-elevated: #10251e;
+  --surface: #123027;
+  --surface-strong: #193e32;
+  --surface-soft: #102a22;
   --ink: #e5f8ee;
   --muted: #92b9a6;
   --line: rgba(143, 211, 178, 0.16);
@@ -132,7 +132,12 @@ html[data-theme='mono'] body {
     radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.76), transparent 28%),
     radial-gradient(circle at 82% 0%, rgba(129, 138, 130, 0.12), transparent 24%),
     linear-gradient(180deg, #f5f2ea 0%, #e9e4d9 100%);
-  background-size: 32px 32px, 32px 32px, auto, auto, auto;
+  background-size:
+    32px 32px,
+    32px 32px,
+    auto,
+    auto,
+    auto;
 }
 
 html[data-theme='dawn'] body {
@@ -143,7 +148,12 @@ html[data-theme='dawn'] body {
     radial-gradient(circle at 18% 0%, rgba(239, 145, 96, 0.18), transparent 26%),
     radial-gradient(circle at 88% 8%, rgba(53, 111, 214, 0.11), transparent 24%),
     linear-gradient(180deg, #fbf9ef 0%, #eef6f4 100%);
-  background-size: 30px 30px, 30px 30px, auto, auto, auto;
+  background-size:
+    30px 30px,
+    30px 30px,
+    auto,
+    auto,
+    auto;
 }
 
 html[data-theme='forest'] body {
@@ -153,8 +163,13 @@ html[data-theme='forest'] body {
     linear-gradient(90deg, rgba(143, 211, 178, 0.028) 1px, transparent 1px),
     radial-gradient(circle at 18% 8%, rgba(101, 219, 164, 0.12), transparent 25%),
     radial-gradient(circle at 88% 0%, rgba(136, 185, 255, 0.08), transparent 24%),
-    linear-gradient(180deg, #071612 0%, #04100d 100%);
-  background-size: 30px 30px, 30px 30px, auto, auto, auto;
+    linear-gradient(180deg, #0a1914 0%, #07130f 100%);
+  background-size:
+    30px 30px,
+    30px 30px,
+    auto,
+    auto,
+    auto;
 }
 
 html[data-theme='sakura'] body {
@@ -165,7 +180,12 @@ html[data-theme='sakura'] body {
     radial-gradient(circle at 16% 2%, rgba(212, 119, 145, 0.16), transparent 25%),
     radial-gradient(circle at 86% 10%, rgba(85, 121, 223, 0.1), transparent 24%),
     linear-gradient(180deg, #fff8fb 0%, #eef5ff 100%);
-  background-size: 30px 30px, 30px 30px, auto, auto, auto;
+  background-size:
+    30px 30px,
+    30px 30px,
+    auto,
+    auto,
+    auto;
 }
 
 html[data-theme='mono'] .main-panel,
@@ -175,7 +195,7 @@ html[data-theme='sakura'] .main-panel {
 }
 
 html[data-theme='forest'] .main-panel {
-  background: #06120f;
+  background: #0a1713;
 }
 
 html[data-theme='mono'] .sidebar,
@@ -184,16 +204,22 @@ html[data-theme='sakura'] .sidebar {
   color: var(--ink);
   border-right-color: var(--line);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 88%, transparent), color-mix(in srgb, var(--surface-soft) 82%, transparent)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-strong) 88%, transparent),
+      color-mix(in srgb, var(--surface-soft) 82%, transparent)
+    ),
     var(--bg);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.76), 12px 0 34px rgba(80, 87, 102, 0.08);
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.76),
+    12px 0 34px rgba(80, 87, 102, 0.08);
 }
 
 html[data-theme='forest'] .sidebar {
-  background:
-    linear-gradient(180deg, rgba(11, 31, 24, 0.96), rgba(5, 18, 14, 0.92)),
-    var(--bg);
-  box-shadow: inset -1px 0 0 rgba(143, 211, 178, 0.05), 12px 0 34px rgba(0, 10, 7, 0.25);
+  background: linear-gradient(180deg, rgba(11, 31, 24, 0.96), rgba(5, 18, 14, 0.92)), var(--bg);
+  box-shadow:
+    inset -1px 0 0 rgba(143, 211, 178, 0.05),
+    12px 0 34px rgba(0, 10, 7, 0.25);
 }
 
 html[data-theme='mono'] .brand-mark,
@@ -255,11 +281,15 @@ html[data-theme='sakura'] .confirm-dialog {
   border-color: var(--line);
   background:
     radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--blue) 7%, transparent), transparent 34%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 90%, transparent), color-mix(in srgb, var(--surface) 82%, transparent)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-strong) 90%, transparent),
+      color-mix(in srgb, var(--surface) 82%, transparent)
+    ),
     var(--surface);
   box-shadow: var(--shadow-strong);
-  backdrop-filter: blur(16px) saturate(130%);
-  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 html[data-theme='forest'] .top-strip,
@@ -274,11 +304,10 @@ html[data-theme='forest'] .confirm-dialog {
   border-color: var(--line);
   background:
     radial-gradient(circle at 12% 0%, rgba(101, 219, 164, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(16, 42, 33, 0.92), rgba(9, 27, 21, 0.88)),
-    var(--surface);
+    linear-gradient(180deg, rgba(16, 42, 33, 0.92), rgba(9, 27, 21, 0.88)), var(--surface);
   box-shadow: var(--shadow-strong);
-  backdrop-filter: blur(18px) saturate(130%);
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 html[data-theme='mono'] .header-metrics article,
@@ -403,9 +432,7 @@ html[data-theme='forest'] .category-task-row,
 html[data-theme='forest'] .review-metric,
 html[data-theme='forest'] .review-score-row {
   border-color: var(--line);
-  background:
-    linear-gradient(180deg, rgba(19, 49, 39, 0.88), rgba(10, 30, 23, 0.84)),
-    var(--surface);
+  background: linear-gradient(180deg, rgba(19, 49, 39, 0.88), rgba(10, 30, 23, 0.84)), var(--surface);
   box-shadow: var(--shadow-soft);
 }
 
@@ -454,9 +481,7 @@ html[data-theme='sakura'] .nav-item[aria-current='page'] {
 html[data-theme='forest'] .nav-item[aria-current='page'] {
   color: var(--ink);
   border-color: color-mix(in srgb, var(--green) 36%, var(--line));
-  background:
-    linear-gradient(90deg, rgba(101, 219, 164, 0.14), transparent 70%),
-    rgba(18, 47, 37, 0.94);
+  background: linear-gradient(90deg, rgba(101, 219, 164, 0.14), transparent 70%), rgba(18, 47, 37, 0.94);
 }
 
 html[data-theme='mono'] .secondary-action,
@@ -683,7 +708,11 @@ html[data-theme='sakura'] .alert.error,
 html[data-theme='sakura'] .alert.danger {
   color: var(--ink);
   border-color: color-mix(in srgb, var(--red) 28%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--red-soft) 74%, white), color-mix(in srgb, var(--red-soft) 36%, white));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--red-soft) 74%, white),
+    color-mix(in srgb, var(--red-soft) 36%, white)
+  );
 }
 
 html[data-theme='forest'] .alert.error,
@@ -697,7 +726,11 @@ html[data-theme='dawn'] .alert.success,
 html[data-theme='sakura'] .alert.success {
   color: var(--ink);
   border-color: color-mix(in srgb, var(--green) 28%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--green-soft) 74%, white), color-mix(in srgb, var(--green-soft) 36%, white));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--green-soft) 74%, white),
+    color-mix(in srgb, var(--green-soft) 36%, white)
+  );
 }
 
 html[data-theme='forest'] .alert.success {
@@ -784,9 +817,7 @@ html[data-theme='sakura'] .timer-orbit {
 
 html[data-theme='forest'] .timer-orbit {
   border-color: var(--line);
-  background:
-    radial-gradient(circle at 50% 30%, rgba(101, 219, 164, 0.12), transparent 62%),
-    rgba(7, 22, 17, 0.88);
+  background: radial-gradient(circle at 50% 30%, rgba(101, 219, 164, 0.12), transparent 62%), rgba(7, 22, 17, 0.88);
 }
 
 html[data-theme='mono'] .focus-active-shell,
@@ -946,7 +977,11 @@ html[data-theme='sakura'] .category-politics,
 html[data-theme='sakura'] .schedule-block.category-politics,
 html[data-theme='sakura'] .week-block.category-politics {
   border-color: color-mix(in srgb, var(--red) 26%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--red-soft) 70%, white), color-mix(in srgb, var(--surface-strong) 72%, transparent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--red-soft) 70%, white),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent)
+  );
 }
 
 html[data-theme='dawn'] .category-english,
@@ -956,7 +991,11 @@ html[data-theme='sakura'] .category-english,
 html[data-theme='sakura'] .schedule-block.category-english,
 html[data-theme='sakura'] .week-block.category-english {
   border-color: color-mix(in srgb, var(--blue) 24%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--blue-soft) 70%, white), color-mix(in srgb, var(--surface-strong) 72%, transparent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--blue-soft) 70%, white),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent)
+  );
 }
 
 html[data-theme='dawn'] .category-math,
@@ -966,7 +1005,11 @@ html[data-theme='sakura'] .category-math,
 html[data-theme='sakura'] .schedule-block.category-math,
 html[data-theme='sakura'] .week-block.category-math {
   border-color: color-mix(in srgb, var(--amber) 28%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--amber-soft) 74%, white), color-mix(in srgb, var(--surface-strong) 72%, transparent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--amber-soft) 74%, white),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent)
+  );
 }
 
 html[data-theme='dawn'] .category-major,
@@ -976,7 +1019,11 @@ html[data-theme='sakura'] .category-major,
 html[data-theme='sakura'] .schedule-block.category-major,
 html[data-theme='sakura'] .week-block.category-major {
   border-color: color-mix(in srgb, var(--green) 26%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--green-soft) 72%, white), color-mix(in srgb, var(--surface-strong) 72%, transparent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--green-soft) 72%, white),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent)
+  );
 }
 
 html[data-theme='forest'] .category-politics,
@@ -1048,15 +1095,17 @@ html[data-theme='forest'] .confirm-dialog-icon {
   html[data-theme='dawn'] .sidebar,
   html[data-theme='sakura'] .sidebar {
     background:
-      linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 94%, transparent), color-mix(in srgb, var(--surface-soft) 88%, transparent)),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--surface-strong) 94%, transparent),
+        color-mix(in srgb, var(--surface-soft) 88%, transparent)
+      ),
       var(--bg);
     box-shadow: 0 12px 28px rgba(80, 87, 102, 0.1);
   }
 
   html[data-theme='forest'] .sidebar {
-    background:
-      linear-gradient(180deg, rgba(11, 31, 24, 0.98), rgba(5, 18, 14, 0.94)),
-      var(--bg);
+    background: linear-gradient(180deg, rgba(11, 31, 24, 0.98), rgba(5, 18, 14, 0.94)), var(--bg);
     box-shadow: 0 12px 28px rgba(0, 10, 7, 0.28);
   }
 }
@@ -1067,7 +1116,11 @@ html[data-theme='sakura'] .automation-settings-panel {
   border-color: var(--line);
   background:
     radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--blue) 7%, transparent), transparent 34%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 90%, transparent), color-mix(in srgb, var(--surface) 82%, transparent)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-strong) 90%, transparent),
+      color-mix(in srgb, var(--surface) 82%, transparent)
+    ),
     var(--surface);
   box-shadow: var(--shadow-strong);
 }
@@ -1076,8 +1129,7 @@ html[data-theme='forest'] .automation-settings-panel {
   border-color: var(--line);
   background:
     radial-gradient(circle at 12% 0%, rgba(101, 219, 164, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(16, 42, 33, 0.92), rgba(9, 27, 21, 0.88)),
-    var(--surface);
+    linear-gradient(180deg, rgba(16, 42, 33, 0.92), rgba(9, 27, 21, 0.88)), var(--surface);
   box-shadow: var(--shadow-strong);
 }
 
@@ -1093,4 +1145,401 @@ html[data-theme='forest'] .time-input {
   color: var(--ink);
   border-color: var(--line);
   background: rgba(7, 22, 17, 0.78);
+}
+
+html[data-theme='dark'] {
+  --surface-soft: #101b2b;
+  --surface-glass: var(--surface);
+  --surface-glass-strong: var(--surface-strong);
+  --surface-panel: var(--surface);
+  --shadow-panel: var(--shadow);
+  --shadow-control: 0 10px 22px rgba(1, 6, 15, 0.2);
+}
+
+html[data-theme='mono'],
+html[data-theme='dawn'],
+html[data-theme='forest'],
+html[data-theme='sakura'] {
+  --surface-glass: var(--surface);
+  --surface-glass-strong: var(--surface-strong);
+  --surface-panel: var(--surface);
+  --shadow-panel: var(--shadow);
+  --shadow-control: var(--shadow-soft);
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .sidebar,
+    .top-strip,
+    .page-shell,
+    .command-panel,
+    .soft-panel,
+    .start-console,
+    .control-panel,
+    .automation-settings-panel,
+    .reminder-sound-panel,
+    .settings-save-row,
+    .confirm-backdrop,
+    .confirm-dialog,
+    .today-plan-drawer,
+    .schedule-drawer,
+    .schedule-quick-add,
+    .settings-section-tabs,
+    .custom-sound-picker,
+    .custom-sound-file,
+    .sound-volume-row,
+    .sound-option-card,
+    .live-badge,
+    .focus-control-dock,
+    .focus-minimal-status,
+    .focus-round-button,
+    .focus-quiet-action,
+    .focus-hud-card
+  ) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .top-strip,
+    .page-shell,
+    .command-panel,
+    .soft-panel,
+    .start-console,
+    .control-panel,
+    .automation-settings-panel,
+    .reminder-sound-panel,
+    .settings-save-row,
+    .confirm-dialog,
+    .today-plan-drawer,
+    .schedule-drawer,
+    .schedule-hero,
+    .schedule-toolbar,
+    .today-task-rail,
+    .template-rail,
+    .review-hero,
+    .focus-control-dock,
+    .schedule-quick-add
+  ) {
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .header-metrics article,
+    .metric-card,
+    .core-fact,
+    .details-card,
+    .phase-badge,
+    .alert,
+    .setting-row,
+    .capability-row,
+    .tool-row,
+    .list-row,
+    .record-row,
+    .subject-stat-row,
+    .blocked-option,
+    .process-option,
+    .sound-option-card,
+    .custom-sound-picker,
+    .custom-sound-file,
+    .sound-volume-row,
+    .today-item-row,
+    .board-column,
+    .checklist-task-card,
+    .today-composer,
+    .task-composer,
+    .task-inline-editor,
+    .empty-state,
+    .monitor-callout,
+    .potplayer-hint,
+    .category-tab,
+    .category-task-row,
+    .review-metric,
+    .review-score-row,
+    .alarm-row,
+    .alarm-time-card,
+    .alarm-reschedule-editor,
+    .schedule-drawer-composer,
+    .schedule-drawer-block,
+    .schedule-task-row,
+    .template-row,
+    .date-stepper,
+    .week-day,
+    .week-block,
+    .schedule-loading-hint,
+    .live-badge
+  ) {
+  border-color: var(--line);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .today-plan-meta span,
+    .board-title-meta span,
+    .task-card-meta span,
+    .top-strip-status span,
+    .schedule-time-slot span
+  ) {
+  border-color: var(--line);
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .secondary-action,
+    .ghost-action,
+    .small-action,
+    .small-action.is-muted,
+    .chip,
+    .segmented-control button,
+    .stepper-control button,
+    .theme-toggle button,
+    .icon-button,
+    .theme-choice-grid button,
+    .settings-collapse-button,
+    .settings-section-tabs button,
+    .schedule-page .ghost-button,
+    .schedule-task-row button,
+    .template-row button,
+    .schedule-block-actions button,
+    .date-stepper button,
+    .weekday-pills button,
+    .review-score-row button
+  ) {
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .secondary-action:hover,
+    .ghost-action:hover,
+    .small-action:hover,
+    .chip:hover,
+    .segmented-control button:hover,
+    .stepper-control button:hover,
+    .theme-toggle button:hover,
+    .icon-button:hover,
+    .theme-choice-grid button:hover,
+    .settings-collapse-button:hover,
+    .settings-section-tabs button:hover,
+    .schedule-page .ghost-button:hover,
+    .schedule-task-row button:hover,
+    .template-row button:hover,
+    .schedule-block-actions button:hover,
+    .date-stepper button:hover,
+    .weekday-pills button:hover,
+    .review-score-row button:hover
+  ) {
+  border-color: var(--line-strong);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.schedule-lane) {
+  border-color: var(--line);
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--line) 62%, transparent) 0 1px,
+      transparent 1px calc(100% / 18)
+    ),
+    var(--surface);
+  box-shadow: none;
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.schedule-block) {
+  border-color: color-mix(in srgb, var(--blue) 18%, var(--line));
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])
+  :is(.category-tab.active, .today-item-row.is-current, .checklist-board-panel.is-highlighted, .alarm-row.is-upcoming) {
+  border-color: color-mix(in srgb, var(--blue) 28%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 64%, var(--surface-strong));
+}
+
+:is(html[data-theme='dark'], html[data-theme='forest'])
+  :is(.category-tab.active, .today-item-row.is-current, .checklist-board-panel.is-highlighted, .alarm-row.is-upcoming) {
+  border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
+  background: color-mix(in srgb, var(--blue) 10%, var(--surface-strong));
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura']) .alarm-row.is-ringing {
+  border-color: color-mix(in srgb, var(--amber) 34%, var(--line));
+  background: color-mix(in srgb, var(--amber-soft) 72%, var(--surface-strong));
+}
+
+:is(html[data-theme='dark'], html[data-theme='forest']) .alarm-row.is-ringing {
+  border-color: color-mix(in srgb, var(--amber) 36%, var(--line));
+  background: color-mix(in srgb, var(--amber) 12%, var(--surface-strong));
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])
+  :is(.schedule-task-row.picking, .schedule-lane.picking, .schedule-lane.dragging) {
+  border-color: color-mix(in srgb, var(--green) 32%, var(--line));
+  background: color-mix(in srgb, var(--green-soft) 62%, var(--surface));
+}
+
+:is(html[data-theme='dark'], html[data-theme='forest'])
+  :is(.schedule-task-row.picking, .schedule-lane.picking, .schedule-lane.dragging) {
+  border-color: color-mix(in srgb, var(--green) 34%, var(--line));
+  background: color-mix(in srgb, var(--green) 10%, var(--surface));
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])
+  :is(
+    .schedule-block.conflict,
+    .alert.error,
+    .alert.danger,
+    .small-action.danger,
+    .metric-card.danger,
+    .count-pill,
+    .row-icon.danger
+  ) {
+  border-color: color-mix(in srgb, var(--red) 28%, var(--line));
+  color: color-mix(in srgb, var(--red) 72%, var(--ink));
+  background: color-mix(in srgb, var(--red-soft) 72%, var(--surface-strong));
+}
+
+:is(html[data-theme='dark'], html[data-theme='forest'])
+  :is(
+    .schedule-block.conflict,
+    .alert.error,
+    .alert.danger,
+    .small-action.danger,
+    .metric-card.danger,
+    .count-pill,
+    .row-icon.danger
+  ) {
+  border-color: color-mix(in srgb, var(--red) 32%, var(--line));
+  background: color-mix(in srgb, var(--red) 12%, var(--surface-strong));
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.alert.success, .small-action.enabled, .row-icon.enabled) {
+  border-color: color-mix(in srgb, var(--green) 30%, var(--line));
+  background: color-mix(in srgb, var(--green) 12%, var(--surface-strong));
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])
+  :is(
+    .settings-section-tabs button[role='tab'][aria-selected='true'],
+    .weekday-pills button.active,
+    .review-score-row button.active
+  ) {
+  color: var(--theme-active-ink, #ffffff);
+  border-color: transparent;
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--blue) 18%, transparent);
+}
+
+:is(html[data-theme='dark'], html[data-theme='forest'])
+  :is(
+    .settings-section-tabs button[role='tab'][aria-selected='true'],
+    .weekday-pills button.active,
+    .review-score-row button.active
+  ) {
+  color: var(--theme-active-ink, #07111c);
+  border-color: transparent;
+  background: var(--theme-accent-gradient, linear-gradient(135deg, #8db8ff, #69dfb7));
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--blue) 18%, transparent);
+}
+
+html[data-theme='forest'] .focus-active-shell,
+html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
+  background:
+    radial-gradient(circle at 50% 48%, rgba(101, 219, 164, 0.1), transparent 30%),
+    linear-gradient(180deg, #0e221b 0%, #0a1713 100%);
+}
+
+:is(
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )[data-study-fullscreen='true']
+  :is(.focus-round-button, .focus-quiet-action, .focus-hud-card, .focus-minimal-status, .live-badge) {
+  border-color: var(--line);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])[data-study-fullscreen='true']
+  :is(.focus-hud-card:hover, .focus-hud-card.is-active, .focus-quiet-action:hover, .focus-quiet-action.is-active) {
+  background: color-mix(in srgb, var(--blue-soft) 62%, var(--surface-strong));
+}
+
+:is(html[data-theme='dark'], html[data-theme='forest'])[data-study-fullscreen='true']
+  :is(.focus-hud-card:hover, .focus-hud-card.is-active, .focus-quiet-action:hover, .focus-quiet-action.is-active) {
+  background: color-mix(in srgb, var(--blue) 10%, var(--surface-strong));
 }

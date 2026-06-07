@@ -7,4 +7,6 @@ export type SettingsPanelKey =
   | 'objectStorage'
   | 'rules'
   | 'update'
-  | 'foreground';
+  | 'foreground'
+  | 'runtimeHealth'
+  | 'privacyData';

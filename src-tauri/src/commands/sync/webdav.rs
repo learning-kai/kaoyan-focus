@@ -84,8 +84,17 @@ pub fn upload_database_to_webdav(
     let normalized = normalize_settings(resolve_webdav_secret(&connection, settings)?)?;
     persist_webdav_settings(&connection, &normalized, password_changed)?;
     let database_path = database_path(&app)?;
-    let bytes =
-        fs::read(&database_path).map_err(|error| format!("Read local database failed: {error}"))?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&app_data_dir).map_err(|error| error.to_string())?;
+    let snapshot_path = app_data_dir.join("kaoyan-focus.webdav-upload.tmp");
+    create_sqlite_snapshot(&database_path, &snapshot_path)?;
+    let bytes = fs::read(&snapshot_path)
+        .map_err(|error| format!("Read local database snapshot failed: {error}"))?;
+    let _ = fs::remove_file(&snapshot_path);
+    let bytes_len = bytes.len() as u64;
 
     if bytes.is_empty() {
         return Err("Local database is empty; cannot upload.".to_string());
@@ -108,9 +117,7 @@ pub fn upload_database_to_webdav(
             success: true,
             message: "Uploaded to WebDAV successfully.".to_string(),
             remote_url: remote_url.to_string(),
-            bytes: fs::metadata(&database_path)
-                .map(|meta| meta.len())
-                .unwrap_or(0),
+            bytes: bytes_len,
             backup_path: None,
         });
     }
@@ -168,14 +175,7 @@ pub fn download_database_from_webdav(
         .map_err(|error| format!("Write temporary file failed: {error}"))?;
     validate_sqlite_database(&temp_path)?;
 
-    let backup_path = create_local_sync_backup(&app, &local_database_path, "webdav")?;
-
-    fs::rename(&temp_path, &local_database_path)
-        .or_else(|_| {
-            fs::copy(&temp_path, &local_database_path)?;
-            fs::remove_file(&temp_path)
-        })
-        .map_err(|error| format!("Replace local database failed: {error}"))?;
+    let backup_path = replace_local_database_from_temp(&app, &local_database_path, &temp_path, "webdav")?;
 
     let connection = open_database(&local_database_path)?;
     persist_webdav_settings(&connection, &normalized, password_changed)?;

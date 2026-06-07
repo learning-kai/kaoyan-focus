@@ -3,6 +3,75 @@
     app_data_dir.join(format!("kaoyan-focus.before-{prefix}-{stamp}.sqlite3"))
 }
 
+fn sqlite_sidecar_path(database_path: &Path, suffix: &str) -> PathBuf {
+    let mut value = database_path.as_os_str().to_os_string();
+    value.push(suffix);
+    PathBuf::from(value)
+}
+
+fn remove_file_if_exists(path: &Path) -> Result<(), String> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("Remove {} failed: {error}", path.display())),
+    }
+}
+
+fn remove_sqlite_sidecars_best_effort(database_path: &Path) {
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = sqlite_sidecar_path(database_path, suffix);
+        if let Err(error) = remove_file_if_exists(&sidecar) {
+            eprintln!("SQLite sidecar cleanup skipped for {}: {error}", sidecar.display());
+        }
+    }
+}
+
+fn create_sqlite_snapshot(source_path: &Path, snapshot_path: &Path) -> Result<(), String> {
+    if !source_path.exists() {
+        return Err(format!("Local database does not exist: {}", source_path.display()));
+    }
+
+    if let Some(parent) = snapshot_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    remove_file_if_exists(snapshot_path)?;
+    remove_sqlite_sidecars_best_effort(snapshot_path);
+
+    let connection = Connection::open(source_path)
+        .map_err(|error| format!("Open local database for snapshot failed: {error}"))?;
+    connection
+        .busy_timeout(std::time::Duration::from_secs(10))
+        .map_err(|error| error.to_string())?;
+    let snapshot = snapshot_path.to_string_lossy().to_string();
+    connection
+        .execute("VACUUM INTO ?1", rusqlite::params![snapshot])
+        .map_err(|error| format!("Create SQLite snapshot failed: {error}"))?;
+    validate_sqlite_database(snapshot_path)?;
+    Ok(())
+}
+
+fn replace_local_database_from_temp(
+    app: &AppHandle,
+    local_database_path: &Path,
+    temp_path: &Path,
+    backup_prefix: &str,
+) -> Result<Option<String>, String> {
+    validate_sqlite_database(temp_path)?;
+    ensure_no_active_runtime(local_database_path)?;
+    let backup_path = create_local_sync_backup(app, local_database_path, backup_prefix)?;
+
+    remove_sqlite_sidecars_best_effort(local_database_path);
+    fs::rename(temp_path, local_database_path)
+        .or_else(|_| {
+            fs::copy(temp_path, local_database_path)?;
+            fs::remove_file(temp_path)
+        })
+        .map_err(|error| format!("Replace local database failed: {error}"))?;
+    remove_sqlite_sidecars_best_effort(local_database_path);
+    open_database(local_database_path)?;
+    Ok(backup_path)
+}
+
 fn is_local_sync_backup_file_name(name: &str) -> bool {
     name.starts_with("kaoyan-focus.before-") && name.ends_with(".sqlite3")
 }
@@ -52,7 +121,7 @@ fn create_local_sync_backup(
         .map_err(|error| error.to_string())?;
     fs::create_dir_all(&app_data_dir).map_err(|error| error.to_string())?;
     let backup_path = backup_database_path_with_prefix(&app_data_dir, prefix);
-    fs::copy(local_database_path, &backup_path)
+    create_sqlite_snapshot(local_database_path, &backup_path)
         .map_err(|error| format!("Create local sync backup failed: {error}"))?;
     prune_local_sync_backups_best_effort(&app_data_dir);
     Ok(Some(backup_path.to_string_lossy().to_string()))
@@ -259,7 +328,8 @@ fn load_backup_bytes(app: &AppHandle, source: &str, key: &str) -> Result<Vec<u8>
 
 #[cfg(test)]
 mod backup_tests {
-    use super::{is_local_sync_backup_file_name, resolve_local_sync_backup_path};
+    use super::{create_sqlite_snapshot, is_local_sync_backup_file_name, resolve_local_sync_backup_path};
+    use rusqlite::Connection;
     use std::fs;
     use tempfile::tempdir;
 
@@ -272,6 +342,30 @@ mod backup_tests {
         assert!(!is_local_sync_backup_file_name(
             "kaoyan-focus.before-r2-v3-auto-20260607000000.txt"
         ));
+    }
+
+    #[test]
+    fn sqlite_snapshot_includes_wal_commits() {
+        let temp = tempdir().expect("tempdir");
+        let database_path = temp.path().join("source.sqlite3");
+        let snapshot_path = temp.path().join("snapshot.sqlite3");
+        let connection = Connection::open(&database_path).expect("open source database");
+        connection
+            .execute_batch(
+                "
+                PRAGMA journal_mode = WAL;
+                CREATE TABLE records (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+                INSERT INTO records (value) VALUES ('from-wal');
+                ",
+            )
+            .expect("seed source database");
+
+        create_sqlite_snapshot(&database_path, &snapshot_path).expect("create sqlite snapshot");
+        let snapshot = Connection::open(&snapshot_path).expect("open snapshot");
+        let value: String = snapshot
+            .query_row("SELECT value FROM records WHERE id = 1", [], |row| row.get(0))
+            .expect("read snapshot value");
+        assert_eq!(value, "from-wal");
     }
 
     #[test]

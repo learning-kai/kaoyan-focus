@@ -74,6 +74,7 @@ if (!options.skipPublish) {
     assets,
     latest: options.latest,
     prerelease: options.prerelease,
+    replaceAssets: options.replaceAssets,
   });
 }
 
@@ -98,6 +99,7 @@ function parseArgs(args) {
     skipPublish: false,
     skipGit: false,
     skipPush: false,
+    replaceAssets: false,
     dryRun: false,
     prerelease: false,
     latest: true,
@@ -163,6 +165,11 @@ function parseArgs(args) {
 
     if (arg === '--skip-push') {
       options.skipPush = true;
+      continue;
+    }
+
+    if (arg === '--replace-assets') {
+      options.replaceAssets = true;
       continue;
     }
 
@@ -302,6 +309,7 @@ function stageReleaseMetadata() {
     'package.json',
     'package-lock.json',
     'src-tauri/Cargo.toml',
+    'src-tauri/Cargo.lock',
     'src-tauri/tauri.conf.json',
     'CHANGELOG.md',
   ].filter((file) => existsSync(resolve(projectRoot, file)));
@@ -422,10 +430,16 @@ async function readChangelogNotes(version) {
   return match?.[1]?.trim() || null;
 }
 
-async function publishGithubRelease({ repo, tagName, title, notesFile, assets, latest, prerelease }) {
+async function publishGithubRelease({ repo, tagName, title, notesFile, assets, latest, prerelease, replaceAssets }) {
   const exists = runQuiet('gh', ['release', 'view', tagName, '--repo', repo]).status === 0;
 
   if (exists) {
+    if (!replaceAssets) {
+      throw new Error(
+        `GitHub Release ${tagName} already exists. Re-run with --replace-assets to edit notes and overwrite assets.`,
+      );
+    }
+
     const editArgs = ['release', 'edit', tagName, '--repo', repo, '--title', title, '--notes-file', notesFile];
     if (latest) editArgs.push('--latest');
     if (prerelease) editArgs.push('--prerelease');
@@ -484,6 +498,7 @@ function printPlan({ packageName, version, updateBaseUrl, updateRepo, options })
   console.log(`Build/sign/latest.json: ${options.skipBuild ? 'skip' : 'yes'}`);
   console.log(`Release commit/tag: ${options.skipGit ? 'skip' : 'yes'}`);
   console.log(`Push commit/tag: ${options.skipGit || options.skipPush ? 'skip' : 'yes'}`);
+  console.log(`Replace existing release assets: ${options.replaceAssets ? 'yes' : 'no'}`);
   console.log(`Publish GitHub Release: ${options.skipPublish ? 'skip' : 'yes'}`);
   console.log(`Android sync: ${options.includeAndroid ? 'yes' : 'skip'}`);
 }
@@ -508,6 +523,7 @@ Options:
   --skip-publish           Build only; do not upload to GitHub.
   --skip-git               Do not create or push the release commit/tag.
   --skip-push              Create the local release commit/tag but do not push them.
+  --replace-assets         Allow overwriting assets when the GitHub Release already exists.
   --dry-run                Print the plan only.
   --prerelease             Mark the GitHub Release as prerelease.
   --no-latest              Do not explicitly mark the release as latest.
