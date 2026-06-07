@@ -1,6 +1,6 @@
 [package]
 name = "kaoyan-focus"
-version = "1.0.5"
+version = "1.7.1"
 description = "Windows study focus app for exam preparation"
 authors = ["kaoyan-focus"]
 edition = "2021"
@@ -20,6 +20,7 @@ chrono = { version = "0.4", features = ["serde"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
 uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
 aws-config = "1"
 aws-credential-types = "1"
 aws-sdk-s3 = "1"
@@ -28,7 +29,9 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "rustls-tls"] }
 windows = { version = "0.61", features = [
   "Win32_Foundation",
+  "Win32_Security_Cryptography",
   "Win32_System_Com",
+  "Win32_System_Registry",
   "Win32_System_ProcessStatus",
   "Win32_System_Threading",
   "Win32_UI_Accessibility",
@@ -44,3 +47,4 @@ tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.7.2"
+winreg = "0.55"

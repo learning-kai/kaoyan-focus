@@ -6,11 +6,7 @@ import type {
   ScheduleTemplate,
   ScheduleTemplateDraft,
 } from '../types/schedule';
-
-async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<T>(command, args);
-}
+import { invokeCommand } from './tauriInvoke';
 
 export function getSchedulePageData(selectedDate?: string | null): Promise<SchedulePageData> {
   return invokeCommand<SchedulePageData>('get_schedule_page_data', { selectedDate });

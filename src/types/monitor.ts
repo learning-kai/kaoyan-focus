@@ -4,6 +4,7 @@ export type ForegroundApp = {
   process_path: string | null;
   window_title: string;
   browser_url?: string | null;
+  potplayer_media_path?: string | null;
 };
 
 export type RunningProcess = {
@@ -18,6 +19,7 @@ export type WhitelistMatchResult = {
   matched_process_name: string | null;
   detected_domain: string | null;
   matched_subject_id: number | null;
+  potplayer_media_path: string | null;
 };
 
 export type FocusAppCheck = {

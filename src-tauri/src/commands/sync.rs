@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::{
+    credential,
     storage::db::open_database,
     sync_package::{
         count_payload_deleted_entities, count_payload_entities, export_shared_sync_payload,
@@ -38,6 +39,14 @@ use serde_json::{self, Value};
 use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 
+const ACTIVE_CONTROL_ACTIONS: [&str; 6] = [
+    "pause",
+    "resume",
+    "confirm_break",
+    "finish",
+    "emergency_exit",
+    "switch_subject",
+];
 const WEBDAV_URL_KEY: &str = "webdav_url";
 const WEBDAV_USERNAME_KEY: &str = "webdav_username";
 const WEBDAV_PASSWORD_KEY: &str = "webdav_password";
@@ -77,6 +86,8 @@ pub struct WebDavSettings {
     pub url: String,
     pub username: String,
     pub password: String,
+    #[serde(default)]
+    pub password_configured: bool,
     pub remote_path: String,
 }
 
@@ -113,6 +124,7 @@ pub struct WebDavAutoSyncResult {
     pub backup_path: Option<String>,
     pub active_state_changed: bool,
     pub took_over_active_mode: bool,
+    pub primary_owner_changed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +134,8 @@ pub struct ObjectStorageSettings {
     pub bucket: String,
     pub access_key_id: String,
     pub secret_access_key: String,
+    #[serde(default)]
+    pub secret_access_key_configured: bool,
     pub region: String,
     pub object_key: String,
 }
@@ -160,6 +174,7 @@ pub struct ObjectStorageAutoSyncResult {
     pub backup_path: Option<String>,
     pub active_state_changed: bool,
     pub took_over_active_mode: bool,
+    pub primary_owner_changed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -239,6 +254,10 @@ struct R2V3Manifest {
     schema_version: i64,
     current_snapshot_key: Option<String>,
     watermarks: HashMap<String, i64>,
+    #[serde(default)]
+    primary_owner_device_id: Option<String>,
+    #[serde(default)]
+    primary_owner_updated_at: Option<i64>,
     compacted_at: String,
 }
 
@@ -336,14 +355,7 @@ struct SyncRunRecord {
 #[tauri::command]
 pub fn get_webdav_settings(app: AppHandle) -> Result<WebDavSettings, String> {
     let connection = open_database(&database_path(&app)?)?;
-
-    Ok(WebDavSettings {
-        enabled: get_bool_setting(&connection, WEBDAV_ENABLED_KEY, true)?,
-        url: get_setting(&connection, WEBDAV_URL_KEY, "")?,
-        username: get_setting(&connection, WEBDAV_USERNAME_KEY, "")?,
-        password: get_setting(&connection, WEBDAV_PASSWORD_KEY, "")?,
-        remote_path: get_setting(&connection, WEBDAV_REMOTE_PATH_KEY, DEFAULT_REMOTE_PATH)?,
-    })
+    read_webdav_settings(&connection, false)
 }
 
 #[tauri::command]
@@ -351,11 +363,12 @@ pub fn save_webdav_settings(
     app: AppHandle,
     settings: WebDavSettings,
 ) -> Result<WebDavSettings, String> {
-    let normalized = normalize_settings(settings)?;
     let connection = open_database(&database_path(&app)?)?;
-    persist_webdav_settings(&connection, &normalized)?;
+    let password_changed = !settings.password.is_empty();
+    let normalized = normalize_settings(resolve_webdav_secret(&connection, settings)?)?;
+    persist_webdav_settings(&connection, &normalized, password_changed)?;
 
-    Ok(normalized)
+    Ok(redact_webdav_settings(normalized))
 }
 
 #[tauri::command]
@@ -363,7 +376,10 @@ pub fn test_webdav_connection(
     app: AppHandle,
     settings: WebDavSettings,
 ) -> Result<WebDavStatus, String> {
-    let normalized = save_webdav_settings(app, settings)?;
+    let connection = open_database(&database_path(&app)?)?;
+    let password_changed = !settings.password.is_empty();
+    let normalized = normalize_settings(resolve_webdav_secret(&connection, settings)?)?;
+    persist_webdav_settings(&connection, &normalized, password_changed)?;
     let client = webdav_client()?;
     let remote_url = remote_file_url(&normalized)?;
     let response = webdav_request(
@@ -417,7 +433,10 @@ pub fn upload_database_to_webdav(
     app: AppHandle,
     settings: WebDavSettings,
 ) -> Result<WebDavSyncResult, String> {
-    let normalized = save_webdav_settings(app.clone(), settings)?;
+    let connection = open_database(&database_path(&app)?)?;
+    let password_changed = !settings.password.is_empty();
+    let normalized = normalize_settings(resolve_webdav_secret(&connection, settings)?)?;
+    persist_webdav_settings(&connection, &normalized, password_changed)?;
     let database_path = database_path(&app)?;
     let bytes =
         fs::read(&database_path).map_err(|error| format!("Read local database failed: {error}"))?;
@@ -461,7 +480,11 @@ pub fn download_database_from_webdav(
     app: AppHandle,
     settings: WebDavSettings,
 ) -> Result<WebDavSyncResult, String> {
-    let normalized = normalize_settings(settings)?;
+    let password_changed = !settings.password.is_empty();
+    let normalized = {
+        let connection = open_database(&database_path(&app)?)?;
+        normalize_settings(resolve_webdav_secret(&connection, settings)?)?
+    };
     let local_database_path = database_path(&app)?;
     ensure_no_active_runtime(&local_database_path)?;
     let client = webdav_client()?;
@@ -509,7 +532,7 @@ pub fn download_database_from_webdav(
         .map_err(|error| format!("Replace local database failed: {error}"))?;
 
     let connection = open_database(&local_database_path)?;
-    persist_webdav_settings(&connection, &normalized)?;
+    persist_webdav_settings(&connection, &normalized, password_changed)?;
 
     Ok(WebDavSyncResult {
         success: true,
@@ -522,7 +545,8 @@ pub fn download_database_from_webdav(
 
 #[tauri::command]
 pub fn auto_sync_webdav_database(app: AppHandle) -> Result<WebDavAutoSyncResult, String> {
-    let settings = get_webdav_settings(app.clone())?;
+    let connection = open_database(&database_path(&app)?)?;
+    let settings = read_webdav_settings(&connection, true)?;
     if !settings.enabled {
         return Ok(skipped_auto_sync(
             "webdav_disabled",
@@ -577,6 +601,7 @@ pub fn auto_sync_webdav_database(app: AppHandle) -> Result<WebDavAutoSyncResult,
             backup_path: None,
             active_state_changed: false,
             took_over_active_mode: false,
+            primary_owner_changed: false,
         });
     }
 
@@ -603,6 +628,7 @@ pub fn auto_sync_webdav_database(app: AppHandle) -> Result<WebDavAutoSyncResult,
             backup_path: download_result.backup_path,
             active_state_changed: false,
             took_over_active_mode: false,
+            primary_owner_changed: false,
         });
     }
 
@@ -619,6 +645,7 @@ pub fn auto_sync_webdav_database(app: AppHandle) -> Result<WebDavAutoSyncResult,
             backup_path: None,
             active_state_changed: false,
             took_over_active_mode: false,
+            primary_owner_changed: false,
         });
     }
 
@@ -639,30 +666,14 @@ pub fn auto_sync_webdav_database(app: AppHandle) -> Result<WebDavAutoSyncResult,
         backup_path: None,
         active_state_changed: false,
         took_over_active_mode: false,
+        primary_owner_changed: false,
     })
 }
 
 #[tauri::command]
 pub fn get_object_storage_settings(app: AppHandle) -> Result<ObjectStorageSettings, String> {
     let connection = open_database(&database_path(&app)?)?;
-
-    Ok(ObjectStorageSettings {
-        enabled: get_bool_setting(&connection, OBJECT_STORAGE_ENABLED_KEY, false)?,
-        endpoint: get_setting(&connection, OBJECT_STORAGE_ENDPOINT_KEY, "")?,
-        bucket: get_setting(&connection, OBJECT_STORAGE_BUCKET_KEY, "")?,
-        access_key_id: get_setting(&connection, OBJECT_STORAGE_ACCESS_KEY_ID_KEY, "")?,
-        secret_access_key: get_setting(&connection, OBJECT_STORAGE_SECRET_ACCESS_KEY_KEY, "")?,
-        region: get_setting(
-            &connection,
-            OBJECT_STORAGE_REGION_KEY,
-            DEFAULT_OBJECT_REGION,
-        )?,
-        object_key: normalize_object_storage_key(&get_setting(
-            &connection,
-            OBJECT_STORAGE_OBJECT_KEY_KEY,
-            "",
-        )?),
-    })
+    read_object_storage_settings(&connection, false)
 }
 
 #[tauri::command]
@@ -670,11 +681,13 @@ pub fn save_object_storage_settings(
     app: AppHandle,
     settings: ObjectStorageSettings,
 ) -> Result<ObjectStorageSettings, String> {
-    let normalized = normalize_object_storage_settings(settings)?;
     let connection = open_database(&database_path(&app)?)?;
-    persist_object_storage_settings(&connection, &normalized)?;
+    let secret_changed = !settings.secret_access_key.is_empty();
+    let normalized =
+        normalize_object_storage_settings(resolve_object_storage_secret(&connection, settings)?)?;
+    persist_object_storage_settings(&connection, &normalized, secret_changed)?;
 
-    Ok(normalized)
+    Ok(redact_object_storage_settings(normalized))
 }
 
 #[tauri::command]
@@ -682,7 +695,11 @@ pub fn test_object_storage_connection(
     app: AppHandle,
     settings: ObjectStorageSettings,
 ) -> Result<ObjectStorageStatus, String> {
-    let normalized = save_object_storage_settings(app, settings)?;
+    let connection = open_database(&database_path(&app)?)?;
+    let secret_changed = !settings.secret_access_key.is_empty();
+    let normalized =
+        normalize_object_storage_settings(resolve_object_storage_secret(&connection, settings)?)?;
+    persist_object_storage_settings(&connection, &normalized, secret_changed)?;
     let metadata = with_s3_runtime(async {
         let client = object_storage_client(&normalized).await?;
         fetch_object_storage_metadata(&client, &normalized).await
@@ -764,7 +781,8 @@ pub fn list_sync_backups(app: AppHandle) -> Result<Vec<SyncBackupEntry>, String>
         }
     }
 
-    if let Ok(settings) = get_object_storage_settings(app.clone()) {
+    if let Ok(connection) = open_database(&database_path(&app)?) {
+        let settings = read_object_storage_settings(&connection, true)?;
         if settings.enabled && object_storage_configured(&settings) {
             let normalized = normalize_object_storage_settings(settings)?;
             if let Ok(remote) = list_object_storage_backup_entries(&normalized) {
@@ -865,7 +883,11 @@ pub fn upload_database_to_object_storage(
     app: AppHandle,
     settings: ObjectStorageSettings,
 ) -> Result<ObjectStorageSyncResult, String> {
-    let normalized = save_object_storage_settings(app.clone(), settings)?;
+    let connection = open_database(&database_path(&app)?)?;
+    let secret_changed = !settings.secret_access_key.is_empty();
+    let normalized =
+        normalize_object_storage_settings(resolve_object_storage_secret(&connection, settings)?)?;
+    persist_object_storage_settings(&connection, &normalized, secret_changed)?;
     let auto = sync_r2_v3_object_storage(app, "manual_upload", false)?;
     Ok(ObjectStorageSyncResult {
         success: auto.status == "synced",
@@ -886,7 +908,11 @@ pub fn download_database_from_object_storage(
     app: AppHandle,
     settings: ObjectStorageSettings,
 ) -> Result<ObjectStorageSyncResult, String> {
-    let normalized = save_object_storage_settings(app.clone(), settings)?;
+    let connection = open_database(&database_path(&app)?)?;
+    let secret_changed = !settings.secret_access_key.is_empty();
+    let normalized =
+        normalize_object_storage_settings(resolve_object_storage_secret(&connection, settings)?)?;
+    persist_object_storage_settings(&connection, &normalized, secret_changed)?;
     let auto = sync_r2_v3_object_storage(app, "manual_download", true)?;
     Ok(ObjectStorageSyncResult {
         success: auto.status == "synced",
@@ -939,7 +965,8 @@ fn sync_r2_v3_object_storage(
         "R2 v3 sync start id={} trigger={} pull_only={}",
         sync_id, trigger, pull_only
     );
-    let settings = get_object_storage_settings(app.clone())?;
+    let connection = open_database(&database_path(&app)?)?;
+    let settings = read_object_storage_settings(&connection, true)?;
     if !settings.enabled {
         let result = skipped_object_storage_auto_sync(
             "object_storage_disabled",
@@ -1003,10 +1030,14 @@ fn sync_r2_v3_object_storage(
         let local_payload =
             export_shared_sync_payload(&connection, device_id.clone(), exported_at)?;
         let local_active_snapshot = shared_active_study_snapshot(&local_payload);
+        let upload_context = active_upload_filter_context(&local_payload, &device_id);
         let local_pending_operations = if pull_only {
             Vec::new()
         } else {
-            payload_entity_operations(&local_payload, &device_id, &local_entity_versions)?
+            filter_passive_active_upload_operations(
+                payload_entity_operations(&local_payload, &device_id, &local_entity_versions)?,
+                &upload_context,
+            )
         };
         eprintln!(
             "R2 v3 sync stage id={} attempt={} exported pending_ops={}",
@@ -1112,6 +1143,10 @@ fn sync_r2_v3_object_storage(
             remote_state.operation_count,
             remote_state.migrated_legacy
         );
+        let local_primary_owner = (
+            local_payload.primary_owner_device_id.clone(),
+            local_payload.primary_owner_updated_at,
+        );
         let merged_payload = if pull_only {
             merge_remote_payload_into_local(
                 local_payload,
@@ -1155,6 +1190,11 @@ fn sync_r2_v3_object_storage(
             device_id.clone(),
             Utc::now().timestamp_millis(),
         )?;
+        let primary_owner_changed = local_primary_owner
+            != (
+                refreshed_payload.primary_owner_device_id.clone(),
+                refreshed_payload.primary_owner_updated_at,
+            );
         let refreshed_active_snapshot = shared_active_study_snapshot(&refreshed_payload);
         let active_state_changed = local_active_snapshot != refreshed_active_snapshot;
         let took_over_active_mode = refreshed_active_snapshot.is_some()
@@ -1179,6 +1219,7 @@ fn sync_r2_v3_object_storage(
                 backup_path: backup_path.clone(),
                 active_state_changed,
                 took_over_active_mode,
+                primary_owner_changed,
             };
             record_object_sync_result(
                 &app,
@@ -1214,8 +1255,10 @@ fn sync_r2_v3_object_storage(
                 ),
                 &local_pending_operations,
             );
-            let refreshed_ops =
-                payload_entity_operations(&refreshed_payload, &device_id, &version_seed)?;
+            let refreshed_ops = filter_passive_active_upload_operations(
+                payload_entity_operations(&refreshed_payload, &device_id, &version_seed)?,
+                &active_upload_filter_context(&refreshed_payload, &device_id),
+            );
             eprintln!(
                 "R2 v3 sync stage id={} attempt={} upload_refreshed_ops={}",
                 sync_id,
@@ -1223,7 +1266,19 @@ fn sync_r2_v3_object_storage(
                 refreshed_ops.len()
             );
             upload_payload_operations(&client, &normalized, &refreshed_ops).await?;
-            if local_pending_operations.is_empty() && refreshed_ops.is_empty() {
+            let primary_owner_manifest_changed = remote_state
+                .manifest
+                .as_ref()
+                .map(|manifest| {
+                    manifest.primary_owner_device_id != refreshed_payload.primary_owner_device_id
+                        || manifest.primary_owner_updated_at
+                            != refreshed_payload.primary_owner_updated_at
+                })
+                .unwrap_or(true);
+            if local_pending_operations.is_empty()
+                && refreshed_ops.is_empty()
+                && !primary_owner_manifest_changed
+            {
                 return Ok::<(bool, Vec<R2V3Operation>), String>((true, refreshed_ops));
             }
             let mut watermarks = remote_state.watermarks.clone();
@@ -1271,6 +1326,8 @@ fn sync_r2_v3_object_storage(
                         .as_ref()
                         .and_then(|manifest| manifest.current_snapshot_key.clone()),
                     watermarks,
+                    refreshed_payload.primary_owner_device_id.clone(),
+                    refreshed_payload.primary_owner_updated_at,
                     remote_state.manifest_etag.as_deref(),
                 )
                 .await?
@@ -1295,6 +1352,7 @@ fn sync_r2_v3_object_storage(
                 backup_path: backup_path.clone(),
                 active_state_changed,
                 took_over_active_mode,
+                primary_owner_changed,
             };
             record_object_sync_result(
                 &app,
@@ -1334,6 +1392,7 @@ fn sync_r2_v3_object_storage(
                 backup_path: backup_path.clone(),
                 active_state_changed,
                 took_over_active_mode,
+                primary_owner_changed,
             };
             record_object_sync_result(
                 &app,
@@ -1440,7 +1499,8 @@ fn auto_sync_object_storage_database_blocking_with_trigger(
 }
 
 fn has_pending_object_storage_local_changes(app: AppHandle) -> Result<bool, String> {
-    let settings = get_object_storage_settings(app.clone())?;
+    let connection = open_database(&database_path(&app)?)?;
+    let settings = read_object_storage_settings(&connection, true)?;
     if !settings.enabled || !object_storage_configured(&settings) {
         return Ok(false);
     }
@@ -1453,11 +1513,16 @@ fn has_pending_object_storage_local_changes(app: AppHandle) -> Result<bool, Stri
         device_id.clone(),
         Utc::now().timestamp_millis(),
     )?;
-    Ok(!payload_entity_operations(&payload, &device_id, &entity_versions)?.is_empty())
+    Ok(!filter_passive_active_upload_operations(
+        payload_entity_operations(&payload, &device_id, &entity_versions)?,
+        &active_upload_filter_context(&payload, &device_id),
+    )
+    .is_empty())
 }
 fn normalize_settings(settings: WebDavSettings) -> Result<WebDavSettings, String> {
     let url = settings.url.trim().trim_end_matches('/').to_string();
     let username = settings.username.trim().to_string();
+    let password_configured = !settings.password.is_empty() || settings.password_configured;
     let password = settings.password;
     let remote_path = settings
         .remote_path
@@ -1486,6 +1551,7 @@ fn normalize_settings(settings: WebDavSettings) -> Result<WebDavSettings, String
         url,
         username,
         password,
+        password_configured,
         remote_path: if remote_path.is_empty() {
             DEFAULT_REMOTE_PATH.to_string()
         } else {
@@ -1500,6 +1566,8 @@ fn normalize_object_storage_settings(
     let endpoint = settings.endpoint.trim().trim_end_matches('/').to_string();
     let bucket = settings.bucket.trim().to_string();
     let access_key_id = settings.access_key_id.trim().to_string();
+    let secret_access_key_configured =
+        !settings.secret_access_key.is_empty() || settings.secret_access_key_configured;
     let secret_access_key = settings.secret_access_key;
     let region = settings.region.trim().to_string();
     let object_key = normalize_object_storage_key(&settings.object_key);
@@ -1541,6 +1609,7 @@ fn normalize_object_storage_settings(
         bucket,
         access_key_id,
         secret_access_key,
+        secret_access_key_configured,
         region: if region.is_empty() {
             DEFAULT_OBJECT_REGION.to_string()
         } else {
@@ -1566,6 +1635,89 @@ fn object_storage_configured(settings: &ObjectStorageSettings) -> bool {
         && !settings.access_key_id.trim().is_empty()
         && !settings.secret_access_key.trim().is_empty()
         && !settings.object_key.trim().is_empty()
+}
+
+fn read_webdav_settings(
+    connection: &Connection,
+    include_secret: bool,
+) -> Result<WebDavSettings, String> {
+    let password_configured = credential::secret_configured(connection, WEBDAV_PASSWORD_KEY)?;
+    let password = if include_secret {
+        credential::get_secret(connection, WEBDAV_PASSWORD_KEY)?
+    } else {
+        String::new()
+    };
+    Ok(WebDavSettings {
+        enabled: get_bool_setting(connection, WEBDAV_ENABLED_KEY, true)?,
+        url: get_setting(connection, WEBDAV_URL_KEY, "")?,
+        username: get_setting(connection, WEBDAV_USERNAME_KEY, "")?,
+        password,
+        password_configured,
+        remote_path: get_setting(connection, WEBDAV_REMOTE_PATH_KEY, DEFAULT_REMOTE_PATH)?,
+    })
+}
+
+fn resolve_webdav_secret(
+    connection: &Connection,
+    mut settings: WebDavSettings,
+) -> Result<WebDavSettings, String> {
+    if settings.password.is_empty() {
+        settings.password = credential::get_secret(connection, WEBDAV_PASSWORD_KEY)?;
+    }
+    settings.password_configured = !settings.password.is_empty();
+    Ok(settings)
+}
+
+fn redact_webdav_settings(mut settings: WebDavSettings) -> WebDavSettings {
+    settings.password_configured = !settings.password.is_empty() || settings.password_configured;
+    settings.password.clear();
+    settings
+}
+
+fn read_object_storage_settings(
+    connection: &Connection,
+    include_secret: bool,
+) -> Result<ObjectStorageSettings, String> {
+    let secret_access_key_configured =
+        credential::secret_configured(connection, OBJECT_STORAGE_SECRET_ACCESS_KEY_KEY)?;
+    let secret_access_key = if include_secret {
+        credential::get_secret(connection, OBJECT_STORAGE_SECRET_ACCESS_KEY_KEY)?
+    } else {
+        String::new()
+    };
+    Ok(ObjectStorageSettings {
+        enabled: get_bool_setting(connection, OBJECT_STORAGE_ENABLED_KEY, false)?,
+        endpoint: get_setting(connection, OBJECT_STORAGE_ENDPOINT_KEY, "")?,
+        bucket: get_setting(connection, OBJECT_STORAGE_BUCKET_KEY, "")?,
+        access_key_id: get_setting(connection, OBJECT_STORAGE_ACCESS_KEY_ID_KEY, "")?,
+        secret_access_key,
+        secret_access_key_configured,
+        region: get_setting(connection, OBJECT_STORAGE_REGION_KEY, DEFAULT_OBJECT_REGION)?,
+        object_key: normalize_object_storage_key(&get_setting(
+            connection,
+            OBJECT_STORAGE_OBJECT_KEY_KEY,
+            "",
+        )?),
+    })
+}
+
+fn resolve_object_storage_secret(
+    connection: &Connection,
+    mut settings: ObjectStorageSettings,
+) -> Result<ObjectStorageSettings, String> {
+    if settings.secret_access_key.is_empty() {
+        settings.secret_access_key =
+            credential::get_secret(connection, OBJECT_STORAGE_SECRET_ACCESS_KEY_KEY)?;
+    }
+    settings.secret_access_key_configured = !settings.secret_access_key.is_empty();
+    Ok(settings)
+}
+
+fn redact_object_storage_settings(mut settings: ObjectStorageSettings) -> ObjectStorageSettings {
+    settings.secret_access_key_configured =
+        !settings.secret_access_key.is_empty() || settings.secret_access_key_configured;
+    settings.secret_access_key.clear();
+    settings
 }
 
 fn r2_v3_prefix(settings: &ObjectStorageSettings) -> String {
@@ -1604,6 +1756,8 @@ fn empty_shared_payload(device_id: &str, exported_at: i64) -> SharedSyncPayload 
         exported_at,
         source_device_id: Some(device_id.to_string()),
         active_device_id: None,
+        primary_owner_device_id: None,
+        primary_owner_updated_at: None,
         subjects: Vec::new(),
         study_modes: Vec::new(),
         focus_sessions: Vec::new(),
@@ -1753,6 +1907,113 @@ fn payload_entity_operations(
     operations
         .dedup_by(|left, right| left.op_id == right.op_id && left.device_id == right.device_id);
     Ok(operations)
+}
+
+#[derive(Debug, Clone)]
+struct ActiveUploadFilterContext {
+    is_non_primary: bool,
+    active_study_sync_id: Option<String>,
+    active_session_sync_id: Option<String>,
+    last_accepted_control_at: Option<i64>,
+}
+
+fn active_upload_filter_context(
+    payload: &SharedSyncPayload,
+    device_id: &str,
+) -> ActiveUploadFilterContext {
+    let owner = payload
+        .primary_owner_device_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let is_non_primary = owner.is_some_and(|owner| owner != device_id);
+    let active_mode = shared_active_study_snapshot(payload).and_then(|snapshot| {
+        payload
+            .study_modes
+            .iter()
+            .find(|mode| mode.sync_id == snapshot.sync_id)
+    });
+    ActiveUploadFilterContext {
+        is_non_primary,
+        active_study_sync_id: active_mode.map(|mode| mode.sync_id.clone()),
+        active_session_sync_id: active_mode.and_then(|mode| mode.current_session_sync_id.clone()),
+        last_accepted_control_at: active_mode.and_then(|mode| mode.last_control_at),
+    }
+}
+
+fn filter_passive_active_upload_operations(
+    operations: Vec<R2V3Operation>,
+    context: &ActiveUploadFilterContext,
+) -> Vec<R2V3Operation> {
+    if !context.is_non_primary {
+        return operations;
+    }
+    operations
+        .into_iter()
+        .filter(|operation| {
+            if operation.entity_type == "study_mode"
+                && context
+                    .active_study_sync_id
+                    .as_deref()
+                    .is_some_and(|sync_id| sync_id == operation.sync_id)
+            {
+                return operation_has_local_control_intent(
+                    operation,
+                    context.last_accepted_control_at,
+                );
+            }
+            if operation.entity_type == "focus_session"
+                && context
+                    .active_session_sync_id
+                    .as_deref()
+                    .is_some_and(|sync_id| sync_id == operation.sync_id)
+            {
+                return false;
+            }
+            true
+        })
+        .collect()
+}
+
+fn operation_has_local_control_intent(
+    operation: &R2V3Operation,
+    last_accepted_control_at: Option<i64>,
+) -> bool {
+    let Some(payload) = operation.payload.as_ref() else {
+        return false;
+    };
+    let Some(control_device_id) = payload
+        .get("lastControlDeviceId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return false;
+    };
+    if control_device_id != operation.device_id {
+        return false;
+    }
+    let Some(action) = payload
+        .get("lastControlAction")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| ACTIVE_CONTROL_ACTIONS.contains(value))
+    else {
+        return false;
+    };
+    let Some(control_at) = payload.get("lastControlAt").and_then(Value::as_i64) else {
+        return false;
+    };
+    let updated_at = payload
+        .get("updatedAt")
+        .and_then(Value::as_i64)
+        .unwrap_or(control_at);
+    control_at > 0
+        && updated_at <= control_at.saturating_add(2_000)
+        && last_accepted_control_at
+            .map(|accepted_at| control_at >= accepted_at && updated_at == control_at)
+            .unwrap_or(true)
+        && !action.is_empty()
 }
 
 fn payload_from_operations(
@@ -2690,6 +2951,10 @@ async fn load_r2_v3_remote_state(
         .as_ref()
         .map(|snapshot| snapshot.payload.clone())
         .unwrap_or_else(|| empty_shared_payload(device_id, exported_at));
+    if manifest.primary_owner_device_id.is_some() || manifest.primary_owner_updated_at.is_some() {
+        payload.primary_owner_device_id = manifest.primary_owner_device_id.clone();
+        payload.primary_owner_updated_at = manifest.primary_owner_updated_at;
+    }
     let snapshot_watermarks = snapshot
         .as_ref()
         .map(|snapshot| snapshot.watermarks.clone())
@@ -2763,6 +3028,8 @@ async fn write_r2_v3_snapshot_and_manifest(
         schema_version: R2_V3_SCHEMA_VERSION,
         current_snapshot_key: Some(snapshot_key),
         watermarks,
+        primary_owner_device_id: snapshot.payload.primary_owner_device_id.clone(),
+        primary_owner_updated_at: snapshot.payload.primary_owner_updated_at,
         compacted_at: now.to_rfc3339(),
     };
     let manifest_bytes = serde_json::to_vec(&manifest).map_err(|error| error.to_string())?;
@@ -2781,12 +3048,16 @@ async fn write_r2_v3_manifest(
     settings: &ObjectStorageSettings,
     current_snapshot_key: Option<String>,
     watermarks: HashMap<String, i64>,
+    primary_owner_device_id: Option<String>,
+    primary_owner_updated_at: Option<i64>,
     manifest_etag: Option<&str>,
 ) -> Result<bool, String> {
     let manifest = R2V3Manifest {
         schema_version: R2_V3_SCHEMA_VERSION,
         current_snapshot_key,
         watermarks,
+        primary_owner_device_id,
+        primary_owner_updated_at,
         compacted_at: Utc::now().to_rfc3339(),
     };
     let manifest_bytes = serde_json::to_vec(&manifest).map_err(|error| error.to_string())?;
@@ -2832,7 +3103,7 @@ async fn fetch_object_storage_metadata(
                     last_modified: None,
                 })
             } else {
-                Err(format!("闂備浇宕垫慨鏉懨洪埡鍜佹晪鐟滄垿濡甸幇鏉跨倞闁宠鍎虫禍楣冩煟閵忊槅鍟忛柡鈧导瀛樼參闁哄诞鍐句紑闂侀€炲苯澧紒瀣浮閺佸姊虹粙娆惧剰缂佸娼ч…鍥╂嫚瀹割喚鍙嗛梺鍛婄矆濡炴帞妲愰幘缁樷拺缂備焦锕╅悞楣冩煕閳哄倻澧甸柛鈹惧亾濡炪倖鍨煎▔鏇⑺囬敃鍌涚厪闁搞儯鍔岄悘鈺呮煙瀹勬壆绉哄┑锛勫厴椤㈡稑顭ㄩ崨顖氱倞{error}"))
+                Err(format!("读取对象存储远程文件元数据失败：{error}"))
             }
         }
     }
@@ -3146,7 +3417,10 @@ pub(crate) fn prune_sync_backups_best_effort(app: &AppHandle) {
         Err(error) => eprintln!("Resolve app data dir for backup prune failed: {error}"),
     }
 
-    match get_object_storage_settings(app.clone()) {
+    match database_path(app)
+        .and_then(|path| open_database(&path))
+        .and_then(|connection| read_object_storage_settings(&connection, true))
+    {
         Ok(settings) if settings.enabled && object_storage_configured(&settings) => {
             match normalize_object_storage_settings(settings) {
                 Ok(normalized) => {
@@ -3169,7 +3443,9 @@ fn load_backup_bytes(app: &AppHandle, source: &str, key: &str) -> Result<Vec<u8>
         let path = PathBuf::from(key);
         return fs::read(&path).map_err(|error| format!("Read local backup failed: {error}"));
     }
-    let settings = normalize_object_storage_settings(get_object_storage_settings(app.clone())?)?;
+    let connection = open_database(&database_path(app)?)?;
+    let settings =
+        normalize_object_storage_settings(read_object_storage_settings(&connection, true)?)?;
     with_s3_runtime(async {
         let client = object_storage_client(&settings).await?;
         let response = client
@@ -3506,6 +3782,7 @@ fn set_setting(
 fn persist_webdav_settings(
     connection: &Connection,
     settings: &WebDavSettings,
+    password_changed: bool,
 ) -> Result<(), String> {
     let now = Utc::now().to_rfc3339();
     set_setting(
@@ -3516,7 +3793,11 @@ fn persist_webdav_settings(
     )?;
     set_setting(connection, WEBDAV_URL_KEY, &settings.url, &now)?;
     set_setting(connection, WEBDAV_USERNAME_KEY, &settings.username, &now)?;
-    set_setting(connection, WEBDAV_PASSWORD_KEY, &settings.password, &now)?;
+    if password_changed {
+        credential::set_secret(connection, WEBDAV_PASSWORD_KEY, &settings.password, &now)?;
+    } else {
+        credential::set_secret_if_changed(connection, WEBDAV_PASSWORD_KEY, "", &now)?;
+    }
     set_setting(
         connection,
         WEBDAV_REMOTE_PATH_KEY,
@@ -3529,6 +3810,7 @@ fn persist_webdav_settings(
 fn persist_object_storage_settings(
     connection: &Connection,
     settings: &ObjectStorageSettings,
+    secret_changed: bool,
 ) -> Result<(), String> {
     let now = Utc::now().to_rfc3339();
     set_setting(
@@ -3555,12 +3837,21 @@ fn persist_object_storage_settings(
         &settings.access_key_id,
         &now,
     )?;
-    set_setting(
-        connection,
-        OBJECT_STORAGE_SECRET_ACCESS_KEY_KEY,
-        &settings.secret_access_key,
-        &now,
-    )?;
+    if secret_changed {
+        credential::set_secret(
+            connection,
+            OBJECT_STORAGE_SECRET_ACCESS_KEY_KEY,
+            &settings.secret_access_key,
+            &now,
+        )?;
+    } else {
+        credential::set_secret_if_changed(
+            connection,
+            OBJECT_STORAGE_SECRET_ACCESS_KEY_KEY,
+            "",
+            &now,
+        )?;
+    }
     set_setting(
         connection,
         OBJECT_STORAGE_REGION_KEY,
@@ -3655,6 +3946,7 @@ fn skipped_auto_sync(
         backup_path: None,
         active_state_changed: false,
         took_over_active_mode: false,
+        primary_owner_changed: false,
     }
 }
 
@@ -3674,11 +3966,12 @@ fn skipped_object_storage_auto_sync(
         backup_path: None,
         active_state_changed: false,
         took_over_active_mode: false,
+        primary_owner_changed: false,
     }
 }
 
 fn emit_study_sync_state_changed(app: &AppHandle, result: &ObjectStorageAutoSyncResult) {
-    if !result.active_state_changed {
+    if !result.active_state_changed && !result.primary_owner_changed {
         return;
     }
 

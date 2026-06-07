@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+﻿import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, Gauge, Leaf, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import ScheduleDrawer from '../components/ScheduleDrawer';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
 import { completeTodayPlanItem, createTodayPlanItem, deleteTodayPlanItem, getChecklistPageData, reorderTodayPlanItems, updateTodayPlanItem } from '../services/checklistApi';
@@ -10,8 +10,9 @@ import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSe
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { createScheduleBlock, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
-import { FEISHU_SYNC_REFRESH_EVENT, STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange, getAppSettings } from '../services/settingsApi';
+import { FEISHU_SYNC_REFRESH_EVENT, STUDY_SYNC_STATE_CHANGED_EVENT, getAppSettings, getSyncDeviceId, saveAppSettings, syncConfiguredStateChange } from '../services/settingsApi';
 import { setStudyFullscreen } from '../services/systemApi';
+import { listenTauriEvent } from '../services/tauriEvents';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
 import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
 import type { FocusAppCheck } from '../types/monitor';
@@ -24,6 +25,7 @@ const longBreakPresetMinutes = [10, 15, 20, 30];
 const longBreakIntervalPresets = [2, 3, 4, 6];
 const FOCUS_TODAY_CONTAINER_ID = 'focus-today-container';
 const emptyTodayDraft: TodayPlanItemDraft = { title: '', note: '', dueDate: '', subjectId: null };
+type FocusConfirmRequest = { kind: 'normalExit' } | { kind: 'syncSourceCompletion'; item: TodayPlanItem };
 const emptyScheduleDraft = (date: string): ScheduleBlockDraft => ({
   scheduleDate: date,
   title: '',
@@ -72,7 +74,7 @@ const phaseLabel: Record<StudyModePhase, string> = {
   emergency_exited: '已退出',
 };
 
-let reminderBaselineKey: string | null = null;
+const REMINDER_STORAGE_KEY = 'focus.notifiedPhaseKeys.v2';
 
 function formatSeconds(totalSeconds: number) {
   const safeSeconds = Math.max(Math.floor(totalSeconds), 0);
@@ -128,6 +130,8 @@ export default function FocusPage() {
   const [longBreakInterval, setLongBreakInterval] = useState(4);
   const [mode, setMode] = useState<FocusMode>('normal');
   const [normalWhitelistEnabled, setNormalWhitelistEnabled] = useState(true);
+  const [syncDeviceId, setSyncDeviceId] = useState<string | null>(null);
+  const [primaryOwnerDeviceId, setPrimaryOwnerDeviceId] = useState<string | null>(null);
   const [studyState, setStudyState] = useState<StudyModeState>(idleStudyState);
   const [history, setHistory] = useState<FocusSession[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -144,11 +148,14 @@ export default function FocusPage() {
   const [editingTodayId, setEditingTodayId] = useState<number | null>(null);
   const [editingTodayDraft, setEditingTodayDraft] = useState<TodayPlanItemDraft>(emptyTodayDraft);
   const [checklistSaving, setChecklistSaving] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<FocusConfirmRequest | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [monitorError, setMonitorError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const studyStateRequestRef = useRef(0);
   const suppressNextReminderRef = useRef(false);
+  const activeReminderScopeRef = useRef<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const active = studyState.status === 'active';
@@ -163,21 +170,29 @@ export default function FocusPage() {
   const timerValue = studyState.phase === 'idle' ? formatSeconds(focusMinutes * 60) : studyState.phase === 'awaiting_break' ? formatSeconds(studyState.phase_elapsed_seconds) : formatSeconds(studyState.phase_remaining_seconds);
   const activeClockLabel = studyState.is_paused ? '暂停中' : studyState.phase === 'awaiting_break' ? '等待确认休息' : phaseLabel[studyState.phase];
   const whitelistStatusLabel = studyState.focus_enforcement_active ? '白名单执行中' : active && studyState.phase !== 'break' && !studyState.whitelist_enabled ? '白名单已关闭' : '休息阶段';
-  const quietMeta = ['第 ' + studyState.cycle_index + ' 轮', '剩余 ' + formatSeconds(studyState.study_remaining_seconds), nextBreakLabel(studyState), latestAppCheck ? foregroundSummary(latestAppCheck) : '前台监控待命'];
+  const activeModeLabel = studyState.mode === 'strict' ? '强制模式' : '普通模式';
+  const activeModeMessage = buildActiveModeMessage(studyState);
+  const isPrimaryDevice = Boolean(syncDeviceId && primaryOwnerDeviceId === syncDeviceId);
+  const primaryStatusLabel = isPrimaryDevice ? '当前为主端' : primaryOwnerDeviceId ? '当前非主端' : '未设置主端';
+  const quietMeta = [activeModeLabel, '第 ' + studyState.cycle_index + ' 轮', '剩余 ' + formatSeconds(studyState.study_remaining_seconds), nextBreakLabel(studyState), primaryStatusLabel, latestAppCheck ? foregroundSummary(latestAppCheck) : '前台监控待命'];
 
   useEffect(() => { void initializePage(); }, []);
 
   useEffect(() => {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
-    void listen<{ active_state_changed?: boolean; took_over_active_mode?: boolean }>(STUDY_SYNC_STATE_CHANGED_EVENT, (event) => {
-      if (cancelled || !event.payload?.active_state_changed) return;
+    void listenTauriEvent<{ active_state_changed?: boolean; took_over_active_mode?: boolean; primary_owner_changed?: boolean }>(STUDY_SYNC_STATE_CHANGED_EVENT, (event) => {
+      if (cancelled) return;
+      void refreshPrimaryOwner();
+      if (!event.payload?.active_state_changed) return;
       if (event.payload?.took_over_active_mode) suppressNextReminderRef.current = true;
       void refreshStudyState();
       void refreshDashboard();
       void refreshChecklistData();
       void refreshScheduleData();
-    }).then((dispose) => { unlisten = dispose; });
+    }).then((dispose) => { unlisten = dispose; }).catch(() => {
+      // Browser previews and partial desktop runtimes should stay in degraded mode quietly.
+    });
     return () => { cancelled = true; unlisten?.(); };
   }, []);
 
@@ -203,33 +218,41 @@ export default function FocusPage() {
   }, [active]);
 
   useEffect(() => {
-    if (!active) return;
-    const key = reminderKey(studyState);
-    if (reminderBaselineKey === null) { reminderBaselineKey = key; return; }
-    if (key === reminderBaselineKey) return;
-    reminderBaselineKey = key;
-    if (suppressNextReminderRef.current) {
-      suppressNextReminderRef.current = false;
+    const completed = studyState.status === 'finished' || studyState.phase === 'finished';
+    if (!active && !completed) {
+      activeReminderScopeRef.current = null;
       return;
     }
+    registerReminderScope(studyState, activeReminderScopeRef);
+    if (suppressNextReminderRef.current) {
+      suppressNextReminderRef.current = false;
+      markReminderSeen(studyState, syncDeviceId);
+      return;
+    }
+    if (hasReminderSeen(studyState, syncDeviceId)) return;
     const reminder = buildReminder(studyState);
-    if (reminder) void notifyStudyReminder(reminder);
-  }, [active, studyState]);
+    if (!reminder) return;
+    markReminderSeen(studyState, syncDeviceId);
+    void notifyStudyReminder(reminder);
+  }, [active, studyState, syncDeviceId]);
 
   async function initializePage() {
     try {
-      const [settings, subjectsData, stateData] = await Promise.all([getAppSettings(), listSubjects(), getStudyModeState()]);
+      const [settings, subjectsData, stateData, deviceId] = await Promise.all([getAppSettings(), listSubjects(), getStudyModeState(), getSyncDeviceId()]);
       setStudyMinutes(settings.default_study_minutes);
       setFocusMinutes(settings.default_focus_minutes);
       setBreakMinutes(settings.break_minutes);
       setLongBreakMinutes(settings.long_break_minutes);
       setLongBreakInterval(settings.long_break_interval);
       setMode(settings.default_focus_mode);
+      setPrimaryOwnerDeviceId(settings.primary_owner_device_id);
+      setSyncDeviceId(deviceId);
       setSubjects(subjectsData);
       setSelectedSubjectId(null);
       const requestId = beginStudyStateRequest();
       applyStudyStateIfCurrent(stateData, requestId);
-      reminderBaselineKey = reminderKey(stateData);
+      registerReminderScope(stateData, activeReminderScopeRef);
+      markReminderSeen(stateData, deviceId);
       await Promise.all([refreshDashboard(), refreshChecklistData(), refreshScheduleData()]);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
@@ -275,8 +298,29 @@ export default function FocusPage() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
+  async function refreshPrimaryOwner() {
+    try {
+      const settings = await getAppSettings();
+      setPrimaryOwnerDeviceId(settings.primary_owner_device_id);
+    } catch {
+    }
+  }
+
   function queueConfiguredSync(trigger = 'focus_state_change') {
     void syncConfiguredStateChange(trigger).catch(() => undefined);
+  }
+
+  async function handlePrimaryOwnerChange(checked: boolean) {
+    if (!syncDeviceId) return;
+    try {
+      setError(null);
+      const settings = await getAppSettings();
+      const nextOwner = checked ? syncDeviceId : settings.primary_owner_device_id === syncDeviceId ? null : settings.primary_owner_device_id;
+      const nextOwnerUpdatedAt = Math.max(Date.now(), (settings.primary_owner_updated_at ?? 0) + 1);
+      const saved = await saveAppSettings({ ...settings, primary_owner_device_id: nextOwner, primary_owner_updated_at: nextOwnerUpdatedAt });
+      setPrimaryOwnerDeviceId(saved.primary_owner_device_id);
+      if (saved.sync_backend === 'object_storage') queueConfiguredSync('primary_owner_change');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
   function scheduleSubjectCategory(subjectId: number | null | undefined) {
@@ -294,7 +338,8 @@ export default function FocusPage() {
       const nextState = await startStudyMode(studyMinutes * 60, focusMinutes * 60, breakMinutes * 60, longBreakMinutes * 60, longBreakInterval, mode, selectedSubjectId, mode === 'strict' ? true : normalWhitelistEnabled);
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setNotice(nextState.focus_enforcement_active ? '学习模式已开始。窗口关闭后会进入托盘，后台继续计时并执行白名单。' : '学习模式已开始。窗口关闭后会进入托盘，后台继续计时，白名单已关闭。');
-      reminderBaselineKey = reminderKey(nextState);
+      resetReminderScope(nextState, activeReminderScopeRef);
+      markReminderSeen(nextState, syncDeviceId);
       void notifyStudyReminder({ title: '学习模式已开始', body: '第 ' + nextState.cycle_index + ' 轮番茄钟开始，专注 ' + formatDuration(nextState.focus_seconds) + '。' });
       await refreshDashboard();
       queueConfiguredSync();
@@ -308,7 +353,7 @@ export default function FocusPage() {
       const nextState = await confirmStudyBreak();
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setNotice(breakKindLabel(nextState.break_kind) + '已开始。休息结束后会自动进入下一轮番茄钟。');
-      reminderBaselineKey = reminderKey(nextState);
+      markReminderSeen(nextState, syncDeviceId);
       void notifyStudyReminder({ title: breakKindLabel(nextState.break_kind) + '开始', body: '休息 ' + formatDuration(nextState.effective_break_seconds) + '，到点后自动进入下一轮番茄钟。' });
       await refreshDashboard();
       queueConfiguredSync();
@@ -322,12 +367,12 @@ export default function FocusPage() {
       const nextState = studyState.is_paused ? await resumeStudyMode() : await pauseStudyMode();
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setNotice(nextState.is_paused ? (nextState.focus_enforcement_active ? '计时已暂停，白名单仍在执行。' : '计时已暂停，白名单已关闭。') : '已继续学习计时。');
-      reminderBaselineKey = reminderKey(nextState);
+      markReminderSeen(nextState, syncDeviceId);
       if (!nextState.is_paused) {
         const refreshRequestId = beginStudyStateRequest();
         const refreshedState = await getStudyModeState();
         applyStudyStateIfCurrent(refreshedState, refreshRequestId);
-        reminderBaselineKey = reminderKey(refreshedState);
+        markReminderSeen(refreshedState, syncDeviceId);
       }
       queueConfiguredSync();
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
@@ -346,26 +391,37 @@ export default function FocusPage() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
-  async function handleNormalExit() {
-    if (!window.confirm('确定结束本次学习吗？当前番茄会按已学习时长结束记录。')) return;
+  function handleNormalExit() {
+    setPendingConfirm({ kind: 'normalExit' });
+  }
+
+  async function confirmNormalExit() {
     try {
+      setConfirmLoading(true);
       setError(null); setMonitorError(null); setLatestAppCheck(null);
       const requestId = beginStudyStateRequest();
       const nextState = await resetStudyMode();
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setNotice('已结束本次学习。');
-      reminderBaselineKey = reminderKey(nextState);
+      markReminderSeen(nextState, syncDeviceId);
       await refreshDashboard();
       queueConfiguredSync();
       setIsChecklistDrawerOpen(false);
       setIsScheduleDrawerOpen(false);
+      setPendingConfirm(null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setConfirmLoading(false); }
   }
 
   async function handleCheckForeground() {
     const sessionId = studyState.current_session?.id;
     if (!sessionId) return;
-    try { setMonitorError(null); setLatestAppCheck(await checkFocusForegroundApp(sessionId)); } catch (reason) { setMonitorError(reason instanceof Error ? reason.message : String(reason)); }
+    try {
+      setMonitorError(null);
+      const appCheck = await checkFocusForegroundApp(sessionId);
+      setLatestAppCheck(appCheck);
+      if (appCheck.match_result.matched_subject_id) await refreshStudyState();
+    } catch (reason) { setMonitorError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
   function beginEditTodayItem(item: TodayPlanItem) {
@@ -407,9 +463,27 @@ export default function FocusPage() {
 
   async function handleCompleteTodayItem(item: TodayPlanItem) {
     const nextCompleted = !item.completed;
-    let syncSourceCompletion = false;
-    if (nextCompleted && item.source_task_id !== null) syncSourceCompletion = window.confirm('完成今日任务时，也同步完成源待办吗？');
-    await withChecklistRefresh(async () => { await completeTodayPlanItem(item.id, nextCompleted, syncSourceCompletion); }, nextCompleted ? '今日任务已完成。' : '今日任务已恢复为未完成。');
+    if (nextCompleted && item.source_task_id !== null) {
+      setPendingConfirm({ kind: 'syncSourceCompletion', item });
+      return;
+    }
+    await completeTodayItem(item, nextCompleted, false);
+  }
+
+  async function completeTodayItem(item: TodayPlanItem, completed: boolean, syncSourceCompletion: boolean) {
+    await withChecklistRefresh(async () => { await completeTodayPlanItem(item.id, completed, syncSourceCompletion); }, completed ? '今日任务已完成。' : '今日任务已恢复为未完成。');
+  }
+
+  async function confirmSyncSourceCompletion(syncSourceCompletion: boolean) {
+    if (pendingConfirm?.kind !== 'syncSourceCompletion') return;
+    try {
+      setConfirmLoading(true);
+      const item = pendingConfirm.item;
+      await completeTodayItem(item, true, syncSourceCompletion);
+      setPendingConfirm(null);
+    } finally {
+      setConfirmLoading(false);
+    }
   }
 
   async function handleTodayDrawerDragEnd(event: DragEndEvent) {
@@ -489,76 +563,113 @@ export default function FocusPage() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
+  const focusConfirmDialog = pendingConfirm?.kind === 'normalExit' ? (
+    <ConfirmDialog
+      cancelLabel="继续学习"
+      confirmLabel="结束并记录"
+      loading={confirmLoading}
+      message="当前番茄会按已学习时长结束记录，专注历史和统计会同步更新。"
+      onCancel={() => setPendingConfirm(null)}
+      onConfirm={() => void confirmNormalExit()}
+      open
+      title="结束本次学习？"
+    >
+      <p>普通模式可以主动结束；强制模式不会显示这个退出入口。</p>
+      <p>关闭窗口只会进入托盘并在后台继续计时，不等同于退出学习。</p>
+    </ConfirmDialog>
+  ) : pendingConfirm?.kind === 'syncSourceCompletion' ? (
+    <ConfirmDialog
+      cancelLabel="仅完成今日任务"
+      confirmLabel="同步完成源待办"
+      loading={confirmLoading}
+      message="这条今日任务来自源待办。你可以只完成今天的进入任务，也可以同时把源待办标记完成。"
+      onCancel={() => void confirmSyncSourceCompletion(false)}
+      onConfirm={() => void confirmSyncSourceCompletion(true)}
+      open
+      title="同步完成源待办？"
+    >
+      <p>仅完成今日任务不会修改源待办，适合今天只是阶段性推进。</p>
+    </ConfirmDialog>
+  ) : null;
+
   if (active) {
     return (
       <DndContext collisionDetection={closestCenter} onDragEnd={(event) => void handleTodayDrawerDragEnd(event)} sensors={sensors}>
-        <section className={'focus-active-shell phase-' + studyState.phase + (studyState.is_paused ? ' is-paused' : '') + ((isChecklistDrawerOpen || isScheduleDrawerOpen) ? ' is-drawer-open' : '')}>
-          <div className="focus-active-bg" aria-hidden="true" />
-          <header className="focus-active-header">
-            <span className="focus-minimal-status">{studyState.is_paused ? '计时暂停' : phaseLabel[studyState.phase]}</span>
-            <label className="subject-switch fullscreen-subject-switch top-subject-switch">
-              <span>科目</span>
-              <select aria-label="当前科目" className="select-input" disabled={subjects.length === 0} onChange={(event) => void handleActiveSubjectChange(event.target.value)} value={studyState.subject_id ?? ''}>
-                <option value="">未指定</option>
-                {subjects.map((subject) => <option disabled={!subject.enabled} key={subject.id} value={subject.id}>{subject.name}</option>)}
-              </select>
-            </label>
-            <div className="focus-header-right">
-              <button aria-expanded={isChecklistDrawerOpen} aria-label="打开今日任务" className={'focus-hud-card focus-hud-task' + (isChecklistDrawerOpen ? ' is-active' : '')} onClick={handleToggleChecklistDrawer} title="今日任务" type="button">
-                <span className="focus-hud-icon"><ClipboardList size={15} /></span>
-                <span className="focus-hud-copy">
-                  <span>今日任务</span>
-                  <strong>{todayTaskCount} 项</strong>
-                </span>
-              </button>
-              <button aria-expanded={isScheduleDrawerOpen} aria-label="打开今日课表" className={'focus-hud-card focus-hud-task' + (isScheduleDrawerOpen ? ' is-active' : '')} onClick={handleToggleScheduleDrawer} title="今日课表" type="button">
-                <span className="focus-hud-icon"><CalendarClock size={15} /></span>
-                <span className="focus-hud-copy">
-                  <span>今日课表</span>
-                  <strong>{scheduleData?.day_blocks.length ?? 0} 块</strong>
-                </span>
-              </button>
-              <div className="live-badge"><span className={studyState.focus_enforcement_active ? 'live-dot on' : 'live-dot'} />{whitelistStatusLabel}</div>
-            </div>
-          </header>
-
-          {(error || notice || monitorError) && <div className="focus-notice-stack">{error && <p className="alert error">{error}</p>}{notice && <p className="alert success">{notice}</p>}{monitorError && <p className="alert error">前台检测失败：{monitorError}</p>}</div>}
-
-          <main className="focus-clock-zone">
-            <p>{activeClockLabel}</p>
-            <strong>{timerValue}</strong>
-            <span>{buildPhaseMessage(studyState)}</span>
-            <div className="focus-round-controls">
-              {canTogglePause && <button aria-label={studyState.is_paused ? '继续计时' : '暂停计时'} className={studyState.is_paused ? 'focus-round-button primary' : 'focus-round-button'} onClick={handleTogglePause} title={studyState.is_paused ? '继续计时' : '暂停'} type="button">{studyState.is_paused ? <Play size={28} /> : <Pause size={28} />}</button>}
-              {studyState.phase === 'awaiting_break' && <button aria-label={'确认开始' + breakKindLabel(studyState.break_kind)} className="focus-round-button secondary" disabled={studyState.is_paused} onClick={handleConfirmBreak} title={'确认开始' + breakKindLabel(studyState.break_kind)} type="button"><Coffee size={26} /></button>}
-            </div>
-          </main>
-
-          <footer className="focus-active-footer">
-            <div className="focus-quiet-meta">{quietMeta.map((item) => <span key={item}>{item}</span>)}</div>
-            <div className="focus-quiet-actions">
-              <button aria-label="刷新前台状态" className="focus-hud-card focus-command-button" onClick={() => void handleCheckForeground()} title="刷新前台状态" type="button">
-                <span className="focus-hud-icon"><Gauge size={14} /></span>
-                <span className="focus-hud-copy">
-                  <span>刷新状态</span>
-                  <strong>前台检测</strong>
-                </span>
-              </button>
-              {canExitNormally && (
-                <button aria-label="结束学习" className="focus-hud-card focus-command-button" onClick={() => void handleNormalExit()} title="结束学习" type="button">
-                  <span className="focus-hud-icon"><Square size={14} /></span>
+        <>
+          <section className={'focus-active-shell phase-' + studyState.phase + (studyState.is_paused ? ' is-paused' : '') + ((isChecklistDrawerOpen || isScheduleDrawerOpen) ? ' is-drawer-open' : '')}>
+            <div className="focus-active-bg" aria-hidden="true" />
+            <header className="focus-active-header">
+              <span className="focus-minimal-status">{studyState.is_paused ? '计时暂停' : phaseLabel[studyState.phase]}</span>
+              <label className="subject-switch fullscreen-subject-switch top-subject-switch">
+                <span>科目</span>
+                <select aria-label="当前科目" className="select-input" disabled={subjects.length === 0} onChange={(event) => void handleActiveSubjectChange(event.target.value)} value={studyState.subject_id ?? ''}>
+                  <option value="">未指定</option>
+                  {subjects.map((subject) => <option disabled={!subject.enabled} key={subject.id} value={subject.id}>{subject.name}</option>)}
+                </select>
+              </label>
+              <div className="focus-header-right">
+                <button aria-expanded={isChecklistDrawerOpen} aria-label="打开今日任务" className={'focus-hud-card focus-hud-task' + (isChecklistDrawerOpen ? ' is-active' : '')} onClick={handleToggleChecklistDrawer} title="今日任务" type="button">
+                  <span className="focus-hud-icon"><ClipboardList size={15} /></span>
                   <span className="focus-hud-copy">
-                    <span>结束学习</span>
-                    <strong>普通模式</strong>
+                    <span>今日任务</span>
+                    <strong>{todayTaskCount} 项</strong>
                   </span>
                 </button>
-              )}
-            </div>
-          </footer>
+                <button aria-expanded={isScheduleDrawerOpen} aria-label="打开今日课表" className={'focus-hud-card focus-hud-task' + (isScheduleDrawerOpen ? ' is-active' : '')} onClick={handleToggleScheduleDrawer} title="今日课表" type="button">
+                  <span className="focus-hud-icon"><CalendarClock size={15} /></span>
+                  <span className="focus-hud-copy">
+                    <span>今日课表</span>
+                    <strong>{scheduleData?.day_blocks.length ?? 0} 块</strong>
+                  </span>
+                </button>
+                <label className={'focus-hud-card live-primary-toggle' + (isPrimaryDevice ? ' is-active' : '')}>
+                  <span>{primaryStatusLabel}</span>
+                  <input checked={isPrimaryDevice} disabled={!syncDeviceId} onChange={(event) => void handlePrimaryOwnerChange(event.target.checked)} role="switch" type="checkbox" />
+                </label>
+                <div className="live-badge"><span className={studyState.focus_enforcement_active ? 'live-dot on' : 'live-dot'} />{whitelistStatusLabel}</div>
+              </div>
+            </header>
 
-          <TodayPlanDrawer compact dndContainerId={FOCUS_TODAY_CONTAINER_ID} dndIsOver={false} currentSubjectLabel={currentSubjectLabel} editingTodayDraft={editingTodayDraft} editingTodayId={editingTodayId} emptyDescription="可以在清单页拖入，也可以直接在这里补一条今天要推进的任务。" emptyTitle="今天还没有进入任务" isOpen={isChecklistDrawerOpen} items={checklistData?.today_items ?? []} onBeginEdit={beginEditTodayItem} onCancelEdit={() => setEditingTodayId(null)} onChangeEdit={(patch) => setEditingTodayDraft((current) => ({ ...(current ?? emptyTodayDraft), ...patch }))} onClose={() => setIsChecklistDrawerOpen(false)} onComplete={(item) => void handleCompleteTodayItem(item)} onCreate={() => void handleCreateTodayItem()} onDelete={(itemId) => void handleDeleteTodayItem(itemId)} onDraftChange={(patch) => setTodayDraft((current) => ({ ...current, ...patch }))} onRefresh={() => void refreshChecklistData()} onSaveEdit={() => void handleSaveTodayEdit()} onToggleComposer={() => setShowTodayComposer((current) => !current)} saving={checklistSaving} showComposer={showTodayComposer} sortable subtitle="Today Queue" title="今日任务" getItemDragId={(item) => getTodaySortableId(item.id)} todayDate={checklistData?.today_date ?? ''} todayDraft={todayDraft} variant="drawer" />
-          <ScheduleDrawer canStart={false} isOpen={isScheduleDrawerOpen} data={scheduleData} draft={scheduleDraft} saving={checklistSaving} onClose={() => setIsScheduleDrawerOpen(false)} onRefresh={() => void refreshScheduleData()} onDraftChange={(patch) => setScheduleDraft((current) => ({ ...current, ...patch }))} onCreate={() => void handleCreateScheduleBlock()} onDelete={(blockId) => void handleDeleteScheduleBlock(blockId)} onStart={(block) => void handleStartScheduleBlock(block)} />
-        </section>
+            {(error || notice || monitorError) && <div className="focus-notice-stack">{error && <p className="alert error">{error}</p>}{notice && <p className="alert success">{notice}</p>}{monitorError && <p className="alert error">前台检测失败：{monitorError}</p>}</div>}
+
+            <main className="focus-clock-zone">
+              <p>{activeClockLabel}</p>
+              <strong>{timerValue}</strong>
+              <span>{buildPhaseMessage(studyState)}</span>
+              <span>{activeModeMessage}</span>
+              <div className="focus-round-controls">
+                {canTogglePause && <button aria-label={studyState.is_paused ? '继续计时' : '暂停计时'} className={studyState.is_paused ? 'focus-round-button primary' : 'focus-round-button'} onClick={handleTogglePause} title={studyState.is_paused ? '继续计时' : '暂停'} type="button">{studyState.is_paused ? <Play size={28} /> : <Pause size={28} />}</button>}
+                {studyState.phase === 'awaiting_break' && <button aria-label={'确认开始' + breakKindLabel(studyState.break_kind)} className="focus-round-button secondary" disabled={studyState.is_paused} onClick={handleConfirmBreak} title={'确认开始' + breakKindLabel(studyState.break_kind)} type="button"><Coffee size={26} /></button>}
+              </div>
+            </main>
+
+            <footer className="focus-active-footer">
+              <div className="focus-quiet-meta">{quietMeta.map((item) => <span key={item}>{item}</span>)}</div>
+              <div className="focus-quiet-actions">
+                <button aria-label="刷新前台状态" className="focus-hud-card focus-command-button" onClick={() => void handleCheckForeground()} title="刷新前台状态" type="button">
+                  <span className="focus-hud-icon"><Gauge size={14} /></span>
+                  <span className="focus-hud-copy">
+                    <span>刷新状态</span>
+                    <strong>前台检测</strong>
+                  </span>
+                </button>
+                {canExitNormally && (
+                  <button aria-label="结束学习" className="focus-hud-card focus-command-button" onClick={handleNormalExit} title="结束学习" type="button">
+                    <span className="focus-hud-icon"><Square size={14} /></span>
+                    <span className="focus-hud-copy">
+                      <span>结束学习</span>
+                      <strong>普通模式</strong>
+                    </span>
+                  </button>
+                )}
+              </div>
+            </footer>
+
+            <TodayPlanDrawer compact dndContainerId={FOCUS_TODAY_CONTAINER_ID} dndIsOver={false} currentSubjectLabel={currentSubjectLabel} editingTodayDraft={editingTodayDraft} editingTodayId={editingTodayId} emptyDescription="可以在清单页拖入，也可以直接在这里补一条今天要推进的任务。" emptyTitle="今天还没有进入任务" isOpen={isChecklistDrawerOpen} items={checklistData?.today_items ?? []} onBeginEdit={beginEditTodayItem} onCancelEdit={() => setEditingTodayId(null)} onChangeEdit={(patch) => setEditingTodayDraft((current) => ({ ...(current ?? emptyTodayDraft), ...patch }))} onClose={() => setIsChecklistDrawerOpen(false)} onComplete={(item) => void handleCompleteTodayItem(item)} onCreate={() => void handleCreateTodayItem()} onDelete={(itemId) => void handleDeleteTodayItem(itemId)} onDraftChange={(patch) => setTodayDraft((current) => ({ ...current, ...patch }))} onRefresh={() => void refreshChecklistData()} onSaveEdit={() => void handleSaveTodayEdit()} onToggleComposer={() => setShowTodayComposer((current) => !current)} saving={checklistSaving} showComposer={showTodayComposer} sortable subtitle="Today Queue" title="今日任务" getItemDragId={(item) => getTodaySortableId(item.id)} todayDate={checklistData?.today_date ?? ''} todayDraft={todayDraft} variant="drawer" />
+            <ScheduleDrawer canStart={false} isOpen={isScheduleDrawerOpen} data={scheduleData} draft={scheduleDraft} saving={checklistSaving} onClose={() => setIsScheduleDrawerOpen(false)} onRefresh={() => void refreshScheduleData()} onDraftChange={(patch) => setScheduleDraft((current) => ({ ...current, ...patch }))} onCreate={() => void handleCreateScheduleBlock()} onDelete={(blockId) => void handleDeleteScheduleBlock(blockId)} onStart={(block) => void handleStartScheduleBlock(block)} />
+          </section>
+          {focusConfirmDialog}
+        </>
       </DndContext>
     );
   }
@@ -578,10 +689,20 @@ export default function FocusPage() {
         </section>
         <aside className="control-panel">
           <div className="panel-title"><div><p className="eyebrow">Plan</p><h3>本次节奏</h3></div><BookOpen size={20} /></div>
-          <div className="number-grid"><NumberField label="学习模式" onChange={setStudyMinutes} value={studyMinutes} /><NumberField label="番茄钟" onChange={setFocusMinutes} value={focusMinutes} /><NumberField label="短休息" onChange={setBreakMinutes} value={breakMinutes} /><NumberField label="长休息" onChange={setLongBreakMinutes} value={longBreakMinutes} /></div>
-          <PresetStrip items={studyPresetMinutes} prefix="学习 " selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} /><PresetStrip items={focusPresetMinutes} prefix="番茄 " selected={focusMinutes} suffix="m" onSelect={setFocusMinutes} /><PresetStrip items={breakPresetMinutes} prefix="短休 " selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} /><PresetStrip items={longBreakPresetMinutes} prefix="长休 " selected={longBreakMinutes} suffix="m" onSelect={setLongBreakMinutes} /><PresetStrip items={longBreakIntervalPresets} prefix="每 " selected={longBreakInterval} suffix=" 轮长休" onSelect={setLongBreakInterval} />
+          <div className="preset-grid">
+            <PresetSelect label="学习模式" items={studyPresetMinutes} selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} />
+            <PresetSelect label="番茄时长" items={focusPresetMinutes} selected={focusMinutes} suffix="m" onSelect={setFocusMinutes} />
+            <PresetSelect label="短休时长" items={breakPresetMinutes} selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} />
+            <PresetSelect label="长休时长" items={longBreakPresetMinutes} selected={longBreakMinutes} suffix="m" onSelect={setLongBreakMinutes} />
+            <PresetSelect label="长休间隔" items={longBreakIntervalPresets} selected={longBreakInterval} suffix="轮" onSelect={setLongBreakInterval} />
+          </div>
           <label className="field-block"><span>科目</span><select className="select-input" disabled={subjects.length === 0} onChange={(event) => setSelectedSubjectId(event.target.value ? Number(event.target.value) : null)} value={selectedSubjectId ?? ''}><option value="">不指定</option>{subjects.map((subject) => <option disabled={!subject.enabled} key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
           <div className="segmented-control"><button className={mode === 'normal' ? 'active' : ''} onClick={() => setMode('normal')} type="button">普通模式</button><button className={mode === 'strict' ? 'active' : ''} onClick={() => setMode('strict')} type="button">强制模式</button></div>
+          <label className="capability-row focus-whitelist-toggle focus-primary-toggle">
+            <span>以当前设备为主</span>
+            <input checked={isPrimaryDevice} disabled={!syncDeviceId} onChange={(event) => void handlePrimaryOwnerChange(event.target.checked)} role="switch" type="checkbox" />
+          </label>
+          <p className="focus-primary-hint">{primaryStatusLabel}。主端可主导专注状态，另一端不能回退本端进度。</p>
           {mode === 'normal' && (
             <label className="capability-row focus-whitelist-toggle">
               <span>启用白名单</span>
@@ -610,7 +731,49 @@ function buildPhaseMessage(studyState: StudyModeState) {
   if (studyState.phase === 'emergency_exited') return '历史退出状态';
   return '设置节奏后开始';
 }
-function reminderKey(studyState: StudyModeState) { return [studyState.id ?? 'idle', studyState.status, studyState.phase, studyState.cycle_index, studyState.break_kind].join(':'); }
+function buildActiveModeMessage(studyState: StudyModeState) {
+  if (studyState.mode === 'strict') return '强制模式：白名单强制执行，不能从这里手动结束；关闭窗口会进入托盘，后台继续计时。';
+  const whitelist = studyState.whitelist_enabled ? '本次执行白名单' : '本次不执行白名单';
+  return '普通模式：' + whitelist + '，可手动结束；退出会按已学习时长记录，关闭窗口只会进入托盘并后台继续计时。';
+}
+function reminderScope(studyState: StudyModeState) { return String(studyState.id ?? 'idle'); }
+function reminderKey(studyState: StudyModeState, deviceId?: string | null) { return [deviceId ?? 'local', studyState.id ?? 'idle', studyState.phase, studyState.cycle_index, studyState.break_kind].join(':'); }
+function loadReminderKeys() {
+  try {
+    const raw = window.localStorage.getItem(REMINDER_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+function saveReminderKeys(keys: Set<string>) {
+  try { window.localStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(Array.from(keys).slice(-200))); } catch {}
+}
+function registerReminderScope(studyState: StudyModeState, scopeRef: MutableRefObject<string | null>) {
+  const scope = reminderScope(studyState);
+  if (scopeRef.current === scope) return;
+  scopeRef.current = scope;
+  if (scope === 'idle') return;
+  const keys = loadReminderKeys();
+  for (const key of Array.from(keys)) {
+    const parts = key.split(':');
+    if (parts[1] !== scope) keys.delete(key);
+  }
+  saveReminderKeys(keys);
+}
+function resetReminderScope(studyState: StudyModeState, scopeRef: MutableRefObject<string | null>) {
+  scopeRef.current = null;
+  registerReminderScope(studyState, scopeRef);
+}
+function hasReminderSeen(studyState: StudyModeState, deviceId?: string | null) { return loadReminderKeys().has(reminderKey(studyState, deviceId)); }
+function markReminderSeen(studyState: StudyModeState, deviceId?: string | null) {
+  const reminder = buildReminder(studyState);
+  if (!reminder) return;
+  const keys = loadReminderKeys();
+  keys.add(reminderKey(studyState, deviceId));
+  saveReminderKeys(keys);
+}
 function buildReminder(studyState: StudyModeState) {
   if (studyState.status === 'active' && studyState.phase === 'focus') return { title: studyState.cycle_index > 1 ? '下一轮番茄钟开始' : '番茄钟开始', body: '第 ' + studyState.cycle_index + ' 轮开始，专注 ' + formatDuration(studyState.focus_seconds) + '。' };
   if (studyState.status === 'active' && studyState.phase === 'awaiting_break') return { title: '番茄钟结束', body: '本轮已经到点。确认后进入 ' + nextBreakLabel(studyState) + '；未确认前学习时间继续累计。' };
@@ -618,9 +781,27 @@ function buildReminder(studyState: StudyModeState) {
   if (studyState.status === 'finished' || studyState.phase === 'finished') return { title: '学习模式完成', body: '本次学习已完成，共累计 ' + formatDuration(studyState.study_elapsed_seconds) + '。' };
   return null;
 }
-function foregroundSummary(check: FocusAppCheck) { return (check.match_result.allowed ? '已放行' : '已拦截') + ' / ' + check.foreground_app.process_name + ' / ' + (check.foreground_app.window_title || '无窗口标题'); }
+function foregroundSummary(check: FocusAppCheck) {
+  const mediaPath = check.match_result.potplayer_media_path || check.foreground_app.potplayer_media_path;
+  const detail = mediaPath || check.foreground_app.window_title || '无窗口标题';
+  return (check.match_result.allowed ? '已放行' : '已拦截') + ' / ' + check.foreground_app.process_name + ' / ' + detail;
+}
 function getTodaySortableId(itemId: number) { return 'today:' + itemId; }
 function Metric({ icon: Icon, label, value }: { icon: typeof Timer; label: string; value: string }) { return <article className="metric-card"><Icon size={18} /><span>{label}</span><strong>{value}</strong></article>; }
 function CoreFact({ label, value }: { label: string; value: string }) { return <article className="core-fact"><span>{label}</span><strong>{value}</strong></article>; }
 function NumberField({ label, onChange, value }: { label: string; onChange: (value: number) => void; value: number }) { return <label className="field-block"><span>{label}</span><input className="number-input" min={1} onChange={(event) => onChange(Number(event.target.value) || 1)} type="number" value={value} /></label>; }
-function PresetStrip({ items, onSelect, prefix, selected, suffix }: { items: number[]; onSelect: (value: number) => void; prefix: string; selected: number; suffix: string }) { return <div className="preset-strip">{items.map((value) => <button className={selected === value ? 'chip active' : 'chip'} key={prefix + '-' + value} onClick={() => onSelect(value)} type="button">{prefix}{value}{suffix}</button>)}</div>; }
+function PresetSelect({ label, items, onSelect, selected, suffix }: { label: string; items: number[]; onSelect: (value: number) => void; selected: number; suffix: string }) {
+  return (
+    <label className="preset-row">
+      <span>{label}</span>
+      <select className="select-input preset-select" onChange={(event) => onSelect(Number(event.target.value) || items[0] || 0)} value={selected}>
+        {items.map((value) => (
+          <option key={`${label}-${value}`} value={value}>
+            {value}
+            {suffix}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}

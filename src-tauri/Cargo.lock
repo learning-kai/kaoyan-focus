@@ -2828,12 +2828,13 @@ dependencies = [
 
 [[package]]
 name = "kaoyan-focus"
-version = "1.0.5"
+version = "1.7.1"
 dependencies = [
  "aws-config",
  "aws-credential-types",
  "aws-sdk-s3",
  "aws-types",
+ "base64 0.22.1",
  "chrono",
  "lettre",
  "reqwest",
@@ -2850,6 +2851,7 @@ dependencies = [
  "tokio",
  "uuid",
  "windows",
+ "winreg",
 ]
 
 [[package]]

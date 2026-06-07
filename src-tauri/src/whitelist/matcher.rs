@@ -18,6 +18,7 @@ pub struct WhitelistMatchResult {
     pub matched_process_name: Option<String>,
     pub detected_domain: Option<String>,
     pub matched_subject_id: Option<i64>,
+    pub potplayer_media_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +35,14 @@ pub struct WebsiteWhitelistRule {
 }
 
 #[derive(Debug, Clone)]
+pub struct PotPlayerWhitelistRule {
+    pub process_name: String,
+    pub media_path: String,
+    pub match_type: String,
+    pub subject_id: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
 struct BrowserUrlParts {
     domain: String,
     path: String,
@@ -43,6 +52,7 @@ pub fn is_foreground_app_allowed(
     app: &ForegroundApp,
     whitelist_processes: &[ProcessWhitelistRule],
     whitelist_websites: &[WebsiteWhitelistRule],
+    whitelist_potplayer_media: &[PotPlayerWhitelistRule],
 ) -> WhitelistMatchResult {
     let process_name = app.process_name.to_ascii_lowercase();
     let supported_browser = is_supported_browser(&process_name);
@@ -57,6 +67,7 @@ pub fn is_foreground_app_allowed(
             matched_process_name: Some(app.process_name.clone()),
             detected_domain: None,
             matched_subject_id: None,
+            potplayer_media_path: app.potplayer_media_path.clone(),
         };
     }
 
@@ -78,6 +89,7 @@ pub fn is_foreground_app_allowed(
                     matched_process_name: Some(rule_label(matched_rule)),
                     detected_domain,
                     matched_subject_id: matched_rule.subject_id,
+                    potplayer_media_path: None,
                 };
             }
 
@@ -87,6 +99,7 @@ pub fn is_foreground_app_allowed(
                 matched_process_name: None,
                 detected_domain,
                 matched_subject_id: None,
+                potplayer_media_path: None,
             };
         }
 
@@ -96,7 +109,12 @@ pub fn is_foreground_app_allowed(
             matched_process_name: None,
             detected_domain: None,
             matched_subject_id: None,
+            potplayer_media_path: None,
         };
+    }
+
+    if is_supported_potplayer(&process_name) {
+        return match_potplayer_media(app, whitelist_potplayer_media);
     }
 
     if let Some(matched_rule) = whitelist_processes
@@ -109,6 +127,7 @@ pub fn is_foreground_app_allowed(
             matched_process_name: Some(matched_rule.process_name.clone()),
             detected_domain: None,
             matched_subject_id: matched_rule.subject_id,
+            potplayer_media_path: app.potplayer_media_path.clone(),
         };
     }
 
@@ -128,6 +147,7 @@ pub fn is_foreground_app_allowed(
                 matched_process_name: Some(rule_label(matched_rule)),
                 detected_domain,
                 matched_subject_id: matched_rule.subject_id,
+                potplayer_media_path: None,
             };
         }
 
@@ -137,6 +157,7 @@ pub fn is_foreground_app_allowed(
             matched_process_name: None,
             detected_domain,
             matched_subject_id: None,
+            potplayer_media_path: None,
         };
     }
 
@@ -146,6 +167,7 @@ pub fn is_foreground_app_allowed(
         matched_process_name: None,
         detected_domain: None,
         matched_subject_id: None,
+        potplayer_media_path: app.potplayer_media_path.clone(),
     }
 }
 
@@ -162,6 +184,83 @@ fn is_supported_browser(process_name: &str) -> bool {
     )
 }
 
+fn is_supported_potplayer(process_name: &str) -> bool {
+    matches!(process_name, "potplayermini64.exe" | "potplayermini.exe")
+}
+
+fn match_potplayer_media(
+    app: &ForegroundApp,
+    whitelist_potplayer_media: &[PotPlayerWhitelistRule],
+) -> WhitelistMatchResult {
+    let Some(media_path) = app.potplayer_media_path.as_deref() else {
+        return WhitelistMatchResult {
+            allowed: true,
+            reason: "PotPlayer 未识别到当前播放视频，按空播放器放行".to_string(),
+            matched_process_name: Some(app.process_name.clone()),
+            detected_domain: None,
+            matched_subject_id: None,
+            potplayer_media_path: None,
+        };
+    };
+
+    if let Some(matched_rule) = whitelist_potplayer_media.iter().find(|rule| {
+        rule.process_name.eq_ignore_ascii_case(&app.process_name)
+            && potplayer_rule_matches(media_path, rule)
+    }) {
+        return WhitelistMatchResult {
+            allowed: true,
+            reason: "命中 PotPlayer 视频白名单".to_string(),
+            matched_process_name: Some(matched_rule.media_path.clone()),
+            detected_domain: None,
+            matched_subject_id: matched_rule.subject_id,
+            potplayer_media_path: Some(media_path.to_string()),
+        };
+    }
+
+    WhitelistMatchResult {
+        allowed: false,
+        reason: format!("PotPlayer 当前视频不在白名单：{media_path}"),
+        matched_process_name: None,
+        detected_domain: None,
+        matched_subject_id: None,
+        potplayer_media_path: Some(media_path.to_string()),
+    }
+}
+
+fn potplayer_rule_matches(media_path: &str, rule: &PotPlayerWhitelistRule) -> bool {
+    match rule.match_type.as_str() {
+        "potplayer_video_file" => paths_equal_ignore_ascii_case(media_path, &rule.media_path),
+        "potplayer_video_directory" => path_is_within_directory(media_path, &rule.media_path),
+        _ => false,
+    }
+}
+
+fn paths_equal_ignore_ascii_case(left: &str, right: &str) -> bool {
+    normalize_file_path(left).eq_ignore_ascii_case(&normalize_file_path(right))
+}
+
+fn path_is_within_directory(media_path: &str, directory_path: &str) -> bool {
+    let media = normalize_file_path(media_path).to_ascii_lowercase();
+    let directory = normalize_file_path(directory_path).to_ascii_lowercase();
+
+    if media == directory {
+        return false;
+    }
+
+    media
+        .strip_prefix(&directory)
+        .is_some_and(|suffix| suffix.starts_with('\\'))
+}
+
+fn normalize_file_path(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches('"')
+        .replace('/', "\\")
+        .trim_end_matches(['\\', '/'])
+        .to_string()
+}
+
 fn detect_browser_url_parts(app: &ForegroundApp) -> Option<BrowserUrlParts> {
     let process_name = app.process_name.to_ascii_lowercase();
     if !is_supported_browser(&process_name) {
@@ -174,7 +273,7 @@ fn detect_browser_url_parts(app: &ForegroundApp) -> Option<BrowserUrlParts> {
 fn extract_domain_from_text(text: &str) -> Option<String> {
     let lower = text.to_ascii_lowercase();
     let separators: &[char] = &[
-        ' ', '\t', '\r', '\n', '/', '\\', '|', '—', '-', '(', ')', '[', ']', '<', '>', '"', '\'',
+        ' ', '\t', '\r', '\n', '/', '\\', '|', '–', '-', '(', ')', '[', ']', '<', '>', '"', '\'',
     ];
 
     lower
@@ -314,4 +413,114 @@ fn domain_matches(detected_domain: &str, allowed_domain: &str) -> bool {
         || detected_domain
             .strip_suffix(allowed_domain)
             .is_some_and(|prefix| prefix.ends_with('.'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        is_foreground_app_allowed, path_is_within_directory, PotPlayerWhitelistRule,
+        ProcessWhitelistRule, WebsiteWhitelistRule,
+    };
+    use crate::windows::foreground::ForegroundApp;
+
+    fn foreground_app(process_name: &str, media_path: Option<&str>) -> ForegroundApp {
+        ForegroundApp::for_test(
+            1,
+            process_name.to_string(),
+            Some(format!(r"D:\Apps\{process_name}")),
+            "PotPlayer".to_string(),
+            None,
+            media_path.map(|value| value.to_string()),
+        )
+    }
+
+    #[test]
+    fn file_rule_matches_case_insensitively() {
+        let app = foreground_app("PotPlayerMini64.exe", Some(r"d:\videos\course\lesson1.mkv"));
+        let result = is_foreground_app_allowed(
+            &app,
+            &[],
+            &[],
+            &[PotPlayerWhitelistRule {
+                process_name: "PotPlayerMini64.exe".to_string(),
+                media_path: r"D:\Videos\Course\Lesson1.mkv".to_string(),
+                match_type: "potplayer_video_file".to_string(),
+                subject_id: Some(2),
+            }],
+        );
+
+        assert!(result.allowed);
+        assert_eq!(result.matched_subject_id, Some(2));
+    }
+
+    #[test]
+    fn directory_rule_matches_child_file() {
+        assert!(path_is_within_directory(
+            r"D:\Videos\Course\Lesson1.mkv",
+            r"D:\Videos\Course"
+        ));
+    }
+
+    #[test]
+    fn directory_rule_rejects_outside_file() {
+        assert!(!path_is_within_directory(
+            r"D:\Videos\Other\Lesson1.mkv",
+            r"D:\Videos\Course"
+        ));
+    }
+
+    #[test]
+    fn empty_potplayer_is_allowed() {
+        let app = foreground_app("PotPlayerMini64.exe", None);
+        let result = is_foreground_app_allowed(&app, &[], &[], &[]);
+
+        assert!(result.allowed);
+        assert!(result.reason.contains("空播放器"));
+    }
+
+    #[test]
+    fn potplayer_media_rules_override_process_whitelist() {
+        let app = foreground_app("PotPlayerMini64.exe", Some(r"D:\Videos\Course\Lesson2.mkv"));
+        let result = is_foreground_app_allowed(
+            &app,
+            &[ProcessWhitelistRule {
+                process_name: "PotPlayerMini64.exe".to_string(),
+                subject_id: None,
+            }],
+            &[],
+            &[PotPlayerWhitelistRule {
+                process_name: "PotPlayerMini64.exe".to_string(),
+                media_path: r"D:\Videos\Course\Lesson1.mkv".to_string(),
+                match_type: "potplayer_video_file".to_string(),
+                subject_id: None,
+            }],
+        );
+
+        assert!(!result.allowed);
+    }
+
+    #[test]
+    fn browser_rules_still_work() {
+        let app = ForegroundApp::for_test(
+            2,
+            "chrome.exe".to_string(),
+            Some(r"C:\Program Files\Google\Chrome\Application\chrome.exe".to_string()),
+            "课程 - www.icourse163.org".to_string(),
+            Some("https://www.icourse163.org/learn".to_string()),
+            None,
+        );
+        let result = is_foreground_app_allowed(
+            &app,
+            &[],
+            &[WebsiteWhitelistRule {
+                domain: "icourse163.org".to_string(),
+                launch_url: None,
+                subject_id: Some(1),
+            }],
+            &[],
+        );
+
+        assert!(result.allowed);
+        assert_eq!(result.matched_subject_id, Some(1));
+    }
 }

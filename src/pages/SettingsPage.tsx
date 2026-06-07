@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ChangeEvent, type CSSProperties } from 'react';
 import {
   Activity,
   BellRing,
@@ -10,16 +10,21 @@ import {
   Mail,
   HardDrive,
   MonitorDot,
+  Music2,
   RefreshCw,
+  Play,
+  Power,
   RotateCcw,
   Save,
   Settings2,
   ShieldCheck,
+  Volume2,
   UploadCloud,
 } from 'lucide-react';
 import { getStudyModeState } from '../services/focusApi';
 import { getCurrentForegroundApp } from '../services/monitorApi';
 import { isStudyModeLocked } from '../services/studyModeLock';
+import { previewReminderSound } from '../services/alertApi';
 import {
   downloadDatabaseFromWebDav,
   getAppDataLocation,
@@ -30,8 +35,10 @@ import {
   getObjectStorageSettings,
   getWebDavSettings,
   saveAppSettings,
+  resetCustomReminderSound,
   saveEmailReminderSettings,
   saveObjectStorageSettings,
+  saveCustomReminderSound,
   saveWebDavSettings,
   testObjectStorageConnection,
   testWebDavConnection,
@@ -65,6 +72,8 @@ import type {
   SyncBackupEntry,
   SyncBackend,
   SyncRunSummary,
+  ReminderSoundId,
+  ReminderSoundSource,
   WebDavSettings,
 } from '../types/settings';
 
@@ -76,9 +85,17 @@ const defaultSettings: AppSettings = {
   long_break_interval: 4,
   default_focus_mode: 'normal',
   ui_theme: 'dark',
+  launch_at_startup: false,
   sync_backend: 'webdav',
+  primary_owner_device_id: null,
+  primary_owner_updated_at: null,
   emergency_cooldown_seconds: 60,
   checklist_category_names: '{"politics":"政治","english":"英语","math":"数学","major":"专业课","general":"通用"}',
+  reminder_sound_source: 'builtin',
+  reminder_sound_id: 'classic',
+  reminder_sound_file_name: null,
+  reminder_sound_updated_at: null,
+  reminder_sound_volume: 100,
 };
 
 const defaultWebDavSettings: WebDavSettings = {
@@ -117,8 +134,50 @@ const defaultFeishuSettings: FeishuSyncSettings = {
   redirect_uri: 'http://127.0.0.1:39781/feishu/callback',
 };
 
+const reminderSoundSourceOptions: Array<{ value: ReminderSoundSource; label: string; description: string }> = [
+  {
+    value: 'builtin',
+    label: '内置',
+    description: '直接使用应用自带音色。',
+  },
+  {
+    value: 'custom',
+    label: '自定义',
+    description: '上传你自己的音频文件。',
+  },
+];
+
+const reminderSoundOptions: Array<{ id: ReminderSoundId; label: string; description: string }> = [
+  {
+    id: 'classic',
+    label: '经典',
+    description: '均衡，适合日常提醒。',
+  },
+  {
+    id: 'bright',
+    label: '清亮',
+    description: '更清脆，更容易被注意到。',
+  },
+  {
+    id: 'soft',
+    label: '柔和',
+    description: '节制一点，不会太刺耳。',
+  },
+  {
+    id: 'urgent',
+    label: '紧急',
+    description: '更强烈一些，适合到点提醒。',
+  },
+  {
+    id: 'short',
+    label: '短促',
+    description: '短一点，响完就停。',
+  },
+];
+
 type SettingsPageProps = {
   lastAutoSyncMessage?: string | null;
+  lastAutoUpdateMessage?: string | null;
   theme?: AppTheme;
   onThemeChange?: (theme: AppTheme) => void;
 };
@@ -150,6 +209,7 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
   const [objectStorageMessage, setObjectStorageMessage] = useState<string | null>(null);
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [feishuMessage, setFeishuMessage] = useState<string | null>(null);
+  const [reminderSoundMessage, setReminderSoundMessage] = useState<string | null>(null);
   const [syncRuns, setSyncRuns] = useState<SyncRunSummary[]>([]);
   const [syncBackups, setSyncBackups] = useState<SyncBackupEntry[]>([]);
   const [syncDetailMessage, setSyncDetailMessage] = useState<string | null>(null);
@@ -162,6 +222,9 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
   const [objectStorageBusy, setObjectStorageBusy] = useState(false);
   const [emailBusy, setEmailBusy] = useState(false);
   const [feishuBusy, setFeishuBusy] = useState(false);
+  const [reminderSoundBusy, setReminderSoundBusy] = useState(false);
+  const [customReminderSoundFile, setCustomReminderSoundFile] = useState<File | null>(null);
+  const [customReminderSoundInputKey, setCustomReminderSoundInputKey] = useState(0);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -433,6 +496,19 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
     }
   }
 
+  async function runReminderSoundAction(action: () => Promise<string>) {
+    try {
+      setReminderSoundBusy(true);
+      setError(null);
+      setReminderSoundMessage(null);
+      setReminderSoundMessage(await action());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setReminderSoundBusy(false);
+    }
+  }
+
   function updateSettings(patch: Partial<AppSettings>) {
     setSavedMessage(null);
     setSettings((current) => ({ ...current, ...patch }));
@@ -458,6 +534,30 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
     setFeishuSettings((current) => ({ ...current, ...patch }));
   }
 
+  function updateReminderSoundSettings(patch: Partial<Pick<AppSettings, 'reminder_sound_source' | 'reminder_sound_id' | 'reminder_sound_volume'>>) {
+    setReminderSoundMessage(null);
+    updateSettings(patch);
+  }
+
+  function handleReminderSoundSourceChange(source: ReminderSoundSource) {
+    updateReminderSoundSettings({ reminder_sound_source: source });
+
+    if (source === 'builtin') {
+      setCustomReminderSoundFile(null);
+      setCustomReminderSoundInputKey((current) => current + 1);
+    }
+  }
+
+  function handleReminderSoundFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      return;
+    }
+
+    setCustomReminderSoundFile(file);
+    handleReminderSoundSourceChange('custom');
+  }
+
   function updateSyncBackend(sync_backend: SyncBackend) {
     updateSettings({ sync_backend });
   }
@@ -470,6 +570,12 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
   const objectStorageActionDisabled = objectStorageBusy || settingsLocked || !objectStorageSettings.enabled;
   const emailActionDisabled = emailBusy || settingsLocked || !emailSettings.enabled;
   const feishuActionDisabled = feishuBusy || settingsLocked || !feishuSettings.enabled;
+  const reminderSoundActionDisabled = reminderSoundBusy || settingsLocked;
+  const currentReminderSoundOption = reminderSoundOptions.find((option) => option.id === settings.reminder_sound_id) ?? reminderSoundOptions[0];
+  const currentReminderSoundSourceOption = reminderSoundSourceOptions.find((option) => option.value === settings.reminder_sound_source) ?? reminderSoundSourceOptions[0];
+  const reminderSoundVolumeStyle = {
+    '--sound-volume-percent': `${settings.reminder_sound_volume}%`,
+  } as CSSProperties;
 
   async function handleDetectForegroundApp() {
     try {
@@ -525,6 +631,49 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
       setError(reason instanceof Error ? reason.message : String(reason));
       setInstallingUpdate(false);
     }
+  }
+
+  async function handlePreviewReminderSound() {
+    await runReminderSoundAction(async () => {
+      await previewReminderSound(settings, customReminderSoundFile ?? undefined);
+      return '已开始试听提醒音效。';
+    });
+  }
+
+  async function handleUploadReminderSound() {
+    if (!customReminderSoundFile) {
+      return;
+    }
+
+    await runReminderSoundAction(async () => {
+      const bytes = Array.from(new Uint8Array(await customReminderSoundFile.arrayBuffer()));
+      const saved = await saveCustomReminderSound({
+        fileName: customReminderSoundFile.name,
+        bytes,
+      });
+      setSettings((current) => ({
+        ...current,
+        ...saved,
+        ui_theme: theme,
+      }));
+      setCustomReminderSoundFile(null);
+      setCustomReminderSoundInputKey((current) => current + 1);
+      return '自定义提醒音频已上传并启用。';
+    });
+  }
+
+  async function handleResetReminderSound() {
+    await runReminderSoundAction(async () => {
+      const saved = await resetCustomReminderSound();
+      setSettings((current) => ({
+        ...current,
+        ...saved,
+        ui_theme: theme,
+      }));
+      setCustomReminderSoundFile(null);
+      setCustomReminderSoundInputKey((current) => current + 1);
+      return '已恢复默认提醒音效。';
+    });
   }
 
   async function runEmailAction(action: () => Promise<string>) {
@@ -686,6 +835,17 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
 
           <div className="setting-row mode-setting">
             <div>
+              <strong>开机自启</strong>
+              <p>随 Windows 登录自动启动，方便后台提醒和同步。</p>
+            </div>
+            <div className="segmented-control">
+              <button className={settings.launch_at_startup ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ launch_at_startup: true })} type="button"><Power size={15} />开启</button>
+              <button className={!settings.launch_at_startup ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ launch_at_startup: false })} type="button">关闭</button>
+            </div>
+          </div>
+
+          <div className="setting-row mode-setting">
+            <div>
               <strong>云同步方式</strong>
               <p>WebDAV 保持默认；对象存储用于 Cloudflare R2、MinIO 或其他 S3 兼容服务。</p>
             </div>
@@ -693,6 +853,100 @@ export default function SettingsPage({ lastAutoSyncMessage = null, theme = 'dark
               <button className={settings.sync_backend === 'webdav' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSyncBackend('webdav')} type="button">WebDAV</button>
               <button className={settings.sync_backend === 'object_storage' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSyncBackend('object_storage')} type="button">对象存储</button>
             </div>
+          </div>
+        </div>
+
+        <div className="reminder-sound-panel">
+          <div className="reminder-sound-heading">
+            <div>
+              <span>Reminder Sound</span>
+              <h4>提醒音效</h4>
+              <p className="panel-copy">当前：{currentReminderSoundSourceOption.label} · {currentReminderSoundOption.label}。可试听内置音色，也可上传自己的提醒音频。</p>
+            </div>
+            <button className="secondary-action" disabled={reminderSoundActionDisabled} onClick={() => void handlePreviewReminderSound()} type="button">
+              <Play size={17} />
+              {reminderSoundBusy ? '处理中' : '试听'}
+            </button>
+          </div>
+
+          <div className="segmented-control secondary-segmented">
+            {reminderSoundSourceOptions.map((option) => (
+              <button
+                className={settings.reminder_sound_source === option.value ? 'active' : ''}
+                disabled={settingsLocked}
+                key={option.value}
+                onClick={() => handleReminderSoundSourceChange(option.value)}
+                type="button"
+              >
+                <Music2 size={15} />
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          {settings.reminder_sound_source === 'builtin' ? (
+            <div className="sound-option-grid">
+              {reminderSoundOptions.map((option) => (
+                <button
+                  className={settings.reminder_sound_id === option.id ? 'sound-option-card active' : 'sound-option-card'}
+                  disabled={settingsLocked}
+                  key={option.id}
+                  onClick={() => updateReminderSoundSettings({ reminder_sound_id: option.id })}
+                  type="button"
+                >
+                  <strong>{option.label}</strong>
+                  <span>{option.description}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="custom-sound-row">
+              <label className={settingsLocked ? 'custom-sound-picker disabled' : 'custom-sound-picker'}>
+                <span className="custom-sound-picker-icon"><UploadCloud size={20} /></span>
+                <span className="custom-sound-picker-copy">
+                  <strong>{customReminderSoundFile?.name ?? '选择音频文件'}</strong>
+                  <small>{settings.reminder_sound_file_name ? `当前已保存：${settings.reminder_sound_file_name}` : '支持系统可播放的本地音频文件。'}</small>
+                </span>
+                <input
+                  className="custom-sound-input"
+                  disabled={settingsLocked}
+                  key={customReminderSoundInputKey}
+                  onChange={handleReminderSoundFileChange}
+                  type="file"
+                />
+              </label>
+              {settings.reminder_sound_file_name && (
+                <div className="custom-sound-file">
+                  <span>当前自定义音频</span>
+                  <strong>{settings.reminder_sound_file_name}</strong>
+                  {settings.reminder_sound_updated_at && <small>{settings.reminder_sound_updated_at}</small>}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="sound-volume-row">
+            <div>
+              <span>音量</span>
+              <strong>{settings.reminder_sound_volume}%</strong>
+              <small>试听和保存后的提醒都会使用这个音量。</small>
+            </div>
+            <input
+              className="sound-volume-slider"
+              disabled={settingsLocked}
+              max={100}
+              min={0}
+              onChange={(event) => updateReminderSoundSettings({ reminder_sound_volume: Number(event.target.value) })}
+              style={reminderSoundVolumeStyle}
+              type="range"
+              value={settings.reminder_sound_volume}
+            />
+          </div>
+
+          {reminderSoundMessage && <p className="alert success">{reminderSoundMessage}</p>}
+          <div className="row-actions">
+            <button className="custom-sound-confirm" disabled={reminderSoundActionDisabled || !customReminderSoundFile} onClick={() => void handleUploadReminderSound()} type="button"><UploadCloud size={17} />上传并启用</button>
+            <button className="secondary-action" disabled={reminderSoundActionDisabled || (!settings.reminder_sound_file_name && !customReminderSoundFile)} onClick={() => void handleResetReminderSound()} type="button"><RotateCcw size={17} />恢复默认</button>
           </div>
         </div>
 

@@ -84,6 +84,9 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               current_session_id INTEGER,
               schedule_block_id INTEGER,
               today_plan_item_id INTEGER,
+              last_control_device_id TEXT,
+              last_control_action TEXT,
+              last_control_at INTEGER,
               status TEXT NOT NULL DEFAULT 'active',
               finish_reason TEXT,
               created_at TEXT NOT NULL,
@@ -217,6 +220,21 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               FOREIGN KEY (linked_focus_session_id) REFERENCES focus_sessions(id)
             );
 
+            CREATE TABLE IF NOT EXISTS alarms (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL,
+              note TEXT,
+              alarm_date TEXT NOT NULL,
+              alarm_time TEXT NOT NULL,
+              alarm_at TEXT NOT NULL,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              status TEXT NOT NULL DEFAULT 'scheduled',
+              fired_at TEXT,
+              dismissed_at TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS daily_reviews (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               review_date TEXT NOT NULL UNIQUE,
@@ -299,6 +317,10 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               WHERE template_id IS NOT NULL;
             CREATE INDEX IF NOT EXISTS idx_schedule_templates_enabled
               ON schedule_templates (enabled, start_minute, id);
+            CREATE INDEX IF NOT EXISTS idx_alarms_due
+              ON alarms (enabled, status, alarm_at, id);
+            CREATE INDEX IF NOT EXISTS idx_alarms_status
+              ON alarms (status, alarm_at, id);
             CREATE INDEX IF NOT EXISTS idx_daily_reviews_date
               ON daily_reviews (review_date);
             CREATE INDEX IF NOT EXISTS idx_weekly_reviews_week_start
@@ -364,6 +386,9 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "state_revision",
         "INTEGER NOT NULL DEFAULT 1",
     )?;
+    add_column_if_missing(connection, "study_modes", "last_control_device_id", "TEXT")?;
+    add_column_if_missing(connection, "study_modes", "last_control_action", "TEXT")?;
+    add_column_if_missing(connection, "study_modes", "last_control_at", "INTEGER")?;
     backfill_study_mode_accumulated_seconds(connection)?;
     add_column_if_missing(
         connection,

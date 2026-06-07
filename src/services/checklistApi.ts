@@ -5,11 +5,7 @@ import type {
   TodayPlanItem,
   TodayPlanItemDraft,
 } from '../types/checklist';
-
-async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<T>(command, args);
-}
+import { invokeCommand } from './tauriInvoke';
 
 export function getChecklistPageData(): Promise<ChecklistPageData> {
   return invokeCommand<ChecklistPageData>('get_checklist_page_data');

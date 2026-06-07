@@ -29,6 +29,10 @@ pub struct SharedSyncPayload {
     #[serde(default)]
     pub active_device_id: Option<String>,
     #[serde(default)]
+    pub primary_owner_device_id: Option<String>,
+    #[serde(default)]
+    pub primary_owner_updated_at: Option<i64>,
+    #[serde(default)]
     pub subjects: Vec<SharedSubject>,
     #[serde(default)]
     pub study_modes: Vec<SharedStudyMode>,
@@ -106,6 +110,12 @@ pub struct SharedStudyMode {
     pub current_session_sync_id: Option<String>,
     pub schedule_block_sync_id: Option<String>,
     pub today_plan_item_sync_id: Option<String>,
+    #[serde(default)]
+    pub last_control_device_id: Option<String>,
+    #[serde(default)]
+    pub last_control_action: Option<String>,
+    #[serde(default)]
+    pub last_control_at: Option<i64>,
     pub status: Option<String>,
     pub finish_reason: Option<String>,
     pub created_at: Option<i64>,
@@ -300,6 +310,9 @@ struct DesktopStudyModeRow {
     current_session_id: Option<i64>,
     schedule_block_id: Option<i64>,
     today_plan_item_id: Option<i64>,
+    last_control_device_id: Option<String>,
+    last_control_action: Option<String>,
+    last_control_at: Option<i64>,
     status: String,
     finish_reason: Option<String>,
     created_at: String,
@@ -437,6 +450,8 @@ pub fn export_shared_sync_payload(
         exported_at,
         source_device_id: Some(device_id.clone()),
         active_device_id: active_device_id(connection).ok().flatten(),
+        primary_owner_device_id: primary_owner_device_id(connection).ok().flatten(),
+        primary_owner_updated_at: primary_owner_updated_at(connection).ok().flatten(),
         subjects: export_subjects(connection)?,
         study_modes: export_study_modes(connection)?,
         focus_sessions: export_focus_sessions(connection)?,
@@ -462,19 +477,38 @@ pub fn merge_shared_sync_payloads(
     canonicalize_subject_payload(&mut remote);
     let local_active = shared_active_study_snapshot(&local);
     let remote_active = shared_active_study_snapshot(&remote);
-    let active_merge_decision =
-        classify_active_remote_merge(&local, &remote, local_active.as_ref(), exported_at);
-    let keep_local_active = should_keep_local_active(
+    let (primary_owner_device_id, primary_owner_updated_at) = merge_primary_owner(&local, &remote);
+    let active_merge_decision = classify_active_remote_merge(
         &local,
         &remote,
         local_active.as_ref(),
-        remote_active.as_ref(),
         exported_at,
-    ) || active_merge_decision
-        == ActiveRemoteMergeDecision::KeepLocalActive;
+        primary_owner_device_id.as_deref(),
+    );
+    let remote_primary_active = primary_owner_device_id.as_deref().is_some_and(|owner| {
+        remote.device_id == owner && local.device_id != owner && remote_active.is_some()
+    });
+    let keep_local_active = !remote_primary_active
+        && (primary_owner_prefers_local(
+            primary_owner_device_id.as_deref(),
+            &local,
+            &remote,
+            local_active.as_ref(),
+            remote_active.as_ref(),
+        ) || should_keep_local_active(
+            &local,
+            &remote,
+            local_active.as_ref(),
+            remote_active.as_ref(),
+            exported_at,
+        ) && active_merge_decision != ActiveRemoteMergeDecision::AcceptRemoteCommand
+            || active_merge_decision == ActiveRemoteMergeDecision::KeepLocalActive);
     let preferred_active_sync_id = match (&local_active, &remote_active) {
         (Some(local_snapshot), Some(_)) if keep_local_active => {
             Some(local_snapshot.sync_id.clone())
+        }
+        (_, Some(remote_snapshot)) if remote_primary_active => {
+            Some(remote_snapshot.sync_id.clone())
         }
         _ => None,
     };
@@ -490,12 +524,18 @@ pub fn merge_shared_sync_payloads(
         if let Some(snapshot) = local_active.as_ref() {
             restore_active_from_payload(&mut study_modes, &mut focus_sessions, &local, snapshot);
         }
+    } else if remote_primary_active {
+        if let Some(snapshot) = remote_active.as_ref() {
+            restore_active_from_payload(&mut study_modes, &mut focus_sessions, &remote, snapshot);
+        }
     } else if active_merge_decision == ActiveRemoteMergeDecision::AcceptRemoteCommand {
         restore_matching_active_from_remote(
             &mut study_modes,
             &mut focus_sessions,
             &remote,
+            &local,
             local_active.as_ref(),
+            exported_at,
         );
     }
 
@@ -528,6 +568,8 @@ pub fn merge_shared_sync_payloads(
                 }
             },
         ),
+        primary_owner_device_id: primary_owner_device_id.clone(),
+        primary_owner_updated_at,
         subjects: merge_latest_by_sync_id(
             &local.subjects,
             &remote.subjects,
@@ -685,6 +727,78 @@ fn active_device_id(connection: &Connection) -> Result<Option<String>, String> {
         ensure_device_id(connection).map(Some)
     } else {
         Ok(None)
+    }
+}
+
+fn primary_owner_device_id(connection: &Connection) -> Result<Option<String>, String> {
+    let value = connection
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'primary_owner_device_id'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    Ok(value.and_then(|item| normalize_optional_device_id(&item)))
+}
+
+fn primary_owner_updated_at(connection: &Connection) -> Result<Option<i64>, String> {
+    let value = connection
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'primary_owner_updated_at'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    Ok(value
+        .and_then(|item| item.trim().parse::<i64>().ok())
+        .filter(|value| *value > 0))
+}
+
+fn set_primary_owner(
+    connection: &Connection,
+    owner: Option<&str>,
+    updated_at: Option<i64>,
+) -> Result<(), String> {
+    let value = owner
+        .and_then(normalize_optional_device_id)
+        .unwrap_or_default();
+    let updated_at_value = updated_at.unwrap_or(0).max(0).to_string();
+    let now = Utc::now().to_rfc3339();
+    connection
+        .execute(
+            "
+            INSERT INTO settings (key, value, updated_at)
+            VALUES ('primary_owner_device_id', ?1, ?2)
+            ON CONFLICT(key) DO UPDATE SET
+              value = excluded.value,
+              updated_at = excluded.updated_at
+            ",
+            params![value, now],
+        )
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "
+            INSERT INTO settings (key, value, updated_at)
+            VALUES ('primary_owner_updated_at', ?1, ?2)
+            ON CONFLICT(key) DO UPDATE SET
+              value = excluded.value,
+              updated_at = excluded.updated_at
+            ",
+            params![updated_at_value, now],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn normalize_optional_device_id(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
     }
 }
 
@@ -870,6 +984,11 @@ pub fn import_shared_sync_payload(
     connection: &mut Connection,
     payload: &SharedSyncPayload,
 ) -> Result<(), String> {
+    set_primary_owner(
+        connection,
+        payload.primary_owner_device_id.as_deref(),
+        payload.primary_owner_updated_at,
+    )?;
     let mut payload = payload.clone();
     canonicalize_subject_payload(&mut payload);
     normalize_import_active_sessions(&mut payload);
@@ -1098,11 +1217,86 @@ fn active_sort_key(mode: &SharedStudyMode) -> (i64, i64) {
     )
 }
 
+const ACTIVE_CONTROL_ACTIONS: [&str; 6] = [
+    "pause",
+    "resume",
+    "confirm_break",
+    "finish",
+    "emergency_exit",
+    "switch_subject",
+];
+
 #[derive(Debug, Clone, Copy)]
 struct ActiveLogicalPosition {
     round: i64,
     phase_rank: i64,
     progress_seconds: i64,
+}
+
+#[derive(Debug, Clone)]
+struct DbStudyModeProgress {
+    phase: String,
+    round_number: i64,
+    phase_started_at: Option<i64>,
+    paused_at: Option<i64>,
+    accumulated_study_seconds: i64,
+    paused_stage_elapsed_seconds: i64,
+    status: String,
+    ended_at: Option<i64>,
+    updated_at: i64,
+}
+
+fn merge_primary_owner(
+    local: &SharedSyncPayload,
+    remote: &SharedSyncPayload,
+) -> (Option<String>, Option<i64>) {
+    let local_updated_at = local.primary_owner_updated_at.unwrap_or(0).max(0);
+    let remote_updated_at = remote.primary_owner_updated_at.unwrap_or(0).max(0);
+    if remote_updated_at > local_updated_at {
+        (
+            remote.primary_owner_device_id.clone(),
+            Some(remote_updated_at),
+        )
+    } else if local_updated_at > 0 {
+        (
+            local.primary_owner_device_id.clone(),
+            Some(local_updated_at),
+        )
+    } else if remote.primary_owner_device_id.is_some() {
+        (
+            remote.primary_owner_device_id.clone(),
+            remote.primary_owner_updated_at,
+        )
+    } else {
+        (
+            local.primary_owner_device_id.clone(),
+            local.primary_owner_updated_at,
+        )
+    }
+}
+
+fn primary_owner_prefers_local(
+    primary_owner_device_id: Option<&str>,
+    local: &SharedSyncPayload,
+    remote: &SharedSyncPayload,
+    local_active: Option<&SharedActiveStudySnapshot>,
+    remote_active: Option<&SharedActiveStudySnapshot>,
+) -> bool {
+    let Some(owner) = primary_owner_device_id.filter(|value| !value.trim().is_empty()) else {
+        return false;
+    };
+    let Some(local_active) = local_active else {
+        return false;
+    };
+    if local.device_id != owner {
+        return false;
+    }
+    if remote.device_id == owner {
+        return false;
+    }
+    remote_active
+        .map(|snapshot| snapshot.sync_id.as_str() != local_active.sync_id.as_str())
+        .unwrap_or(false)
 }
 
 fn should_keep_local_active(
@@ -1152,6 +1346,7 @@ fn classify_active_remote_merge(
     remote: &SharedSyncPayload,
     local_active: Option<&SharedActiveStudySnapshot>,
     now_millis: i64,
+    primary_owner_device_id: Option<&str>,
 ) -> ActiveRemoteMergeDecision {
     let Some(local_active) = local_active else {
         return ActiveRemoteMergeDecision::Default;
@@ -1174,6 +1369,22 @@ fn classify_active_remote_merge(
         return ActiveRemoteMergeDecision::Default;
     };
 
+    let local_is_primary = primary_owner_device_id
+        .map(|owner| !owner.trim().is_empty() && local.device_id == owner)
+        .unwrap_or(false);
+    let remote_is_primary = primary_owner_device_id
+        .map(|owner| !owner.trim().is_empty() && remote.device_id == owner)
+        .unwrap_or(false);
+    let valid_control = is_remote_active_command(local_mode, remote_mode)
+        && has_valid_remote_control_intent(local_mode, remote_mode, &remote.device_id);
+    if local_is_primary && !remote_is_primary {
+        return if valid_control {
+            ActiveRemoteMergeDecision::AcceptRemoteCommand
+        } else {
+            ActiveRemoteMergeDecision::KeepLocalActive
+        };
+    }
+
     if remote_mode.updated_at <= local_mode.updated_at {
         return if active_mode_regresses(local_mode, remote_mode, now_millis) {
             ActiveRemoteMergeDecision::KeepLocalActive
@@ -1182,7 +1393,7 @@ fn classify_active_remote_merge(
         };
     }
 
-    if is_remote_active_command(local_mode, remote_mode) {
+    if valid_control {
         return ActiveRemoteMergeDecision::AcceptRemoteCommand;
     }
 
@@ -1213,6 +1424,76 @@ fn is_remote_active_command(local: &SharedStudyMode, remote: &SharedStudyMode) -
         return true;
     }
     local_phase == "awaiting_break" && remote_phase == "break"
+}
+
+fn has_valid_remote_control_intent(
+    local: &SharedStudyMode,
+    remote: &SharedStudyMode,
+    remote_device_id: &str,
+) -> bool {
+    let Some(control_device_id) = remote
+        .last_control_device_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return false;
+    };
+    if control_device_id != remote_device_id {
+        return false;
+    }
+    let Some(action) = remote
+        .last_control_action
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| ACTIVE_CONTROL_ACTIONS.contains(value))
+    else {
+        return false;
+    };
+    let Some(control_at) = remote.last_control_at.filter(|value| *value > 0) else {
+        return false;
+    };
+    if remote.updated_at != control_at {
+        return false;
+    }
+    if local
+        .last_control_at
+        .filter(|accepted_at| control_at < *accepted_at)
+        .is_some()
+    {
+        return false;
+    }
+    control_action_matches_state(action, local, remote)
+}
+
+fn control_action_matches_state(
+    action: &str,
+    local: &SharedStudyMode,
+    remote: &SharedStudyMode,
+) -> bool {
+    let local_phase = local.phase.as_deref().unwrap_or_default();
+    let remote_phase = remote.phase.as_deref().unwrap_or_default();
+    let local_paused = local_phase == "paused" || local.paused_at.is_some();
+    let remote_paused = remote_phase == "paused" || remote.paused_at.is_some();
+    match action {
+        "pause" => remote_paused && !local_paused,
+        "resume" => {
+            local_paused && !remote_paused && matches!(remote_phase, "focus" | "awaiting_break")
+        }
+        "confirm_break" => local_phase == "awaiting_break" && remote_phase == "break",
+        "finish" => {
+            remote.status.as_deref() == Some("finished")
+                || remote_phase == "finished"
+                || (remote.ended_at.is_some()
+                    && remote.status.as_deref() != Some("emergency_exited"))
+        }
+        "emergency_exit" => {
+            remote.status.as_deref() == Some("emergency_exited")
+                || remote_phase == "emergency_exited"
+        }
+        "switch_subject" => local.subject_sync_id != remote.subject_sync_id,
+        _ => false,
+    }
 }
 
 fn active_mode_regresses(
@@ -1336,12 +1617,14 @@ fn restore_matching_active_from_remote(
     study_modes: &mut Vec<SharedStudyMode>,
     focus_sessions: &mut Vec<SharedFocusSession>,
     remote: &SharedSyncPayload,
+    local: &SharedSyncPayload,
     local_active: Option<&SharedActiveStudySnapshot>,
+    now_millis: i64,
 ) {
     let Some(local_active) = local_active else {
         return;
     };
-    let Some(remote_mode) = remote
+    let Some(mut remote_mode) = remote
         .study_modes
         .iter()
         .find(|mode| mode.sync_id == local_active.sync_id)
@@ -1349,6 +1632,13 @@ fn restore_matching_active_from_remote(
     else {
         return;
     };
+    if let Some(local_mode) = local
+        .study_modes
+        .iter()
+        .find(|mode| mode.sync_id == local_active.sync_id)
+    {
+        remote_mode = preserve_active_progress_for_command(local_mode, remote_mode, now_millis);
+    }
 
     if let Some(position) = study_modes
         .iter()
@@ -1376,6 +1666,60 @@ fn restore_matching_active_from_remote(
             }
         }
     }
+}
+
+fn preserve_active_progress_for_command(
+    local: &SharedStudyMode,
+    mut remote: SharedStudyMode,
+    now_millis: i64,
+) -> SharedStudyMode {
+    let local_position = active_logical_position(local, now_millis);
+    let remote_position = active_logical_position(&remote, now_millis);
+    remote.round_number = Some(
+        remote
+            .round_number
+            .unwrap_or(1)
+            .max(local.round_number.unwrap_or(1)),
+    );
+    remote.accumulated_study_seconds = Some(
+        remote
+            .accumulated_study_seconds
+            .unwrap_or(0)
+            .max(local.accumulated_study_seconds.unwrap_or(0)),
+    );
+    if remote_position.progress_seconds < local_position.progress_seconds {
+        match remote.phase.as_deref() {
+            Some("paused") => {
+                remote.paused_stage_elapsed_seconds = Some(
+                    remote
+                        .paused_stage_elapsed_seconds
+                        .or(remote.phase_paused_seconds)
+                        .unwrap_or(0)
+                        .max(phase_elapsed_seconds(local, now_millis)),
+                );
+                remote.phase_paused_seconds = remote.paused_stage_elapsed_seconds;
+            }
+            Some("focus") => {
+                if let Some(local_started_at) = local.phase_started_at {
+                    remote.phase_started_at = Some(
+                        remote
+                            .phase_started_at
+                            .unwrap_or(local_started_at)
+                            .min(local_started_at),
+                    );
+                }
+            }
+            _ => {
+                remote.accumulated_study_seconds = Some(
+                    remote
+                        .accumulated_study_seconds
+                        .unwrap_or(0)
+                        .max(local_position.progress_seconds),
+                );
+            }
+        }
+    }
+    remote
 }
 
 fn resolve_shared_active_conflicts(
@@ -1617,6 +1961,9 @@ fn export_study_modes(connection: &Connection) -> Result<Vec<SharedStudyMode>, S
                 .ok()
                 .flatten()
             }),
+            last_control_device_id: row.last_control_device_id,
+            last_control_action: row.last_control_action,
+            last_control_at: row.last_control_at,
             status: Some(to_shared_study_status(&row.status).to_string()),
             finish_reason: row.finish_reason,
             created_at: Some(parse_rfc3339_millis(&row.created_at)?),
@@ -2066,6 +2413,9 @@ impl From<DeletedPayload> for SharedStudyMode {
             current_session_sync_id: None,
             schedule_block_sync_id: None,
             today_plan_item_sync_id: None,
+            last_control_device_id: None,
+            last_control_action: None,
+            last_control_at: None,
             status: None,
             finish_reason: None,
             created_at: None,
@@ -2367,6 +2717,9 @@ fn import_study_modes(connection: &Connection, items: &[SharedStudyMode]) -> Res
             today_plan_item_id,
             desktop_status,
             item.finish_reason.clone(),
+            item.last_control_device_id.clone(),
+            item.last_control_action.clone(),
+            item.last_control_at,
             &created_at,
             &updated_at,
         )?;
@@ -2898,7 +3251,8 @@ fn load_study_mode_rows(connection: &Connection) -> Result<Vec<DesktopStudyModeR
                    started_at, phase_started_at, paused_at, total_paused_seconds,
                    phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at, current_session_id, status,
-                   finish_reason, created_at, updated_at, schedule_block_id, today_plan_item_id
+                   finish_reason, created_at, updated_at, schedule_block_id, today_plan_item_id,
+                   last_control_device_id, last_control_action, last_control_at
             FROM study_modes
             ORDER BY id ASC
             ",
@@ -2934,6 +3288,9 @@ fn load_study_mode_rows(connection: &Connection) -> Result<Vec<DesktopStudyModeR
                 updated_at: row.get(23)?,
                 schedule_block_id: row.get(24)?,
                 today_plan_item_id: row.get(25)?,
+                last_control_device_id: row.get(26)?,
+                last_control_action: row.get(27)?,
+                last_control_at: row.get(28)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -3360,12 +3717,72 @@ fn upsert_study_mode_row(
     today_plan_item_id: Option<i64>,
     status: &str,
     finish_reason: Option<String>,
+    last_control_device_id: Option<String>,
+    last_control_action: Option<String>,
+    last_control_at: Option<i64>,
     created_at: &str,
     updated_at: &str,
 ) -> Result<(), String> {
+    let incoming_updated_at_millis = parse_rfc3339_millis(updated_at)?;
     if let Some(local_id) =
         resolve_local_id_by_sync_id(connection, ENTITY_STUDY_MODE, Some(sync_id))?
     {
+        let incoming = DbStudyModeProgress {
+            phase: phase.to_string(),
+            round_number,
+            phase_started_at: parse_rfc3339_millis(phase_started_at).ok(),
+            paused_at: paused_at
+                .as_deref()
+                .and_then(|value| parse_rfc3339_millis(value).ok()),
+            accumulated_study_seconds,
+            paused_stage_elapsed_seconds,
+            status: status.to_string(),
+            ended_at: ended_at
+                .as_deref()
+                .and_then(|value| parse_rfc3339_millis(value).ok()),
+            updated_at: incoming_updated_at_millis,
+        };
+        let existing = load_db_study_mode_progress(connection, local_id)?;
+        let keep_existing_progress = existing.as_ref().is_some_and(|existing| {
+            should_preserve_db_active_progress(existing, &incoming, incoming_updated_at_millis)
+        });
+
+        let (
+            next_phase,
+            next_round_number,
+            next_phase_started_at,
+            next_paused_at,
+            next_accumulated_study_seconds,
+            next_paused_stage_elapsed_seconds,
+            next_status,
+            next_ended_at,
+        ) = if keep_existing_progress {
+            let existing = existing.expect("existing progress checked");
+            (
+                existing.phase,
+                existing.round_number,
+                existing
+                    .phase_started_at
+                    .map(millis_to_rfc3339)
+                    .unwrap_or_else(|| phase_started_at.to_string()),
+                existing.paused_at.map(millis_to_rfc3339),
+                existing.accumulated_study_seconds,
+                existing.paused_stage_elapsed_seconds,
+                existing.status,
+                existing.ended_at.map(millis_to_rfc3339),
+            )
+        } else {
+            (
+                phase.to_string(),
+                round_number,
+                phase_started_at.to_string(),
+                paused_at,
+                accumulated_study_seconds,
+                paused_stage_elapsed_seconds,
+                status.to_string(),
+                ended_at,
+            )
+        };
         connection
             .execute(
                 "
@@ -3393,9 +3810,12 @@ fn upsert_study_mode_row(
                     today_plan_item_id = ?20,
                     status = ?21,
                     finish_reason = ?22,
-                    created_at = ?23,
-                    updated_at = ?24
-                WHERE id = ?25
+                    last_control_device_id = ?23,
+                    last_control_action = ?24,
+                    last_control_at = ?25,
+                    created_at = ?26,
+                    updated_at = ?27
+                WHERE id = ?28
                 ",
                 params![
                     state_revision.max(1),
@@ -3406,20 +3826,23 @@ fn upsert_study_mode_row(
                     break_seconds,
                     long_break_seconds,
                     long_break_interval,
-                    phase,
-                    round_number,
+                    next_phase,
+                    next_round_number,
                     started_at,
-                    phase_started_at,
-                    paused_at,
-                    accumulated_study_seconds,
+                    next_phase_started_at,
+                    next_paused_at,
+                    next_accumulated_study_seconds,
                     total_paused_seconds,
-                    paused_stage_elapsed_seconds,
-                    ended_at,
+                    next_paused_stage_elapsed_seconds,
+                    next_ended_at,
                     current_session_id,
                     schedule_block_id,
                     today_plan_item_id,
-                    status,
+                    next_status,
                     finish_reason,
+                    last_control_device_id,
+                    last_control_action,
+                    last_control_at,
                     created_at,
                     updated_at,
                     local_id
@@ -3431,7 +3854,7 @@ fn upsert_study_mode_row(
             ENTITY_STUDY_MODE,
             local_id,
             sync_id,
-            parse_rfc3339_millis(updated_at)?,
+            incoming_updated_at_millis,
             None,
         )?;
         return Ok(());
@@ -3446,8 +3869,9 @@ fn upsert_study_mode_row(
               started_at, phase_started_at, paused_at, accumulated_study_seconds,
               total_paused_seconds, phase_paused_seconds, paused_stage_elapsed_seconds,
               ended_at, current_session_id, schedule_block_id,
-              today_plan_item_id, status, finish_reason, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
+              today_plan_item_id, status, finish_reason, last_control_device_id,
+              last_control_action, last_control_at, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)
             ",
             params![
                 state_revision.max(1),
@@ -3473,6 +3897,9 @@ fn upsert_study_mode_row(
                 today_plan_item_id,
                 status,
                 finish_reason,
+                last_control_device_id,
+                last_control_action,
+                last_control_at,
                 created_at,
                 updated_at
             ],
@@ -3484,9 +3911,99 @@ fn upsert_study_mode_row(
         ENTITY_STUDY_MODE,
         local_id,
         sync_id,
-        parse_rfc3339_millis(updated_at)?,
+        incoming_updated_at_millis,
         None,
     )
+}
+
+fn load_db_study_mode_progress(
+    connection: &Connection,
+    local_id: i64,
+) -> Result<Option<DbStudyModeProgress>, String> {
+    connection
+        .query_row(
+            "
+            SELECT phase, cycle_index, phase_started_at, paused_at, accumulated_study_seconds,
+                   paused_stage_elapsed_seconds, status, ended_at, updated_at
+            FROM study_modes
+            WHERE id = ?1
+            ",
+            params![local_id],
+            |row| {
+                let phase_started_at: String = row.get(2)?;
+                let paused_at: Option<String> = row.get(3)?;
+                let ended_at: Option<String> = row.get(7)?;
+                let updated_at: String = row.get(8)?;
+                Ok(DbStudyModeProgress {
+                    phase: row.get(0)?,
+                    round_number: row.get(1)?,
+                    phase_started_at: parse_rfc3339_millis(&phase_started_at).ok(),
+                    paused_at: paused_at
+                        .as_deref()
+                        .and_then(|value| parse_rfc3339_millis(value).ok()),
+                    accumulated_study_seconds: row.get(4)?,
+                    paused_stage_elapsed_seconds: row.get(5)?,
+                    status: row.get(6)?,
+                    ended_at: ended_at
+                        .as_deref()
+                        .and_then(|value| parse_rfc3339_millis(value).ok()),
+                    updated_at: parse_rfc3339_millis(&updated_at).unwrap_or_default(),
+                })
+            },
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+fn should_preserve_db_active_progress(
+    existing: &DbStudyModeProgress,
+    incoming: &DbStudyModeProgress,
+    now_millis: i64,
+) -> bool {
+    if !is_shared_running_status(&existing.status) || !is_shared_running_status(&incoming.status) {
+        return false;
+    }
+    let existing_mode = db_progress_to_shared_mode(existing);
+    let incoming_mode = db_progress_to_shared_mode(incoming);
+    active_mode_regresses(&existing_mode, &incoming_mode, now_millis)
+        && incoming.updated_at >= existing.updated_at
+}
+
+fn db_progress_to_shared_mode(progress: &DbStudyModeProgress) -> SharedStudyMode {
+    SharedStudyMode {
+        sync_id: String::new(),
+        state_revision: None,
+        mode: None,
+        subject_sync_id: None,
+        planned_seconds: Some(i64::MAX / 4),
+        focus_seconds: None,
+        break_seconds: None,
+        long_break_seconds: None,
+        long_break_interval: None,
+        phase: Some(progress.phase.clone()),
+        round_number: Some(progress.round_number),
+        started_at: None,
+        phase_started_at: progress.phase_started_at,
+        paused_at: progress.paused_at,
+        paused_from_phase: None,
+        accumulated_study_seconds: Some(progress.accumulated_study_seconds),
+        total_paused_seconds: None,
+        phase_paused_seconds: Some(progress.paused_stage_elapsed_seconds),
+        paused_stage_elapsed_seconds: Some(progress.paused_stage_elapsed_seconds),
+        current_break_type: None,
+        ended_at: progress.ended_at,
+        current_session_sync_id: None,
+        schedule_block_sync_id: None,
+        today_plan_item_sync_id: None,
+        last_control_device_id: None,
+        last_control_action: None,
+        last_control_at: None,
+        status: Some(progress.status.clone()),
+        finish_reason: None,
+        created_at: None,
+        updated_at: progress.updated_at,
+        deleted_at: None,
+    }
 }
 
 fn upsert_focus_session_row(
@@ -4849,6 +5366,8 @@ mod tests {
             exported_at,
             source_device_id: Some(device_id.to_string()),
             active_device_id: None,
+            primary_owner_device_id: None,
+            primary_owner_updated_at: None,
             subjects: Vec::new(),
             study_modes: Vec::new(),
             focus_sessions: Vec::new(),
@@ -4895,6 +5414,9 @@ mod tests {
             current_session_sync_id: None,
             schedule_block_sync_id: None,
             today_plan_item_sync_id: None,
+            last_control_device_id: None,
+            last_control_action: None,
+            last_control_at: None,
             status: Some("running".to_string()),
             finish_reason: None,
             created_at: Some(0),
@@ -4930,6 +5452,19 @@ mod tests {
             updated_at,
             deleted_at: None,
         }
+    }
+
+    fn with_control(
+        mut mode: SharedStudyMode,
+        device_id: &str,
+        action: &str,
+        at: i64,
+    ) -> SharedStudyMode {
+        mode.last_control_device_id = Some(device_id.to_string());
+        mode.last_control_action = Some(action.to_string());
+        mode.last_control_at = Some(at);
+        mode.updated_at = at;
+        mode
     }
 
     #[test]
@@ -5051,6 +5586,57 @@ mod tests {
     }
 
     #[test]
+    fn primary_local_active_rejects_remote_pause_without_control_intent() {
+        let mut local = empty_payload("desktop", 60_000);
+        local.primary_owner_device_id = Some("desktop".to_string());
+        local.primary_owner_updated_at = Some(10_000);
+        local
+            .study_modes
+            .push(running_study_mode("mode-1", 1, "focus", 900, 50_000, 2_000));
+
+        let mut remote = empty_payload("phone", 60_000);
+        remote.primary_owner_device_id = Some("desktop".to_string());
+        remote.primary_owner_updated_at = Some(10_000);
+        let mut paused = running_study_mode("mode-1", 1, "paused", 900, 50_000, 6_000);
+        paused.paused_at = Some(55_000);
+        paused.paused_from_phase = Some("focus".to_string());
+        paused.paused_stage_elapsed_seconds = Some(5);
+        remote.study_modes.push(paused);
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 60_000);
+        assert_eq!(merged.study_modes.len(), 1);
+        assert_eq!(merged.study_modes[0].phase.as_deref(), Some("focus"));
+        assert_eq!(merged.study_modes[0].paused_at, None);
+    }
+
+    #[test]
+    fn remote_pause_control_does_not_reduce_accepted_progress() {
+        let mut local = empty_payload("desktop", 60_000);
+        local.primary_owner_device_id = Some("desktop".to_string());
+        local.primary_owner_updated_at = Some(10_000);
+        local.study_modes.push(running_study_mode(
+            "mode-1", 2, "focus", 1_600, 50_000, 2_000,
+        ));
+
+        let mut remote = empty_payload("phone", 60_000);
+        remote.primary_owner_device_id = Some("desktop".to_string());
+        remote.primary_owner_updated_at = Some(10_000);
+        let mut paused = running_study_mode("mode-1", 1, "paused", 100, 50_000, 6_000);
+        paused.paused_at = Some(55_000);
+        paused.paused_from_phase = Some("focus".to_string());
+        paused.paused_stage_elapsed_seconds = Some(5);
+        remote
+            .study_modes
+            .push(with_control(paused, "phone", "pause", 6_000));
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 60_000);
+        assert_eq!(merged.study_modes.len(), 1);
+        assert_eq!(merged.study_modes[0].phase.as_deref(), Some("paused"));
+        assert_eq!(merged.study_modes[0].round_number, Some(2));
+        assert_eq!(merged.study_modes[0].accumulated_study_seconds, Some(1_600));
+    }
+
+    #[test]
     fn active_study_mode_accepts_remote_resume_command() {
         let mut local = empty_payload("desktop", 60_000);
         let mut paused = running_study_mode("mode-1", 1, "paused", 100, 50_000, 2_000);
@@ -5155,6 +5741,86 @@ mod tests {
         assert_eq!(desktop_mode.phase.as_deref(), Some("focus"));
         assert_eq!(phone_mode.status.as_deref(), Some("finished"));
         assert_eq!(phone_mode.finish_reason.as_deref(), Some("sync_takeover"));
+    }
+
+    #[test]
+    fn primary_local_active_rejects_different_remote_takeover() {
+        let mut local = empty_payload("desktop", 60_000);
+        local.primary_owner_device_id = Some("desktop".to_string());
+        local.study_modes.push(running_study_mode(
+            "desktop-mode",
+            1,
+            "focus",
+            300,
+            50_000,
+            2_000,
+        ));
+        let mut remote = empty_payload("phone", 60_000);
+        remote.primary_owner_device_id = Some("desktop".to_string());
+        remote.study_modes.push(running_study_mode(
+            "phone-mode",
+            3,
+            "focus",
+            0,
+            59_000,
+            5_000,
+        ));
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 60_000);
+        let desktop_mode = merged
+            .study_modes
+            .iter()
+            .find(|mode| mode.sync_id == "desktop-mode")
+            .expect("desktop active should remain");
+        let phone_mode = merged
+            .study_modes
+            .iter()
+            .find(|mode| mode.sync_id == "phone-mode")
+            .expect("phone mode should be retained as history");
+        assert_eq!(merged.primary_owner_device_id.as_deref(), Some("desktop"));
+        assert_eq!(desktop_mode.status.as_deref(), Some("running"));
+        assert_eq!(phone_mode.status.as_deref(), Some("finished"));
+        assert_eq!(phone_mode.finish_reason.as_deref(), Some("sync_takeover"));
+    }
+
+    #[test]
+    fn remote_primary_active_takes_over_local_non_primary_active() {
+        let mut local = empty_payload("desktop", 60_000);
+        local.primary_owner_device_id = Some("phone".to_string());
+        local.study_modes.push(running_study_mode(
+            "desktop-mode",
+            3,
+            "focus",
+            900,
+            50_000,
+            5_000,
+        ));
+        let mut remote = empty_payload("phone", 60_000);
+        remote.primary_owner_device_id = Some("phone".to_string());
+        remote.study_modes.push(running_study_mode(
+            "phone-mode",
+            1,
+            "focus",
+            120,
+            59_000,
+            3_000,
+        ));
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 60_000);
+        let desktop_mode = merged
+            .study_modes
+            .iter()
+            .find(|mode| mode.sync_id == "desktop-mode")
+            .expect("desktop mode should be retained as history");
+        let phone_mode = merged
+            .study_modes
+            .iter()
+            .find(|mode| mode.sync_id == "phone-mode")
+            .expect("phone active should win");
+        assert_eq!(merged.primary_owner_device_id.as_deref(), Some("phone"));
+        assert_eq!(phone_mode.status.as_deref(), Some("running"));
+        assert_eq!(desktop_mode.status.as_deref(), Some("finished"));
+        assert_eq!(desktop_mode.finish_reason.as_deref(), Some("sync_takeover"));
     }
 
     #[test]

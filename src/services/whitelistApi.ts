@@ -1,9 +1,5 @@
-import type { RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
-
-async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<T>(command, args);
-}
+import type { PotPlayerMediaInfo, RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
+import { invokeCommand } from './tauriInvoke';
 
 export function createWhitelistApp(
   name: string,
@@ -28,6 +24,38 @@ export function createWhitelistWebsite(name: string, domain: string, note?: stri
     note: note?.trim() ? note.trim() : null,
     subjectId: subjectId ?? null,
   });
+}
+
+export function createPotPlayerVideoWhitelistFile(
+  name: string,
+  videoPath: string,
+  note?: string,
+  subjectId?: number | null,
+): Promise<WhitelistApp> {
+  return invokeCommand<WhitelistApp>('create_potplayer_video_whitelist_file', {
+    name,
+    videoPath,
+    note: note?.trim() ? note.trim() : null,
+    subjectId: subjectId ?? null,
+  });
+}
+
+export function createPotPlayerVideoWhitelistDirectory(
+  name: string,
+  directoryPath: string,
+  note?: string,
+  subjectId?: number | null,
+): Promise<WhitelistApp> {
+  return invokeCommand<WhitelistApp>('create_potplayer_video_whitelist_directory', {
+    name,
+    directoryPath,
+    note: note?.trim() ? note.trim() : null,
+    subjectId: subjectId ?? null,
+  });
+}
+
+export function getCurrentPotPlayerMedia(): Promise<PotPlayerMediaInfo> {
+  return invokeCommand<PotPlayerMediaInfo>('get_current_potplayer_media');
 }
 
 export function listWhitelistApps(): Promise<WhitelistApp[]> {

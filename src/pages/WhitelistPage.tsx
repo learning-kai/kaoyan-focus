@@ -1,12 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, FolderSearch, Globe2, History, ListPlus, Power, PowerOff, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import {
+  Clapperboard,
+  ExternalLink,
+  FolderSearch,
+  Globe2,
+  History,
+  ListPlus,
+  PlaySquare,
+  Power,
+  PowerOff,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Video,
+} from 'lucide-react';
 import { getStudyModeState, listSubjects } from '../services/focusApi';
 import { isStudyModeLocked } from '../services/studyModeLock';
 import { openExternalUrl } from '../services/systemApi';
 import {
+  createPotPlayerVideoWhitelistDirectory,
+  createPotPlayerVideoWhitelistFile,
   createWhitelistApp,
   createWhitelistWebsite,
   deleteWhitelistApp,
+  getCurrentPotPlayerMedia,
   listRecentBlockedApps,
   listRunningProcesses,
   listWhitelistApps,
@@ -14,9 +31,10 @@ import {
   updateWhitelistSubject,
 } from '../services/whitelistApi';
 import type { StudyModeState, Subject } from '../types/focus';
-import type { RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
+import type { PotPlayerMediaInfo, RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
 
-type WhitelistEntryType = 'app' | 'website';
+type WhitelistEntryType = 'app' | 'website' | 'potplayer';
+type PotPlayerRuleType = 'file' | 'directory';
 
 function websiteUrlFromRule(rule: string) {
   const trimmed = rule.trim();
@@ -27,14 +45,31 @@ function websiteUrlFromRule(rule: string) {
   return `https://${trimmed.replace(/^\*+\./, '').replace(/^\/+/, '')}`;
 }
 
+function isPotPlayerRule(app: WhitelistApp) {
+  return app.match_type === 'potplayer_video_file' || app.match_type === 'potplayer_video_directory';
+}
+
+function isWebsiteRule(app: WhitelistApp) {
+  return app.match_type === 'website_domain';
+}
+
+function pathBaseName(path: string | null) {
+  if (!path) return '';
+  const segments = path.replace(/\//g, '\\').split('\\').filter(Boolean);
+  return segments.at(-1) ?? '';
+}
+
 export default function WhitelistPage() {
   const [apps, setApps] = useState<WhitelistApp[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [entryType, setEntryType] = useState<WhitelistEntryType>('app');
+  const [potPlayerRuleType, setPotPlayerRuleType] = useState<PotPlayerRuleType>('file');
   const [name, setName] = useState('');
   const [processName, setProcessName] = useState('');
   const [domain, setDomain] = useState('');
   const [processPath, setProcessPath] = useState<string | null>(null);
+  const [potPlayerPath, setPotPlayerPath] = useState('');
+  const [currentPotPlayerMedia, setCurrentPotPlayerMedia] = useState<PotPlayerMediaInfo | null>(null);
   const [note, setNote] = useState('');
   const [subjectId, setSubjectId] = useState<number | null>(null);
   const [runningProcesses, setRunningProcesses] = useState<RunningProcess[]>([]);
@@ -45,15 +80,23 @@ export default function WhitelistPage() {
   const [loading, setLoading] = useState(false);
   const [processLoading, setProcessLoading] = useState(false);
   const [blockedLoading, setBlockedLoading] = useState(false);
+  const [potPlayerLoading, setPotPlayerLoading] = useState(false);
   const [studyState, setStudyState] = useState<StudyModeState | null>(null);
 
   const enabledCount = apps.filter((app) => app.enabled).length;
-  const websiteCount = apps.filter((app) => app.match_type === 'website_domain').length;
-  const appCount = apps.length - websiteCount;
+  const websiteCount = apps.filter(isWebsiteRule).length;
+  const potPlayerCount = apps.filter(isPotPlayerRule).length;
+  const appCount = apps.length - websiteCount - potPlayerCount;
   const whitelistLocked = isStudyModeLocked(studyState);
   const canCreate = !whitelistLocked
     && name.trim().length > 0
-    && (entryType === 'website' ? domain.trim().length > 0 : processName.trim().length > 0);
+    && (
+      entryType === 'website'
+        ? domain.trim().length > 0
+        : entryType === 'potplayer'
+          ? potPlayerPath.trim().length > 0
+          : processName.trim().length > 0
+    );
   const groupedApps = useMemo(() => {
     const groups = [
       { id: null as number | null, name: '未指定科目', items: apps.filter((app) => app.subject_id === null) },
@@ -125,15 +168,16 @@ export default function WhitelistPage() {
       setLoading(true);
       if (entryType === 'website') {
         await createWhitelistWebsite(name, domain, note, subjectId);
+      } else if (entryType === 'potplayer') {
+        if (potPlayerRuleType === 'file') {
+          await createPotPlayerVideoWhitelistFile(name, potPlayerPath, note, subjectId);
+        } else {
+          await createPotPlayerVideoWhitelistDirectory(name, potPlayerPath, note, subjectId);
+        }
       } else {
         await createWhitelistApp(name, processName, note, processPath, subjectId);
       }
-      setName('');
-      setProcessName('');
-      setDomain('');
-      setProcessPath(null);
-      setNote('');
-      setSubjectId(null);
+      resetCreateForm();
       await refreshApps();
       await refreshRecentBlockedApps();
     } catch (reason) {
@@ -141,6 +185,18 @@ export default function WhitelistPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function resetCreateForm() {
+    setName('');
+    setProcessName('');
+    setDomain('');
+    setProcessPath(null);
+    setPotPlayerPath('');
+    setCurrentPotPlayerMedia(null);
+    setNote('');
+    setSubjectId(null);
+    setPotPlayerRuleType('file');
   }
 
   async function refreshRecentBlockedApps() {
@@ -185,6 +241,35 @@ export default function WhitelistPage() {
     }
   }
 
+  async function handleReadCurrentPotPlayerMedia() {
+    if (whitelistLocked) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setPotPlayerLoading(true);
+      const media = await getCurrentPotPlayerMedia();
+      setCurrentPotPlayerMedia(media);
+      const nextRuleType = media.media_path ? 'file' : 'directory';
+      setPotPlayerRuleType(nextRuleType);
+      const nextPath = nextRuleType === 'file'
+        ? media.media_path ?? ''
+        : media.media_directory ?? '';
+      setPotPlayerPath(nextPath);
+      setName(
+        nextRuleType === 'file'
+          ? pathBaseName(media.media_path) || 'PotPlayer 视频'
+          : pathBaseName(media.media_directory) || 'PotPlayer 视频目录',
+      );
+      setEntryType('potplayer');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setPotPlayerLoading(false);
+    }
+  }
+
   function handleSelectProcess(process: RunningProcess) {
     if (whitelistLocked) {
       return;
@@ -195,6 +280,7 @@ export default function WhitelistPage() {
     setProcessName(process.process_name);
     setProcessPath(process.process_path);
     setProcessPickerOpen(false);
+    setEntryType('app');
   }
 
   async function handleAddBlockedApp(blockedApp: RecentBlockedApp) {
@@ -271,13 +357,26 @@ export default function WhitelistPage() {
     return subjects.find((subject) => subject.id === id)?.name ?? '未知科目';
   }
 
+  function renderRuleSummary(app: WhitelistApp) {
+    if (app.match_type === 'website_domain') {
+      return `网站规则：${app.path ?? app.process_name}`;
+    }
+    if (app.match_type === 'potplayer_video_file') {
+      return `视频文件：${app.path ?? ''}`;
+    }
+    if (app.match_type === 'potplayer_video_directory') {
+      return `视频目录：${app.path ?? ''}`;
+    }
+    return `进程名：${app.process_name}`;
+  }
+
   return (
     <section className="page-shell whitelist-shell">
       <header className="page-header">
         <div>
           <p className="eyebrow">Allowlist Control</p>
-          <h2>软件与网站白名单</h2>
-          <p>学习阶段只放行必要工具。白名单可绑定科目，专注中切到对应软件或网页时会自动切换当前科目。</p>
+          <h2>软件、网站与 PotPlayer 白名单</h2>
+          <p>学习阶段只放行必要工具。PotPlayer 会优先按当前视频白名单判断，网站和软件规则保持原有逻辑。</p>
         </div>
         <div className="header-metrics">
           <article>
@@ -291,6 +390,10 @@ export default function WhitelistPage() {
           <article>
             <span>网站</span>
             <strong>{websiteCount}</strong>
+          </article>
+          <article>
+            <span>视频</span>
+            <strong>{potPlayerCount}</strong>
           </article>
         </div>
       </header>
@@ -317,16 +420,45 @@ export default function WhitelistPage() {
               <Globe2 size={16} />
               网站
             </button>
+            <button className={entryType === 'potplayer' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setEntryType('potplayer')} type="button">
+              <Video size={16} />
+              PotPlayer 视频
+            </button>
           </div>
+
+          {entryType === 'potplayer' && (
+            <div className="segmented-control secondary-segmented">
+              <button className={potPlayerRuleType === 'file' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setPotPlayerRuleType('file')} type="button">
+                <PlaySquare size={16} />
+                单个视频
+              </button>
+              <button className={potPlayerRuleType === 'directory' ? 'active' : ''} disabled={whitelistLocked} onClick={() => setPotPlayerRuleType('directory')} type="button">
+                <FolderSearch size={16} />
+                整个目录
+              </button>
+            </div>
+          )}
 
           <div className="form-stack">
             <label className="field-block">
-              <span>{entryType === 'website' ? '网站名称' : '软件名称'}</span>
+              <span>
+                {entryType === 'website'
+                  ? '网站名称'
+                  : entryType === 'potplayer'
+                    ? potPlayerRuleType === 'file' ? '视频名称' : '目录名称'
+                    : '软件名称'}
+              </span>
               <input
                 className="text-input"
                 disabled={whitelistLocked}
                 onChange={(event) => setName(event.target.value)}
-                placeholder={entryType === 'website' ? '例如：中国大学 MOOC' : '例如：Anki'}
+                placeholder={
+                  entryType === 'website'
+                    ? '例如：中国大学 MOOC'
+                    : entryType === 'potplayer'
+                      ? potPlayerRuleType === 'file' ? '例如：线代第 07 讲' : '例如：张宇高数强化'
+                      : '例如：Anki'
+                }
                 value={name}
               />
             </label>
@@ -339,6 +471,17 @@ export default function WhitelistPage() {
                   onChange={(event) => setDomain(event.target.value)}
                   placeholder="例如：https://www.bilibili.com/video/BV..."
                   value={domain}
+                />
+              </label>
+            ) : entryType === 'potplayer' ? (
+              <label className="field-block">
+                <span>{potPlayerRuleType === 'file' ? '视频完整路径' : '目录完整路径'}</span>
+                <input
+                  className="text-input"
+                  disabled={whitelistLocked}
+                  onChange={(event) => setPotPlayerPath(event.target.value)}
+                  placeholder={potPlayerRuleType === 'file' ? '例如：D:\\Videos\\课程\\lesson01.mkv' : '例如：D:\\Videos\\课程'}
+                  value={potPlayerPath}
                 />
               </label>
             ) : (
@@ -376,7 +519,15 @@ export default function WhitelistPage() {
               {loading ? '添加中' : '加入白名单'}
             </button>
           </div>
-          {processPath && <p className="path-hint">已选择路径：{processPath}</p>}
+          {processPath && entryType === 'app' && <p className="path-hint">已选择路径：{processPath}</p>}
+          {entryType === 'potplayer' && potPlayerPath && <p className="path-hint">当前视频规则路径：{potPlayerPath}</p>}
+          {entryType === 'potplayer' && currentPotPlayerMedia && (
+            <div className="potplayer-hint">
+              <strong>{currentPotPlayerMedia.process_name}</strong>
+              <span>{currentPotPlayerMedia.media_path ?? '当前未识别到播放视频'}</span>
+              <span>来源：{currentPotPlayerMedia.source ?? '未识别'}</span>
+            </div>
+          )}
         </section>
 
         <section className="command-panel source-panel">
@@ -397,6 +548,17 @@ export default function WhitelistPage() {
               <button className="secondary-action" disabled={processLoading || whitelistLocked} onClick={() => void handleLoadRunningProcesses()} type="button">
                 <FolderSearch size={17} />
                 {processLoading ? '读取中' : '读取进程'}
+              </button>
+            </article>
+
+            <article className="tool-row">
+              <div>
+                <h4>读取当前 PotPlayer</h4>
+                <p>自动识别当前正在播放的视频或所在目录，适合一键加入 PotPlayer 视频白名单。</p>
+              </div>
+              <button className="secondary-action" disabled={potPlayerLoading || whitelistLocked} onClick={() => void handleReadCurrentPotPlayerMedia()} type="button">
+                <Clapperboard size={17} />
+                {potPlayerLoading ? '读取中' : '读取当前播放'}
               </button>
             </article>
 
@@ -481,7 +643,7 @@ export default function WhitelistPage() {
         {apps.length === 0 ? (
           <div className="empty-state">
             <strong>还没有白名单条目</strong>
-            <p>先添加常用学习软件，例如 Word、PDF 阅读器、Anki、词典或必要学习网站。</p>
+            <p>先添加常用学习软件、必要学习网站，或者把当前 PotPlayer 正在播放的视频直接加入白名单。</p>
           </div>
         ) : (
           <div className="rule-list">
@@ -495,11 +657,15 @@ export default function WhitelistPage() {
                   <article className="list-row whitelist-row" key={app.id}>
                     <div className="row-main">
                       <span className={app.enabled ? 'row-icon enabled' : 'row-icon'}>
-                        {app.match_type === 'website_domain' ? <Globe2 size={18} /> : <ShieldCheck size={18} />}
+                        {app.match_type === 'website_domain'
+                          ? <Globe2 size={18} />
+                          : isPotPlayerRule(app)
+                            ? <Video size={18} />
+                            : <ShieldCheck size={18} />}
                       </span>
                       <div>
                         <strong>{app.name}</strong>
-                        <p>{app.match_type === 'website_domain' ? `网站规则：${app.path ?? app.process_name}` : `进程名：${app.process_name}`}</p>
+                        <p>{renderRuleSummary(app)}</p>
                         <p>自动切科：{subjectNameFor(app.subject_id)}</p>
                         {app.note && <p>{app.note}</p>}
                       </div>

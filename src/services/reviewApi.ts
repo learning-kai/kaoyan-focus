@@ -6,11 +6,7 @@ import type {
   WeeklyReviewDraft,
   WeeklyReviewPageData,
 } from '../types/review';
-
-async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<T>(command, args);
-}
+import { invokeCommand } from './tauriInvoke';
 
 export function getDailyReviewPageData(reviewDate?: string | null): Promise<DailyReviewPageData> {
   return invokeCommand<DailyReviewPageData>('get_daily_review_page_data', { reviewDate });

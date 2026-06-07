@@ -424,4 +424,307 @@
 ### Android
 - No commits found.
 
+## v1.0.6 - 2026-05-27
+
+### Desktop
+#### Changed
+- Allow active sync despite stale lock (94cc6a3)
+- Refine focus monitoring and sync (60cf4d0)
+
+### Android
+#### Added
+- Add browser site blocking support (3f7b647)
+
+#### Changed
+- Allow active sync despite stale lock (2076b52)
+- Improve active state auto sync (e76fc91)
+
+## v1.0.7 - 2026-05-27
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.0.8 - 2026-05-27
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.0.9 - 2026-05-27
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.1.0 - 2026-05-27
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.1.1 - 2026-05-27
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.1.2 - 2026-05-27
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.1.3 - 2026-05-27
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.1.4 - 2026-05-27
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.2.0 - 2026-06-02
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.2.1 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.3.0 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.4.0 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.4.1 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.4.2 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.4.3 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.4.4 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.4.5 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.4.6 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.4.7 - 2026-06-05
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.0 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.1 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.2 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.3 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.4 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.5 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.6 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.7 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.8 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.9 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.5.10 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.6.0 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.6.1 - 2026-06-06
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.6.2 - 2026-06-07
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.6.3 - 2026-06-07
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.7.0 - 2026-06-07
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
+## v1.7.1 - 2026-06-07
+
+### Desktop
+- No commits found.
+
+### Android
+- No commits found.
+
 

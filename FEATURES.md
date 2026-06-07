@@ -1,6 +1,6 @@
 # 考研专注功能说明
 
-当前版本：`0.1.4`
+当前版本：`1.5.5`
 
 `考研专注` 是一个面向 Windows 的本地学习约束工具，核心目标是在一段学习模式时间内强制执行番茄钟、休息流程和软件/网站白名单，减少非学习应用对考研复习的干扰。应用使用 Tauri 2 + React + TypeScript + Rust 构建，数据存储在本机 SQLite 数据库中。
 
@@ -209,7 +209,30 @@
 - 精确域名匹配，例如 `icourse163.org`
 - 子域名匹配，例如 `www.icourse163.org`、`study.icourse163.org`
 
-### 3.5 浏览器识别范围
+### 3.5 PotPlayer 视频白名单
+
+PotPlayer 视频白名单只在前台进程是 `PotPlayer` 时生效，并且优先级高于普通软件白名单。
+
+用户可以添加：
+
+- 单个视频文件规则。
+- 整个视频目录规则。
+- 从当前 PotPlayer 正在播放的视频一键加入。
+- 手动填写完整文件路径或目录路径。
+- 可选备注。
+
+匹配规则支持：
+
+- `potplayer_video_file`：当前播放视频完整路径精确匹配。
+- `potplayer_video_directory`：当前播放视频位于允许目录下。
+
+识别逻辑：
+
+- 优先从 PotPlayer 安装目录下的 `Playlist/*.dpl` 读取当前播放路径。
+- 如果 `playname` 滞后，会用窗口标题里的文件名对照播放列表条目。
+- 当前未识别到播放视频时，按空播放器放行，不自动拦截。
+
+### 3.6 浏览器识别范围
 
 当前网站白名单通过浏览器窗口标题尝试识别域名。支持的浏览器进程包括：
 
@@ -377,7 +400,7 @@
 当前 Tauri 配置中启用了 updater：
 
 - 使用内置公钥校验更新包签名。
-- 更新地址为 `https://github.com/OWNER/REPO/releases/latest/download/latest.json`。
+- 更新地址为 `https://github.com/learning-kai/kaoyan-focus-updates/releases/latest/download/latest.json`。
 - Windows 安装模式为 `passive`。
 
 注意：当前 endpoint 仍是占位地址，需要发布到真实 GitHub 仓库或其他下载服务器后替换。
@@ -414,7 +437,7 @@
 当前配置：
 
 - `productName`：`考研专注`
-- `version`：`0.1.4`
+- `version`：`1.5.5`
 - `identifier`：`com.kaoyan.focus`
 - `bundle.targets`：`nsis`
 - `bundle.icon`：`icons/icon.ico`
@@ -479,7 +502,7 @@ kaoyan-focus.sqlite3
 
 - `focus_sessions`：每轮番茄钟或单次专注记录。
 - `study_modes`：学习模式总状态和当前阶段。
-- `whitelist_apps`：软件白名单和网站白名单。
+- `whitelist_apps`：软件白名单、网站白名单和 PotPlayer 视频白名单。
 - `app_events`：非白名单干扰事件。
 - `subjects`：科目。
 - `settings`：用户设置。
@@ -527,10 +550,12 @@ kaoyan-focus.sqlite3
 
 ### 10.4 whitelist_apps
 
-软件和网站共用一张表，通过 `match_type` 区分：
+软件、网站和 PotPlayer 视频规则共用一张表，通过 `match_type` 区分：
 
 - `process_name`：软件进程名。
 - `website_domain`：网站域名。
+- `potplayer_video_file`：PotPlayer 单个视频文件。
+- `potplayer_video_directory`：PotPlayer 视频目录。
 
 字段包括：
 
@@ -612,7 +637,7 @@ kaoyan-focus.sqlite3
 - 当前不包含 macOS/Linux 发布配置。
 - 当前不包含开机自启。
 - WebDAV 同步是整库上传/下载，不做逐条记录合并。
-- 当前 updater endpoint 仍需替换为真实发布地址。
+- 当前 updater endpoint 需要替换为真实发布地址，当前项目使用 `https://github.com/learning-kai/kaoyan-focus-updates/releases/latest/download/latest.json`。
 
 ## 12. 推荐验证清单
 

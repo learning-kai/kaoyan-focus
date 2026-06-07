@@ -1,19 +1,33 @@
 import type { PropsWithChildren } from 'react';
-import { BookOpenCheck, CircleDot, Lock, MoonStar, MonitorUp, SunMedium } from 'lucide-react';
+import { AlarmClock, BookOpenCheck, CircleDot, Lock, MoonStar, MonitorUp, SunMedium } from 'lucide-react';
 import type { PageMeta } from '../App';
+import type { Alarm } from '../types/alarm';
 import type { AppPage } from '../types/navigation';
 import type { AppTheme } from '../types/settings';
+import { DESKTOP_RUNTIME_MESSAGE, isTauriRuntime } from '../services/tauriInvoke';
 
 type LayoutProps = PropsWithChildren<{
   activePage: AppPage;
+  nextAlarm: Alarm | null;
   pages: Record<AppPage, PageMeta>;
   onNavigate: (page: AppPage) => void;
   theme: AppTheme;
   onThemeChange: (theme: AppTheme) => void;
 }>;
 
-export default function Layout({ activePage, pages, onNavigate, theme, onThemeChange, children }: LayoutProps) {
+function formatNextAlarm(alarm: Alarm | null) {
+  if (!alarm) {
+    return '暂无闹钟';
+  }
+
+  return `${alarm.alarm_date} ${alarm.alarm_time}`;
+}
+
+export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme, onThemeChange, children }: LayoutProps) {
   const activeMeta = pages[activePage];
+  const desktopReady = isTauriRuntime();
+  const runtimeStatusTitle = desktopReady ? '后台待命' : '桌面壳未连接';
+  const runtimeStatusText = desktopReady ? '托盘运行 / 本地数据' : '请在 Windows 桌面壳中运行';
 
   return (
     <div className="app-shell">
@@ -53,8 +67,8 @@ export default function Layout({ activePage, pages, onNavigate, theme, onThemeCh
         <div className="sidebar-foot">
           <span className="status-dot" />
           <div>
-            <strong>后台待命</strong>
-            <span>托盘运行 / 本地数据</span>
+            <strong>{runtimeStatusTitle}</strong>
+            <span title={desktopReady ? undefined : DESKTOP_RUNTIME_MESSAGE}>{runtimeStatusText}</span>
           </div>
         </div>
       </aside>
@@ -66,7 +80,12 @@ export default function Layout({ activePage, pages, onNavigate, theme, onThemeCh
             <span>{activeMeta.title}</span>
           </div>
           <div className="top-strip-status">
-            <span><MonitorUp size={14} /> Windows 桌面</span>
+            <span className={desktopReady ? 'runtime-pill is-ready' : 'runtime-pill is-preview'}>
+              <MonitorUp size={14} /> {desktopReady ? 'Windows 桌面壳' : '浏览器预览'}
+            </span>
+            <span className={nextAlarm ? 'next-alarm-pill active' : 'next-alarm-pill'}>
+              <AlarmClock size={14} /> {formatNextAlarm(nextAlarm)}
+            </span>
             <span><Lock size={14} /> 学习中自动锁定配置</span>
           </div>
           <div className="theme-toggle" role="group" aria-label="主题切换">

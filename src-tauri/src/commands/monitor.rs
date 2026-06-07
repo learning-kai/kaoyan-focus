@@ -5,8 +5,10 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::{
     storage::db::open_database,
+    sync_package::load_or_create_device_id,
     whitelist::matcher::{
-        is_foreground_app_allowed, ProcessWhitelistRule, WebsiteWhitelistRule, WhitelistMatchResult,
+        is_foreground_app_allowed, PotPlayerWhitelistRule, ProcessWhitelistRule,
+        WebsiteWhitelistRule, WhitelistMatchResult,
     },
     windows::{
         foreground::{get_foreground_app, ForegroundApp},
@@ -14,6 +16,8 @@ use crate::{
     },
     AppState,
 };
+
+const CONTROL_SWITCH_SUBJECT: &str = "switch_subject";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FocusAppCheck {
@@ -147,6 +151,7 @@ fn build_non_enforcing_focus_check(
     reason: &'static str,
 ) -> Result<FocusAppCheck, String> {
     let foreground_app = get_foreground_app()?;
+    let potplayer_media_path = foreground_app.potplayer_media_path.clone();
     *state
         .last_blocked_process
         .lock()
@@ -174,6 +179,7 @@ fn build_non_enforcing_focus_check(
             matched_process_name: None,
             detected_domain: None,
             matched_subject_id: None,
+            potplayer_media_path,
         },
         interruption_count,
         action_taken: None,
@@ -191,8 +197,13 @@ fn check_focus_foreground_app_internal(
     let connection = open_database(&database_path(app)?)?;
     let whitelist_processes = enabled_whitelist_processes(&connection)?;
     let whitelist_websites = enabled_whitelist_websites(&connection)?;
-    let match_result =
-        is_foreground_app_allowed(&foreground_app, &whitelist_processes, &whitelist_websites);
+    let whitelist_potplayer_media = enabled_whitelist_potplayer_media(&connection)?;
+    let match_result = is_foreground_app_allowed(
+        &foreground_app,
+        &whitelist_processes,
+        &whitelist_websites,
+        &whitelist_potplayer_media,
+    );
     let mut action_taken = None;
     let mut close_error = None;
 
@@ -400,6 +411,36 @@ fn enabled_whitelist_websites(
     Ok(websites)
 }
 
+fn enabled_whitelist_potplayer_media(
+    connection: &rusqlite::Connection,
+) -> Result<Vec<PotPlayerWhitelistRule>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT process_name, path, match_type, subject_id
+            FROM whitelist_apps
+            WHERE enabled = 1
+              AND match_type IN ('potplayer_video_file', 'potplayer_video_directory')
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rules = statement
+        .query_map([], |row| {
+            Ok(PotPlayerWhitelistRule {
+                process_name: row.get(0)?,
+                media_path: row.get(1)?,
+                match_type: row.get(2)?,
+                subject_id: row.get(3)?,
+            })
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    Ok(rules)
+}
+
 fn maybe_auto_switch_subject(
     connection: &rusqlite::Connection,
     match_result: &WhitelistMatchResult,
@@ -430,16 +471,29 @@ fn maybe_auto_switch_subject(
         return Ok(false);
     }
 
-    let now = Utc::now().to_rfc3339();
+    let now_dt = Utc::now();
+    let now = now_dt.to_rfc3339();
+    let device_id = load_or_create_device_id(connection)?;
     connection
         .execute(
             "
             UPDATE study_modes
             SET subject_id = ?1,
+                state_revision = state_revision + 1,
+                last_control_device_id = ?3,
+                last_control_action = ?4,
+                last_control_at = ?5,
                 updated_at = ?2
-            WHERE id = ?3 AND status = 'active'
+            WHERE id = ?6 AND status = 'active'
             ",
-            params![subject_id, now, study_mode_id],
+            params![
+                subject_id,
+                now,
+                device_id,
+                CONTROL_SWITCH_SUBJECT,
+                now_dt.timestamp_millis(),
+                study_mode_id
+            ],
         )
         .map_err(|error| error.to_string())?;
 
@@ -466,5 +520,188 @@ fn legacy_specific_url(value: &str) -> Option<String> {
         Some(trimmed.to_string())
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{maybe_auto_switch_subject, CONTROL_SWITCH_SUBJECT};
+    use crate::whitelist::matcher::WhitelistMatchResult;
+    use rusqlite::{params, Connection};
+
+    fn connection_with_active_study_mode(
+        current_subject_id: Option<i64>,
+        session_subject_id: Option<i64>,
+    ) -> Connection {
+        let connection = Connection::open_in_memory().expect("open test database");
+        connection
+            .execute_batch(
+                "
+                CREATE TABLE settings (
+                  key TEXT PRIMARY KEY,
+                  value TEXT NOT NULL,
+                  updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE focus_sessions (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  subject_id INTEGER,
+                  status TEXT NOT NULL,
+                  updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE study_modes (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  subject_id INTEGER,
+                  current_session_id INTEGER,
+                  state_revision INTEGER NOT NULL DEFAULT 1,
+                  last_control_device_id TEXT,
+                  last_control_action TEXT,
+                  last_control_at INTEGER,
+                  status TEXT NOT NULL DEFAULT 'active',
+                  updated_at TEXT NOT NULL
+                );
+                ",
+            )
+            .expect("create test schema");
+
+        connection
+            .execute(
+                "
+                INSERT INTO focus_sessions (subject_id, status, updated_at)
+                VALUES (?1, 'running', '2026-01-01T00:00:00Z')
+                ",
+                params![session_subject_id],
+            )
+            .expect("insert focus session");
+
+        connection
+            .execute(
+                "
+                INSERT INTO study_modes (
+                  subject_id,
+                  current_session_id,
+                  state_revision,
+                  status,
+                  updated_at
+                ) VALUES (?1, 1, 7, 'active', '2026-01-01T00:00:00Z')
+                ",
+                params![current_subject_id],
+            )
+            .expect("insert study mode");
+
+        connection
+    }
+
+    fn match_result(subject_id: Option<i64>) -> WhitelistMatchResult {
+        WhitelistMatchResult {
+            allowed: true,
+            reason: "matched".to_string(),
+            matched_process_name: Some("reader.exe".to_string()),
+            detected_domain: None,
+            matched_subject_id: subject_id,
+            potplayer_media_path: None,
+        }
+    }
+
+    #[test]
+    fn auto_switch_subject_updates_active_mode_and_running_session() {
+        let connection = connection_with_active_study_mode(Some(1), Some(1));
+
+        let switched =
+            maybe_auto_switch_subject(&connection, &match_result(Some(3))).expect("switch subject");
+
+        assert!(switched);
+        let row: (
+            Option<i64>,
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<i64>,
+            String,
+        ) = connection
+            .query_row(
+                "
+                SELECT subject_id,
+                       state_revision,
+                       last_control_device_id,
+                       last_control_action,
+                       last_control_at,
+                       updated_at
+                FROM study_modes
+                WHERE id = 1
+                ",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("load study mode");
+        assert_eq!(row.0, Some(3));
+        assert_eq!(row.1, 8);
+        assert!(row.2.as_deref().is_some_and(|value| !value.is_empty()));
+        assert_eq!(row.3.as_deref(), Some(CONTROL_SWITCH_SUBJECT));
+        assert!(row.4.is_some_and(|value| value > 0));
+        assert_ne!(row.5, "2026-01-01T00:00:00Z");
+
+        let session_subject_id: Option<i64> = connection
+            .query_row(
+                "SELECT subject_id FROM focus_sessions WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("load focus session");
+        assert_eq!(session_subject_id, Some(3));
+    }
+
+    #[test]
+    fn auto_switch_subject_noops_without_matched_subject() {
+        let connection = connection_with_active_study_mode(Some(1), Some(1));
+
+        let switched =
+            maybe_auto_switch_subject(&connection, &match_result(None)).expect("switch subject");
+
+        assert!(!switched);
+        let row: (Option<i64>, i64, Option<String>) = connection
+            .query_row(
+                "
+                SELECT subject_id, state_revision, last_control_action
+                FROM study_modes
+                WHERE id = 1
+                ",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("load study mode");
+        assert_eq!(row, (Some(1), 7, None));
+    }
+
+    #[test]
+    fn auto_switch_subject_noops_when_subject_is_already_current() {
+        let connection = connection_with_active_study_mode(Some(3), Some(3));
+
+        let switched =
+            maybe_auto_switch_subject(&connection, &match_result(Some(3))).expect("switch subject");
+
+        assert!(!switched);
+        let row: (Option<i64>, i64, Option<String>) = connection
+            .query_row(
+                "
+                SELECT subject_id, state_revision, last_control_action
+                FROM study_modes
+                WHERE id = 1
+                ",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("load study mode");
+        assert_eq!(row, (Some(3), 7, None));
     }
 }

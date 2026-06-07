@@ -1,4 +1,4 @@
-use crate::storage::db::open_database;
+use crate::{credential, storage::db::open_database};
 use chrono::{Duration, Local, Timelike, Utc};
 use lettre::{
     message::Mailbox, transport::smtp::authentication::Credentials, Message, SmtpTransport,
@@ -26,6 +26,8 @@ pub struct EmailReminderSettings {
     pub smtp_security: String,
     pub username: String,
     pub password: String,
+    #[serde(default)]
+    pub password_configured: bool,
     pub from: String,
     pub to: String,
 }
@@ -54,6 +56,7 @@ impl Default for EmailReminderSettings {
             smtp_security: "tls".to_string(),
             username: String::new(),
             password: String::new(),
+            password_configured: false,
             from: String::new(),
             to: String::new(),
         }
@@ -72,7 +75,8 @@ pub fn save_email_reminder_settings(
     settings: EmailReminderSettings,
 ) -> Result<EmailReminderSettings, String> {
     let connection = open_database(&database_path(&app)?)?;
-    let normalized = normalize_settings(settings)?;
+    let password_changed = !settings.password.is_empty();
+    let normalized = normalize_settings(resolve_email_password(&connection, settings)?)?;
     let now = Utc::now().to_rfc3339();
     set_setting(
         &connection,
@@ -94,18 +98,23 @@ pub fn save_email_reminder_settings(
         &now,
     )?;
     set_setting(&connection, SMTP_USERNAME_KEY, &normalized.username, &now)?;
-    set_setting(&connection, SMTP_PASSWORD_KEY, &normalized.password, &now)?;
+    if password_changed {
+        credential::set_secret(&connection, SMTP_PASSWORD_KEY, &normalized.password, &now)?;
+    } else {
+        credential::set_secret_if_changed(&connection, SMTP_PASSWORD_KEY, "", &now)?;
+    }
     set_setting(&connection, SMTP_FROM_KEY, &normalized.from, &now)?;
     set_setting(&connection, SMTP_TO_KEY, &normalized.to, &now)?;
-    Ok(normalized)
+    Ok(redact_email_settings(normalized))
 }
 
 #[tauri::command]
 pub fn test_email_reminder(
-    _app: AppHandle,
+    app: AppHandle,
     settings: EmailReminderSettings,
 ) -> Result<EmailReminderResult, String> {
-    let normalized = normalize_settings(settings)?;
+    let connection = open_database(&database_path(&app)?)?;
+    let normalized = normalize_settings(resolve_email_password(&connection, settings)?)?;
     validate_send_settings(&normalized)?;
     let subject = "考研专注邮件提醒测试";
     let body = "这是一封测试邮件。收到它就说明 SMTP 配置可以正常发送提醒。";
@@ -120,7 +129,7 @@ pub fn test_email_reminder(
 #[tauri::command]
 pub fn check_due_task_email_reminders(app: AppHandle) -> Result<EmailReminderResult, String> {
     let connection = open_database(&database_path(&app)?)?;
-    let settings = read_email_settings(&connection)?;
+    let settings = read_email_settings_for_send(&connection)?;
     if !settings.enabled {
         return Ok(skipped("邮件提醒未开启。"));
     }
@@ -178,13 +187,15 @@ fn read_email_settings(connection: &Connection) -> Result<EmailReminderSettings,
             &defaults.smtp_security,
         )?),
         username: get_string_setting(connection, SMTP_USERNAME_KEY, &defaults.username)?,
-        password: get_string_setting(connection, SMTP_PASSWORD_KEY, &defaults.password)?,
+        password: String::new(),
+        password_configured: credential::secret_configured(connection, SMTP_PASSWORD_KEY)?,
         from: get_string_setting(connection, SMTP_FROM_KEY, &defaults.from)?,
         to: get_string_setting(connection, SMTP_TO_KEY, &defaults.to)?,
     })
 }
 
 fn normalize_settings(settings: EmailReminderSettings) -> Result<EmailReminderSettings, String> {
+    let password_configured = !settings.password.is_empty() || settings.password_configured;
     Ok(EmailReminderSettings {
         enabled: settings.enabled,
         smtp_host: settings.smtp_host.trim().to_string(),
@@ -192,9 +203,34 @@ fn normalize_settings(settings: EmailReminderSettings) -> Result<EmailReminderSe
         smtp_security: normalize_security(&settings.smtp_security),
         username: settings.username.trim().to_string(),
         password: settings.password,
+        password_configured,
         from: settings.from.trim().to_string(),
         to: settings.to.trim().to_string(),
     })
+}
+
+fn read_email_settings_for_send(connection: &Connection) -> Result<EmailReminderSettings, String> {
+    let mut settings = read_email_settings(connection)?;
+    settings.password = credential::get_secret(connection, SMTP_PASSWORD_KEY)?;
+    settings.password_configured = !settings.password.is_empty();
+    Ok(settings)
+}
+
+fn resolve_email_password(
+    connection: &Connection,
+    mut settings: EmailReminderSettings,
+) -> Result<EmailReminderSettings, String> {
+    if settings.password.is_empty() {
+        settings.password = credential::get_secret(connection, SMTP_PASSWORD_KEY)?;
+    }
+    settings.password_configured = !settings.password.is_empty();
+    Ok(settings)
+}
+
+fn redact_email_settings(mut settings: EmailReminderSettings) -> EmailReminderSettings {
+    settings.password_configured = !settings.password.is_empty() || settings.password_configured;
+    settings.password.clear();
+    settings
 }
 
 fn normalize_security(value: &str) -> String {

@@ -10,7 +10,10 @@ use windows::Win32::{
     },
 };
 
-use super::browser_url::read_browser_url;
+use super::{
+    browser_url::read_browser_url,
+    potplayer::{detect_potplayer_media_for_process, is_supported_potplayer_process},
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ForegroundApp {
@@ -21,11 +24,32 @@ pub struct ForegroundApp {
     pub process_path: Option<String>,
     pub window_title: String,
     pub browser_url: Option<String>,
+    pub potplayer_media_path: Option<String>,
 }
 
 impl ForegroundApp {
     pub fn window(&self) -> HWND {
         self.window
+    }
+
+    #[cfg(test)]
+    pub fn for_test(
+        process_id: u32,
+        process_name: String,
+        process_path: Option<String>,
+        window_title: String,
+        browser_url: Option<String>,
+        potplayer_media_path: Option<String>,
+    ) -> Self {
+        Self {
+            window: HWND::default(),
+            process_id,
+            process_name,
+            process_path,
+            window_title,
+            browser_url,
+            potplayer_media_path,
+        }
     }
 }
 
@@ -57,6 +81,16 @@ pub fn get_foreground_app() -> Result<ForegroundApp, String> {
     } else {
         None
     };
+    let potplayer_media_path = if is_supported_potplayer_process(&process_name) {
+        detect_potplayer_media_for_process(
+            &process_name,
+            process_path.as_deref(),
+            Some(&window_title),
+        )
+        .and_then(|media| media.media_path)
+    } else {
+        None
+    };
 
     Ok(ForegroundApp {
         window,
@@ -65,6 +99,7 @@ pub fn get_foreground_app() -> Result<ForegroundApp, String> {
         process_path,
         window_title,
         browser_url,
+        potplayer_media_path,
     })
 }
 

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, Clock3, Pencil, RefreshCw, ShieldAlert, TimerReset, Trash2 } from 'lucide-react';
+import { BarChart3, CalendarDays, Clock3, ExternalLink, Pencil, RefreshCw, ShieldAlert, TimerReset, Trash2 } from 'lucide-react';
 import { deleteFocusSession, getFocusStatsSummary, listFocusSessions, listSubjects, updateFocusSessionSubject } from '../services/focusApi';
 import { listInterruptionSummary } from '../services/monitorApi';
+import { openStudyDashboard } from '../services/systemApi';
 import type { FocusSession, FocusStatsSummary, Subject } from '../types/focus';
 import type { InterruptionSummary } from '../types/monitor';
 
@@ -44,6 +45,7 @@ export default function StatsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [savingSessionId, setSavingSessionId] = useState<number | null>(null);
   const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
+  const [openingDashboard, setOpeningDashboard] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +110,20 @@ export default function StatsPage() {
     }
   }
 
+  async function handleOpenDashboard() {
+    try {
+      setOpeningDashboard(true);
+      setError(null);
+      setMessage(null);
+      const launch = await openStudyDashboard();
+      setMessage(`学习数据看板已打开：${launch.url}`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setOpeningDashboard(false);
+    }
+  }
+
   return (
     <section className="page-shell stats-shell">
       <header className="page-header">
@@ -116,10 +132,16 @@ export default function StatsPage() {
           <h2>学习统计</h2>
           <p>按今日、本周、本月和科目汇总本地专注记录，同时保留非白名单干扰排行。</p>
         </div>
-        <button className="secondary-action" onClick={() => void refreshStats()} type="button">
-          <RefreshCw size={17} />
-          刷新
-        </button>
+        <div className="page-header-actions">
+          <button className="secondary-action" disabled={openingDashboard} onClick={() => void handleOpenDashboard()} type="button">
+            <ExternalLink size={17} />
+            {openingDashboard ? '打开中' : '打开数据看板'}
+          </button>
+          <button className="secondary-action" onClick={() => void refreshStats()} type="button">
+            <RefreshCw size={17} />
+            刷新
+          </button>
+        </div>
       </header>
 
       {error && <p className="alert error">{error}</p>}

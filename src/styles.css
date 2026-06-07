@@ -32,14 +32,15 @@
 }
 
 html {
-  min-width: 960px;
+  width: 100%;
+  min-width: 0;
   background: var(--bg);
 }
 
 body {
   margin: 0;
-  min-width: 960px;
   min-height: 100vh;
+  min-height: 100dvh;
   color: var(--ink);
   background:
     radial-gradient(circle at 18% 14%, rgba(121, 167, 255, 0.12), transparent 26%),
@@ -267,6 +268,17 @@ svg {
   align-items: center;
 }
 
+.next-alarm-pill {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.next-alarm-pill.active {
+  color: #dbeafe;
+}
+
 .page-shell {
   display: grid;
   gap: 14px;
@@ -319,6 +331,13 @@ html[data-study-fullscreen='true'] body {
   margin-top: 8px;
   color: var(--muted);
   line-height: 1.55;
+}
+
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .eyebrow,
@@ -434,12 +453,16 @@ html[data-study-fullscreen='true'] body {
 .primary-action,
 .secondary-action,
 .ghost-action,
+.danger-action,
+.icon-button,
 .small-action,
 .start-ritual-button,
 .chip,
 .nav-item,
 .process-option,
 .blocked-option,
+.custom-sound-picker,
+.sound-option-card,
 .tool-row,
 .stepper-control button,
 .segmented-control button {
@@ -449,6 +472,7 @@ html[data-study-fullscreen='true'] body {
 .primary-action,
 .secondary-action,
 .ghost-action,
+.danger-action,
 .small-action,
 .start-ritual-button {
   display: inline-flex;
@@ -475,11 +499,25 @@ html[data-study-fullscreen='true'] body {
   transform: translateY(-1px);
 }
 
+.danger-action {
+  color: #fff7f7;
+  border-color: rgba(255, 125, 115, 0.3);
+  background: linear-gradient(135deg, #d95d57, #b94743);
+  box-shadow: 0 14px 32px rgba(157, 49, 45, 0.22);
+}
+
+.danger-action:hover {
+  border-color: rgba(255, 147, 140, 0.46);
+  background: linear-gradient(135deg, #e36962, #c8504b);
+  transform: translateY(-1px);
+}
+
 .secondary-action,
 .ghost-action,
 .small-action,
 .process-option,
 .chip,
+.sound-option-card,
 .stepper-control button,
 .segmented-control button {
   color: var(--ink);
@@ -492,6 +530,8 @@ html[data-study-fullscreen='true'] body {
 .small-action:hover,
 .chip:hover,
 .process-option:hover,
+.sound-option-card:hover,
+.custom-sound-picker:hover,
 .stepper-control button:hover,
 .segmented-control button:hover {
   border-color: var(--line-strong);
@@ -516,6 +556,118 @@ html[data-study-fullscreen='true'] body {
   min-height: 38px;
   padding: 9px 12px;
   font-size: 13px;
+}
+
+.icon-button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(16, 27, 43, 0.82);
+  line-height: 1;
+}
+
+.icon-button:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: rgba(20, 33, 51, 0.94);
+  transform: translateY(-1px);
+}
+
+.icon-button:active,
+.primary-action:active,
+.secondary-action:active,
+.ghost-action:active,
+.danger-action:active,
+.small-action:active,
+.start-ritual-button:active {
+  transform: translateY(0);
+}
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 6, 17, 0.58);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+}
+
+.confirm-dialog {
+  display: grid;
+  gap: 16px;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 18px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  color: var(--ink);
+  background: linear-gradient(180deg, rgba(22, 34, 54, 0.98), rgba(12, 20, 33, 0.98));
+  box-shadow: 0 28px 80px rgba(1, 6, 15, 0.52);
+}
+
+.confirm-dialog-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.confirm-dialog-head h3,
+.confirm-dialog-head p {
+  margin: 0;
+}
+
+.confirm-dialog-head h3 {
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.confirm-dialog-head p {
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.confirm-dialog-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid rgba(121, 167, 255, 0.22);
+  border-radius: 12px;
+  color: #cfe0ff;
+  background: rgba(121, 167, 255, 0.12);
+}
+
+.confirm-dialog.tone-danger .confirm-dialog-icon {
+  color: #ffd9d7;
+  border-color: rgba(255, 125, 115, 0.28);
+  background: rgba(255, 125, 115, 0.12);
+}
+
+.confirm-dialog-body {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(9, 15, 25, 0.52);
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .page-header .secondary-action {
@@ -653,6 +805,27 @@ html[data-study-fullscreen='true'] body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.preset-row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.preset-row > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preset-select {
+  min-width: 0;
+}
+
 .field-block {
   display: grid;
   gap: 8px;
@@ -710,14 +883,282 @@ html[data-study-fullscreen='true'] body {
   background: linear-gradient(135deg, #8db8ff, #69dfb7);
 }
 
-.preset-strip {
-  display: flex;
-  flex-wrap: wrap;
+.settings-section-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+  padding: 6px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-soft);
+  scrollbar-width: thin;
 }
 
-.preset-strip .chip {
-  flex: 1 1 120px;
+.settings-section-tabs button {
+  min-width: 0;
+  min-height: 44px;
+  overflow: hidden;
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-section-tabs button[role='tab'][aria-selected='true'] {
+  color: #07111c;
+  border-color: transparent;
+  background: linear-gradient(135deg, #8db8ff, #69dfb7);
+}
+
+
+.reminder-sound-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 12% 0%, var(--blue-soft), transparent 34%),
+    var(--surface-soft);
+}
+
+.reminder-sound-heading,
+.custom-sound-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.reminder-sound-heading h4 {
+  margin: 2px 0 6px;
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.reminder-sound-heading span,
+.custom-sound-file span,
+.custom-sound-file small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sound-option-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sound-option-card {
+  display: grid;
+  gap: 6px;
+  min-height: 86px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface-soft);
+}
+
+.sound-option-card strong,
+.custom-sound-file strong,
+.custom-sound-picker-copy strong {
+  color: var(--ink);
+}
+
+.sound-option-card span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.custom-sound-confirm {
+  justify-self: start;
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  min-height: 34px;
+  margin-top: 4px;
+  padding: 8px 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #07111c;
+  background: linear-gradient(135deg, #8db8ff, #69dfb7);
+  box-shadow: 0 12px 24px rgba(79, 208, 161, 0.14);
+}
+
+.custom-sound-confirm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(79, 208, 161, 0.2);
+}
+
+.custom-sound-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+}
+
+.sound-option-card.active {
+  color: #07111c;
+  border-color: transparent;
+  background: linear-gradient(135deg, #8db8ff, #69dfb7);
+}
+
+.sound-option-card.active strong,
+.sound-option-card.active span {
+  color: #07111c;
+}
+
+.custom-sound-file {
+  display: grid;
+  gap: 4px;
+  min-width: min(320px, 100%);
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.custom-sound-picker {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 74px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.custom-sound-picker.disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.custom-sound-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.custom-sound-picker-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(79, 208, 161, 0.28);
+  border-radius: 12px;
+  color: #d8fff0;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(121, 167, 255, 0.22), transparent 42%),
+    rgba(79, 208, 161, 0.13);
+}
+
+.custom-sound-picker-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.custom-sound-picker-copy small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.custom-sound-picker:focus-within {
+  border-color: var(--line-strong);
+  box-shadow: var(--focus-ring);
+}
+
+.sound-volume-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 320px);
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.sound-volume-row > div {
+  display: grid;
+  gap: 4px;
+}
+
+.sound-volume-row span,
+.sound-volume-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sound-volume-row strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.sound-volume-slider {
+  width: 100%;
+  height: 28px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sound-volume-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.sound-volume-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--green), var(--blue)) 0 / var(--sound-volume-percent, 100%) 100% no-repeat,
+    rgba(145, 167, 199, 0.14);
+}
+
+.sound-volume-slider::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  appearance: none;
+  border: 2px solid var(--bg-elevated);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--green), var(--blue));
+  box-shadow: 0 8px 18px rgba(2, 6, 17, 0.28);
+}
+
+.sound-volume-slider::-moz-range-track {
+  height: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(145, 167, 199, 0.14);
+}
+
+.sound-volume-slider::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--green), var(--blue));
+}
+
+.sound-volume-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--bg-elevated);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--green), var(--blue));
+  box-shadow: 0 8px 18px rgba(2, 6, 17, 0.28);
 }
 
 .settings-save-row {
@@ -2282,9 +2723,13 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 
 .settings-collapse-button {
   display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
   min-height: 34px;
   align-items: center;
   gap: 7px;
+  justify-content: center;
+  overflow: hidden;
   padding: 7px 10px;
   border: 1px solid rgba(139, 167, 215, 0.18);
   border-radius: 999px;
@@ -2293,6 +2738,7 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -2338,6 +2784,27 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 
 .path-hint {
   font-size: 12px;
+}
+
+.secondary-segmented {
+  margin-top: 12px;
+}
+
+.potplayer-hint {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(9, 15, 25, 0.62);
+  font-size: 12px;
+}
+
+.potplayer-hint strong {
+  color: var(--ink);
+  font-size: 13px;
 }
 
 .inline-fields {
@@ -2406,6 +2873,58 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 .focus-whitelist-toggle input[type='checkbox']:checked::after {
   background: #07111c;
   transform: translateX(18px);
+}
+
+.focus-primary-hint {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.live-primary-toggle {
+  gap: 8px;
+  min-height: 46px;
+  padding: 7px 11px 7px 10px;
+  cursor: pointer;
+}
+
+.live-primary-toggle input[type='checkbox'] {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border: 1px solid rgba(145, 167, 199, 0.32);
+  border-radius: 999px;
+  background: rgba(8, 15, 26, 0.72);
+  appearance: none;
+  cursor: pointer;
+}
+
+.live-primary-toggle input[type='checkbox']::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  content: '';
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.live-primary-toggle input[type='checkbox']:checked {
+  border-color: transparent;
+  background: linear-gradient(135deg, #8db8ff, #69dfb7);
+}
+
+.live-primary-toggle input[type='checkbox']:checked::after {
+  background: #07111c;
+  transform: translateX(14px);
+}
+
+.live-primary-toggle:has(input[type='checkbox']:checked) {
+  color: var(--ink);
 }
 
 .details-card {
@@ -2763,6 +3282,144 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   margin-top: 5px;
   border-radius: 999px;
   border: none;
+}
+
+.alarm-shell {
+  align-content: start;
+}
+
+.alarm-composer,
+.alarm-section,
+.alarm-list {
+  display: grid;
+  gap: 12px;
+}
+
+.alarm-form-grid {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) 150px 120px minmax(170px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.alarm-row {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(9, 15, 25, 0.58);
+}
+
+.alarm-row.is-upcoming {
+  border-color: rgba(121, 167, 255, 0.28);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(121, 167, 255, 0.12), transparent 30%),
+    rgba(9, 15, 25, 0.64);
+}
+
+.alarm-row.is-ringing {
+  border-color: rgba(242, 181, 107, 0.42);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(242, 181, 107, 0.2), transparent 34%),
+    rgba(36, 24, 14, 0.72);
+  box-shadow: 0 18px 40px rgba(242, 181, 107, 0.12);
+}
+
+.alarm-row.is-expired {
+  opacity: 0.78;
+}
+
+.alarm-time-card {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(16, 27, 43, 0.82);
+}
+
+.alarm-time-card strong {
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.alarm-time-card span,
+.alarm-row-main span,
+.alarm-row-main small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.alarm-row-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.alarm-row-main > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.alarm-row-main strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alarm-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.alarm-inline-editor {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(150px, 1fr) 150px 120px minmax(150px, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.alarm-reschedule-editor {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) 150px auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(121, 167, 255, 0.24);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(121, 167, 255, 0.12), transparent 32%),
+    rgba(16, 27, 43, 0.74);
+}
+
+.alarm-reschedule-editor > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.alarm-reschedule-editor strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.alarm-reschedule-editor span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .schedule-page {
@@ -3594,6 +4251,12 @@ html[data-study-fullscreen='true'] .focus-resume-action {
     grid-template-columns: 1fr;
   }
 
+  .alarm-form-grid,
+  .alarm-inline-editor,
+  .alarm-reschedule-editor {
+    grid-template-columns: 1fr;
+  }
+
   .today-task-rail,
   .template-rail {
     max-height: none;
@@ -3655,6 +4318,9 @@ html[data-theme='light'] .secondary-action,
 html[data-theme='light'] .ghost-action,
 html[data-theme='light'] .small-action,
 html[data-theme='light'] .chip,
+html[data-theme='light'] .custom-sound-picker,
+html[data-theme='light'] .sound-volume-row,
+html[data-theme='light'] .sound-option-card,
 html[data-theme='light'] .segmented-control button,
 html[data-theme='light'] .stepper-control button,
 html[data-theme='light'] .text-input,
@@ -3666,6 +4332,7 @@ html[data-theme='light'] .record-row,
 html[data-theme='light'] .subject-stat-row,
 html[data-theme='light'] .blocked-option,
 html[data-theme='light'] .process-option,
+html[data-theme='light'] .reminder-sound-panel,
 html[data-theme='light'] .setting-row,
 html[data-theme='light'] .capability-row,
 html[data-theme='light'] .empty-state,
@@ -3723,6 +4390,9 @@ html[data-theme='light'] .record-row,
 html[data-theme='light'] .subject-stat-row,
 html[data-theme='light'] .blocked-option,
 html[data-theme='light'] .process-option,
+html[data-theme='light'] .custom-sound-picker,
+html[data-theme='light'] .custom-sound-file,
+html[data-theme='light'] .sound-volume-row,
 html[data-theme='light'] .settings-save-row,
 html[data-theme='light'] .today-item-row,
 html[data-theme='light'] .board-column,
@@ -3740,6 +4410,12 @@ html[data-theme='light'] .schedule-loading-hint,
 html[data-theme='light'] .whitelist-subject-heading {
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.58);
+}
+
+html[data-theme='light'] .potplayer-hint {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 18px 40px rgba(82, 101, 129, 0.1);
 }
 
 html[data-theme='light'] .page-shell {
@@ -3766,6 +4442,10 @@ html[data-theme='light'] .settings-collapse-button:hover {
 
 html[data-theme='light'] .top-strip {
   background: rgba(255, 255, 255, 0.56);
+}
+
+html[data-theme='light'] .next-alarm-pill.active {
+  color: #2f5cc4;
 }
 
 html[data-theme='light'] .sidebar-foot {
@@ -3837,6 +4517,8 @@ html[data-theme='light'] .secondary-action,
 html[data-theme='light'] .ghost-action,
 html[data-theme='light'] .small-action,
 html[data-theme='light'] .chip,
+html[data-theme='light'] .custom-sound-picker,
+html[data-theme='light'] .sound-option-card,
 html[data-theme='light'] .segmented-control button,
 html[data-theme='light'] .stepper-control button,
 html[data-theme='light'] .theme-toggle button {
@@ -3849,6 +4531,8 @@ html[data-theme='light'] .secondary-action:hover,
 html[data-theme='light'] .ghost-action:hover,
 html[data-theme='light'] .small-action:hover,
 html[data-theme='light'] .chip:hover,
+html[data-theme='light'] .custom-sound-picker:hover,
+html[data-theme='light'] .sound-option-card:hover,
 html[data-theme='light'] .process-option:hover,
 html[data-theme='light'] .stepper-control button:hover,
 html[data-theme='light'] .segmented-control button:hover,
@@ -3861,13 +4545,30 @@ html[data-theme='light'] .primary-action,
 html[data-theme='light'] .start-ritual-button,
 html[data-theme='light'] .segmented-control .active,
 html[data-theme='light'] .chip.active,
+html[data-theme='light'] .custom-sound-confirm,
+html[data-theme='light'] .sound-option-card.active,
 html[data-theme='light'] .theme-toggle button.active {
   color: #f8fbff;
   border-color: transparent;
   background: linear-gradient(135deg, #547ef0, #39c79a);
 }
 
+html[data-theme='light'] .sound-option-card.active strong,
+html[data-theme='light'] .sound-option-card.active span {
+  color: #f8fbff;
+}
+
+html[data-theme='light'] .custom-sound-picker-icon {
+  color: #f8fbff;
+  border-color: rgba(75, 119, 232, 0.18);
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.4), transparent 42%),
+    linear-gradient(135deg, rgba(75, 119, 232, 0.92), rgba(44, 181, 139, 0.9));
+  box-shadow: 0 10px 22px rgba(75, 119, 232, 0.18);
+}
+
 html[data-theme='light'] .primary-action,
+html[data-theme='light'] .custom-sound-confirm,
 html[data-theme='light'] .start-ritual-button {
   box-shadow: 0 18px 36px rgba(76, 120, 231, 0.22);
 }
@@ -4144,6 +4845,40 @@ html[data-theme='light'] .today-plan-panel {
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.66);
   box-shadow: 0 18px 40px rgba(82, 101, 129, 0.1);
+}
+
+html[data-theme='light'] .alarm-row {
+  border-color: rgba(112, 131, 159, 0.18);
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: 0 16px 34px rgba(82, 101, 129, 0.08);
+}
+
+html[data-theme='light'] .alarm-row.is-upcoming {
+  border-color: rgba(75, 119, 232, 0.22);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(75, 119, 232, 0.1), transparent 30%),
+    rgba(255, 255, 255, 0.74);
+}
+
+html[data-theme='light'] .alarm-row.is-ringing {
+  border-color: rgba(213, 146, 61, 0.3);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(213, 146, 61, 0.16), transparent 34%),
+    rgba(255, 247, 235, 0.82);
+  box-shadow: 0 18px 40px rgba(213, 146, 61, 0.12);
+}
+
+html[data-theme='light'] .alarm-time-card {
+  border-color: rgba(112, 131, 159, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme='light'] .alarm-reschedule-editor {
+  border-color: rgba(75, 119, 232, 0.2);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(75, 119, 232, 0.1), transparent 32%),
+    rgba(255, 255, 255, 0.74);
+  box-shadow: 0 14px 30px rgba(82, 101, 129, 0.08);
 }
 
 html[data-theme='light'] .schedule-hero {
@@ -4510,6 +5245,352 @@ html[data-theme='light'] .theme-toggle button.active {
   box-shadow: 0 16px 30px rgba(76, 120, 231, 0.24);
 }
 
+:is(html[data-theme='light'], html:not([data-theme])) {
+  color: #172033;
+  background: #f3f6fa;
+  --bg: #f3f6fa;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-strong: #f8fafc;
+  --surface-soft: #f8fafc;
+  --ink: #172033;
+  --muted: #657387;
+  --line: rgba(115, 133, 160, 0.22);
+  --line-strong: rgba(77, 95, 126, 0.38);
+  --blue: #3869d4;
+  --blue-soft: rgba(56, 105, 212, 0.1);
+  --green: #269b76;
+  --green-soft: rgba(38, 155, 118, 0.1);
+  --amber: #bf7c27;
+  --amber-soft: rgba(191, 124, 39, 0.1);
+  --red: #c7524d;
+  --red-soft: rgba(199, 82, 77, 0.1);
+  --shadow: 0 18px 42px rgba(63, 82, 112, 0.12);
+  --focus-ring: 0 0 0 3px rgba(56, 105, 212, 0.18);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) body {
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .sidebar {
+  color: var(--ink);
+  border-right-color: rgba(115, 133, 160, 0.22);
+  background: #f8fafc;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .main-panel {
+  background: #eef3f8;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .top-strip,
+:is(html[data-theme='light'], html:not([data-theme])) .page-shell,
+:is(html[data-theme='light'], html:not([data-theme])) .command-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .soft-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-hero,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-toolbar,
+:is(html[data-theme='light'], html:not([data-theme])) .today-task-rail,
+:is(html[data-theme='light'], html:not([data-theme])) .template-rail,
+:is(html[data-theme='light'], html:not([data-theme])) .review-hero,
+:is(html[data-theme='light'], html:not([data-theme])) .focus-control-dock,
+:is(html[data-theme='light'], html:not([data-theme])) .settings-save-row,
+:is(html[data-theme='light'], html:not([data-theme])) .reminder-sound-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog {
+  border-color: var(--line);
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .page-shell {
+  border-radius: 12px;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .command-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .soft-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-hero,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-toolbar,
+:is(html[data-theme='light'], html:not([data-theme])) .today-task-rail,
+:is(html[data-theme='light'], html:not([data-theme])) .template-rail,
+:is(html[data-theme='light'], html:not([data-theme])) .review-hero {
+  border-radius: 12px;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .header-metrics article,
+:is(html[data-theme='light'], html:not([data-theme])) .metric-card,
+:is(html[data-theme='light'], html:not([data-theme])) .core-fact,
+:is(html[data-theme='light'], html:not([data-theme])) .details-card,
+:is(html[data-theme='light'], html:not([data-theme])) .phase-badge,
+:is(html[data-theme='light'], html:not([data-theme])) .start-console,
+:is(html[data-theme='light'], html:not([data-theme])) .control-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .setting-row,
+:is(html[data-theme='light'], html:not([data-theme])) .capability-row,
+:is(html[data-theme='light'], html:not([data-theme])) .tool-row,
+:is(html[data-theme='light'], html:not([data-theme])) .list-row,
+:is(html[data-theme='light'], html:not([data-theme])) .record-row,
+:is(html[data-theme='light'], html:not([data-theme])) .subject-stat-row,
+:is(html[data-theme='light'], html:not([data-theme])) .blocked-option,
+:is(html[data-theme='light'], html:not([data-theme])) .process-option,
+:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card,
+:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-picker,
+:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-file,
+:is(html[data-theme='light'], html:not([data-theme])) .sound-volume-row,
+:is(html[data-theme='light'], html:not([data-theme])) .alarm-row,
+:is(html[data-theme='light'], html:not([data-theme])) .alarm-time-card,
+:is(html[data-theme='light'], html:not([data-theme])) .alarm-reschedule-editor,
+:is(html[data-theme='light'], html:not([data-theme])) .category-tab,
+:is(html[data-theme='light'], html:not([data-theme])) .category-task-row,
+:is(html[data-theme='light'], html:not([data-theme])) .today-item-row,
+:is(html[data-theme='light'], html:not([data-theme])) .board-column,
+:is(html[data-theme='light'], html:not([data-theme])) .checklist-task-card,
+:is(html[data-theme='light'], html:not([data-theme])) .today-composer,
+:is(html[data-theme='light'], html:not([data-theme])) .task-composer,
+:is(html[data-theme='light'], html:not([data-theme])) .task-inline-editor,
+:is(html[data-theme='light'], html:not([data-theme])) .empty-state,
+:is(html[data-theme='light'], html:not([data-theme])) .review-metric,
+:is(html[data-theme='light'], html:not([data-theme])) .review-score-row {
+  border-color: var(--line);
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(63, 82, 112, 0.07);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .command-panel .metric-card,
+:is(html[data-theme='light'], html:not([data-theme])) .command-panel .details-card,
+:is(html[data-theme='light'], html:not([data-theme])) .command-panel .setting-row,
+:is(html[data-theme='light'], html:not([data-theme])) .command-panel .capability-row,
+:is(html[data-theme='light'], html:not([data-theme])) .soft-panel .metric-card,
+:is(html[data-theme='light'], html:not([data-theme])) .soft-panel .details-card,
+:is(html[data-theme='light'], html:not([data-theme])) .soft-panel .setting-row,
+:is(html[data-theme='light'], html:not([data-theme])) .soft-panel .capability-row,
+:is(html[data-theme='light'], html:not([data-theme])) .settings-shell .details-card,
+:is(html[data-theme='light'], html:not([data-theme])) .settings-shell .setting-row,
+:is(html[data-theme='light'], html:not([data-theme])) .settings-shell .capability-row,
+:is(html[data-theme='light'], html:not([data-theme])) .start-console .core-fact,
+:is(html[data-theme='light'], html:not([data-theme])) .control-panel .details-card {
+  background: #f8fafc;
+  box-shadow: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item {
+  color: var(--muted);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item:hover {
+  color: var(--ink);
+  border-color: rgba(115, 133, 160, 0.24);
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(63, 82, 112, 0.08);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item[aria-current='page'],
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item.active {
+  color: var(--ink);
+  border-color: rgba(56, 105, 212, 0.24);
+  background: #ffffff;
+  box-shadow: inset 3px 0 0 var(--blue), 0 8px 18px rgba(63, 82, 112, 0.08);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .sidebar-foot {
+  border-color: var(--line);
+  background: #ffffff;
+  box-shadow: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .primary-action,
+:is(html[data-theme='light'], html:not([data-theme])) .start-ritual-button,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-page .primary-button,
+:is(html[data-theme='light'], html:not([data-theme])) .segmented-control .active,
+:is(html[data-theme='light'], html:not([data-theme])) .chip.active,
+:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-confirm,
+:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card.active,
+:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button.active,
+:is(html[data-theme='light'], html:not([data-theme])) .weekday-pills button.active,
+:is(html[data-theme='light'], html:not([data-theme])) .review-score-row button.active {
+  color: #ffffff;
+  border-color: #2f5fc6;
+  background: linear-gradient(135deg, #3869d4, #239a75);
+  box-shadow: 0 12px 24px rgba(56, 105, 212, 0.2);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .secondary-action,
+:is(html[data-theme='light'], html:not([data-theme])) .small-action,
+:is(html[data-theme='light'], html:not([data-theme])) .chip,
+:is(html[data-theme='light'], html:not([data-theme])) .segmented-control button,
+:is(html[data-theme='light'], html:not([data-theme])) .stepper-control button,
+:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-page .ghost-button,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-task-row button,
+:is(html[data-theme='light'], html:not([data-theme])) .template-row button,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-block-actions button,
+:is(html[data-theme='light'], html:not([data-theme])) .date-stepper button,
+:is(html[data-theme='light'], html:not([data-theme])) .review-score-row button,
+:is(html[data-theme='light'], html:not([data-theme])) .icon-button {
+  color: var(--ink);
+  border-color: var(--line);
+  background: #ffffff;
+  box-shadow: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .ghost-action {
+  color: #435067;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .secondary-action:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .ghost-action:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .small-action:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .chip:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .segmented-control button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .stepper-control button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-page .ghost-button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-task-row button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .template-row button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-block-actions button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .date-stepper button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .review-score-row button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .icon-button:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: #f8fafc;
+  box-shadow: 0 8px 18px rgba(63, 82, 112, 0.08);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .danger-action,
+:is(html[data-theme='light'], html:not([data-theme])) .secondary-action.danger-action {
+  color: #ffffff;
+  border-color: #b8433e;
+  background: linear-gradient(135deg, #d65c56, #b8433e);
+  box-shadow: 0 12px 24px rgba(199, 82, 77, 0.2);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .danger-action:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .secondary-action.danger-action:hover {
+  color: #ffffff;
+  border-color: #a83b36;
+  background: linear-gradient(135deg, #c7524d, #a83b36);
+  box-shadow: 0 14px 28px rgba(199, 82, 77, 0.24);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .small-action.danger {
+  color: #ad3e39;
+  border-color: rgba(199, 82, 77, 0.24);
+  background: #fff2f1;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .text-input,
+:is(html[data-theme='light'], html:not([data-theme])) .number-input,
+:is(html[data-theme='light'], html:not([data-theme])) .select-input,
+:is(html[data-theme='light'], html:not([data-theme])) .date-stepper input,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-composer input,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-composer select,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-block-editor input,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-quick-add input,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-quick-add select {
+  color: var(--ink);
+  border-color: rgba(115, 133, 160, 0.26);
+  background: #ffffff;
+  box-shadow: inset 0 1px 2px rgba(63, 82, 112, 0.06);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .metric-card.danger,
+:is(html[data-theme='light'], html:not([data-theme])) .count-pill,
+:is(html[data-theme='light'], html:not([data-theme])) .row-icon.danger,
+:is(html[data-theme='light'], html:not([data-theme])) .alert.error {
+  color: #9d3834;
+  border-color: rgba(199, 82, 77, 0.24);
+  background: #fff2f1;
+  box-shadow: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .alert.success {
+  color: #176f55;
+  border-color: rgba(38, 155, 118, 0.24);
+  background: #eefaf6;
+  box-shadow: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-lane {
+  border-color: var(--line);
+  background:
+    repeating-linear-gradient(to bottom, rgba(115, 133, 160, 0.11) 0 1px, transparent 1px calc(100% / 18)),
+    #ffffff;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-block {
+  border-color: rgba(115, 133, 160, 0.24);
+  background: #ffffff;
+  box-shadow: 0 10px 22px rgba(63, 82, 112, 0.1);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .category-politics,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-block.category-politics,
+:is(html[data-theme='light'], html:not([data-theme])) .week-block.category-politics {
+  border-color: rgba(191, 124, 39, 0.26);
+  background: #fff8ed;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .category-english,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-block.category-english,
+:is(html[data-theme='light'], html:not([data-theme])) .week-block.category-english {
+  border-color: rgba(56, 105, 212, 0.24);
+  background: #f0f5ff;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .category-math,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-block.category-math,
+:is(html[data-theme='light'], html:not([data-theme])) .week-block.category-math {
+  border-color: rgba(38, 155, 118, 0.24);
+  background: #eefaf6;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .category-major,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-block.category-major,
+:is(html[data-theme='light'], html:not([data-theme])) .week-block.category-major {
+  border-color: rgba(199, 82, 77, 0.22);
+  background: #fff2f1;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-backdrop {
+  background: rgba(31, 42, 58, 0.28);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog {
+  border-radius: 12px;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog-body {
+  border-color: var(--line);
+  background: #f8fafc;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog-icon {
+  color: #3869d4;
+  border-color: rgba(56, 105, 212, 0.22);
+  background: #f0f5ff;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog.tone-danger .confirm-dialog-icon {
+  color: #c7524d;
+  border-color: rgba(199, 82, 77, 0.24);
+  background: #fff2f1;
+}
+
 .theme-toggle {
   display: inline-flex;
   gap: 8px;
@@ -4532,10 +5613,523 @@ html[data-theme='light'] .theme-toggle button.active {
   background: linear-gradient(135deg, #8db8ff, #69dfb7);
 }
 
+:is(html[data-theme='light'], html:not([data-theme])) {
+  color: #162033;
+  background: #f4f7fb;
+  color-scheme: light;
+  --bg: #f4f7fb;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-strong: #f8fafc;
+  --surface-soft: #f8fafc;
+  --ink: #162033;
+  --muted: #657387;
+  --line: rgba(113, 131, 159, 0.2);
+  --line-strong: rgba(75, 95, 124, 0.34);
+  --blue: #3869d4;
+  --blue-soft: rgba(56, 105, 212, 0.1);
+  --green: #269b76;
+  --green-soft: rgba(38, 155, 118, 0.1);
+  --amber: #bf7c27;
+  --amber-soft: rgba(191, 124, 39, 0.1);
+  --red: #c7524d;
+  --red-soft: rgba(199, 82, 77, 0.1);
+  --shadow: 0 12px 28px rgba(63, 82, 112, 0.1);
+  --shadow-soft: 0 8px 18px rgba(63, 82, 112, 0.07);
+  --shadow-strong: 0 18px 40px rgba(63, 82, 112, 0.12);
+  --focus-ring: 0 0 0 3px rgba(56, 105, 212, 0.18);
+  --radius: 12px;
+  --radius-lg: 14px;
+  --radius-control: 10px;
+  --radius-card: 12px;
+  --radius-panel: 14px;
+  --radius-shell: 16px;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) body {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(56, 105, 212, 0.06), transparent 24%),
+    radial-gradient(circle at 82% 8%, rgba(38, 155, 118, 0.05), transparent 22%),
+    linear-gradient(180deg, #fbfdff 0%, #eef3f8 100%);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .main-panel {
+  background: #eef3f8;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .sidebar {
+  color: var(--ink);
+  border-right-color: var(--line);
+  background: #f8fafc;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.76);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .brand-mark {
+  color: #f8fbff;
+  background: linear-gradient(145deg, rgba(56, 105, 212, 0.96), rgba(38, 155, 118, 0.9));
+  box-shadow: 0 12px 24px rgba(56, 105, 212, 0.22);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item {
+  color: var(--muted);
+  border-color: transparent;
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item.active {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item[aria-current='page'] {
+  color: var(--ink);
+  border-color: rgba(56, 105, 212, 0.22);
+  background: #ffffff;
+  box-shadow: inset 3px 0 0 var(--blue), var(--shadow-soft);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .top-strip,
+:is(html[data-theme='light'], html:not([data-theme])) .page-shell,
+:is(html[data-theme='light'], html:not([data-theme])) .command-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .soft-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .start-console,
+:is(html[data-theme='light'], html:not([data-theme])) .control-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .reminder-sound-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .settings-save-row,
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog {
+  border-color: var(--line);
+  border-radius: var(--radius-panel);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-strong);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .page-shell {
+  border-radius: var(--radius-shell);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .top-strip {
+  flex-wrap: wrap;
+  padding: 12px 16px;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .top-strip-title {
+  flex: 1 1 220px;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .top-strip-status {
+  flex: 1 1 340px;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle {
+  margin-left: auto;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .sidebar-foot {
+  border-color: var(--line);
+  border-radius: var(--radius-card);
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .header-metrics article,
+:is(html[data-theme='light'], html:not([data-theme])) .metric-card,
+:is(html[data-theme='light'], html:not([data-theme])) .core-fact,
+:is(html[data-theme='light'], html:not([data-theme])) .details-card,
+:is(html[data-theme='light'], html:not([data-theme])) .phase-badge,
+:is(html[data-theme='light'], html:not([data-theme])) .alert,
+:is(html[data-theme='light'], html:not([data-theme])) .setting-row,
+:is(html[data-theme='light'], html:not([data-theme])) .capability-row,
+:is(html[data-theme='light'], html:not([data-theme])) .tool-row,
+:is(html[data-theme='light'], html:not([data-theme])) .list-row,
+:is(html[data-theme='light'], html:not([data-theme])) .record-row,
+:is(html[data-theme='light'], html:not([data-theme])) .subject-stat-row,
+:is(html[data-theme='light'], html:not([data-theme])) .blocked-option,
+:is(html[data-theme='light'], html:not([data-theme])) .process-option,
+:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card,
+:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-picker,
+:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-file,
+:is(html[data-theme='light'], html:not([data-theme])) .sound-volume-row,
+:is(html[data-theme='light'], html:not([data-theme])) .today-item-row,
+:is(html[data-theme='light'], html:not([data-theme])) .board-column,
+:is(html[data-theme='light'], html:not([data-theme])) .checklist-task-card,
+:is(html[data-theme='light'], html:not([data-theme])) .today-composer,
+:is(html[data-theme='light'], html:not([data-theme])) .task-composer,
+:is(html[data-theme='light'], html:not([data-theme])) .task-inline-editor,
+:is(html[data-theme='light'], html:not([data-theme])) .empty-state,
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-loading-hint,
+:is(html[data-theme='light'], html:not([data-theme])) .whitelist-subject-heading,
+:is(html[data-theme='light'], html:not([data-theme])) .potplayer-hint,
+:is(html[data-theme='light'], html:not([data-theme])) .monitor-callout {
+  border-color: var(--line);
+  border-radius: var(--radius-card);
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .start-console,
+:is(html[data-theme='light'], html:not([data-theme])) .control-panel {
+  background:
+    radial-gradient(circle at 18% 16%, rgba(56, 105, 212, 0.07), transparent 30%),
+    #ffffff;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .phase-badge {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(247, 250, 253, 0.9)),
+    #ffffff;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .alert.error {
+  border-color: rgba(199, 82, 77, 0.24);
+  background: linear-gradient(180deg, rgba(255, 240, 239, 0.98), rgba(255, 247, 247, 0.92));
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .alert.success {
+  border-color: rgba(38, 155, 118, 0.24);
+  background: linear-gradient(180deg, rgba(235, 251, 246, 0.98), rgba(247, 252, 250, 0.94));
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .alert.neutral {
+  background: #ffffff;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .text-input,
+:is(html[data-theme='light'], html:not([data-theme])) .number-input,
+:is(html[data-theme='light'], html:not([data-theme])) .select-input,
+:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button,
+:is(html[data-theme='light'], html:not([data-theme])) .secondary-action,
+:is(html[data-theme='light'], html:not([data-theme])) .ghost-action,
+:is(html[data-theme='light'], html:not([data-theme])) .small-action,
+:is(html[data-theme='light'], html:not([data-theme])) .chip,
+:is(html[data-theme='light'], html:not([data-theme])) .segmented-control button,
+:is(html[data-theme='light'], html:not([data-theme])) .stepper-control button,
+:is(html[data-theme='light'], html:not([data-theme])) .icon-button,
+:is(html[data-theme='light'], html:not([data-theme])) .settings-collapse-button {
+  color: var(--ink);
+  border-color: var(--line);
+  border-radius: var(--radius-control);
+  background: #ffffff;
+  box-shadow: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .secondary-action:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .ghost-action:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .small-action:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .chip:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .segmented-control button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .stepper-control button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .icon-button:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .settings-collapse-button:hover {
+  border-color: var(--line-strong);
+  background: #f8fafc;
+  box-shadow: var(--shadow-soft);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .primary-action,
+:is(html[data-theme='light'], html:not([data-theme])) .start-ritual-button,
+:is(html[data-theme='light'], html:not([data-theme])) .segmented-control .active,
+:is(html[data-theme='light'], html:not([data-theme])) .chip.active,
+:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-confirm,
+:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card.active,
+:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button.active,
+:is(html[data-theme='light'], html:not([data-theme])) .weekday-pills button.active,
+:is(html[data-theme='light'], html:not([data-theme])) .review-score-row button.active {
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #3869d4, #239a75);
+  box-shadow: 0 12px 24px rgba(56, 105, 212, 0.18);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .danger-action,
+:is(html[data-theme='light'], html:not([data-theme])) .secondary-action.danger-action {
+  color: #ffffff;
+  border-color: #b8433e;
+  background: linear-gradient(135deg, #d65c56, #b8433e);
+  box-shadow: 0 12px 24px rgba(199, 82, 77, 0.2);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .small-action.danger {
+  color: #b94e4a;
+  border-color: rgba(199, 82, 77, 0.25);
+  background: rgba(255, 240, 239, 0.9);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .small-action.enabled,
+:is(html[data-theme='light'], html:not([data-theme])) .row-icon.enabled {
+  color: #1b7e62;
+  border-color: rgba(38, 155, 118, 0.24);
+  background: rgba(233, 251, 245, 0.94);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .text-input::placeholder,
+:is(html[data-theme='light'], html:not([data-theme])) .number-input::placeholder {
+  color: #8b97a9;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card.active strong,
+:is(html[data-theme='light'], html:not([data-theme])) .sound-option-card.active span {
+  color: #ffffff;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .custom-sound-picker-icon {
+  color: #f8fbff;
+  border-color: rgba(56, 105, 212, 0.18);
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.4), transparent 42%),
+    linear-gradient(135deg, rgba(56, 105, 212, 0.92), rgba(38, 155, 118, 0.9));
+  box-shadow: 0 10px 22px rgba(56, 105, 212, 0.18);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .metric-card.danger,
+:is(html[data-theme='light'], html:not([data-theme])) .count-pill,
+:is(html[data-theme='light'], html:not([data-theme])) .row-icon.danger {
+  color: #a94942;
+  border-color: rgba(199, 82, 77, 0.24);
+  background: linear-gradient(180deg, rgba(255, 244, 243, 0.96), rgba(255, 250, 249, 0.78));
+  box-shadow: var(--shadow-soft);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .metric-card.danger strong,
+:is(html[data-theme='light'], html:not([data-theme])) .count-pill {
+  color: #8d3530;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .timer-orbit {
+  border-color: rgba(113, 131, 159, 0.22);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(56, 105, 212, 0.1), transparent 60%),
+    #ffffff;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .focus-active-shell {
+  background:
+    radial-gradient(circle at 50% 48%, rgba(56, 105, 212, 0.1), transparent 29%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .focus-active-bg {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(56, 105, 212, 0.08), transparent 30%),
+    radial-gradient(circle at 52% 68%, rgba(38, 155, 118, 0.06), transparent 26%);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .focus-round-button {
+  color: #162033;
+  border-color: rgba(113, 131, 159, 0.2);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 18px 40px rgba(63, 82, 112, 0.12);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .focus-round-button.primary {
+  color: #f8fbff;
+  background: linear-gradient(135deg, #3869d4, #239a75);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .focus-round-button.secondary {
+  color: #b87926;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .focus-quiet-action {
+  color: color-mix(in srgb, #162033 78%, #65758b);
+  border-color: rgba(113, 131, 159, 0.18);
+  background: rgba(255, 255, 255, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 14px 30px rgba(84, 104, 136, 0.1);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .focus-quiet-action:hover {
+  color: #162033;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .focus-quiet-action.is-active {
+  color: #162033;
+  border-color: rgba(56, 105, 212, 0.26);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-backdrop {
+  background: rgba(31, 42, 58, 0.24);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog-body {
+  border-color: var(--line);
+  background: #f8fafc;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog-icon {
+  color: #3869d4;
+  border-color: rgba(56, 105, 212, 0.22);
+  background: #f0f5ff;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .confirm-dialog.tone-danger .confirm-dialog-icon {
+  color: #c7524d;
+  border-color: rgba(199, 82, 77, 0.24);
+  background: #fff2f1;
+}
+
 @media (max-width: 960px) {
   html,
   body {
-    min-width: 960px;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: relative;
+    grid-template-rows: auto auto auto;
+    height: auto;
+    padding: 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand {
+    padding: 4px 4px 12px;
+  }
+
+  .nav-list {
+    grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+    gap: 8px;
+  }
+
+  .nav-item {
+    min-height: 44px;
+    padding: 9px 10px;
+  }
+
+  .main-panel {
+    padding: 12px;
+  }
+
+  .top-strip,
+  .schedule-hero,
+  .tool-row,
+  .list-row,
+  .record-row,
+  .subject-stat-row,
+  .blocked-option {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .top-strip {
+    padding: 12px;
+  }
+
+  .page-shell {
+    min-height: auto;
+    padding: 12px;
+  }
+
+  .page-header,
+  .prepare-header {
+    grid-template-columns: 1fr;
+  }
+
+  .page-header h2 {
+    font-size: 24px;
+  }
+
+  .header-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .prepare-grid,
+  .number-grid,
+  .rhythm-grid,
+  .inline-fields,
+  .record-row,
+  .subject-bars .subject-stat-row,
+  .setting-row,
+  .alarm-row,
+  .sound-volume-row,
+  .custom-sound-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sound-option-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .focus-action-row {
+    grid-auto-flow: row;
+    grid-template-columns: 1fr;
+  }
+
+  .start-ritual-button,
+  .page-header .secondary-action {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .row-actions,
+  .alarm-row-actions,
+  .confirm-dialog-actions {
+    justify-content: flex-start;
+  }
+
+  .confirm-backdrop {
+    padding: 12px;
+  }
+
+  .confirm-dialog {
+    width: min(440px, calc(100vw - 24px));
+    max-height: calc(100dvh - 24px);
+    padding: 16px;
+  }
+
+  .confirm-dialog-actions button {
+    flex: 1 1 150px;
+  }
+}
+
+@media (max-width: 680px) {
+  .header-metrics,
+  .sound-option-grid,
+  .schedule-composer,
+  .template-composer {
+    grid-template-columns: 1fr;
+  }
+
+  .top-strip-status,
+  .schedule-actions,
+  .schedule-toolbar,
+  .focus-active-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .confirm-dialog-head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .confirm-dialog-head .icon-button {
+    grid-column: 2;
+    justify-self: end;
   }
 }
 

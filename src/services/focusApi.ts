@@ -1,9 +1,5 @@
 import type { FocusMode, FocusSession, FocusSessionRecovery, FocusStatsSummary, StudyModeState, Subject } from '../types/focus';
-
-async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<T>(command, args);
-}
+import { invokeCommand } from './tauriInvoke';
 
 export function startFocusSession(plannedSeconds: number, mode: FocusMode, subjectId?: number | null): Promise<FocusSession> {
   return invokeCommand<FocusSession>('start_focus_session', {

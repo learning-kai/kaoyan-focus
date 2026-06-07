@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "考研专注",
-  "version": "1.0.5",
+  "version": "1.7.1",
   "identifier": "com.kaoyan.focus",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; font-src 'self' data:; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; media-src 'self' asset: blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     }
   },
   "bundle": {
@@ -34,9 +34,9 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcxQzk2MjM2MTMwOENDRDUKUldUVnpBZ1RObUxKY1FWTnBxVnRZTWM3REhzL2k4MmQweGU2U1RYNW5ZWDFQRnFBS3pkNHJDYWEK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMwRTgwMzYwNjQzNEQzMkEKUldRcTB6UmtZQVBvd0VhcTgxV2xqTEZUQUpXREQxUmdDUXNNZWxsWFZIYkE1L1BzOEpFOGFJY0wK",
       "endpoints": [
-        "https://github.com/OWNER/REPO/releases/latest/download/latest.json"
+        "https://github.com/learning-kai/kaoyan-focus-updates/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

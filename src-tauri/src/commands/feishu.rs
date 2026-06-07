@@ -1,4 +1,6 @@
-use crate::{storage::db::open_database, sync_package::mark_entity_deleted};
+use crate::{
+    credential, runtime_health, storage::db::open_database, sync_package::mark_entity_deleted,
+};
 use chrono::{DateTime, Duration, Local, NaiveDate, TimeZone, Timelike, Utc};
 use reqwest::{
     blocking::{Client, Response},
@@ -73,6 +75,8 @@ pub struct FeishuSyncSettings {
     pub enabled: bool,
     pub app_id: String,
     pub app_secret: String,
+    #[serde(default)]
+    pub app_secret_configured: bool,
     pub redirect_uri: String,
 }
 
@@ -258,8 +262,9 @@ pub fn save_feishu_sync_settings(
 ) -> Result<FeishuSyncSettings, String> {
     let connection = open_database(&database_path(&app)?)?;
     let current_app_id = get_setting(&connection, FEISHU_APP_ID_KEY, "")?;
-    let current_secret = get_setting(&connection, FEISHU_APP_SECRET_KEY, "")?;
-    let normalized = normalize_settings(settings);
+    let current_secret = credential::get_secret(&connection, FEISHU_APP_SECRET_KEY)?;
+    let secret_changed = !settings.app_secret.is_empty();
+    let normalized = normalize_settings(resolve_feishu_secret(&connection, settings)?);
     let now = Utc::now().to_rfc3339();
     set_setting(
         &connection,
@@ -268,12 +273,16 @@ pub fn save_feishu_sync_settings(
         &now,
     )?;
     set_setting(&connection, FEISHU_APP_ID_KEY, &normalized.app_id, &now)?;
-    set_setting(
-        &connection,
-        FEISHU_APP_SECRET_KEY,
-        &normalized.app_secret,
-        &now,
-    )?;
+    if secret_changed {
+        credential::set_secret(
+            &connection,
+            FEISHU_APP_SECRET_KEY,
+            &normalized.app_secret,
+            &now,
+        )?;
+    } else {
+        credential::set_secret_if_changed(&connection, FEISHU_APP_SECRET_KEY, "", &now)?;
+    }
     set_setting(
         &connection,
         FEISHU_REDIRECT_URI_KEY,
@@ -285,20 +294,20 @@ pub fn save_feishu_sync_settings(
     {
         clear_feishu_tokens(&connection)?;
     }
-    Ok(normalized)
+    Ok(redact_feishu_settings(normalized))
 }
 
 #[tauri::command]
 pub fn get_feishu_sync_status(app: AppHandle) -> Result<FeishuSyncStatus, String> {
     let connection = open_database(&database_path(&app)?)?;
     let settings = read_feishu_settings(&connection)?;
-    let access_token = get_setting(&connection, FEISHU_ACCESS_TOKEN_KEY, "")?;
+    let access_token = credential::get_secret(&connection, FEISHU_ACCESS_TOKEN_KEY)?;
     let expires_at = non_empty_setting(&connection, FEISHU_TOKEN_EXPIRES_AT_KEY)?;
     let tasklists = feishu_tasklist_statuses(&connection)?;
     let tasklist_count = tasklists.iter().filter(|item| item.ready).count();
     Ok(FeishuSyncStatus {
         enabled: settings.enabled,
-        configured: !settings.app_id.is_empty() && !settings.app_secret.is_empty(),
+        configured: !settings.app_id.is_empty() && settings.app_secret_configured,
         authenticated: is_feishu_access_token_usable(&access_token, expires_at.as_deref()),
         expires_at,
         tasklist_guid: non_empty_setting(
@@ -320,7 +329,7 @@ pub fn get_feishu_sync_status(app: AppHandle) -> Result<FeishuSyncStatus, String
 #[tauri::command]
 pub fn start_feishu_oauth_login(app: AppHandle) -> Result<FeishuOAuthLogin, String> {
     let connection = open_database(&database_path(&app)?)?;
-    let settings = read_feishu_settings(&connection)?;
+    let settings = read_feishu_settings_for_api(&connection)?;
     if settings.app_id.is_empty() || settings.app_secret.is_empty() {
         return Err("请先填写飞书 App ID 和 App Secret。".to_string());
     }
@@ -392,7 +401,7 @@ pub fn start_feishu_oauth_login(app: AppHandle) -> Result<FeishuOAuthLogin, Stri
 #[tauri::command]
 pub fn poll_feishu_oauth_login(app: AppHandle) -> Result<FeishuLoginPollResult, String> {
     let connection = open_database(&database_path(&app)?)?;
-    let access_token = get_setting(&connection, FEISHU_ACCESS_TOKEN_KEY, "")?;
+    let access_token = credential::get_secret(&connection, FEISHU_ACCESS_TOKEN_KEY)?;
     let expires_at = get_setting(&connection, FEISHU_TOKEN_EXPIRES_AT_KEY, "")?;
     let authenticated = is_feishu_access_token_usable(&access_token, Some(&expires_at));
     let message = get_setting(
@@ -463,6 +472,9 @@ pub fn sync_feishu_bridge_after_local_change(app: AppHandle, trigger: &'static s
         })();
         if let Err(error) = result {
             eprintln!("Feishu local-change sync failed: {error}");
+            runtime_health::mark_task_error("feishu_background_sync", &error, Some(60));
+        } else {
+            runtime_health::mark_task_success("feishu_background_sync", Some(60));
         }
         FEISHU_LOCAL_CHANGE_SYNC_PENDING.store(false, Ordering::SeqCst);
     });
@@ -522,7 +534,7 @@ fn sync_feishu_bridge_blocking_locked(
     let mut connection = open_database(&database_path)?;
 
     let result: Result<FeishuSyncResult, String> = (|| {
-        let settings = read_feishu_settings(&connection)?;
+        let settings = read_feishu_settings_for_api(&connection)?;
         if !settings.enabled {
             return Ok(skipped_result("飞书同步已关闭。"));
         }
@@ -663,7 +675,7 @@ fn rebuild_feishu_tasklists_inner(
     connection: &mut Connection,
     app_data_dir: &Path,
 ) -> Result<FeishuRebuildResult, String> {
-    let settings = read_feishu_settings(connection)?;
+    let settings = read_feishu_settings_for_api(connection)?;
     if settings.app_id.is_empty() || settings.app_secret.is_empty() {
         return Err("未配置飞书 App ID 或 App Secret。".to_string());
     }
@@ -2935,15 +2947,15 @@ fn ensure_checklist_bucket(connection: &Connection, board_scope: &str) -> Result
 
 fn handle_oauth_code(app: &AppHandle, code: &str) -> Result<String, String> {
     let connection = open_database(&database_path(app)?)?;
-    let settings = read_feishu_settings(&connection)?;
+    let settings = read_feishu_settings_for_api(&connection)?;
     let data = exchange_user_token(&settings, code)?;
     persist_token_response(&connection, &data)?;
     Ok("飞书登录成功，已保存本机 Token。".to_string())
 }
 
 fn ensure_access_token(connection: &Connection) -> Result<TokenSet, String> {
-    let access_token = get_setting(connection, FEISHU_ACCESS_TOKEN_KEY, "")?;
-    let refresh_token = get_setting(connection, FEISHU_REFRESH_TOKEN_KEY, "")?;
+    let access_token = credential::get_secret(connection, FEISHU_ACCESS_TOKEN_KEY)?;
+    let refresh_token = credential::get_secret(connection, FEISHU_REFRESH_TOKEN_KEY)?;
     let expires_at_raw = get_setting(connection, FEISHU_TOKEN_EXPIRES_AT_KEY, "")?;
     let expires_at = parse_rfc3339(&expires_at_raw).unwrap_or_else(Utc::now);
     if !access_token.is_empty() && expires_at > Utc::now() + Duration::seconds(60) {
@@ -2952,11 +2964,11 @@ fn ensure_access_token(connection: &Connection) -> Result<TokenSet, String> {
     if refresh_token.is_empty() {
         return Err("飞书尚未登录，请先完成浏览器授权。".to_string());
     }
-    let settings = read_feishu_settings(connection)?;
+    let settings = read_feishu_settings_for_api(connection)?;
     let data = refresh_user_token(&settings, &refresh_token)?;
     persist_token_response(connection, &data)?;
     Ok(TokenSet {
-        access_token: get_setting(connection, FEISHU_ACCESS_TOKEN_KEY, "")?,
+        access_token: credential::get_secret(connection, FEISHU_ACCESS_TOKEN_KEY)?,
     })
 }
 
@@ -3071,9 +3083,9 @@ fn persist_token_response(connection: &Connection, value: &Value) -> Result<(), 
         .unwrap_or(7200);
     let expires_at = Utc::now() + Duration::seconds(expires_in);
     let now = Utc::now().to_rfc3339();
-    set_setting(connection, FEISHU_ACCESS_TOKEN_KEY, access_token, &now)?;
+    credential::set_secret(connection, FEISHU_ACCESS_TOKEN_KEY, access_token, &now)?;
     if !refresh_token.is_empty() {
-        set_setting(connection, FEISHU_REFRESH_TOKEN_KEY, refresh_token, &now)?;
+        credential::set_secret(connection, FEISHU_REFRESH_TOKEN_KEY, refresh_token, &now)?;
     }
     set_setting(
         connection,
@@ -3088,7 +3100,8 @@ fn read_feishu_settings(connection: &Connection) -> Result<FeishuSyncSettings, S
     Ok(normalize_settings(FeishuSyncSettings {
         enabled: get_bool_setting(connection, FEISHU_SYNC_ENABLED_KEY, false)?,
         app_id: get_setting(connection, FEISHU_APP_ID_KEY, "")?,
-        app_secret: get_setting(connection, FEISHU_APP_SECRET_KEY, "")?,
+        app_secret: String::new(),
+        app_secret_configured: credential::secret_configured(connection, FEISHU_APP_SECRET_KEY)?,
         redirect_uri: get_setting(connection, FEISHU_REDIRECT_URI_KEY, DEFAULT_REDIRECT_URI)?,
     }))
 }
@@ -3098,6 +3111,8 @@ fn normalize_settings(settings: FeishuSyncSettings) -> FeishuSyncSettings {
         enabled: settings.enabled,
         app_id: settings.app_id.trim().to_string(),
         app_secret: settings.app_secret.trim().to_string(),
+        app_secret_configured: !settings.app_secret.trim().is_empty()
+            || settings.app_secret_configured,
         redirect_uri: settings
             .redirect_uri
             .trim()
@@ -3106,11 +3121,36 @@ fn normalize_settings(settings: FeishuSyncSettings) -> FeishuSyncSettings {
     }
 }
 
+fn read_feishu_settings_for_api(connection: &Connection) -> Result<FeishuSyncSettings, String> {
+    let mut settings = read_feishu_settings(connection)?;
+    settings.app_secret = credential::get_secret(connection, FEISHU_APP_SECRET_KEY)?;
+    settings.app_secret_configured = !settings.app_secret.is_empty();
+    Ok(settings)
+}
+
+fn resolve_feishu_secret(
+    connection: &Connection,
+    mut settings: FeishuSyncSettings,
+) -> Result<FeishuSyncSettings, String> {
+    if settings.app_secret.is_empty() {
+        settings.app_secret = credential::get_secret(connection, FEISHU_APP_SECRET_KEY)?;
+    }
+    settings.app_secret_configured = !settings.app_secret.is_empty();
+    Ok(settings)
+}
+
+fn redact_feishu_settings(mut settings: FeishuSyncSettings) -> FeishuSyncSettings {
+    settings.app_secret_configured =
+        !settings.app_secret.is_empty() || settings.app_secret_configured;
+    settings.app_secret.clear();
+    settings
+}
+
 fn clear_feishu_tokens(connection: &Connection) -> Result<(), String> {
     let now = Utc::now().to_rfc3339();
+    credential::set_secret(connection, FEISHU_ACCESS_TOKEN_KEY, "", &now)?;
+    credential::set_secret(connection, FEISHU_REFRESH_TOKEN_KEY, "", &now)?;
     for key in [
-        FEISHU_ACCESS_TOKEN_KEY,
-        FEISHU_REFRESH_TOKEN_KEY,
         FEISHU_TOKEN_EXPIRES_AT_KEY,
         FEISHU_TASKLIST_GUID_KEY,
         FEISHU_LEGACY_TASKLIST_GUID_KEY,

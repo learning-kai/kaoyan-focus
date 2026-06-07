@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type {
+  DragEvent as ReactDragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react';
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   Clock3,
   CopyPlus,
+  PencilLine,
   Play,
   Plus,
   RefreshCw,
@@ -280,18 +285,6 @@ export default function SchedulePage() {
     };
   }, [dragState]);
 
-  const scheduledTodayItemIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const block of data?.day_blocks ?? []) {
-      if (typeof block.source_today_item_id === 'number') ids.add(block.source_today_item_id);
-    }
-    return ids;
-  }, [data]);
-
-  const availableTodayItems = useMemo(
-    () => (data?.today_items ?? []).filter((item) => !scheduledTodayItemIds.has(item.id)),
-    [data, scheduledTodayItemIds],
-  );
   const positionedDayBlocks = useMemo(
     () => layoutScheduleBlocks(data?.day_blocks ?? []),
     [data?.day_blocks],
@@ -541,7 +534,7 @@ export default function SchedulePage() {
     const current = dragStateRef.current;
     const itemId = Number(event.dataTransfer.getData(todayItemDragType) || current?.todayItemId);
     const item = data?.today_items.find((candidate) => candidate.id === itemId);
-    if (!item || scheduledTodayItemIds.has(item.id)) return;
+    if (!item) return;
     if (!current || current.mode !== 'create' || current.todayItemId !== item.id) {
       startCreateDrag(item.id, item.title, event.clientY);
       return;
@@ -575,6 +568,81 @@ export default function SchedulePage() {
     event.preventDefault();
     event.stopPropagation();
     startBlockDrag(block, mode, event.clientY);
+  }
+
+  function nextKeyboardBlockTime(block: ScheduleBlock, key: string, shiftKey: boolean) {
+    const duration = block.end_minute - block.start_minute;
+
+    if (!shiftKey) {
+      if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'ArrowLeft' && key !== 'ArrowRight') return null;
+      const delta = key === 'ArrowUp' || key === 'ArrowLeft' ? -slotMinutes : slotMinutes;
+      const startMinute = clampMinute(block.start_minute + delta, dayStart, dayEnd - duration);
+      return {
+        startMinute,
+        endMinute: startMinute + duration,
+      };
+    }
+
+    if (key === 'ArrowUp') {
+      return {
+        startMinute: clampMinute(block.start_minute - slotMinutes, dayStart, block.end_minute - minBlockMinutes),
+        endMinute: block.end_minute,
+      };
+    }
+
+    if (key === 'ArrowDown') {
+      return {
+        startMinute: clampMinute(block.start_minute + slotMinutes, dayStart, block.end_minute - minBlockMinutes),
+        endMinute: block.end_minute,
+      };
+    }
+
+    if (key === 'ArrowLeft') {
+      return {
+        startMinute: block.start_minute,
+        endMinute: clampMinute(block.end_minute - slotMinutes, block.start_minute + minBlockMinutes, dayEnd),
+      };
+    }
+
+    if (key === 'ArrowRight') {
+      return {
+        startMinute: block.start_minute,
+        endMinute: clampMinute(block.end_minute + slotMinutes, block.start_minute + minBlockMinutes, dayEnd),
+      };
+    }
+
+    return null;
+  }
+
+  function handleBlockKeyDown(event: ReactKeyboardEvent<HTMLElement>, block: ScheduleBlock) {
+    if (saving || editingBlockId === block.id || isInteractiveElement(event.target)) return;
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      beginEditBlock(block);
+      return;
+    }
+
+    if (event.key === 'Delete') {
+      event.preventDefault();
+      event.stopPropagation();
+      void withSave(() => deleteScheduleBlock(block.id), '课表块已删除。');
+      return;
+    }
+
+    const nextTime = nextKeyboardBlockTime(block, event.key, event.shiftKey);
+    if (!nextTime) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (nextTime.startMinute === block.start_minute && nextTime.endMinute === block.end_minute) return;
+    void withSave(
+      async () => {
+        await moveScheduleBlock(block.id, selectedDate, nextTime.startMinute, nextTime.endMinute);
+      },
+      '课表时间已更新。',
+    );
   }
 
   function quickDraftForSlot(startMinute: number, itemId: number | null = null): ScheduleBlockDraft {
@@ -874,12 +942,11 @@ export default function SchedulePage() {
             </div>
           </div>
           {data?.today_items.length ? data.today_items.map((item) => {
-            const already = scheduledTodayItemIds.has(item.id);
             const picking = pendingTodayItemId === item.id;
             return (
               <article
-                className={`${already ? 'schedule-task-row muted' : 'schedule-task-row'}${picking ? ' picking' : ''}`}
-                draggable={!already && !saving}
+                className={`schedule-task-row${picking ? ' picking' : ''}`}
+                draggable={!saving}
                 key={item.id}
                 onDragEnd={handleTodayItemDragEnd}
                 onDragStart={(event) => handleTodayItemDragStart(event, item.id, item.title)}
@@ -888,8 +955,8 @@ export default function SchedulePage() {
                   <strong>{item.title}</strong>
                   <span>{subjectName(subjects, item.subject_id)}{item.due_date ? ` / ${item.due_date}` : ''}</span>
                 </div>
-                <button disabled={already || saving} type="button" onClick={() => void handleAddTodayItem(item.id)}>
-                  {already ? '已安排' : picking ? '取消' : '选时间'}
+                <button disabled={saving} type="button" onClick={() => void handleAddTodayItem(item.id)}>
+                  {picking ? '取消' : '选时间'}
                 </button>
               </article>
             );
@@ -938,10 +1005,14 @@ export default function SchedulePage() {
               )}
               {positionedDayBlocks.map(({ block, columnCount, columnIndex }) => (
                 <article
+                  aria-label={`${block.title}，${formatMinute(block.start_minute)} 到 ${formatMinute(block.end_minute)}，${columnCount > 1 ? '时间冲突，' : ''}按 Enter 编辑，方向键每次移动 15 分钟，Shift 加方向键调整开始或结束时间，Delete 删除`}
+                  aria-keyshortcuts="Enter Delete ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"
                   className={`schedule-block category-${block.category_key}${columnCount > 1 ? ' conflict' : ''}${dragState?.blockId === block.id ? ' is-dragging' : ''}`}
                   key={block.id}
+                  onKeyDown={(event) => handleBlockKeyDown(event, block)}
                   onPointerDown={(event) => handleBlockPointerDown(event, block)}
                   style={positionedBlockTimelineStyle({ block, columnCount, columnIndex })}
+                  tabIndex={0}
                 >
                   {editingBlockId === block.id && editingBlockDraft ? (
                     <div className="schedule-block-editor">
@@ -961,7 +1032,7 @@ export default function SchedulePage() {
                   ) : (
                     <>
                       <button
-                        aria-label="Resize start time"
+                        aria-label={`调整 ${block.title} 的开始时间`}
                         className="schedule-resize-handle is-start"
                         onPointerDown={(event) => handleResizePointerDown(event, block, 'resize-start')}
                         type="button"
@@ -969,15 +1040,23 @@ export default function SchedulePage() {
                       <div onDoubleClick={() => beginEditBlock(block)}>
                         <span>{formatMinute(block.start_minute)}-{formatMinute(block.end_minute)} · {categoryLabel(block.category_key)}</span>
                         <strong>{block.title}</strong>
-                        <small>{subjectName(subjects, block.subject_id)}{columnCount > 1 ? ' · 时间冲突' : ''}</small>
+                        <small>{subjectName(subjects, block.subject_id)}</small>
+                        {columnCount > 1 && <span className="schedule-conflict-badge">时间冲突，点击编辑解决</span>}
                       </div>
                       <div className="schedule-block-actions">
                         <button aria-label="开始专注" type="button" onClick={() => void handleStart(block)}><Play size={14} /></button>
-                        <button aria-label="编辑" type="button" onClick={() => beginEditBlock(block)}>改</button>
+                        <button
+                          aria-label={`编辑 ${block.title}`}
+                          style={{ minWidth: '56px', width: 'auto', padding: '0 8px' }}
+                          type="button"
+                          onClick={() => beginEditBlock(block)}
+                        >
+                          <PencilLine size={14} /> 编辑
+                        </button>
                         <button aria-label="删除" type="button" onClick={() => void withSave(() => deleteScheduleBlock(block.id), '课表块已删除。')}><Trash2 size={14} /></button>
                       </div>
                       <button
-                        aria-label="Resize end time"
+                        aria-label={`调整 ${block.title} 的结束时间`}
                         className="schedule-resize-handle is-end"
                         onPointerDown={(event) => handleResizePointerDown(event, block, 'resize-end')}
                         type="button"
@@ -1008,7 +1087,7 @@ export default function SchedulePage() {
                   </div>
                   <select value={quickAddSourceTodayItemId ?? ''} onChange={(event) => handleQuickSourceChange(event.target.value)}>
                     <option value="">手动安排</option>
-                    {availableTodayItems.map((item) => (
+                    {(data?.today_items ?? []).map((item) => (
                       <option key={item.id} value={item.id}>{item.title}</option>
                     ))}
                   </select>

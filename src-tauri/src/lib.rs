@@ -8,16 +8,18 @@ use ::windows::{
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    Emitter, Manager, WindowEvent,
 };
 #[cfg(windows)]
 use tauri_winrt_notification::{Duration as ToastDuration, LoopableSound, Scenario, Sound, Toast};
 
 mod commands {
+    pub mod alarm;
     pub mod checklist;
     pub mod email;
     pub mod feishu;
     pub mod focus;
+    pub mod health;
     pub mod monitor;
     pub mod review;
     pub mod schedule;
@@ -25,7 +27,10 @@ mod commands {
     pub mod sync;
     pub mod whitelist;
 }
+mod credential;
+mod dashboard_server;
 mod focus;
+mod runtime_health;
 mod storage;
 mod sync_package;
 mod whitelist;
@@ -37,8 +42,10 @@ pub struct AppState {
     last_blocked_process: Mutex<Option<(i64, String)>>,
 }
 
+const REMINDER_NOTIFICATION_CLOSED_EVENT: &str = "study-reminder-notification-closed";
+
 impl AppState {
-    fn should_prevent_exit(&self) -> Result<bool, String> {
+    fn should_prevent_exit(&self, app: Option<&tauri::AppHandle>) -> Result<bool, String> {
         let has_active_session = self
             .active_session_id
             .lock()
@@ -48,7 +55,11 @@ impl AppState {
             .study_mode_active
             .lock()
             .map_err(|error| error.to_string())?;
-        Ok(has_active_session || study_mode_active)
+        let has_active_alarm = app
+            .map(commands::alarm::app_has_active_alarm)
+            .transpose()?
+            .unwrap_or(false);
+        Ok(has_active_session || study_mode_active || has_active_alarm)
     }
 }
 
@@ -67,36 +78,97 @@ fn set_study_mode_active(state: tauri::State<'_, AppState>, active: bool) -> Res
 }
 
 #[tauri::command]
-fn show_study_reminder(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+fn show_study_reminder(
+    app: tauri::AppHandle,
+    title: String,
+    body: String,
+    sound_id: Option<String>,
+    notification_id: Option<String>,
+) -> Result<(), String> {
     #[cfg(windows)]
     {
         let app_id = app.config().identifier.as_str();
+        let sound = toast_sound_for_id(sound_id.as_deref());
 
-        Toast::new(app_id)
-            .title(&title)
-            .text1(&body)
-            .scenario(Scenario::Reminder)
-            .duration(ToastDuration::Long)
-            .sound(Some(Sound::Loop(LoopableSound::Alarm2)))
-            .show()
+        show_toast_with_close_event(&app, app_id, &title, &body, sound, notification_id.clone())
             .or_else(|_| {
-                Toast::new(Toast::POWERSHELL_APP_ID)
-                    .title(&title)
-                    .text1(&body)
-                    .scenario(Scenario::Reminder)
-                    .duration(ToastDuration::Long)
-                    .sound(Some(Sound::Loop(LoopableSound::Alarm2)))
-                    .show()
+                show_toast_with_close_event(
+                    &app,
+                    Toast::POWERSHELL_APP_ID,
+                    &title,
+                    &body,
+                    sound,
+                    notification_id,
+                )
             })
             .map_err(|error| error.to_string())?;
     }
 
     #[cfg(not(windows))]
     {
-        let _ = (app, title, body);
+        let _ = (app, title, body, sound_id, notification_id);
     }
 
     Ok(())
+}
+
+#[cfg(windows)]
+fn show_toast_with_close_event(
+    app: &tauri::AppHandle,
+    app_id: &str,
+    title: &str,
+    body: &str,
+    sound: Option<Sound>,
+    notification_id: Option<String>,
+) -> Result<(), tauri_winrt_notification::Error> {
+    let app_for_dismiss = app.clone();
+    let notification_id_for_dismiss = notification_id.clone();
+    let app_for_activate = app.clone();
+    let notification_id_for_activate = notification_id;
+
+    Toast::new(app_id)
+        .title(title)
+        .text1(body)
+        .scenario(Scenario::Reminder)
+        .duration(ToastDuration::Long)
+        .sound(sound)
+        .on_dismissed(move |_| {
+            emit_reminder_notification_closed(
+                &app_for_dismiss,
+                notification_id_for_dismiss.as_deref(),
+            );
+            Ok(())
+        })
+        .on_activated(move |_| {
+            emit_reminder_notification_closed(
+                &app_for_activate,
+                notification_id_for_activate.as_deref(),
+            );
+            Ok(())
+        })
+        .show()
+}
+
+#[cfg(windows)]
+fn emit_reminder_notification_closed(app: &tauri::AppHandle, notification_id: Option<&str>) {
+    if let Some(notification_id) = notification_id {
+        let _ = app.emit(
+            REMINDER_NOTIFICATION_CLOSED_EVENT,
+            serde_json::json!({ "notification_id": notification_id }),
+        );
+    }
+}
+
+#[cfg(windows)]
+fn toast_sound_for_id(sound_id: Option<&str>) -> Option<Sound> {
+    match sound_id.unwrap_or("classic") {
+        "bright" => Some(Sound::Single(LoopableSound::Alarm5)),
+        "soft" => Some(Sound::Reminder),
+        "urgent" => Some(Sound::Loop(LoopableSound::Alarm10)),
+        "short" => Some(Sound::SMS),
+        "silent" => None,
+        _ => Some(Sound::Loop(LoopableSound::Alarm2)),
+    }
 }
 
 #[tauri::command]
@@ -136,6 +208,13 @@ fn open_external_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn open_study_dashboard(app: tauri::AppHandle) -> Result<dashboard_server::DashboardLaunch, String> {
+    let launch = dashboard_server::ensure_running(app)?;
+    open_external_url(launch.url.clone())?;
+    Ok(launch)
+}
+
 #[cfg(windows)]
 fn wide_null(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
@@ -158,9 +237,21 @@ pub fn run() {
             let prune_app_handle = app_handle.clone();
             let sync_poll_app_handle = app_handle.clone();
             let _ = commands::focus::sync_study_runtime_state(&app_handle);
+            if let Ok(settings) = commands::settings::get_app_settings(app_handle.clone()) {
+                if let Err(error) =
+                    commands::settings::sync_launch_at_startup(&app_handle, settings.launch_at_startup)
+                {
+                    eprintln!("Failed to sync autostart setting: {error}");
+                }
+            }
             commands::sync::prune_sync_backups_best_effort(&app_handle);
             thread::spawn(move || loop {
-                let _ = commands::focus::tick_background_study_mode(&tick_app_handle);
+                match commands::focus::tick_background_study_mode(&tick_app_handle) {
+                    Ok(()) => runtime_health::mark_task_success("study_runtime_tick", Some(3)),
+                    Err(error) => {
+                        runtime_health::mark_task_error("study_runtime_tick", &error, Some(3));
+                    }
+                }
                 thread::sleep(Duration::from_secs(3));
             });
             thread::spawn(move || {
@@ -175,6 +266,17 @@ pub fn run() {
                                 "Desktop background object storage sync finished: status={} message={}",
                                 result.status, result.message
                             );
+                            if result.status == "skipped" {
+                                runtime_health::mark_task_success(
+                                    "object_storage_background_poll",
+                                    Some(15),
+                                );
+                            } else {
+                                runtime_health::mark_task_success(
+                                    "object_storage_background_poll",
+                                    Some(120),
+                                );
+                            }
                             if result
                                 .skipped_reason
                                 .as_deref()
@@ -186,6 +288,11 @@ pub fn run() {
                         }
                         Err(error) => {
                             eprintln!("Desktop background object storage sync failed: {error}");
+                            runtime_health::mark_task_error(
+                                "object_storage_background_poll",
+                                &error,
+                                Some(120),
+                            );
                         }
                     }
                     thread::sleep(Duration::from_secs(120));
@@ -216,7 +323,7 @@ pub fn run() {
                     }
                     "tray_quit" => {
                         if let Some(state) = app.try_state::<AppState>() {
-                            if state.should_prevent_exit().unwrap_or(false) {
+                            if state.should_prevent_exit(Some(app)).unwrap_or(false) {
                                 let _ = show_main_window(app);
                                 return;
                             }
@@ -243,7 +350,10 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if let Some(state) = window.try_state::<AppState>() {
-                    if state.should_prevent_exit().unwrap_or(false) {
+                    if state
+                        .should_prevent_exit(Some(window.app_handle()))
+                        .unwrap_or(false)
+                    {
                         api.prevent_close();
                         let _ = window.set_fullscreen(false);
                         let _ = window.hide();
@@ -255,6 +365,16 @@ pub fn run() {
             ping,
             set_study_mode_active,
             open_external_url,
+            open_study_dashboard,
+            commands::alarm::list_alarms,
+            commands::alarm::create_alarm,
+            commands::alarm::update_alarm,
+            commands::alarm::delete_alarm,
+            commands::alarm::set_alarm_enabled,
+            commands::alarm::dismiss_alarm,
+            commands::alarm::trigger_due_alarms,
+            commands::alarm::get_next_alarm,
+            commands::alarm::has_active_alarm,
             commands::checklist::get_checklist_page_data,
             commands::checklist::create_checklist_task,
             commands::checklist::update_checklist_task,
@@ -303,7 +423,12 @@ pub fn run() {
             commands::focus::get_focus_stats_summary,
             commands::settings::get_app_settings,
             commands::settings::get_app_data_location,
+            commands::settings::get_sync_device_id,
             commands::settings::save_app_settings,
+            commands::settings::save_custom_reminder_sound,
+            commands::settings::get_custom_reminder_sound,
+            commands::settings::reset_custom_reminder_sound,
+            commands::health::get_runtime_health,
             commands::email::get_email_reminder_settings,
             commands::email::save_email_reminder_settings,
             commands::email::test_email_reminder,
@@ -337,6 +462,9 @@ pub fn run() {
             commands::sync::restore_sync_backup,
             commands::whitelist::create_whitelist_app,
             commands::whitelist::create_whitelist_website,
+            commands::whitelist::create_potplayer_video_whitelist_file,
+            commands::whitelist::create_potplayer_video_whitelist_directory,
+            commands::whitelist::get_current_potplayer_media,
             commands::whitelist::list_recent_blocked_apps,
             commands::whitelist::list_whitelist_apps,
             commands::whitelist::list_running_processes,

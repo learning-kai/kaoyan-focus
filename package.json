@@ -1,18 +1,21 @@
 {
   "name": "kaoyan-focus",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "lint": "tsc --noEmit",
+    "test": "npm.cmd run lint",
     "preview": "vite preview",
     "tauri": "tauri",
     "release:prepare": "node scripts/prepare-release.mjs",
     "release:tag": "node scripts/tag-release.mjs",
     "release:win": "node scripts/release-win.mjs",
     "release:win:update": "node scripts/release-win-update.mjs",
-    "release:metadata": "node scripts/generate-latest-json.mjs \"https://github.com/OWNER/REPO/releases/latest/download\""
+    "release:auto": "node scripts/release-auto.mjs",
+    "release:metadata": "node scripts/generate-latest-json.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

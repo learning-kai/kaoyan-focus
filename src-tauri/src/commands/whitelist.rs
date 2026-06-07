@@ -1,6 +1,10 @@
 use crate::{
     storage::db::open_database,
     whitelist::app::WhitelistApp,
+    windows::potplayer::{
+        get_current_potplayer_media as read_current_potplayer_media, PotPlayerMediaInfo,
+        POTPLAYER_DEFAULT_PROCESS_NAME,
+    },
     windows::running_processes::{
         list_running_processes as read_running_processes, RunningProcess,
     },
@@ -210,6 +214,47 @@ pub fn create_whitelist_website(
 }
 
 #[tauri::command]
+pub fn create_potplayer_video_whitelist_file(
+    app: AppHandle,
+    name: String,
+    video_path: String,
+    note: Option<String>,
+    subject_id: Option<i64>,
+) -> Result<WhitelistApp, String> {
+    create_potplayer_video_whitelist(
+        app,
+        name,
+        video_path,
+        "potplayer_video_file",
+        note,
+        subject_id,
+    )
+}
+
+#[tauri::command]
+pub fn create_potplayer_video_whitelist_directory(
+    app: AppHandle,
+    name: String,
+    directory_path: String,
+    note: Option<String>,
+    subject_id: Option<i64>,
+) -> Result<WhitelistApp, String> {
+    create_potplayer_video_whitelist(
+        app,
+        name,
+        directory_path,
+        "potplayer_video_directory",
+        note,
+        subject_id,
+    )
+}
+
+#[tauri::command]
+pub fn get_current_potplayer_media() -> Result<PotPlayerMediaInfo, String> {
+    read_current_potplayer_media()
+}
+
+#[tauri::command]
 pub fn list_running_processes() -> Result<Vec<RunningProcess>, String> {
     read_running_processes()
 }
@@ -312,6 +357,15 @@ fn normalize_domain(value: &str) -> String {
         .to_ascii_lowercase()
 }
 
+fn normalize_file_path(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches('"')
+        .replace('/', "\\")
+        .trim_end_matches(['\\', '/'])
+        .to_string()
+}
+
 fn website_launch_url(value: &str) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -346,6 +400,94 @@ fn website_url_has_specific_path(value: &str) -> bool {
         .trim_end_matches('/');
 
     !path.is_empty() && path != "/"
+}
+
+fn create_potplayer_video_whitelist(
+    app: AppHandle,
+    name: String,
+    media_path: String,
+    match_type: &str,
+    note: Option<String>,
+    subject_id: Option<i64>,
+) -> Result<WhitelistApp, String> {
+    let name = name.trim();
+    let media_path = normalize_file_path(&media_path);
+
+    if name.is_empty() {
+        return Err("PotPlayer 规则名称不能为空".to_string());
+    }
+
+    if media_path.is_empty() {
+        return Err("PotPlayer 视频路径不能为空".to_string());
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let connection = open_database(&database_path(&app)?)?;
+    validate_subject_id(&connection, subject_id)?;
+    let existing_id = connection
+        .query_row(
+            "
+            SELECT id
+            FROM whitelist_apps
+            WHERE match_type = ?1
+              AND lower(process_name) = lower(?2)
+              AND lower(path) = lower(?3)
+            ORDER BY id DESC
+            LIMIT 1
+            ",
+            params![match_type, POTPLAYER_DEFAULT_PROCESS_NAME, media_path],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    if let Some(existing_id) = existing_id {
+        connection
+            .execute(
+                "
+                UPDATE whitelist_apps
+                SET name = ?1,
+                    subject_id = ?2,
+                    note = ?3,
+                    enabled = 1,
+                    updated_at = ?4
+                WHERE id = ?5
+                ",
+                params![name, subject_id, note, now, existing_id],
+            )
+            .map_err(|error| error.to_string())?;
+
+        return get_whitelist_app_by_id(&connection, existing_id);
+    }
+
+    connection
+        .execute(
+            "
+            INSERT INTO whitelist_apps (
+              name,
+              process_name,
+              path,
+              match_type,
+              subject_id,
+              note,
+              enabled,
+              created_at,
+              updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7)
+            ",
+            params![
+                name,
+                POTPLAYER_DEFAULT_PROCESS_NAME,
+                media_path,
+                match_type,
+                subject_id,
+                note,
+                now
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    get_whitelist_app_by_id(&connection, connection.last_insert_rowid())
 }
 
 #[tauri::command]

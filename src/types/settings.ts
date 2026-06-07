@@ -2,6 +2,9 @@ import type { FocusMode } from './focus';
 
 export type AppTheme = 'dark' | 'light';
 export type SyncBackend = 'webdav' | 'object_storage';
+export type ReminderSoundSource = 'builtin' | 'custom';
+export type ReminderSoundId = 'classic' | 'bright' | 'soft' | 'urgent' | 'short';
+export type RuntimeHealthStatus = 'ok' | 'healthy' | 'warning' | 'degraded' | 'error' | 'failed' | 'unavailable' | 'unknown';
 
 export type AppSettings = {
   default_study_minutes: number;
@@ -11,9 +14,28 @@ export type AppSettings = {
   long_break_interval: number;
   default_focus_mode: FocusMode;
   ui_theme: AppTheme;
+  launch_at_startup: boolean;
   sync_backend: SyncBackend;
+  primary_owner_device_id: string | null;
+  primary_owner_updated_at: number | null;
   emergency_cooldown_seconds: number;
   checklist_category_names: string;
+  reminder_sound_source: ReminderSoundSource;
+  reminder_sound_id: ReminderSoundId;
+  reminder_sound_file_name: string | null;
+  reminder_sound_updated_at: number | null;
+  reminder_sound_volume: number;
+};
+
+export type ReminderSoundFile = {
+  fileName: string;
+  bytes: number[];
+};
+
+export type ReminderSoundData = {
+  file_name: string;
+  mime_type: string;
+  bytes: number[];
 };
 
 export type WebDavSettings = {
@@ -21,6 +43,7 @@ export type WebDavSettings = {
   url: string;
   username: string;
   password: string;
+  password_configured?: boolean;
   remote_path: string;
 };
 
@@ -54,6 +77,7 @@ export type WebDavAutoSyncResult = {
   backup_path: string | null;
   active_state_changed?: boolean;
   took_over_active_mode?: boolean;
+  primary_owner_changed?: boolean;
 };
 
 export type ObjectStorageSettings = {
@@ -62,6 +86,7 @@ export type ObjectStorageSettings = {
   bucket: string;
   access_key_id: string;
   secret_access_key: string;
+  secret_access_key_configured?: boolean;
   region: string;
   object_key: string;
 };
@@ -97,6 +122,7 @@ export type ObjectStorageAutoSyncResult = {
   backup_path: string | null;
   active_state_changed?: boolean;
   took_over_active_mode?: boolean;
+  primary_owner_changed?: boolean;
 };
 
 export type SyncRunSummary = {
@@ -156,6 +182,7 @@ export type EmailReminderSettings = {
   smtp_security: 'tls' | 'starttls' | 'none';
   username: string;
   password: string;
+  password_configured?: boolean;
   from: string;
   to: string;
 };
@@ -170,6 +197,7 @@ export type FeishuSyncSettings = {
   enabled: boolean;
   app_id: string;
   app_secret: string;
+  app_secret_configured?: boolean;
   redirect_uri: string;
 };
 
@@ -248,4 +276,31 @@ export type FeishuRebuildResult = {
   uploaded_task_count: number;
   tasklist_count: number;
   synced_at: string;
+};
+
+export type RuntimeHealthCheck = {
+  key?: string;
+  label?: string;
+  status: RuntimeHealthStatus;
+  message?: string | null;
+  detail?: string | null;
+  checked_at?: string | null;
+};
+
+export type RuntimeHealth = {
+  status: RuntimeHealthStatus;
+  summary?: string | null;
+  checked_at?: string | null;
+  protected_storage?: RuntimeHealthCheck | null;
+  checks?: RuntimeHealthCheck[];
+  generated_at?: string;
+  tasks?: RuntimeTaskHealth[];
+};
+
+export type RuntimeTaskHealth = {
+  task: string;
+  status: string;
+  last_success_at: string | null;
+  last_error: string | null;
+  next_retry_at: string | null;
 };

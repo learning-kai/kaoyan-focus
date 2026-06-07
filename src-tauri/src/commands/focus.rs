@@ -1,7 +1,7 @@
 use crate::{
     focus::{session::FocusSession, subject::Subject},
     storage::db::open_database,
-    sync_package::mark_entity_deleted,
+    sync_package::{load_or_create_device_id, mark_entity_deleted},
     AppState,
 };
 use chrono::{DateTime, Datelike, Duration, FixedOffset, TimeZone, Utc};
@@ -11,6 +11,13 @@ use std::thread;
 use tauri::{AppHandle, Manager, State};
 
 const MIN_RECORDED_FOCUS_SECONDS: i64 = 60;
+const CONTROL_PAUSE: &str = "pause";
+const CONTROL_RESUME: &str = "resume";
+const CONTROL_CONFIRM_BREAK: &str = "confirm_break";
+const CONTROL_FINISH: &str = "finish";
+const CONTROL_EMERGENCY_EXIT: &str = "emergency_exit";
+const CONTROL_SWITCH_SUBJECT: &str = "switch_subject";
+const PRIMARY_OWNER_DEVICE_ID_KEY: &str = "primary_owner_device_id";
 
 fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
     let sync_app = app.clone();
@@ -178,6 +185,7 @@ pub fn start_study_mode(
 
     let whitelist_enabled = mode == "strict" || whitelist_enabled.unwrap_or(true);
     let connection = open_database(&database_path(&app)?)?;
+    ensure_current_device_can_start_study_mode(&connection)?;
     if get_active_study_mode_record(&connection)?.is_some() {
         return Err("已有学习模式正在进行中".to_string());
     }
@@ -266,6 +274,7 @@ pub fn start_study_mode_with_links(
     }
 
     let connection = open_database(&database_path(&app)?)?;
+    ensure_current_device_can_start_study_mode(&connection)?;
     if get_active_study_mode_record(&connection)?.is_some() {
         return Err("A study mode is already running.".to_string());
     }
@@ -330,6 +339,34 @@ pub fn get_study_mode_state(
     advance_study_mode(&app, state.inner())
 }
 
+fn ensure_current_device_can_start_study_mode(connection: &Connection) -> Result<(), String> {
+    let owner = connection
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![PRIMARY_OWNER_DEVICE_ID_KEY],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .and_then(|value| {
+            let trimmed = value.trim().to_string();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        });
+    let Some(owner) = owner else {
+        return Ok(());
+    };
+    let device_id = load_or_create_device_id(connection)?;
+    if owner == device_id {
+        Ok(())
+    } else {
+        Err("当前设备不是主控端，请先切换为主控设备后再开始新的专注。".to_string())
+    }
+}
+
 #[tauri::command]
 pub fn confirm_study_break(
     app: AppHandle,
@@ -355,6 +392,7 @@ pub fn confirm_study_break(
     }
 
     let now = Utc::now();
+    let device_id = load_or_create_device_id(&connection)?;
     if study_elapsed_seconds(&record, now)? >= record.planned_seconds {
         complete_study_mode_record(&connection, state.inner(), &record, now, "completed")?;
         return load_current_study_mode_state(&connection, now);
@@ -385,10 +423,20 @@ pub fn confirm_study_break(
                 paused_at = NULL,
                 accumulated_study_seconds = ?2,
                 current_session_id = NULL,
+                last_control_device_id = ?4,
+                last_control_action = ?5,
+                last_control_at = ?6,
                 updated_at = ?1
             WHERE id = ?3 AND status = 'active'
             ",
-            params![now.to_rfc3339(), next_accumulated, record.id],
+            params![
+                now.to_rfc3339(),
+                next_accumulated,
+                record.id,
+                device_id,
+                CONTROL_CONFIRM_BREAK,
+                now.timestamp_millis()
+            ],
         )
         .map_err(|error| error.to_string())?;
 
@@ -424,6 +472,7 @@ pub fn pause_study_mode(
 
     let now_dt = Utc::now();
     let now = now_dt.to_rfc3339();
+    let device_id = load_or_create_device_id(&connection)?;
     let paused_stage_elapsed_seconds = phase_elapsed_seconds(&record, now_dt)?;
     connection
         .execute(
@@ -432,10 +481,20 @@ pub fn pause_study_mode(
             SET paused_at = ?1,
                 state_revision = state_revision + 1,
                 paused_stage_elapsed_seconds = ?2,
+                last_control_device_id = ?3,
+                last_control_action = ?4,
+                last_control_at = ?5,
                 updated_at = ?1
-            WHERE id = ?3 AND status = 'active'
+            WHERE id = ?6 AND status = 'active'
             ",
-            params![now, paused_stage_elapsed_seconds, record.id],
+            params![
+                now,
+                paused_stage_elapsed_seconds,
+                device_id,
+                CONTROL_PAUSE,
+                now_dt.timestamp_millis(),
+                record.id
+            ],
         )
         .map_err(|error| error.to_string())?;
 
@@ -460,6 +519,7 @@ pub fn resume_study_mode(
     };
 
     let now = Utc::now();
+    let device_id = load_or_create_device_id(&connection)?;
     let paused_seconds = seconds_since(paused_at, now)?;
     connection
         .execute(
@@ -471,13 +531,19 @@ pub fn resume_study_mode(
                 phase_started_at = ?2,
                 phase_paused_seconds = 0,
                 paused_stage_elapsed_seconds = 0,
+                last_control_device_id = ?4,
+                last_control_action = ?5,
+                last_control_at = ?6,
                 updated_at = ?3
-            WHERE id = ?4 AND status = 'active'
+            WHERE id = ?7 AND status = 'active'
             ",
             params![
                 paused_seconds,
                 (now - Duration::seconds(record.paused_stage_elapsed_seconds.max(0))).to_rfc3339(),
                 now.to_rfc3339(),
+                device_id,
+                CONTROL_RESUME,
+                now.timestamp_millis(),
                 record.id
             ],
         )
@@ -503,17 +569,29 @@ pub fn update_study_mode_subject(
 
     validate_subject_id(&connection, subject_id)?;
 
-    let now = Utc::now().to_rfc3339();
+    let now_dt = Utc::now();
+    let now = now_dt.to_rfc3339();
+    let device_id = load_or_create_device_id(&connection)?;
     connection
         .execute(
             "
             UPDATE study_modes
             SET subject_id = ?1,
                 state_revision = state_revision + 1,
+                last_control_device_id = ?3,
+                last_control_action = ?4,
+                last_control_at = ?5,
                 updated_at = ?2
-            WHERE id = ?3 AND status = 'active'
+            WHERE id = ?6 AND status = 'active'
             ",
-            params![subject_id, now, record.id],
+            params![
+                subject_id,
+                now,
+                device_id,
+                CONTROL_SWITCH_SUBJECT,
+                now_dt.timestamp_millis(),
+                record.id
+            ],
         )
         .map_err(|error| error.to_string())?;
 
@@ -553,6 +631,7 @@ pub fn emergency_exit_study_mode(
     }
 
     let now = Utc::now();
+    let device_id = load_or_create_device_id(&connection)?;
     if let Some(session_id) = record.current_session_id {
         if let Ok(session) = get_focus_session_by_id(&connection, session_id) {
             if session.status == "running" {
@@ -573,14 +652,20 @@ pub fn emergency_exit_study_mode(
                 ended_at = ?1,
                 current_session_id = NULL,
                 accumulated_study_seconds = ?2,
+                last_control_device_id = ?3,
+                last_control_action = ?4,
+                last_control_at = ?5,
                 updated_at = ?1
-            WHERE id = ?3 AND status = 'active'
+            WHERE id = ?6 AND status = 'active'
             ",
             params![
                 now.to_rfc3339(),
                 study_elapsed_seconds(&record, now)?
                     .min(record.planned_seconds)
                     .max(0),
+                device_id,
+                CONTROL_EMERGENCY_EXIT,
+                now.timestamp_millis(),
                 record.id
             ],
         )
@@ -600,6 +685,7 @@ pub fn reset_study_mode(
     let connection = open_database(&database_path(&app)?)?;
     if let Some(record) = get_active_study_mode_record(&connection)? {
         let now = Utc::now();
+        let device_id = load_or_create_device_id(&connection)?;
         if let Some(session_id) = record.current_session_id {
             if let Ok(session) = get_focus_session_by_id(&connection, session_id) {
                 if session.status == "running" {
@@ -626,14 +712,20 @@ pub fn reset_study_mode(
                     ended_at = ?1,
                     current_session_id = NULL,
                     accumulated_study_seconds = ?2,
+                    last_control_device_id = ?3,
+                    last_control_action = ?4,
+                    last_control_at = ?5,
                     updated_at = ?1
-                WHERE id = ?3 AND status = 'active'
+                WHERE id = ?6 AND status = 'active'
                 ",
                 params![
                     now.to_rfc3339(),
                     study_elapsed_seconds(&record, now)?
                         .min(record.planned_seconds)
                         .max(0),
+                    device_id,
+                    CONTROL_FINISH,
+                    now.timestamp_millis(),
                     record.id
                 ],
             )

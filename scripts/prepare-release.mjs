@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveUpdateBaseUrlFromArgs, updateTauriUpdaterEndpoint } from './release-config.mjs';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(scriptDir, '..');
@@ -14,6 +15,7 @@ const packageJsonPath = resolve(desktopRoot, 'package.json');
 const cargoTomlPath = resolve(desktopRoot, 'src-tauri', 'Cargo.toml');
 const tauriConfigPath = resolve(desktopRoot, 'src-tauri', 'tauri.conf.json');
 const androidGradlePath = resolve(androidRoot, 'app', 'build.gradle.kts');
+const releaseArgs = resolveUpdateBaseUrlFromArgs(process.argv.slice(2), process.env, 'preparing a release');
 
 if (!existsSync(androidGradlePath)) {
   throw new Error(`Android project not found. Expected: ${androidGradlePath}`);
@@ -22,17 +24,27 @@ if (!existsSync(androidGradlePath)) {
 const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
 const currentVersion = packageJson.version;
 const nextVersion = resolveNextVersion(currentVersion, args);
-const today = new Date().toISOString().slice(0, 10);
+const today = formatLocalDate(new Date());
 
 await updatePackageJson(nextVersion);
 await replaceVersionInFile(cargoTomlPath, /^version = "([^"]+)"/m, `version = "${nextVersion}"`);
 await updateTauriConfig(nextVersion);
+if (releaseArgs.updateBaseUrl) {
+  await updateTauriUpdaterEndpoint(tauriConfigPath, releaseArgs.updateBaseUrl);
+}
 await updateAndroidGradle(nextVersion);
 await updateChangelog(nextVersion, today);
 
 console.log(`Prepared release v${nextVersion}`);
 console.log(`Desktop: ${desktopRoot}`);
 console.log(`Android: ${androidRoot}`);
+
+function formatLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 function resolveNextVersion(current, rawArgs) {
   const explicitIndex = rawArgs.indexOf('--version');

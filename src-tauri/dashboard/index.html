@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="学习数据分析看板，查看学习时长、专注质量、任务完成率、科目分布和时间热力图。"
+    />
+    <title>Study Ledger | 学习数据看板</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b1116'/%3E%3Cpath d='M16 44V20h8v24h-8Zm12 0V28h8v16h-8Zm12 0V14h8v30h-8Z' fill='%2346d3b2'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="study-dashboard" data-theme="paper">
+    <main class="app-shell">
+      <header class="hero panel">
+        <div class="hero-copy">
+          <p class="kicker">Read-only analytics</p>
+          <h1>Study Ledger</h1>
+          <p class="lede">
+            自动读取本地专注记录，拆出总量、质量、欠账和节奏，帮你判断下一轮复习该调哪里。
+          </p>
+          <div class="hero-status" role="status" aria-live="polite">
+            <span id="dataset-status">正在加载示例数据</span>
+            <span id="dataset-meta">0 条记录</span>
+            <span id="range-label">近 30 天</span>
+          </div>
+        </div>
+
+        <div class="hero-toolbar">
+          <div class="control-stack">
+            <span class="control-label">时间范围</span>
+            <div class="segmented-control" role="group" aria-label="时间范围">
+              <button class="segment-button is-active" type="button" data-range="7">7 天</button>
+              <button class="segment-button" type="button" data-range="30">30 天</button>
+              <button class="segment-button" type="button" data-range="90">90 天</button>
+              <button class="segment-button" type="button" data-range="all">全部</button>
+            </div>
+          </div>
+
+          <div class="control-stack">
+            <span class="control-label">界面风格</span>
+            <div class="theme-switcher" role="group" aria-label="界面风格">
+              <button class="theme-button" type="button" data-theme="console">Console</button>
+              <button class="theme-button is-active" type="button" data-theme="paper">Paper</button>
+              <button class="theme-button" type="button" data-theme="graphite">Graphite</button>
+              <button class="theme-button" type="button" data-theme="focus">Focus</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section class="metric-grid" aria-label="核心指标">
+        <article class="metric-card accent-teal">
+          <span class="metric-label">总学习时长</span>
+          <strong id="metric-hours">0h</strong>
+          <small id="metric-hours-note">按当前时间范围统计</small>
+        </article>
+        <article class="metric-card accent-amber">
+          <span class="metric-label">平均专注分</span>
+          <strong id="metric-focus">0</strong>
+          <small id="metric-focus-note">0 - 100</small>
+        </article>
+        <article class="metric-card accent-coral">
+          <span class="metric-label">任务完成率</span>
+          <strong id="metric-task-rate">0%</strong>
+          <small id="metric-task-note">已完成 / 计划</small>
+        </article>
+        <article class="metric-card accent-blue">
+          <span class="metric-label">当前连贯天数</span>
+          <strong id="metric-streak">0</strong>
+          <small id="metric-streak-note">连续有学习记录的天数</small>
+        </article>
+        <article class="metric-card accent-lime">
+          <span class="metric-label">最佳时段</span>
+          <strong id="metric-window">--</strong>
+          <small id="metric-window-note">专注效率最高的时间段</small>
+        </article>
+        <article class="metric-card accent-ghost">
+          <span class="metric-label">活跃天数</span>
+          <strong id="metric-days">0</strong>
+          <small id="metric-days-note">有学习记录的日期数</small>
+        </article>
+      </section>
+
+      <section class="diagnostic-grid" aria-label="学习诊断">
+        <article class="diagnostic-card">
+          <div class="diagnostic-head">
+            <span>稳态目标</span>
+            <strong id="target-progress-value">0%</strong>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <span id="target-progress-bar"></span>
+          </div>
+          <p id="target-progress-meta">按当前周期估算目标完成度</p>
+        </article>
+
+        <article class="diagnostic-card">
+          <div class="diagnostic-head">
+            <span>周期环比</span>
+            <strong id="comparison-summary">--</strong>
+          </div>
+          <div class="delta-grid" id="comparison-list"></div>
+        </article>
+
+        <article class="diagnostic-card">
+          <div class="diagnostic-head">
+            <span>计划兑现</span>
+            <strong id="task-funnel-summary">--</strong>
+          </div>
+          <div class="funnel-bars" id="task-funnel-bars"></div>
+        </article>
+
+        <article class="diagnostic-card">
+          <div class="diagnostic-head">
+            <span>优先修正</span>
+            <strong id="risk-summary">--</strong>
+          </div>
+          <ul class="compact-list" id="risk-list"></ul>
+        </article>
+      </section>
+
+      <section class="layout">
+        <div class="main-column">
+          <article class="panel chart-panel snapshot-panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">快照</p>
+                <h2>日表现快照</h2>
+              </div>
+              <p class="panel-copy">把最强、最典型、最长和最需要注意的那几天直接拎出来，先看结果，再看图。</p>
+            </div>
+            <div class="snapshot-grid" id="daily-snapshot"></div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">趋势</p>
+                <h2>学习时长与专注质量</h2>
+              </div>
+              <p class="panel-copy">看每日学习量和质量是否同向上升，还是只是在硬扛。</p>
+            </div>
+            <svg id="trend-chart" class="chart" viewBox="0 0 960 320" role="img" aria-label="学习时长和专注质量趋势图"></svg>
+            <div class="chart-legend">
+              <span><i class="legend-swatch legend-teal"></i>学习分钟</span>
+              <span><i class="legend-swatch legend-amber"></i>专注分</span>
+            </div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">质量</p>
+                <h2>学习质量象限</h2>
+              </div>
+              <p class="panel-copy">把每天拆成高效深学、低效硬撑、轻量维护和空窗风险，避免只看时长。</p>
+            </div>
+            <div class="quality-grid">
+              <svg id="quality-chart" class="chart quality-chart" viewBox="0 0 720 360" role="img" aria-label="学习质量象限图"></svg>
+              <div class="quadrant-summary" id="quadrant-summary"></div>
+            </div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">连续性</p>
+                <h2>每日达标矩阵</h2>
+              </div>
+              <p class="panel-copy">每格代表一天，颜色同时考虑学习分钟和专注质量，用来找断点和低质日。</p>
+            </div>
+            <div class="consistency-grid" id="consistency-grid" aria-label="每日达标矩阵"></div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">分布</p>
+                <h2>科目投入结构</h2>
+              </div>
+              <p class="panel-copy">看哪一科吃掉了你的大脑预算，哪一科正在被冷落。</p>
+            </div>
+            <div class="chart-grid">
+              <svg id="subject-chart" class="chart" viewBox="0 0 960 280" role="img" aria-label="科目投入分布图"></svg>
+              <div class="table-shell">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>科目</th>
+                      <th>分钟</th>
+                      <th>占比</th>
+                      <th>平均分</th>
+                    </tr>
+                  </thead>
+                  <tbody id="subject-table"></tbody>
+                </table>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">热力</p>
+                <h2>时间段热力图</h2>
+              </div>
+              <p class="panel-copy">找出你最容易进入状态的日内窗口，别再全靠感觉。</p>
+            </div>
+            <svg id="heatmap-chart" class="chart" viewBox="0 0 960 240" role="img" aria-label="学习时间热力图"></svg>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">明细</p>
+                <h2>最近学习记录</h2>
+              </div>
+              <p class="panel-copy">按当前时间范围筛出来的学习记录明细。</p>
+            </div>
+            <div class="table-controls" aria-label="明细筛选">
+              <label>
+                <span>科目</span>
+                <select id="subject-filter">
+                  <option value="all">全部科目</option>
+                </select>
+              </label>
+              <div class="chip-group" role="group" aria-label="记录状态筛选">
+                <button class="chip-button is-active" type="button" data-record-filter="all">全部</button>
+                <button class="chip-button" type="button" data-record-filter="low-focus">低专注</button>
+                <button class="chip-button" type="button" data-record-filter="task-debt">有欠账</button>
+                <button class="chip-button" type="button" data-record-filter="long-session">长时段</button>
+              </div>
+              <div class="table-actions">
+                <span id="session-table-count" class="table-count">0 条</span>
+                <button id="toggle-session-rows" class="chip-button table-toggle" type="button" aria-expanded="false" hidden>展开全部</button>
+              </div>
+            </div>
+            <div class="table-shell recent-records-shell">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>科目</th>
+                    <th>时段</th>
+                    <th>分钟</th>
+                    <th>专注分</th>
+                    <th>任务</th>
+                  </tr>
+                </thead>
+                <tbody id="session-table-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <aside class="side-column">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">数据源</p>
+                <h2>项目数据库只读源</h2>
+              </div>
+              <p class="panel-copy">自动读取当前考研专注项目的 SQLite 数据库，只做查询，不写回。</p>
+            </div>
+
+            <div class="source-panel" aria-live="polite">
+              <span class="source-label">读取状态</span>
+              <strong id="data-source-status">等待只读服务</strong>
+              <span class="source-label">数据库位置</span>
+              <code id="data-source-path">尚未连接</code>
+              <span class="source-label">源信息</span>
+              <span id="data-source-meta">不会修改本地数据库</span>
+            </div>
+
+            <div class="source-actions">
+              <button class="primary-button" id="refresh-project-data" type="button">重新读取项目数据</button>
+            </div>
+
+            <p class="field-hint">
+              数据来自 <code>kaoyan-focus.sqlite3</code>，服务端使用 SQLite 只读模式打开。
+            </p>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">洞察</p>
+                <h2>本轮策略</h2>
+              </div>
+              <p class="panel-copy">自动从数据里提炼的下一步调整建议。</p>
+            </div>
+            <ul id="insights-list" class="insight-list"></ul>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">处方</p>
+                <h2>下轮学习处方</h2>
+              </div>
+              <p class="panel-copy">把短板、时段和任务兑现合成下一轮可执行安排。</p>
+            </div>
+            <div class="prescription-summary" id="prescription-summary"></div>
+            <ol class="prescription-list" id="prescription-list"></ol>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">节奏</p>
+                <h2>高效窗口</h2>
+              </div>
+              <p class="panel-copy">结合分钟数和专注分，排序出更值得保护的学习时段。</p>
+            </div>
+            <div class="window-list" id="window-list"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">可信度</p>
+                <h2>记录质量</h2>
+              </div>
+              <p class="panel-copy">检查当前分析样本是否足够厚、任务字段是否完整、记录节奏是否稳定。</p>
+            </div>
+            <div class="data-quality-card" id="data-quality-card"></div>
+            <ul class="compact-list" id="data-quality-list"></ul>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">提示</p>
+                <h2>只读边界</h2>
+              </div>
+              <p class="panel-copy">看板只消费查询结果；任务和专注记录仍由原应用管理。</p>
+            </div>
+            <div class="schema-card">
+              <code>GET /api/study-data
+SQLite URI: mode=ro
+Allowed writes: none</code>
+            </div>
+          </article>
+        </aside>
+      </section>
+
+      <footer class="page-foot" id="status-line" aria-live="polite"></footer>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

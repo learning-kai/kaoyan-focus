@@ -3,18 +3,18 @@ import type { AppTheme } from './types/settings';
 const THEME_STORAGE_KEY = 'kaoyan-focus-theme';
 
 export function normalizeTheme(value: string | null | undefined): AppTheme {
-  return value === 'light' || value === 'mono' ? 'light' : 'dark';
+  return value === 'dark' ? 'dark' : 'light';
 }
 
 export function readStoredTheme(): AppTheme {
   if (typeof window === 'undefined') {
-    return 'dark';
+    return 'light';
   }
 
   try {
     return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
   } catch {
-    return 'dark';
+    return 'light';
   }
 }
 
