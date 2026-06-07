@@ -66,4 +66,9 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ### Desktop
 - No commits found.
 
+## v1.8.4 - 2026-06-07
+
+### Desktop
+- No commits found.
+
 
