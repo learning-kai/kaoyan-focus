@@ -77,4 +77,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Refactor focus study app flows and UI (31a171e)
 
+## v1.9.1 - 2026-06-08
+
+### Desktop
+#### Changed
+- Revert focus page UI to v1.8.4 and update core-flow smoke (00ba592)
+
 
