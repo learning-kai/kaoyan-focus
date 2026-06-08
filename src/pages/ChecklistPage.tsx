@@ -698,9 +698,9 @@ export default function ChecklistPage() {
       <section className="page-shell checklist-shell checklist-clean-shell">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Task Console</p>
+          <p className="eyebrow">任务准备</p>
           <h2>进入任务与分类待办</h2>
-          <p>先在政治、英语、数学、专业课、通用里整理待办，再把今天真正要做的事项拖入顶部进入任务区。</p>
+          <p>先在政治、英语、数学、专业课、通用里整理待办，再用“加入今日”把真正要做的事项送入任务区。拖拽只是更快的整理方式。</p>
         </div>
         <button className="secondary-action" disabled={saving} onClick={() => void initializePage(activeCategoryKey)} type="button">
           <RefreshCw size={17} />
@@ -708,8 +708,8 @@ export default function ChecklistPage() {
         </button>
       </header>
 
-      {error && <p className="alert error">{error}</p>}
-      {message && <p className="alert success">{message}</p>}
+      {error && <p className="alert error" role="alert">{error}</p>}
+      {message && <p aria-live="polite" className="alert success" role="status">{message}</p>}
       {confirmDialog}
 
       <TodayPlanDrawer
@@ -735,7 +735,7 @@ export default function ChecklistPage() {
         saving={saving}
         showComposer={showTodayComposer}
         sortable
-        subtitle="Today Queue"
+        subtitle="今日队列"
         title="进入任务"
         getItemDragId={(item) => getTodaySortableId(item.id)}
         todayDate={data?.today_date ?? ''}
@@ -745,7 +745,7 @@ export default function ChecklistPage() {
       <section className="command-panel checklist-categories-panel">
         <div className="panel-title">
           <div>
-            <p className="eyebrow">Categories</p>
+            <p className="eyebrow">分类清单</p>
             <h3>五大分类</h3>
           </div>
           <span className="board-title-meta">
@@ -781,7 +781,7 @@ export default function ChecklistPage() {
           <div className="checklist-category-body">
             <div className="category-surface-head">
               <div className="category-surface-title">
-                <p className="eyebrow">Current Category</p>
+                <p className="eyebrow">当前分类</p>
                 <h4>{activeCategory.title} 待办</h4>
               </div>
               <button
@@ -813,7 +813,7 @@ export default function ChecklistPage() {
               {activeCategory.pending_tasks.length === 0 ? (
                 <div className="empty-state">
                   <strong>{activeCategory.title} 还没有待办</strong>
-                  <p>先在这里一条一条写好，再把今天要做的拖到上方进入任务区。</p>
+                  <p>先在这里一条一条写好，再点“加入今日”送入上方任务区。</p>
                 </div>
               ) : (
                 <SortableContext items={activeCategory.pending_tasks.map((task) => getTaskSortableId(task.id))} strategy={verticalListSortingStrategy}>

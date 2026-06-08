@@ -407,13 +407,40 @@ pub fn start_study_mode_from_schedule_block(
     long_break_interval: i64,
     mode: String,
 ) -> Result<StudyModeState, String> {
-    let connection = open_database(&database_path(&app)?)?;
-    let block = get_schedule_block_by_id(&connection, block_id)?;
-    drop(connection);
-
-    let next_state = focus::start_study_mode_with_links(
-        app.clone(),
+    let mut connection = open_database(&database_path(&app)?)?;
+    let next_state = start_study_mode_from_schedule_block_on_connection(
+        &mut connection,
         state.inner(),
+        block_id,
+        planned_seconds,
+        focus_seconds,
+        break_seconds,
+        long_break_seconds,
+        long_break_interval,
+        mode,
+    )?;
+
+    trigger_shared_sync(&app, "focus_state_change");
+    trigger_shared_sync(&app, "schedule_change");
+    Ok(next_state)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn start_study_mode_from_schedule_block_on_connection(
+    connection: &mut Connection,
+    state: &AppState,
+    block_id: i64,
+    planned_seconds: i64,
+    focus_seconds: i64,
+    break_seconds: i64,
+    long_break_seconds: i64,
+    long_break_interval: i64,
+    mode: String,
+) -> Result<StudyModeState, String> {
+    let block = get_schedule_block_by_id(connection, block_id)?;
+    let next_state = focus::start_study_mode_with_links_on_connection(
+        connection,
+        state,
         planned_seconds,
         focus_seconds,
         break_seconds,
@@ -427,7 +454,6 @@ pub fn start_study_mode_from_schedule_block(
         },
     )?;
 
-    let connection = open_database(&database_path(&app)?)?;
     let now = Utc::now().to_rfc3339();
     connection
         .execute(
@@ -451,7 +477,6 @@ pub fn start_study_mode_from_schedule_block(
         )
         .map_err(|error| error.to_string())?;
 
-    trigger_shared_sync(&app, "schedule_change");
     Ok(next_state)
 }
 
@@ -937,4 +962,139 @@ fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
         .app_data_dir()
         .map_err(|error| error.to_string())?
         .join("kaoyan-focus.sqlite3"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::db::open_database;
+    use std::sync::Mutex;
+    use tempfile::tempdir;
+
+    fn test_state() -> AppState {
+        AppState {
+            active_session_id: Mutex::new(None),
+            study_mode_active: Mutex::new(false),
+            last_blocked_process: Mutex::new(None),
+        }
+    }
+
+    #[test]
+    fn starting_from_schedule_block_links_database_records() {
+        let directory = tempdir().expect("create temp directory");
+        let mut connection = open_database(&directory.path().join("schedule-start.sqlite3"))
+            .expect("open test database");
+        let now = Utc::now().to_rfc3339();
+
+        connection
+            .execute(
+                "
+            INSERT INTO today_plan_items (
+              today_date, source_task_id, subject_id, title, note, due_date, sort_order,
+              completed, synced_source_completion, created_at, updated_at
+            ) VALUES ('2026-06-08', NULL, 2, 'Read English', NULL, NULL, 1, 0, 0, ?1, ?1)
+            ",
+                params![now],
+            )
+            .expect("insert today item");
+        let today_item_id = connection.last_insert_rowid();
+
+        connection.execute(
+            "
+            INSERT INTO schedule_blocks (
+              schedule_date, title, note, category_key, subject_id, source_today_item_id,
+              template_id, start_minute, end_minute, status, created_at, updated_at
+            ) VALUES ('2026-06-08', 'English block', NULL, 'english', 2, ?1, NULL, 540, 600, 'planned', ?2, ?2)
+            ",
+            params![today_item_id, now],
+        ).expect("insert schedule block");
+        let block_id = connection.last_insert_rowid();
+        let state = test_state();
+
+        let study_state = start_study_mode_from_schedule_block_on_connection(
+            &mut connection,
+            &state,
+            block_id,
+            7200,
+            1500,
+            300,
+            900,
+            4,
+            "normal".to_string(),
+        )
+        .expect("start study mode from schedule block");
+
+        assert_eq!(study_state.status, "active");
+        assert_eq!(study_state.phase, "focus");
+        assert_eq!(study_state.subject_id, Some(2));
+        assert!(study_state.current_session.is_some());
+
+        let (status, linked_study_mode_id, linked_focus_session_id): (
+            String,
+            Option<i64>,
+            Option<i64>,
+        ) = connection
+            .query_row(
+                "
+            SELECT status, linked_study_mode_id, linked_focus_session_id
+            FROM schedule_blocks
+            WHERE id = ?1
+            ",
+                params![block_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("load linked schedule block");
+        assert_eq!(status, "running");
+        assert_eq!(linked_study_mode_id, study_state.id);
+        assert_eq!(
+            linked_focus_session_id,
+            study_state
+                .current_session
+                .as_ref()
+                .map(|session| session.id),
+        );
+
+        let (schedule_block_id, today_plan_item_id, current_session_id): (
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+        ) = connection
+            .query_row(
+                "
+            SELECT schedule_block_id, today_plan_item_id, current_session_id
+            FROM study_modes
+            WHERE id = ?1
+            ",
+                params![study_state.id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("load study mode links");
+        assert_eq!(schedule_block_id, Some(block_id));
+        assert_eq!(today_plan_item_id, Some(today_item_id));
+        assert_eq!(
+            current_session_id,
+            study_state
+                .current_session
+                .as_ref()
+                .map(|session| session.id),
+        );
+
+        let (session_schedule_block_id, session_today_plan_item_id): (Option<i64>, Option<i64>) =
+            connection
+                .query_row(
+                    "
+            SELECT schedule_block_id, today_plan_item_id
+            FROM focus_sessions
+            WHERE id = ?1
+            ",
+                    params![study_state
+                        .current_session
+                        .as_ref()
+                        .map(|session| session.id)],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .expect("load focus session links");
+        assert_eq!(session_schedule_block_id, Some(block_id));
+        assert_eq!(session_today_plan_item_id, Some(today_item_id));
+    }
 }

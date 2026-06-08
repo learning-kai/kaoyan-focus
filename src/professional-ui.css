@@ -534,11 +534,11 @@ button {
   .top-strip-status {
     display: flex;
     flex-direction: row;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     grid-column: 1 / -1;
     gap: 6px;
-    overflow-x: auto;
+    overflow: visible;
     font-size: 11px;
     scrollbar-width: none;
   }
@@ -548,10 +548,14 @@ button {
   }
 
   .top-strip-status span {
-    flex: 0 0 auto;
-    max-width: 76vw;
+    flex: 1 1 120px;
+    max-width: 100%;
     min-height: 28px;
     padding: 4px 8px;
+  }
+
+  .top-strip-status .next-alarm-pill {
+    flex-basis: 100%;
   }
 
   .theme-toggle button {
@@ -693,5 +697,56 @@ button {
       linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(239, 244, 250, 0.94)),
       #f8fafc;
     box-shadow: 0 12px 28px rgba(82, 101, 129, 0.12);
+  }
+}
+
+@media (max-width: 960px) {
+  .top-strip {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .top-strip-title {
+    min-width: 0;
+  }
+
+  .top-strip-status {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 1px;
+    scrollbar-width: none;
+  }
+
+  .top-strip-status::-webkit-scrollbar {
+    display: none;
+  }
+
+  .top-strip-status span {
+    flex: 0 0 auto;
+    min-height: 26px;
+    max-width: min(72vw, 260px);
+    padding: 4px 8px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 680px) {
+  .top-strip {
+    padding: 8px 10px;
+  }
+
+  .theme-toggle {
+    display: none !important;
+  }
+
+  .top-strip-status {
+    grid-column: 1;
+  }
+
+  .top-strip-status span {
+    font-size: 11px;
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   notifyPersistentAlarm,
   notifyStudyReminder,
@@ -41,7 +41,8 @@ const FEISHU_AUTO_SYNC_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_LOOKBACK_MINUTES = 1;
 const EMAIL_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
-const ALARM_CHECK_INTERVAL_MS = 1000;
+const ALARM_CHECK_MIN_DELAY_MS = 1000;
+const ALARM_CHECK_MAX_DELAY_MS = 60 * 1000;
 const SILENT_AUTO_SYNC_SKIP_REASONS = new Set([
   'webdav_not_configured',
   'webdav_disabled',
@@ -291,22 +292,47 @@ export function useScheduleReminders() {
 }
 
 export function useAlarmWatcher(setNextAlarm: (alarm: Alarm | null) => void) {
+  const nextAlarmKeyRef = useRef<string>('');
+
   useEffect(() => {
     let disposed = false;
+    let timeoutId: number | null = null;
     const notifiedAlarmIds = new Set<number>();
 
     async function refreshNextAlarm() {
       try {
         const alarm = await getNextAlarm();
         if (!disposed) {
-          setNextAlarm(alarm);
+          const nextKey = alarm ? `${alarm.id}:${alarm.alarm_date}:${alarm.alarm_time}:${alarm.title}` : 'none';
+          if (nextKey !== nextAlarmKeyRef.current) {
+            nextAlarmKeyRef.current = nextKey;
+            setNextAlarm(alarm);
+          }
         }
       } catch {
         // Alarm status is visible on the Alarm page; the global widget stays quiet.
       }
     }
 
+    function nextAlarmDelay(alarm: Alarm | null) {
+      if (!alarm) return ALARM_CHECK_MAX_DELAY_MS;
+      const dueAt = new Date(alarm.alarm_at).getTime();
+      if (!Number.isFinite(dueAt)) return ALARM_CHECK_MAX_DELAY_MS;
+      return Math.max(ALARM_CHECK_MIN_DELAY_MS, Math.min(ALARM_CHECK_MAX_DELAY_MS, dueAt - Date.now()));
+    }
+
+    function scheduleNextCheck(alarm: Alarm | null) {
+      if (disposed) return;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+      timeoutId = window.setTimeout(() => {
+        void checkAlarms();
+      }, nextAlarmDelay(alarm));
+    }
+
     async function checkAlarms() {
+      let nextAlarm: Alarm | null = null;
       try {
         const ringingAlarms = await triggerDueAlarms();
         if (disposed) return;
@@ -330,29 +356,36 @@ export function useAlarmWatcher(setNextAlarm: (alarm: Alarm | null) => void) {
           }
         }
 
-        await refreshNextAlarm();
+        nextAlarm = await getNextAlarm();
+        const nextKey = nextAlarm ? `${nextAlarm.id}:${nextAlarm.alarm_date}:${nextAlarm.alarm_time}:${nextAlarm.title}` : 'none';
+        if (nextKey !== nextAlarmKeyRef.current) {
+          nextAlarmKeyRef.current = nextKey;
+          setNextAlarm(nextAlarm);
+        }
         if (ringingAlarms.length > 0) {
           notifyAlarmStateChanged();
         }
       } catch {
         // Alarm checks are best-effort and should never interrupt the app.
+      } finally {
+        scheduleNextCheck(nextAlarm);
       }
     }
 
-    void refreshNextAlarm();
     void checkAlarms();
-    const intervalId = window.setInterval(() => {
-      void checkAlarms();
-    }, ALARM_CHECK_INTERVAL_MS);
 
     const handleAlarmStateChanged = () => {
-      void refreshNextAlarm();
+      void refreshNextAlarm().then(() => {
+        void checkAlarms();
+      });
     };
     window.addEventListener(ALARM_STATE_CHANGED_EVENT, handleAlarmStateChanged);
 
     return () => {
       disposed = true;
-      window.clearInterval(intervalId);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
       window.removeEventListener(ALARM_STATE_CHANGED_EVENT, handleAlarmStateChanged);
       stopPersistentAlarmSound();
     };

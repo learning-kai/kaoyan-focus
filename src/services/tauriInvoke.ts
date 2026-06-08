@@ -1,4 +1,4 @@
-const DESKTOP_RUNTIME_MESSAGE = '请在桌面壳中运行考研专注。浏览器预览只用于界面检查，无法访问本机数据、通知、更新和 Windows 守护能力。';
+const DESKTOP_RUNTIME_MESSAGE = '请在 Windows 桌面应用中运行考研专注。浏览器预览只用于界面检查，无法访问本机数据、通知、更新和 Windows 守护能力。';
 
 type TauriWindow = Window & {
   __TAURI_INTERNALS__?: unknown;

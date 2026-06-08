@@ -383,7 +383,15 @@ export default function AlarmPage() {
         </div>
       </section>
 
-      {(error || message) && <div className={error ? 'alert error' : 'alert success'}>{error ?? message}</div>}
+      {(error || message) && (
+        <div
+          aria-live={error ? undefined : 'polite'}
+          className={error ? 'alert error' : 'alert success'}
+          role={error ? 'alert' : 'status'}
+        >
+          {error ?? message}
+        </div>
+      )}
       {confirmDialog}
 
       <section className="command-panel alarm-composer">
@@ -453,7 +461,7 @@ export default function AlarmPage() {
       <section className="command-panel alarm-section">
         <div className="panel-title">
           <div>
-            <p className="eyebrow">History</p>
+            <p className="eyebrow">历史记录</p>
             <h3>已确认 / 已关闭</h3>
           </div>
           <Save size={18} />

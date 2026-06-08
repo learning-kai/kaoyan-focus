@@ -1,7 +1,7 @@
 import { Activity, ChevronDown, Cloud, Download, RefreshCw, RotateCcw, Save, UploadCloud } from 'lucide-react';
 import type { AppSettings, ObjectStorageSettings, SyncBackupEntry, SyncBackend, SyncRunSummary, WebDavSettings } from '../../types/settings';
 import { Detail, formatBytes } from './SettingsPrimitives';
-import type { SettingsPanelKey } from './types';
+import type { ObjectStorageBusyAction, SettingsPanelKey, WebDavBusyAction } from './types';
 
 type SyncSettingsPanelProps = {
   expandedPanels: Record<SettingsPanelKey, boolean>;
@@ -18,6 +18,7 @@ type SyncSettingsPanelProps = {
   lastAutoSyncMessage: string | null;
   objectStorageActionDisabled: boolean;
   objectStorageBusy: boolean;
+  objectStorageBusyAction: ObjectStorageBusyAction | null;
   objectStorageMessage: string | null;
   objectStorageSettings: ObjectStorageSettings;
   refreshSyncDetails: () => Promise<void>;
@@ -32,6 +33,7 @@ type SyncSettingsPanelProps = {
   updateWebDavSettings: (patch: Partial<WebDavSettings>) => void;
   webDavActionDisabled: boolean;
   webDavBusy: boolean;
+  webDavBusyAction: WebDavBusyAction | null;
   webDavMessage: string | null;
   webDavSettings: WebDavSettings;
 };
@@ -51,6 +53,7 @@ export function SyncSettingsPanel({
   lastAutoSyncMessage,
   objectStorageActionDisabled,
   objectStorageBusy,
+  objectStorageBusyAction,
   objectStorageMessage,
   objectStorageSettings,
   refreshSyncDetails,
@@ -65,6 +68,7 @@ export function SyncSettingsPanel({
   updateWebDavSettings,
   webDavActionDisabled,
   webDavBusy,
+  webDavBusyAction,
   webDavMessage,
   webDavSettings,
 }: SyncSettingsPanelProps) {
@@ -78,7 +82,7 @@ export function SyncSettingsPanel({
       <section className="command-panel sync-backend-panel">
         <div className="panel-title">
           <div>
-            <p className="eyebrow">Sync Backend</p>
+            <p className="eyebrow">同步后端</p>
             <h3>云同步方式</h3>
           </div>
           <Cloud size={20} />
@@ -153,10 +157,10 @@ export function SyncSettingsPanel({
               {!webDavSettings.enabled && <p className="alert neutral">WebDAV 同步已关闭，保存配置后不会参与启动自动同步。</p>}
               {webDavMessage && <p className="alert success">{webDavMessage}</p>}
               <div className="row-actions">
-                <button className="secondary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleSaveWebDavSettings()} type="button"><Save size={17} />保存</button>
-                <button className="secondary-action" disabled={webDavActionDisabled} onClick={() => void handleTestWebDav()} type="button"><Cloud size={17} />测试连接</button>
-                <button className="primary-action" disabled={webDavActionDisabled} onClick={() => void handleUploadWebDav()} type="button"><UploadCloud size={17} />上传本机数据</button>
-                <button className="secondary-action" disabled={webDavActionDisabled} onClick={() => void handleDownloadWebDav()} type="button"><Download size={17} />从云端恢复</button>
+                <button aria-busy={webDavBusyAction === 'save'} className="secondary-action" disabled={webDavBusy || settingsLocked} onClick={() => void handleSaveWebDavSettings()} type="button"><Save size={17} />{webDavBusyAction === 'save' ? '保存中' : '保存 WebDAV 配置'}</button>
+                <button aria-busy={webDavBusyAction === 'test'} className="secondary-action" disabled={webDavActionDisabled} onClick={() => void handleTestWebDav()} type="button"><Cloud size={17} />{webDavBusyAction === 'test' ? '测试中' : '测试连接'}</button>
+                <button aria-busy={webDavBusyAction === 'upload'} className="primary-action" disabled={webDavActionDisabled} onClick={() => void handleUploadWebDav()} type="button"><UploadCloud size={17} />{webDavBusyAction === 'upload' ? '上传中' : '上传本机数据'}</button>
+                <button aria-busy={webDavBusyAction === 'download'} className="secondary-action" disabled={webDavActionDisabled} onClick={() => void handleDownloadWebDav()} type="button"><Download size={17} />{webDavBusyAction === 'download' ? '恢复中' : '从云端恢复'}</button>
               </div>
             </>
           )}
@@ -165,7 +169,7 @@ export function SyncSettingsPanel({
         <section className="command-panel">
           <div className="panel-title">
             <div>
-              <p className="eyebrow">Sync Journal</p>
+              <p className="eyebrow">同步日志</p>
               <h3>最近同步详情</h3>
             </div>
             <Activity size={20} />
@@ -210,7 +214,7 @@ export function SyncSettingsPanel({
         <section className="command-panel">
           <div className="panel-title">
             <div>
-              <p className="eyebrow">Restore</p>
+              <p className="eyebrow">备份恢复</p>
               <h3>备份恢复</h3>
             </div>
             <RotateCcw size={20} />
@@ -235,8 +239,8 @@ export function SyncSettingsPanel({
                     <Detail label={`${entry.source.toUpperCase()} · ${entry.label}`} value={entry.created_at ?? '未知时间'} />
                     <Detail label="大小" value={entry.bytes === null ? '未知' : formatBytes(entry.bytes)} />
                     <div className="row-actions">
-                      <button className="secondary-action" disabled={objectStorageBusy || settingsLocked} onClick={() => void handlePreviewBackup(entry)} type="button">预检</button>
-                      <button className="secondary-action" disabled={objectStorageBusy || settingsLocked} onClick={() => void handleRestoreBackup(entry)} type="button">恢复</button>
+                      <button aria-busy={objectStorageBusyAction === 'previewBackup'} className="secondary-action" disabled={objectStorageBusy || settingsLocked} onClick={() => void handlePreviewBackup(entry)} type="button">{objectStorageBusyAction === 'previewBackup' ? '预检中' : '预检'}</button>
+                      <button aria-busy={objectStorageBusyAction === 'restoreBackup'} className="secondary-action" disabled={objectStorageBusy || settingsLocked} onClick={() => void handleRestoreBackup(entry)} type="button">{objectStorageBusyAction === 'restoreBackup' ? '恢复中' : '恢复'}</button>
                     </div>
                   </div>
                 ))}
@@ -248,7 +252,7 @@ export function SyncSettingsPanel({
         <section className="command-panel">
           <div className="panel-title">
             <div>
-              <p className="eyebrow">S3 / R2</p>
+              <p className="eyebrow">对象存储</p>
               <h3>对象存储同步</h3>
             </div>
             <Cloud size={20} />
@@ -311,10 +315,10 @@ export function SyncSettingsPanel({
               {objectStorageMessage && <p className="alert success">{objectStorageMessage}</p>}
               {!objectStorageSettings.enabled && <p className="alert neutral">对象存储同步已关闭，保存配置后不会参与启动自动同步。</p>}
               <div className="row-actions">
-                <button className="secondary-action" disabled={objectStorageBusy || settingsLocked} onClick={() => void handleSaveObjectStorageSettings()} type="button"><Save size={17} />保存</button>
-                <button className="secondary-action" disabled={objectStorageActionDisabled} onClick={() => void handleTestObjectStorage()} type="button"><Cloud size={17} />测试连接</button>
-                <button className="primary-action" disabled={objectStorageActionDisabled} onClick={() => void handleUploadObjectStorage()} type="button"><UploadCloud size={17} />上传本机数据</button>
-                <button className="secondary-action" disabled={objectStorageActionDisabled} onClick={() => void handleDownloadObjectStorage()} type="button"><Download size={17} />从云端恢复</button>
+                <button aria-busy={objectStorageBusyAction === 'save'} className="secondary-action" disabled={objectStorageBusy || settingsLocked} onClick={() => void handleSaveObjectStorageSettings()} type="button"><Save size={17} />{objectStorageBusyAction === 'save' ? '保存中' : '保存对象存储配置'}</button>
+                <button aria-busy={objectStorageBusyAction === 'test'} className="secondary-action" disabled={objectStorageActionDisabled} onClick={() => void handleTestObjectStorage()} type="button"><Cloud size={17} />{objectStorageBusyAction === 'test' ? '测试中' : '测试连接'}</button>
+                <button aria-busy={objectStorageBusyAction === 'upload'} className="primary-action" disabled={objectStorageActionDisabled} onClick={() => void handleUploadObjectStorage()} type="button"><UploadCloud size={17} />{objectStorageBusyAction === 'upload' ? '上传中' : '上传本机数据'}</button>
+                <button aria-busy={objectStorageBusyAction === 'download'} className="secondary-action" disabled={objectStorageActionDisabled} onClick={() => void handleDownloadObjectStorage()} type="button"><Download size={17} />{objectStorageBusyAction === 'download' ? '恢复中' : '从云端恢复'}</button>
               </div>
             </>
           )}

@@ -37,62 +37,69 @@ pub fn start_study_mode(
     }
 
     let whitelist_enabled = mode == "strict" || whitelist_enabled.unwrap_or(true);
-    let connection = open_database(&database_path(&app)?)?;
+    let mut connection = open_database(&database_path(&app)?)?;
     ensure_current_device_can_start_study_mode(&connection)?;
     if get_active_study_mode_record(&connection)?.is_some() {
         return Err("已有学习模式正在进行中".to_string());
     }
 
     let now = Utc::now().to_rfc3339();
-    let session = insert_focus_session(&connection, focus_seconds, &mode, subject_id, &now)?;
-    connection
-        .execute(
-            "
-            INSERT INTO study_modes (
-              mode,
-              subject_id,
-              planned_seconds,
-              focus_seconds,
-              break_seconds,
-              long_break_seconds,
-              long_break_interval,
-              state_revision,
-              phase,
-              cycle_index,
-              started_at,
-              phase_started_at,
-              accumulated_study_seconds,
-              current_session_id,
-              whitelist_enabled,
-              status,
-              created_at,
-              updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 'focus', 1, ?8, ?8, 0, ?9, ?10, 'active', ?8, ?8)
-            ",
-            params![
-                mode,
-                subject_id,
-                planned_seconds,
-                focus_seconds,
-                break_seconds,
-                long_break_seconds,
-                long_break_interval,
-                now,
-                session.id,
-                whitelist_enabled
-            ],
-        )
-        .map_err(|error| error.to_string())?;
+    let session_id = {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let session = insert_focus_session(&transaction, focus_seconds, &mode, subject_id, &now)?;
+        transaction
+            .execute(
+                "
+                INSERT INTO study_modes (
+                  mode,
+                  subject_id,
+                  planned_seconds,
+                  focus_seconds,
+                  break_seconds,
+                  long_break_seconds,
+                  long_break_interval,
+                  state_revision,
+                  phase,
+                  cycle_index,
+                  started_at,
+                  phase_started_at,
+                  accumulated_study_seconds,
+                  current_session_id,
+                  whitelist_enabled,
+                  status,
+                  created_at,
+                  updated_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 'focus', 1, ?8, ?8, 0, ?9, ?10, 'active', ?8, ?8)
+                ",
+                params![
+                    mode,
+                    subject_id,
+                    planned_seconds,
+                    focus_seconds,
+                    break_seconds,
+                    long_break_seconds,
+                    long_break_interval,
+                    now,
+                    session.id,
+                    whitelist_enabled
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        session.id
+    };
 
-    set_runtime_state(state.inner(), true, Some(session.id))?;
+    set_runtime_state(state.inner(), true, Some(session_id))?;
     let next_state = load_current_study_mode_state(&connection, Utc::now())?;
     trigger_shared_sync(&app, "focus_state_change");
     Ok(next_state)
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn start_study_mode_with_links(
-    app: AppHandle,
+pub(crate) fn start_study_mode_with_links_on_connection(
+    connection: &mut Connection,
     state: &AppState,
     planned_seconds: i64,
     focus_seconds: i64,
@@ -103,85 +110,67 @@ pub fn start_study_mode_with_links(
     subject_id: Option<i64>,
     links: StudyModeLinks,
 ) -> Result<StudyModeState, String> {
-    if planned_seconds <= 0 {
-        return Err("Study mode duration must be greater than 0 seconds.".to_string());
-    }
-
-    if focus_seconds <= 0 {
-        return Err("Focus duration must be greater than 0 seconds.".to_string());
-    }
-
-    if break_seconds <= 0 {
-        return Err("Break duration must be greater than 0 seconds.".to_string());
-    }
-
-    if long_break_seconds <= 0 {
-        return Err("Long break duration must be greater than 0 seconds.".to_string());
-    }
-
-    if long_break_interval <= 0 {
-        return Err("Long break interval must be greater than 0.".to_string());
-    }
-
-    if mode != "normal" && mode != "strict" {
-        return Err("Unknown focus mode.".to_string());
-    }
-
-    let connection = open_database(&database_path(&app)?)?;
-    ensure_current_device_can_start_study_mode(&connection)?;
-    if get_active_study_mode_record(&connection)?.is_some() {
+    ensure_current_device_can_start_study_mode(connection)?;
+    if get_active_study_mode_record(connection)?.is_some() {
         return Err("A study mode is already running.".to_string());
     }
 
     let now = Utc::now().to_rfc3339();
-    let session = insert_focus_session(&connection, focus_seconds, &mode, subject_id, &now)?;
-    let whitelist_enabled = true;
-    connection
-        .execute(
-            "
-            INSERT INTO study_modes (
-              mode,
-              subject_id,
-              planned_seconds,
-              focus_seconds,
-              break_seconds,
-              long_break_seconds,
-              long_break_interval,
-              state_revision,
-              phase,
-              cycle_index,
-              started_at,
-              phase_started_at,
-              accumulated_study_seconds,
-              current_session_id,
-              schedule_block_id,
-              today_plan_item_id,
-              whitelist_enabled,
-              status,
-              created_at,
-              updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 'focus', 1, ?8, ?8, 0, ?9, ?10, ?11, ?12, 'active', ?8, ?8)
-            ",
-            params![
-                mode,
-                subject_id,
-                planned_seconds,
-                focus_seconds,
-                break_seconds,
-                long_break_seconds,
-                long_break_interval,
-                now,
-                session.id,
-                links.schedule_block_id,
-                links.today_plan_item_id,
-                whitelist_enabled
-            ],
-        )
-        .map_err(|error| error.to_string())?;
+    let session_id = {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let session = insert_focus_session(&transaction, focus_seconds, &mode, subject_id, &now)?;
+        link_focus_session_to_study_source(&transaction, session.id, links)?;
+        let whitelist_enabled = true;
+        transaction
+            .execute(
+                "
+                INSERT INTO study_modes (
+                  mode,
+                  subject_id,
+                  planned_seconds,
+                  focus_seconds,
+                  break_seconds,
+                  long_break_seconds,
+                  long_break_interval,
+                  state_revision,
+                  phase,
+                  cycle_index,
+                  started_at,
+                  phase_started_at,
+                  accumulated_study_seconds,
+                  current_session_id,
+                  schedule_block_id,
+                  today_plan_item_id,
+                  whitelist_enabled,
+                  status,
+                  created_at,
+                  updated_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 'focus', 1, ?8, ?8, 0, ?9, ?10, ?11, ?12, 'active', ?8, ?8)
+                ",
+                params![
+                    mode,
+                    subject_id,
+                    planned_seconds,
+                    focus_seconds,
+                    break_seconds,
+                    long_break_seconds,
+                    long_break_interval,
+                    now,
+                    session.id,
+                    links.schedule_block_id,
+                    links.today_plan_item_id,
+                    whitelist_enabled
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        session.id
+    };
 
-    set_runtime_state(state, true, Some(session.id))?;
-    let next_state = load_current_study_mode_state(&connection, Utc::now())?;
-    trigger_shared_sync(&app, "focus_state_change");
+    set_runtime_state(state, true, Some(session_id))?;
+    let next_state = load_current_study_mode_state(connection, Utc::now())?;
     Ok(next_state)
 }
 

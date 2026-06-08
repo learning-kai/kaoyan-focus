@@ -347,7 +347,7 @@ export default function ReviewPage() {
       {(error || message) && (
         <div
           className={error ? 'alert error' : 'alert success'}
-          role={error ? 'alert' : undefined}
+          role={error ? 'alert' : 'status'}
           aria-live={error ? undefined : 'polite'}
         >
           {error ?? message}

@@ -27,8 +27,10 @@ function formatNextAlarm(alarm: Alarm | null) {
 export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme, onThemeChange, children }: LayoutProps) {
   const activeMeta = pages[activePage];
   const desktopReady = isTauriRuntime();
-  const runtimeStatusTitle = desktopReady ? '后台待命' : '桌面壳未连接';
-  const runtimeStatusText = desktopReady ? '托盘运行 / 本地数据' : '请在 Windows 桌面壳中运行';
+  const runtimeStatusTitle = desktopReady ? '后台待命' : '桌面模式未连接';
+  const runtimeStatusText = desktopReady ? '托盘运行 / 本地数据' : '请在 Windows 桌面应用中运行';
+  const primaryPages: AppPage[] = ['focus', 'checklist', 'schedule', 'whitelist', 'review'];
+  const secondaryPages: AppPage[] = ['stats', 'alarm', 'settings'];
 
   return (
     <div className="app-shell">
@@ -40,33 +42,62 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
           </span>
           <div>
             <h1>考研专注</h1>
-            <p>Study Console</p>
+            <p>本地学习控制台</p>
           </div>
         </div>
 
         <nav className="nav-list" aria-label="主导航">
-          {(Object.keys(pages) as AppPage[]).map((page) => {
-            const Icon = pages[page].icon;
+          <div className="nav-group">
+            <p className="nav-group-label">学习闭环</p>
+            {primaryPages.map((page) => {
+              const Icon = pages[page].icon;
 
-            return (
-              <button
-                aria-current={page === activePage ? 'page' : undefined}
-                className={page === activePage ? 'nav-item active' : 'nav-item'}
-                key={page}
-                onClick={() => onNavigate(page)}
-                type="button"
-              >
-                <Icon size={19} />
-                <span>
-                  <strong>
-                    <span className="nav-title-full">{pages[page].title}</span>
-                    <span className="nav-title-short">{pages[page].shortTitle ?? pages[page].title}</span>
-                  </strong>
-                  <small>{pages[page].description}</small>
-                </span>
-              </button>
-            );
-          })}
+              return (
+                <button
+                  aria-current={page === activePage ? 'page' : undefined}
+                  className={page === activePage ? 'nav-item active' : 'nav-item'}
+                  key={page}
+                  onClick={() => onNavigate(page)}
+                  type="button"
+                >
+                  <Icon size={19} />
+                  <span>
+                    <strong>
+                      <span className="nav-title-full">{pages[page].title}</span>
+                      <span className="nav-title-short">{pages[page].shortTitle ?? pages[page].title}</span>
+                    </strong>
+                    <small>{pages[page].description}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="nav-group">
+            <p className="nav-group-label">辅助能力</p>
+            {secondaryPages.map((page) => {
+              const Icon = pages[page].icon;
+
+              return (
+                <button
+                  aria-current={page === activePage ? 'page' : undefined}
+                  className={page === activePage ? 'nav-item active' : 'nav-item'}
+                  key={page}
+                  onClick={() => onNavigate(page)}
+                  type="button"
+                >
+                  <Icon size={19} />
+                  <span>
+                    <strong>
+                      <span className="nav-title-full">{pages[page].title}</span>
+                      <span className="nav-title-short">{pages[page].shortTitle ?? pages[page].title}</span>
+                    </strong>
+                    <small>{pages[page].description}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         <div className="sidebar-foot">
@@ -82,7 +113,10 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
         <div className="top-strip">
           <div className="top-strip-title">
             <CircleDot size={14} />
-            <span>{activeMeta.title}</span>
+            <span className="top-strip-title-copy">
+              <strong>{activeMeta.title}</strong>
+              <small>{activeMeta.description}</small>
+            </span>
           </div>
           <div className="top-strip-status">
             <span className={desktopReady ? 'runtime-pill is-ready' : 'runtime-pill is-preview'}>

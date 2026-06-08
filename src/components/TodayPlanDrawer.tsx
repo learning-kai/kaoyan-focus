@@ -277,7 +277,7 @@ function TodayDropArea({
 
 export default function TodayPlanDrawer({
   title = '今日任务',
-  subtitle = 'Today Queue',
+  subtitle = '今日队列',
   todayDate,
   items,
   currentSubjectLabel,
@@ -335,7 +335,6 @@ export default function TodayPlanDrawer({
           editingTodayDraft,
           editingTodayId,
           item,
-          key: item.id,
           onBeginEdit,
           onCancelEdit,
           onChangeEdit,
@@ -346,10 +345,10 @@ export default function TodayPlanDrawer({
         };
 
         if (canSort && getItemDragId) {
-          return <SortableTodayItemCard {...sharedProps} dragId={getItemDragId(item)} />;
+          return <SortableTodayItemCard {...sharedProps} dragId={getItemDragId(item)} key={item.id} />;
         }
 
-        return <TodayItemCardBase {...sharedProps} />;
+        return <TodayItemCardBase {...sharedProps} key={item.id} />;
       })}
     </div>
   );

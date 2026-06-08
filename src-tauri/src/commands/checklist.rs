@@ -250,18 +250,24 @@ pub fn update_checklist_task(
 
 #[tauri::command]
 pub fn delete_checklist_task(app: AppHandle, id: i64) -> Result<(), String> {
-    let connection = open_database(&database_path(&app)?)?;
+    let mut connection = open_database(&database_path(&app)?)?;
     let now = Utc::now().timestamp_millis();
-    mark_entity_deleted(&connection, "checklist_task", id, now)?;
-    connection
-        .execute(
-            "DELETE FROM today_plan_items WHERE source_task_id = ?1",
-            params![id],
-        )
-        .map_err(|error| error.to_string())?;
-    connection
-        .execute("DELETE FROM checklist_tasks WHERE id = ?1", params![id])
-        .map_err(|error| error.to_string())?;
+    {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        mark_entity_deleted(&transaction, "checklist_task", id, now)?;
+        transaction
+            .execute(
+                "DELETE FROM today_plan_items WHERE source_task_id = ?1",
+                params![id],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute("DELETE FROM checklist_tasks WHERE id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     trigger_shared_sync(&app, "checklist_change");
     Ok(())
 }
@@ -488,12 +494,18 @@ pub fn update_today_plan_item(
 
 #[tauri::command]
 pub fn delete_today_plan_item(app: AppHandle, id: i64) -> Result<(), String> {
-    let connection = open_database(&database_path(&app)?)?;
+    let mut connection = open_database(&database_path(&app)?)?;
     let now = Utc::now().timestamp_millis();
-    mark_entity_deleted(&connection, "today_plan_item", id, now)?;
-    connection
-        .execute("DELETE FROM today_plan_items WHERE id = ?1", params![id])
-        .map_err(|error| error.to_string())?;
+    {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        mark_entity_deleted(&transaction, "today_plan_item", id, now)?;
+        transaction
+            .execute("DELETE FROM today_plan_items WHERE id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     trigger_shared_sync(&app, "today_plan_change");
     Ok(())
 }
@@ -521,40 +533,48 @@ pub fn complete_today_plan_item(
     completed: bool,
     sync_source_completion: bool,
 ) -> Result<TodayPlanItem, String> {
-    let connection = open_database(&database_path(&app)?)?;
-    let item = get_today_plan_item_by_id(&connection, id)?;
+    let mut connection = open_database(&database_path(&app)?)?;
     let now = Utc::now().to_rfc3339();
 
-    connection
-        .execute(
-            "
-            UPDATE today_plan_items
-            SET completed = ?1,
-                synced_source_completion = ?2,
-                updated_at = ?3
-            WHERE id = ?4
-            ",
-            params![completed, sync_source_completion, now, id],
-        )
-        .map_err(|error| error.to_string())?;
+    let item = {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let item = get_today_plan_item_by_id(&transaction, id)?;
 
-    if completed && sync_source_completion {
-        if let Some(source_task_id) = item.source_task_id {
-            connection
-                .execute(
-                    "
-                    UPDATE checklist_tasks
-                    SET completed = 1,
-                        updated_at = ?1
-                    WHERE id = ?2
-                    ",
-                    params![now, source_task_id],
-                )
-                .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "
+                UPDATE today_plan_items
+                SET completed = ?1,
+                    synced_source_completion = ?2,
+                    updated_at = ?3
+                WHERE id = ?4
+                ",
+                params![completed, sync_source_completion, now, id],
+            )
+            .map_err(|error| error.to_string())?;
+
+        if completed && sync_source_completion {
+            if let Some(source_task_id) = item.source_task_id {
+                transaction
+                    .execute(
+                        "
+                        UPDATE checklist_tasks
+                        SET completed = 1,
+                            updated_at = ?1
+                        WHERE id = ?2
+                        ",
+                        params![now, source_task_id],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
         }
-    }
 
-    let item = get_today_plan_item_by_id(&connection, id)?;
+        let item = get_today_plan_item_by_id(&transaction, id)?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        item
+    };
     trigger_shared_sync(&app, "today_plan_change");
     Ok(item)
 }

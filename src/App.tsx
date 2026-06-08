@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import AppErrorBoundary from './components/AppErrorBoundary';
 import Layout from './components/Layout';
-import SettingsPage from './pages/SettingsPage';
 import { pages } from './navigation';
+import { APP_NAVIGATE_EVENT } from './navigationEvents';
 import {
   useAlarmWatcher,
   useAutoSync,
@@ -27,6 +28,19 @@ export default function App() {
     applyTheme(theme);
     storeTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    function handleAppNavigation(event: Event) {
+      const page = (event as CustomEvent<{ page?: AppPage }>).detail?.page;
+      if (page && page in pages) {
+        setActivePage(page);
+      }
+    }
+
+    window.addEventListener(APP_NAVIGATE_EVENT, handleAppNavigation);
+    return () => window.removeEventListener(APP_NAVIGATE_EVENT, handleAppNavigation);
+  }, []);
+
   useAutoSync(setLastAutoSyncMessage);
   useSyncTakeoverNavigation(setActivePage);
   useAutoUpdateCheck(setLastAutoUpdateMessage);
@@ -44,30 +58,43 @@ export default function App() {
   }
 
   function renderActivePage() {
-    if (activePage === 'settings') {
-      return (
-        <SettingsPage
-          lastAutoSyncMessage={lastAutoSyncMessage}
-          lastAutoUpdateMessage={lastAutoUpdateMessage}
-          theme={theme}
-          onThemeChange={handleThemeChange}
-        />
-      );
-    }
+    const ActivePage = pages[activePage].component;
 
-    return pages[activePage].component;
+    return (
+      <Suspense
+        fallback={
+          <section className="page-shell page-loading-shell" aria-live="polite">
+            <p className="eyebrow">Loading</p>
+            <h2>正在加载页面...</h2>
+          </section>
+        }
+      >
+        {activePage === 'settings' ? (
+          <ActivePage
+            lastAutoSyncMessage={lastAutoSyncMessage}
+            lastAutoUpdateMessage={lastAutoUpdateMessage}
+            theme={theme}
+            onThemeChange={handleThemeChange}
+          />
+        ) : (
+          <ActivePage />
+        )}
+      </Suspense>
+    );
   }
 
   return (
-    <Layout
-      activePage={activePage}
-      nextAlarm={nextAlarm}
-      pages={pages}
-      onNavigate={setActivePage}
-      theme={theme}
-      onThemeChange={handleThemeChange}
-    >
-      {renderActivePage()}
-    </Layout>
+    <AppErrorBoundary>
+      <Layout
+        activePage={activePage}
+        nextAlarm={nextAlarm}
+        pages={pages}
+        onNavigate={setActivePage}
+        theme={theme}
+        onThemeChange={handleThemeChange}
+      >
+        {renderActivePage()}
+      </Layout>
+    </AppErrorBoundary>
   );
 }

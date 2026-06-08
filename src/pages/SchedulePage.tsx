@@ -36,6 +36,7 @@ import type { AppSettings } from '../types/settings';
 import type { Subject } from '../types/focus';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData, ScheduleTemplate, ScheduleTemplateDraft } from '../types/schedule';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
+import { requestAppNavigation } from '../navigationEvents';
 
 const categories = [
   { key: 'politics', label: '政治' },
@@ -52,6 +53,11 @@ const slotMinutes = 15;
 const minBlockMinutes = 15;
 const defaultBlockMinutes = 60;
 const todayItemDragType = 'application/x-schedule-today-item';
+const quickScheduleSlots = [
+  { label: '上午', minute: 8 * 60 },
+  { label: '下午', minute: 14 * 60 },
+  { label: '晚上', minute: 19 * 60 },
+];
 
 const emptyBlockDraft = (date: string): ScheduleBlockDraft => ({
   scheduleDate: date,
@@ -241,13 +247,16 @@ export default function SchedulePage() {
   const [quickAddSourceTodayItemId, setQuickAddSourceTodayItemId] = useState<number | null>(null);
   const [pendingTodayItemId, setPendingTodayItemId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [loadingSchedule, setLoadingSchedule] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragState, setDragState] = useState<CalendarDragState | null>(null);
   const refreshTokenRef = useRef(0);
   const laneRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<CalendarDragState | null>(null);
+  const dragFrameRef = useRef<number | null>(null);
+  const pendingDragClientYRef = useRef<number | null>(null);
+  const dragEffectKey = dragState && dragState.mode !== 'create' ? `${dragState.mode}:${dragState.blockId ?? ''}` : null;
 
   useEffect(() => {
     void initialize();
@@ -267,20 +276,22 @@ export default function SchedulePage() {
     return () => window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
   }, [selectedDate]);
 
-  useEffect(() => {
-    dragStateRef.current = dragState;
-  }, [dragState]);
+  function setCalendarDragState(next: CalendarDragState | null) {
+    dragStateRef.current = next;
+    setDragState(next);
+  }
 
   useEffect(() => {
-    const active = dragState;
+    const active = dragStateRef.current;
     if (!active || active.mode === 'create') return;
 
     function handlePointerMove(event: PointerEvent) {
       event.preventDefault();
-      updateDragPreview(event.clientY);
+      scheduleDragPreview(event.clientY);
     }
 
     function handlePointerUp() {
+      flushScheduledDragPreview();
       void commitDrag(dragStateRef.current);
     }
 
@@ -291,8 +302,9 @@ export default function SchedulePage() {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
+      cancelScheduledDragPreview();
     };
-  }, [dragState]);
+  }, [dragEffectKey]);
 
   const positionedDayBlocks = useMemo(
     () => layoutScheduleBlocks(data?.day_blocks ?? []),
@@ -434,35 +446,69 @@ export default function SchedulePage() {
   }
 
   function updateDragPreview(clientY: number) {
-    setDragState((current) => {
-      if (!current) return current;
-      if (current.mode !== 'create' && typeof current.originClientY === 'number') {
-        const delta = minuteDeltaFromClientY(clientY, current.originClientY);
-        if (current.mode === 'move') {
-          const duration = current.originalEnd - current.originalStart;
-          const startMinute = clampMinute(current.originalStart + delta, dayStart, dayEnd - duration);
-          return {
-            ...current,
-            startMinute,
-            endMinute: startMinute + duration,
-          };
-        }
-        if (current.mode === 'resize-start') {
-          const startMinute = clampMinute(current.originalStart + delta, dayStart, current.originalEnd - minBlockMinutes);
-          return {
-            ...current,
-            startMinute,
-            endMinute: current.originalEnd,
-          };
-        }
+    const current = dragStateRef.current;
+    if (!current) return;
+    let next = current;
+    if (current.mode !== 'create' && typeof current.originClientY === 'number') {
+      const delta = minuteDeltaFromClientY(clientY, current.originClientY);
+      if (current.mode === 'move') {
+        const duration = current.originalEnd - current.originalStart;
+        const startMinute = clampMinute(current.originalStart + delta, dayStart, dayEnd - duration);
+        next = {
+          ...current,
+          startMinute,
+          endMinute: startMinute + duration,
+        };
+      } else if (current.mode === 'resize-start') {
+        const startMinute = clampMinute(current.originalStart + delta, dayStart, current.originalEnd - minBlockMinutes);
+        next = {
+          ...current,
+          startMinute,
+          endMinute: current.originalEnd,
+        };
+      } else {
         const endMinute = clampMinute(current.originalEnd + delta, current.originalStart + minBlockMinutes, dayEnd);
-        return {
+        next = {
           ...current,
           startMinute: current.originalStart,
           endMinute,
         };
       }
-      return nextDragForMinute(current, minuteFromLaneClientY(clientY));
+    } else {
+      next = nextDragForMinute(current, minuteFromLaneClientY(clientY));
+    }
+    setCalendarDragState(next);
+  }
+
+  function cancelScheduledDragPreview() {
+    if (dragFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+    pendingDragClientYRef.current = null;
+  }
+
+  function flushScheduledDragPreview() {
+    const pendingClientY = pendingDragClientYRef.current;
+    cancelScheduledDragPreview();
+    if (typeof pendingClientY === 'number') {
+      updateDragPreview(pendingClientY);
+    }
+  }
+
+  function scheduleDragPreview(clientY: number) {
+    pendingDragClientYRef.current = clientY;
+    if (dragFrameRef.current !== null) {
+      return;
+    }
+
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      const pendingClientY = pendingDragClientYRef.current;
+      dragFrameRef.current = null;
+      pendingDragClientYRef.current = null;
+      if (typeof pendingClientY === 'number') {
+        updateDragPreview(pendingClientY);
+      }
     });
   }
 
@@ -473,7 +519,7 @@ export default function SchedulePage() {
     setPendingTodayItemId(null);
     setMessage(null);
     const startMinute = typeof clientY === 'number' ? minuteFromLaneClientY(clientY) : dayStart;
-    setDragState({
+    setCalendarDragState({
       mode: 'create',
       title,
       todayItemId: itemId,
@@ -491,7 +537,7 @@ export default function SchedulePage() {
     setQuickAddDraft(null);
     setQuickAddSourceTodayItemId(null);
     setMessage(null);
-    setDragState({
+    setCalendarDragState({
       mode,
       title: block.title,
       blockId: block.id,
@@ -505,7 +551,7 @@ export default function SchedulePage() {
 
   async function commitDrag(state: CalendarDragState | null = dragState) {
     if (!state) return;
-    setDragState(null);
+    setCalendarDragState(null);
     if (state.mode !== 'create' && state.startMinute === state.originalStart && state.endMinute === state.originalEnd) return;
     await withSave(async () => {
       if (state.mode === 'create' && typeof state.todayItemId === 'number') {
@@ -531,7 +577,8 @@ export default function SchedulePage() {
   function handleTodayItemDragEnd() {
     const active = dragStateRef.current;
     if (active?.mode === 'create') {
-      setDragState(null);
+      cancelScheduledDragPreview();
+      setCalendarDragState(null);
     }
   }
 
@@ -547,12 +594,13 @@ export default function SchedulePage() {
       startCreateDrag(item.id, item.title, event.clientY);
       return;
     }
-    updateDragPreview(event.clientY);
+    scheduleDragPreview(event.clientY);
   }
 
   function handleLaneDrop(event: ReactDragEvent<HTMLDivElement>) {
     if (!event.dataTransfer.types.includes(todayItemDragType)) return;
     event.preventDefault();
+    flushScheduledDragPreview();
     const active = dragStateRef.current;
     if (active?.mode === 'create') {
       void commitDrag(active);
@@ -741,8 +789,41 @@ export default function SchedulePage() {
     });
   }
 
+  function validateBlockDraft(draft: ScheduleBlockDraft, label: string) {
+    if (!draft.title.trim()) {
+      setMessage(null);
+      setError(`${label}需要先填写标题。`);
+      return false;
+    }
+    if (draft.endMinute <= draft.startMinute) {
+      setMessage(null);
+      setError(`${label}的结束时间必须晚于开始时间。`);
+      return false;
+    }
+    return true;
+  }
+
+  function validateTemplateDraft(draft: ScheduleTemplateDraft) {
+    if (!draft.title.trim()) {
+      setMessage(null);
+      setError('周模板需要先填写标题。');
+      return false;
+    }
+    if (draft.endMinute <= draft.startMinute) {
+      setMessage(null);
+      setError('周模板的结束时间必须晚于开始时间。');
+      return false;
+    }
+    if (draft.weekdays.length === 0) {
+      setMessage(null);
+      setError('周模板至少需要选择一个生效日期。');
+      return false;
+    }
+    return true;
+  }
+
   async function handleCreateBlock() {
-    if (!blockDraft.title.trim()) return;
+    if (!validateBlockDraft(blockDraft, '课表块')) return;
     await withSave(async () => {
       await createScheduleBlock(blockDraft);
       setBlockDraft(emptyBlockDraft(selectedDate));
@@ -767,6 +848,12 @@ export default function SchedulePage() {
 
   async function handleQuickAddSave() {
     if (!quickAddDraft) return;
+    if (quickAddSourceTodayItemId === null && !validateBlockDraft(quickAddDraft, '快速安排')) return;
+    if (quickAddSourceTodayItemId !== null && quickAddDraft.endMinute <= quickAddDraft.startMinute) {
+      setMessage(null);
+      setError('快速安排的结束时间必须晚于开始时间。');
+      return;
+    }
     await withSave(async () => {
       if (quickAddSourceTodayItemId !== null) {
         await createScheduleBlockFromTodayItem(
@@ -776,7 +863,6 @@ export default function SchedulePage() {
           quickAddDraft.endMinute,
         );
       } else {
-        if (!quickAddDraft.title.trim()) return;
         await createScheduleBlock(quickAddDraft);
       }
       setQuickAddDraft(null);
@@ -807,7 +893,7 @@ export default function SchedulePage() {
   }
 
   async function handleSaveTemplate() {
-    if (!templateDraft.title.trim()) return;
+    if (!validateTemplateDraft(templateDraft)) return;
     await withSave(async () => {
       if (editingTemplateId !== null) {
         await updateScheduleTemplate(editingTemplateId, templateDraft);
@@ -843,7 +929,8 @@ export default function SchedulePage() {
   }
 
   async function handleUpdateBlock() {
-    if (!editingBlockId || !editingBlockDraft?.title.trim()) return;
+    if (!editingBlockId || !editingBlockDraft) return;
+    if (!validateBlockDraft(editingBlockDraft, '课表块')) return;
     await withSave(async () => {
       await updateScheduleBlock(editingBlockId, editingBlockDraft);
       setEditingBlockId(null);
@@ -863,14 +950,23 @@ export default function SchedulePage() {
         appSettings.long_break_interval,
         appSettings.default_focus_mode,
       );
+      requestAppNavigation('focus');
     }, '已从课表开始专注。', 'focus_state_change');
   }
 
   return (
+    loadingSchedule && data === null ? (
+      <section className="page-shell schedule-page">
+        <div className="empty-state">
+          <strong>正在载入课表</strong>
+          <p>正在读取今日安排、周模板和同步状态。</p>
+        </div>
+      </section>
+    ) : (
     <div className="schedule-page">
       <section className="schedule-hero">
         <div>
-          <p className="eyebrow">Schedule</p>
+          <p className="eyebrow">日程安排</p>
           <h2>今日课表</h2>
           <p>把今日任务和手动安排放进一天的时间轴。新增、拖拽、删除会自动保存；需要时可手动同步飞书/云端。</p>
         </div>
@@ -887,7 +983,15 @@ export default function SchedulePage() {
         </div>
       </section>
 
-      {(error || message) && <div className={error ? 'alert error' : 'alert success'}>{error ?? message}</div>}
+      {(error || message) && (
+        <div
+          aria-live={error ? undefined : 'polite'}
+          className={error ? 'alert error' : 'alert success'}
+          role={error ? 'alert' : 'status'}
+        >
+          {error ?? message}
+        </div>
+      )}
 
       <section className="schedule-toolbar soft-panel">
         <div className="segmented-control">
@@ -986,7 +1090,7 @@ export default function SchedulePage() {
         <aside className="today-task-rail soft-panel">
           <div className="panel-title compact-title">
             <div>
-              <p className="eyebrow">Today</p>
+              <p className="eyebrow">今日待排</p>
               <h3>今日任务</h3>
             </div>
           </div>
@@ -1004,13 +1108,28 @@ export default function SchedulePage() {
                   <strong>{item.title}</strong>
                   <span>{subjectName(subjects, item.subject_id)}{item.due_date ? ` / ${item.due_date}` : ''}</span>
                 </div>
-                <button disabled={saving} type="button" onClick={() => void handleAddTodayItem(item.id)}>
-                  {picking ? '取消' : '选时间'}
-                </button>
+                <div className="schedule-task-actions">
+                  <button disabled={saving} type="button" onClick={() => void handleAddTodayItem(item.id)}>
+                    {picking ? '取消' : '选时间'}
+                  </button>
+                  <div className="schedule-quick-slots" aria-label={`${item.title} 快捷安排`}>
+                    {quickScheduleSlots.map((slot) => (
+                      <button
+                        aria-label={`安排 ${item.title} 到${slot.label} ${formatMinute(slot.minute)}`}
+                        disabled={saving}
+                        key={slot.label}
+                        type="button"
+                        onClick={() => void handleAddTodayItemAt(item.id, slot.minute)}
+                      >
+                        {slot.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </article>
             );
           }) : <div className="empty-state compact">今日任务为空。</div>}
-          {pendingTodayItemId !== null && <div className="schedule-placement-hint">现在点击右侧时间轴空格即可安排。</div>}
+          {pendingTodayItemId !== null && <div className="schedule-placement-hint">点击右侧时间轴空格，或直接用任务卡上的上午/下午/晚上快捷安排。</div>}
         </aside>
 
         {view === 'day' ? (
@@ -1210,5 +1329,6 @@ export default function SchedulePage() {
         </aside>
       </div>
     </div>
+    )
   );
 }

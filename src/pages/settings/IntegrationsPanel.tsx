@@ -65,7 +65,7 @@ export function IntegrationsPanel({
         <section className="command-panel">
           <div className="panel-title">
             <div>
-              <p className="eyebrow">Feishu</p>
+              <p className="eyebrow">飞书桥接</p>
               <h3>飞书任务 / 日历桥接</h3>
             </div>
             <ExternalLink size={20} />
@@ -158,7 +158,7 @@ export function IntegrationsPanel({
               {feishuMessage && <p className="alert success">{feishuMessage}</p>}
               {!feishuSettings.enabled && <p className="alert neutral">飞书桥接已关闭，自动同步会静默跳过。</p>}
               <div className="row-actions">
-                <button className="secondary-action" disabled={feishuBusy || settingsLocked} onClick={() => void handleSaveFeishuSettings()} type="button"><Save size={17} />保存</button>
+                <button className="secondary-action" disabled={feishuBusy || settingsLocked} onClick={() => void handleSaveFeishuSettings()} type="button"><Save size={17} />保存飞书配置</button>
                 <button className="secondary-action" disabled={feishuBusy || settingsLocked || !feishuSettings.app_id || !feishuSettings.app_secret} onClick={() => void handleStartFeishuLogin()} type="button"><ExternalLink size={17} />浏览器授权</button>
                 <button className="secondary-action" disabled={feishuBusy || !feishuStatus?.pending_authorization_url} onClick={() => void handleOpenFeishuLogin()} type="button"><ExternalLink size={17} />打开授权页</button>
                 <button className="secondary-action" disabled={feishuBusy} onClick={() => void handlePollFeishuLogin()} type="button"><RefreshCw size={17} />检查登录</button>
@@ -173,7 +173,7 @@ export function IntegrationsPanel({
         <section className="command-panel">
           <div className="panel-title">
             <div>
-              <p className="eyebrow">SMTP</p>
+              <p className="eyebrow">邮件提醒</p>
               <h3>截止任务邮件提醒</h3>
             </div>
             <Mail size={20} />
@@ -246,7 +246,7 @@ export function IntegrationsPanel({
               {emailMessage && <p className="alert success">{emailMessage}</p>}
               {!emailSettings.enabled && <p className="alert neutral">邮件提醒已关闭，后台检查会静默跳过。</p>}
               <div className="row-actions">
-                <button className="secondary-action" disabled={emailBusy || settingsLocked} onClick={() => void handleSaveEmailSettings()} type="button"><Save size={17} />保存</button>
+                <button className="secondary-action" disabled={emailBusy || settingsLocked} onClick={() => void handleSaveEmailSettings()} type="button"><Save size={17} />保存邮件配置</button>
                 <button className="secondary-action" disabled={emailActionDisabled} onClick={() => void handleTestEmail()} type="button"><Mail size={17} />测试发送</button>
               </div>
             </>

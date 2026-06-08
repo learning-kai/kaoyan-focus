@@ -62,7 +62,7 @@ export default function ScheduleDrawer({
     <section aria-hidden={!isOpen ? true : undefined} className={`schedule-drawer${isOpen ? ' is-open' : ''}`} inert={!isOpen ? true : undefined}>
       <div className="panel-title schedule-drawer-head">
         <div>
-          <p className="eyebrow">Schedule</p>
+          <p className="eyebrow">今日安排</p>
           <h3>今日课表</h3>
         </div>
         <div className="today-drawer-tools">

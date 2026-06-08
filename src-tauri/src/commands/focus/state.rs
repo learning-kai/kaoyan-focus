@@ -455,6 +455,31 @@ fn insert_focus_session(
     get_focus_session_by_id(connection, connection.last_insert_rowid())
 }
 
+fn link_focus_session_to_study_source(
+    connection: &Connection,
+    session_id: i64,
+    links: StudyModeLinks,
+) -> Result<(), String> {
+    connection
+        .execute(
+            "
+            UPDATE focus_sessions
+            SET schedule_block_id = ?1,
+                today_plan_item_id = ?2,
+                updated_at = ?3
+            WHERE id = ?4
+            ",
+            params![
+                links.schedule_block_id,
+                links.today_plan_item_id,
+                Utc::now().to_rfc3339(),
+                session_id
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 fn finish_running_focus_session(
     connection: &Connection,
     session_id: i64,

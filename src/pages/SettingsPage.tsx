@@ -1,11 +1,11 @@
-import { useEffect, useState, type ChangeEvent, type CSSProperties } from 'react';
+import { useEffect, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent } from 'react';
 import { Cloud, ExternalLink, HardDrive, RefreshCw, Settings2, type LucideIcon } from 'lucide-react';
 import { BasicSettingsPanel } from './settings/BasicSettingsPanel';
 import { IntegrationsPanel } from './settings/IntegrationsPanel';
 import { SyncSettingsPanel } from './settings/SyncSettingsPanel';
 import { SystemPanel } from './settings/SystemPanel';
 import { formatBytes } from './settings/SettingsPrimitives';
-import type { SettingsPanelKey } from './settings/types';
+import type { ObjectStorageBusyAction, SettingsPanelKey, WebDavBusyAction } from './settings/types';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { getRuntimeHealth } from '../services/healthApi';
 import { getStudyModeState } from '../services/focusApi';
@@ -180,6 +180,8 @@ type SettingsPageProps = {
 
 type SettingsSectionKey = 'basic' | 'sync' | 'integrations' | 'system';
 
+const settingsSectionKeys: SettingsSectionKey[] = ['basic', 'sync', 'integrations', 'system'];
+
 const settingsSections: Array<{ key: SettingsSectionKey; label: string; description: string; icon: LucideIcon }> = [
   { key: 'basic', label: '基础', description: '节奏与提醒', icon: Settings2 },
   { key: 'sync', label: '同步', description: '云端数据', icon: Cloud },
@@ -222,7 +224,9 @@ export default function SettingsPage({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [webDavBusy, setWebDavBusy] = useState(false);
+  const [webDavBusyAction, setWebDavBusyAction] = useState<WebDavBusyAction | null>(null);
   const [objectStorageBusy, setObjectStorageBusy] = useState(false);
+  const [objectStorageBusyAction, setObjectStorageBusyAction] = useState<ObjectStorageBusyAction | null>(null);
   const [emailBusy, setEmailBusy] = useState(false);
   const [feishuBusy, setFeishuBusy] = useState(false);
   const [reminderSoundBusy, setReminderSoundBusy] = useState(false);
@@ -248,6 +252,39 @@ export default function SettingsPage({
 
   const settingsLocked = isStudyModeLocked(studyState);
   const visibleUpdateMessage = updateMessage;
+  const isPageLoading = !settingsLoaded;
+
+  function focusSettingsTab(nextSection: SettingsSectionKey) {
+    const element = document.getElementById(`settings-tab-${nextSection}`);
+    if (element instanceof HTMLButtonElement) {
+      element.focus();
+    }
+  }
+
+  function handleSettingsTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, section: SettingsSectionKey) {
+    const currentIndex = settingsSectionKeys.indexOf(section);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      nextIndex = (currentIndex + 1) % settingsSectionKeys.length;
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      nextIndex = (currentIndex - 1 + settingsSectionKeys.length) % settingsSectionKeys.length;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = settingsSectionKeys.length - 1;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    const nextSection = settingsSectionKeys[nextIndex];
+    setActiveSection(nextSection);
+    window.requestAnimationFrame(() => focusSettingsTab(nextSection));
+  }
 
   useEffect(() => {
     void initializeSettingsPage();
@@ -291,19 +328,24 @@ export default function SettingsPage({
   }, [settingsLocked]);
 
   async function initializeSettingsPage() {
+    setError(null);
     setSettingsLoaded(false);
-    await Promise.all([
-      refreshStudyState(),
-      refreshSettings(),
-      refreshDataLocation(),
-      refreshWebDavSettings(),
-      refreshObjectStorageSettings(),
-      refreshEmailSettings(),
-      refreshFeishuSettings(),
-      refreshSyncDetails(),
-      refreshRuntimeHealth(),
-    ]);
-    setSettingsLoaded(true);
+
+    try {
+      await Promise.all([
+        refreshStudyState(),
+        refreshSettings(),
+        refreshDataLocation(),
+        refreshWebDavSettings(),
+        refreshObjectStorageSettings(),
+        refreshEmailSettings(),
+        refreshFeishuSettings(),
+        refreshSyncDetails(),
+        refreshRuntimeHealth(),
+      ]);
+    } finally {
+      setSettingsLoaded(true);
+    }
   }
 
   async function refreshStudyState() {
@@ -316,7 +358,6 @@ export default function SettingsPage({
 
   async function refreshSettings() {
     try {
-      setError(null);
       const nextSettings = await getAppSettings();
       setSettings({ ...nextSettings, ui_theme: theme });
     } catch (reason) {
@@ -326,7 +367,6 @@ export default function SettingsPage({
 
   async function refreshWebDavSettings() {
     try {
-      setError(null);
       setWebDavSettings(await getWebDavSettings());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -335,7 +375,6 @@ export default function SettingsPage({
 
   async function refreshObjectStorageSettings() {
     try {
-      setError(null);
       setObjectStorageSettings(await getObjectStorageSettings());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -344,7 +383,6 @@ export default function SettingsPage({
 
   async function refreshEmailSettings() {
     try {
-      setError(null);
       setEmailSettings(await getEmailReminderSettings());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -353,7 +391,6 @@ export default function SettingsPage({
 
   async function refreshFeishuSettings() {
     try {
-      setError(null);
       const [settings, status] = await Promise.all([getFeishuSyncSettings(), getFeishuSyncStatus()]);
       setFeishuSettings(settings);
       setFeishuStatus(status);
@@ -364,7 +401,6 @@ export default function SettingsPage({
 
   async function refreshDataLocation() {
     try {
-      setError(null);
       const location = await getAppDataLocation();
       setDataLocation(location.database_path);
     } catch (reason) {
@@ -409,7 +445,7 @@ export default function SettingsPage({
   }
 
   async function handleSaveWebDavSettings() {
-    await runWebDavAction(async () => {
+    await runWebDavAction('save', async () => {
       const saved = await saveWebDavSettings(webDavSettings);
       setWebDavSettings(saved);
       return 'WebDAV 配置已保存。';
@@ -417,21 +453,21 @@ export default function SettingsPage({
   }
 
   async function handleTestWebDav() {
-    await runWebDavAction(async () => {
+    await runWebDavAction('test', async () => {
       const status = await testWebDavConnection(webDavSettings);
       return status.message;
     });
   }
 
   async function handleUploadWebDav() {
-    await runWebDavAction(async () => {
+    await runWebDavAction('upload', async () => {
       const result = await uploadDatabaseToWebDav(webDavSettings);
       return `${result.message} 上传 ${formatBytes(result.bytes)}。`;
     });
   }
 
   async function handleDownloadWebDav() {
-    await runWebDavAction(async () => {
+    await runWebDavAction('download', async () => {
       const result = await downloadDatabaseFromWebDav(webDavSettings);
       return result.backup_path ? `${result.message} 备份路径：${result.backup_path}` : result.message;
     });
@@ -439,7 +475,7 @@ export default function SettingsPage({
   }
 
   async function handleSaveObjectStorageSettings() {
-    await runObjectStorageAction(async () => {
+    await runObjectStorageAction('save', async () => {
       const saved = await saveObjectStorageSettings(objectStorageSettings);
       setObjectStorageSettings(saved);
       return '对象存储配置已保存。';
@@ -447,7 +483,7 @@ export default function SettingsPage({
   }
 
   async function handleTestObjectStorage() {
-    await runObjectStorageAction(async () => {
+    await runObjectStorageAction('test', async () => {
       const status = await testObjectStorageConnection(objectStorageSettings);
       return status.object_exists
         ? `${status.message} 远端大小 ${status.object_size ? formatBytes(status.object_size) : '未知'}。`
@@ -456,14 +492,14 @@ export default function SettingsPage({
   }
 
   async function handleUploadObjectStorage() {
-    await runObjectStorageAction(async () => {
+    await runObjectStorageAction('upload', async () => {
       const result = await uploadDatabaseToObjectStorage(objectStorageSettings);
       return `${result.message} 上传 ${formatBytes(result.bytes)}。`;
     });
   }
 
   async function handleDownloadObjectStorage() {
-    await runObjectStorageAction(async () => {
+    await runObjectStorageAction('download', async () => {
       const result = await downloadDatabaseFromObjectStorage(objectStorageSettings);
       return result.backup_path ? `${result.message} 备份路径：${result.backup_path}` : result.message;
     });
@@ -471,7 +507,7 @@ export default function SettingsPage({
   }
 
   async function handlePreviewBackup(entry: SyncBackupEntry) {
-    await runObjectStorageAction(async () => {
+    await runObjectStorageAction('previewBackup', async () => {
       const preview = await previewSyncBackup(entry.source, entry.key);
       setSyncDetailMessage(`${entry.label}：${preview.validation_report}`);
       return '备份预检完成。';
@@ -487,7 +523,7 @@ export default function SettingsPage({
     });
     if (!confirmed) return;
 
-    await runObjectStorageAction(async () => {
+    await runObjectStorageAction('restoreBackup', async () => {
       const message = await restoreSyncBackup(entry.source, entry.key);
       await refreshSyncDetails();
       return message;
@@ -495,9 +531,10 @@ export default function SettingsPage({
     await initializeSettingsPage();
   }
 
-  async function runWebDavAction(action: () => Promise<string>) {
+  async function runWebDavAction(actionName: WebDavBusyAction, action: () => Promise<string>) {
     try {
       setWebDavBusy(true);
+      setWebDavBusyAction(actionName);
       setError(null);
       setWebDavMessage(null);
       setWebDavMessage(await action());
@@ -505,12 +542,14 @@ export default function SettingsPage({
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setWebDavBusy(false);
+      setWebDavBusyAction(null);
     }
   }
 
-  async function runObjectStorageAction(action: () => Promise<string>) {
+  async function runObjectStorageAction(actionName: ObjectStorageBusyAction, action: () => Promise<string>) {
     try {
       setObjectStorageBusy(true);
+      setObjectStorageBusyAction(actionName);
       setError(null);
       setObjectStorageMessage(null);
       setObjectStorageMessage(await action());
@@ -518,6 +557,7 @@ export default function SettingsPage({
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setObjectStorageBusy(false);
+      setObjectStorageBusyAction(null);
     }
   }
 
@@ -783,7 +823,13 @@ export default function SettingsPage({
     await runFeishuAction(async () => {
       const result = await syncFeishuBridge('manual');
       if (result.status === 'synced' && (result.pulled_count > 0 || result.deleted_count > 0)) {
-        await syncConfiguredStateChange('feishu_bridge_in').catch(() => undefined);
+        try {
+          await syncConfiguredStateChange('feishu_bridge_in');
+        } catch (reason) {
+          throw new Error(
+            `${result.message}，但本地同步状态更新失败：${reason instanceof Error ? reason.message : String(reason)}`,
+          );
+        }
       }
       return `${result.message} 推送 ${result.pushed_count}，拉取 ${result.pulled_count}，删除 ${result.deleted_count}。`;
     });
@@ -822,14 +868,14 @@ export default function SettingsPage({
           <h2>节奏与数据控制</h2>
           <p>默认参数会用于下一次学习模式；学习运行时所有配置入口保持锁定。</p>
         </div>
-        <button className="secondary-action" onClick={() => void initializeSettingsPage()} type="button">
-          <RefreshCw size={17} />
-          刷新
-        </button>
+      <button className="secondary-action" onClick={() => void initializeSettingsPage()} type="button">
+        <RefreshCw size={17} />
+        刷新
+      </button>
       </header>
 
-      {error && <p className="alert error">{error}</p>}
-      {savedMessage && <p className="alert success">{savedMessage}</p>}
+      {error && <p className="alert error" role="alert">{error}</p>}
+      {savedMessage && <p aria-live="polite" className="alert success" role="status">{savedMessage}</p>}
       {settingsLocked && (
         <p className="alert neutral">学习模式正在运行，全部配置改动已锁定；当前页面只允许查看状态。</p>
       )}
@@ -842,11 +888,14 @@ export default function SettingsPage({
 
           return (
             <button
-              aria-controls={`settings-panel-${section.key}`}
+              aria-controls="settings-panel"
               aria-selected={selected}
+              disabled={isPageLoading}
               id={`settings-tab-${section.key}`}
               key={section.key}
+              tabIndex={selected ? 0 : -1}
               onClick={() => setActiveSection(section.key)}
+              onKeyDown={(event) => handleSettingsTabKeyDown(event, section.key)}
               role="tab"
               type="button"
             >
@@ -860,7 +909,21 @@ export default function SettingsPage({
         })}
       </nav>
 
-      {activeSection === 'basic' && (
+      <div
+        aria-busy={isPageLoading}
+        aria-labelledby={`settings-tab-${activeSection}`}
+        className="settings-tab-panel"
+        id="settings-panel"
+        role="tabpanel"
+        tabIndex={-1}
+      >
+      {isPageLoading ? (
+        <div className="settings-loading-state">
+          <p className="eyebrow">Loading</p>
+          <h3>正在载入设置</h3>
+          <p>正在同步本地配置、同步记录和运行状态，请稍候。</p>
+        </div>
+      ) : activeSection === 'basic' ? (
         <BasicSettingsPanel
           currentReminderSoundOption={currentReminderSoundOption}
           currentReminderSoundSourceOption={currentReminderSoundSourceOption}
@@ -886,9 +949,7 @@ export default function SettingsPage({
           updateReminderSoundSettings={updateReminderSoundSettings}
           updateSettings={updateSettings}
         />
-      )}
-
-      {activeSection === 'sync' && (
+      ) : activeSection === 'sync' ? (
         <SyncSettingsPanel
           expandedPanels={expandedPanels}
           handleDownloadObjectStorage={handleDownloadObjectStorage}
@@ -904,6 +965,7 @@ export default function SettingsPage({
           lastAutoSyncMessage={lastAutoSyncMessage}
           objectStorageActionDisabled={objectStorageActionDisabled}
           objectStorageBusy={objectStorageBusy}
+          objectStorageBusyAction={objectStorageBusyAction}
           objectStorageMessage={objectStorageMessage}
           objectStorageSettings={objectStorageSettings}
           refreshSyncDetails={refreshSyncDetails}
@@ -918,12 +980,11 @@ export default function SettingsPage({
           updateWebDavSettings={updateWebDavSettings}
           webDavActionDisabled={webDavActionDisabled}
           webDavBusy={webDavBusy}
+          webDavBusyAction={webDavBusyAction}
           webDavMessage={webDavMessage}
           webDavSettings={webDavSettings}
         />
-      )}
-
-      {activeSection === 'integrations' && (
+      ) : activeSection === 'integrations' ? (
         <IntegrationsPanel
           emailActionDisabled={emailActionDisabled}
           emailBusy={emailBusy}
@@ -949,9 +1010,7 @@ export default function SettingsPage({
           updateEmailSettings={updateEmailSettings}
           updateFeishuSettings={updateFeishuSettings}
         />
-      )}
-
-      {activeSection === 'system' && (
+      ) : (
         <SystemPanel
           availableUpdate={availableUpdate}
           autoUpdateMessage={lastAutoUpdateMessage}
@@ -979,6 +1038,7 @@ export default function SettingsPage({
           webDavSettings={webDavSettings}
         />
       )}
+      </div>
     </section>
   );
 }
