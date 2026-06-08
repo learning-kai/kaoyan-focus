@@ -468,22 +468,30 @@ try {
   await client.send('Page.navigate', { url: targetUrl });
   await waitForPageLoad(client);
 
-  await waitForCondition(client, 'focus landing content', `document.body.innerText.includes('今日学习中枢') && document.body.innerText.includes('进入学习模式')`);
-  await waitForCondition(client, 'desktop runtime mock', `document.body.innerText.includes('桌面能力已连接') || document.body.innerText.includes('Windows 桌面')`);
+  await waitForCondition(client, 'focus landing content', `document.body.innerText.toLowerCase().includes('focus ritual') && document.body.innerText.includes('进入学习模式') && document.body.innerText.includes('下一轮专注')`);
+  await waitForCondition(client, 'desktop runtime mock', `document.body.innerText.includes('Windows 桌面') || document.body.innerText.includes('浏览器预览')`);
 
-  await clickByExpression(client, 'open today task composer from hub primary', `
+  await clickByExpression(client, 'checklist navigation', `
     (() => {
-      const button = document.querySelector('.learning-hub .primary-button');
+      const button = [...document.querySelectorAll('.nav-item')].find((node) => node.textContent.includes('清单'));
       if (!button) return false;
       button.click();
       return true;
     })()
   `);
-  await waitForCondition(client, 'today task drawer opened', `Boolean(document.querySelector('.today-plan-drawer.is-open'))`);
-  await waitForCondition(client, 'today task composer opened', `Boolean(document.querySelector('.today-plan-drawer.is-open .today-composer input.text-input'))`);
+  await waitForCondition(client, 'checklist page loaded', `Boolean(document.querySelector('.checklist-clean-shell .today-drawer-add')) && document.body.innerText.includes('进入任务')`);
+  await clickByExpression(client, 'open today task composer', `
+    (() => {
+      const button = document.querySelector('.checklist-clean-shell .today-drawer-add');
+      if (!button) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'today task composer opened', `Boolean(document.querySelector('.checklist-clean-shell .today-composer input.text-input'))`);
   await clickByExpression(client, 'fill today task title', `
     (() => {
-      const input = document.querySelector('.today-plan-drawer.is-open .today-composer input.text-input');
+      const input = document.querySelector('.checklist-clean-shell .today-composer input.text-input');
       if (!input) return false;
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(smokeTaskTitle)});
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -491,10 +499,10 @@ try {
       return true;
     })()
   `);
-  await waitForCondition(client, 'today task submit enabled', `!document.querySelector('.today-plan-drawer.is-open .today-composer .primary-action')?.disabled`);
+  await waitForCondition(client, 'today task submit enabled', `!document.querySelector('.checklist-clean-shell .today-composer .primary-action')?.disabled`);
   await clickByExpression(client, 'submit today task', `
     (() => {
-      const button = document.querySelector('.today-plan-drawer.is-open .today-composer .primary-action');
+      const button = document.querySelector('.checklist-clean-shell .today-composer .primary-action');
       if (!button || button.disabled) return false;
       button.click();
       return true;
@@ -502,18 +510,27 @@ try {
   `);
   await waitForCondition(client, 'today task created', `window.__SMOKE_STATE.todayItems.some((item) => item.title === ${JSON.stringify(smokeTaskTitle)}) && document.body.innerText.includes(${JSON.stringify(smokeTaskTitle)})`);
 
-  await clickByExpression(client, 'schedule drawer', `
+  await clickByExpression(client, 'schedule navigation', `
     (() => {
-      const button = [...document.querySelectorAll('.learning-hub button')].find((node) => node.textContent.includes('今日课表'));
+      const button = [...document.querySelectorAll('.nav-item')].find((node) => node.textContent.includes('课表'));
       if (!button) return false;
       button.click();
       return true;
     })()
   `);
-  await waitForCondition(client, 'schedule drawer opened', `Boolean(document.querySelector('.schedule-drawer.is-open'))`);
+  await waitForCondition(client, 'schedule page loaded', `Boolean(document.querySelector('.schedule-lane')) && document.body.innerText.includes(${JSON.stringify(smokeTaskTitle)})`);
+  await clickByExpression(client, 'open schedule block composer', `
+    (() => {
+      const button = [...document.querySelectorAll('.schedule-actions .primary-button')].find((node) => node.textContent.includes('时间块'));
+      if (!button) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'schedule block composer opened', `Boolean(document.querySelector('.schedule-composer input[placeholder="安排标题"]'))`);
   await clickByExpression(client, 'fill schedule block title', `
     (() => {
-      const input = document.querySelector('.schedule-drawer.is-open input[placeholder="新增时间块"]');
+      const input = document.querySelector('.schedule-composer input[placeholder="安排标题"]');
       if (!input) return false;
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(smokeScheduleTitle)});
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -521,25 +538,16 @@ try {
       return true;
     })()
   `);
-  await waitForCondition(client, 'schedule block submit enabled', `!document.querySelector('.schedule-drawer.is-open .primary-action')?.disabled`);
+  await waitForCondition(client, 'schedule block submit enabled', `!document.querySelector('.schedule-composer .primary-button')?.disabled`);
   await clickByExpression(client, 'submit schedule block', `
     (() => {
-      const button = [...document.querySelectorAll('.schedule-drawer.is-open button')].find((node) => node.textContent.includes('添加'));
+      const button = document.querySelector('.schedule-composer .primary-button');
       if (!button || button.disabled) return false;
       button.click();
       return true;
     })()
   `);
   await waitForCondition(client, 'schedule block created', `window.__SMOKE_STATE.scheduleBlocks.some((block) => block.title === ${JSON.stringify(smokeScheduleTitle)}) && document.body.innerText.includes(${JSON.stringify(smokeScheduleTitle)})`);
-  await clickByExpression(client, 'schedule navigation', `
-    (() => {
-      const button = document.querySelectorAll('.nav-item')[2];
-      if (!button) return false;
-      button.click();
-      return true;
-    })()
-  `);
-  await waitForCondition(client, 'schedule page loaded', `Boolean(document.querySelector('.schedule-lane')) && document.body.innerText.includes(${JSON.stringify(smokeScheduleTitle)})`);
   const scheduleBlockCountBeforeCancel = await client.evaluate(`window.__SMOKE_STATE.scheduleBlocks.length`);
   await clickByExpression(client, 'drag today task out cancels preview', `
     (() => {

@@ -1,10 +1,8 @@
 ﻿import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, Gauge, Leaf, Play, ShieldCheck, Square, Timer } from 'lucide-react';
+import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, Gauge, Leaf, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
-import ActiveFocusClock from '../components/focus/ActiveFocusClock';
-import LearningHub from '../components/focus/LearningHub';
 import ScheduleDrawer from '../components/ScheduleDrawer';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
 import { completeTodayPlanItem, createTodayPlanItem, deleteTodayPlanItem, getChecklistPageData, reorderTodayPlanItems, updateTodayPlanItem } from '../services/checklistApi';
@@ -16,14 +14,12 @@ import { getAppSettings, getSyncDeviceId, saveAppSettings } from '../services/se
 import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
 import { setStudyFullscreen } from '../services/systemApi';
-import { isTauriRuntime } from '../services/tauriInvoke';
 import { listenTauriEvent } from '../services/tauriEvents';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
 import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
 import type { FocusAppCheck } from '../types/monitor';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData } from '../types/schedule';
-import { currentMinuteOfDay, formatDateKey } from '../utils/date';
-import { recommendScheduleBlock } from '../utils/scheduleRecommendation';
+import { formatDateKey } from '../utils/date';
 
 const studyPresetMinutes = [60, 120, 180, 240];
 const focusPresetMinutes = [25, 45, 60, 90];
@@ -97,11 +93,6 @@ function formatDuration(seconds: number) {
   if (seconds < 3600) return Math.round(seconds / 60) + ' 分钟';
   const hours = seconds / 3600;
   return (Number.isInteger(hours) ? hours.toFixed(0) : hours.toFixed(1)) + ' 小时';
-}
-
-function formatMinute(minute: number) {
-  const safe = Math.max(0, Math.min(24 * 60, minute));
-  return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
 }
 
 function formatDateTime(value: string | null) {
@@ -202,34 +193,7 @@ export default function FocusPage() {
   const displayedSubjectId = active ? studyState.subject_id : selectedSubjectId;
   const selectedSubjectName = displayedSubjectId ? subjectNameMap.get(displayedSubjectId) : null;
   const currentSubjectLabel = studyState.subject_id ? subjectNameMap.get(studyState.subject_id) ?? '当前科目' : null;
-  const desktopReady = isTauriRuntime();
-  const pendingTodayItems = useMemo(
-    () => checklistData?.today_items.filter((item) => !item.completed) ?? [],
-    [checklistData?.today_items],
-  );
-  const scheduledBlocks = useMemo(
-    () => [...(scheduleData?.day_blocks ?? [])].sort((left, right) => left.start_minute - right.start_minute),
-    [scheduleData?.day_blocks],
-  );
-  const scheduleRecommendation = useMemo(
-    () => recommendScheduleBlock(scheduledBlocks, currentMinuteOfDay()),
-    [scheduledBlocks],
-  );
-  const nextScheduleBlock = scheduleRecommendation?.kind === 'missed' ? null : scheduleRecommendation?.block ?? null;
-  const completedTodayItems = (checklistData?.today_items.length ?? 0) - pendingTodayItems.length;
-  const nextTask = pendingTodayItems[0] ?? null;
   const todayTaskCount = checklistData?.today_items.length ?? 0;
-  const hubPrimaryLabel = nextScheduleBlock
-    ? scheduleRecommendation?.kind === 'current' ? '从当前块开始' : '从下一块开始'
-    : todayTaskCount > 0
-      ? '打开今日课表'
-      : '添加今日任务';
-  const hubPrimaryDisabled = Boolean((nextScheduleBlock && !desktopReady) || isStartingStudy);
-  const nextScheduleBlockMeta = nextScheduleBlock
-    ? `${scheduleRecommendation?.kind === 'current' ? '正在进行' : '下一块'} · ${formatMinute(nextScheduleBlock.start_minute)}-${formatMinute(nextScheduleBlock.end_minute)} · ${nextScheduleBlock.subject_id ? subjectNameMap.get(nextScheduleBlock.subject_id) ?? '未指定科目' : '未指定科目'}`
-    : scheduleRecommendation?.kind === 'missed'
-      ? `已错过 · ${formatMinute(scheduleRecommendation.block.start_minute)}-${formatMinute(scheduleRecommendation.block.end_minute)} · 请先调整课表时间`
-    : null;
   const timerValue = studyState.phase === 'idle' ? formatSeconds(focusMinutes * 60) : formatSeconds(localPhaseSeconds(studyState, localClockNow));
   const activeClockLabel = studyState.is_paused ? '暂停中' : studyState.phase === 'awaiting_break' ? '等待确认休息' : phaseLabel[studyState.phase];
   const whitelistStatusLabel = studyState.focus_enforcement_active ? '白名单执行中' : active && studyState.phase !== 'break' && !studyState.whitelist_enabled ? '白名单已关闭' : '休息阶段';
@@ -237,23 +201,6 @@ export default function FocusPage() {
   const activeModeMessage = buildActiveModeMessage(studyState);
   const isPrimaryDevice = Boolean(syncDeviceId && primaryOwnerDeviceId === syncDeviceId);
   const primaryStatusLabel = isPrimaryDevice ? '当前为主端' : primaryOwnerDeviceId ? '当前非主端' : '未设置主端';
-  const whitelistReadinessTitle = mode === 'strict'
-    ? '强制执行白名单'
-    : normalWhitelistEnabled
-      ? '本次执行白名单'
-      : '本次不执行白名单';
-  const whitelistReadinessCopy = mode === 'strict'
-    ? '会持续关闭非放行软件或网站，开始前请先确认白名单。'
-    : normalWhitelistEnabled
-      ? '普通模式也会检查前台窗口；遇到误拦截可手动结束后调整。'
-      : '适合整理资料或首次试用；本次不会主动关闭非放行窗口。';
-  const exitReadinessTitle = mode === 'strict' ? '强制模式不可手动结束' : '普通模式可手动结束';
-  const exitReadinessCopy = mode === 'strict'
-    ? '关闭窗口会进入托盘继续计时，直到本次学习完成或后台规则结束。'
-    : '需要停下时可以结束学习，已完成时长会保留到记录里。';
-  const breakReadinessCopy = autoStartBreakAfterFocus
-    ? '番茄到点后自动进入休息，不需要手动确认。'
-    : '番茄到点后会等待你确认休息，避免离开座位时误切阶段。';
   const quietMeta = [activeModeLabel, '第 ' + studyState.cycle_index + ' 轮', '剩余 ' + formatSeconds(studyState.study_remaining_seconds), nextBreakLabel(studyState), primaryStatusLabel, latestAppCheck ? foregroundSummary(latestAppCheck) : '前台监控待命'];
 
   useEffect(() => { void initializePage(); }, []);
@@ -628,22 +575,6 @@ export default function FocusPage() {
     }
   }
 
-  function handleHubPrimaryAction() {
-    if (nextScheduleBlock) {
-      void handleStartScheduleBlock(nextScheduleBlock);
-      return;
-    }
-    if (todayTaskCount > 0) {
-      setIsScheduleDrawerOpen(true);
-      setIsChecklistDrawerOpen(false);
-      void refreshScheduleData();
-      return;
-    }
-    setIsChecklistDrawerOpen(true);
-    setIsScheduleDrawerOpen(false);
-    setShowTodayComposer(true);
-  }
-
   async function handleCreateScheduleBlock() {
     if (!scheduleDraft.title.trim()) {
       setNotice(null);
@@ -768,17 +699,16 @@ export default function FocusPage() {
 
             {(error || notice || monitorError) && <div className="focus-notice-stack">{error && <p className="alert error" role="alert">{error}</p>}{notice && <p aria-live="polite" className="alert success" role="status">{notice}</p>}{monitorError && <p className="alert error" role="alert">前台检测失败：{monitorError}</p>}</div>}
 
-            <ActiveFocusClock
-              activeClockLabel={activeClockLabel}
-              activeModeMessage={activeModeMessage}
-              breakKindLabel={breakKindLabel(studyState.break_kind)}
-              canTogglePause={canTogglePause}
-              onConfirmBreak={handleConfirmBreak}
-              onTogglePause={handleTogglePause}
-              phaseMessage={buildPhaseMessage(studyState)}
-              studyState={studyState}
-              timerValue={timerValue}
-            />
+            <main className="focus-clock-zone">
+              <p>{activeClockLabel}</p>
+              <strong>{timerValue}</strong>
+              <span>{buildPhaseMessage(studyState)}</span>
+              <span>{activeModeMessage}</span>
+              <div className="focus-round-controls">
+                {canTogglePause && <button aria-label={studyState.is_paused ? '继续计时' : '暂停计时'} className={studyState.is_paused ? 'focus-round-button primary' : 'focus-round-button'} onClick={handleTogglePause} title={studyState.is_paused ? '继续计时' : '暂停'} type="button">{studyState.is_paused ? <Play size={28} /> : <Pause size={28} />}</button>}
+                {studyState.phase === 'awaiting_break' && <button aria-label={'确认开始' + breakKindLabel(studyState.break_kind)} className="focus-round-button secondary" disabled={studyState.is_paused} onClick={handleConfirmBreak} title={'确认开始' + breakKindLabel(studyState.break_kind)} type="button"><Coffee size={26} /></button>}
+              </div>
+            </main>
 
             <footer className="focus-active-footer">
               <div className="focus-quiet-meta">{quietMeta.map((item) => <span key={item}>{item}</span>)}</div>
@@ -814,59 +744,21 @@ export default function FocusPage() {
   return (
     <section className="page-shell focus-prepare-shell">
       <header className="page-header prepare-header">
-        <div><p className="eyebrow">学习准备</p><h2>进入学习模式</h2><p>先确认本次目标、白名单和退出规则。开始后界面会切换为极简番茄钟，配置入口自动锁定。</p></div>
+        <div><p className="eyebrow">Focus Ritual</p><h2>进入学习模式</h2><p>设定本次学习长度、番茄节奏和休息规则。开始后界面会切换为极简番茄钟，配置入口自动锁定。</p></div>
         <div className={'phase-badge phase-' + studyState.phase}><span>{phaseLabel[studyState.phase]}</span><strong>{studyState.phase === 'finished' ? '已收束' : '待命'}</strong></div>
       </header>
       {error && <p className="alert error" role="alert">{error}</p>}{notice && <p aria-live="polite" className="alert success" role="status">{notice}</p>}{monitorError && <p className="alert error" role="alert">前台检测失败：{monitorError}</p>}
       <div className="prepare-grid">
         <section className="start-console">
-          <div className="start-console-head">
-            <div className="timer-orbit"><span>下一轮专注</span><strong>{formatSeconds(focusMinutes * 60)}</strong><p>{selectedSubjectName ?? '未指定科目'} / {mode === 'strict' ? '强制模式' : '普通模式'}</p></div>
-            <div className={desktopReady ? 'readiness-badge ready' : 'readiness-badge preview'}>
-              <span>{desktopReady ? '桌面能力已连接' : '浏览器预览'}</span>
-              <strong>{desktopReady ? '可以执行本地守护' : '只能检查界面'}</strong>
-            </div>
-          </div>
+          <div className="timer-orbit"><span>下一轮专注</span><strong>{formatSeconds(focusMinutes * 60)}</strong><p>{selectedSubjectName ?? '未指定科目'} / {mode === 'strict' ? '强制模式' : '普通模式'}</p></div>
           <div className="console-facts"><CoreFact label="学习模式" value={formatDuration(studyMinutes * 60)} /><CoreFact label="番茄时长" value={formatDuration(focusMinutes * 60)} /><CoreFact label="短休息" value={formatDuration(breakMinutes * 60)} /><CoreFact label="长休息" value={formatDuration(longBreakMinutes * 60) + ' / ' + longBreakInterval + ' 轮'} /></div>
-          <LearningHub
-            completedTodayItems={completedTodayItems}
-            desktopReady={desktopReady}
-            hubPrimaryDisabled={hubPrimaryDisabled || checklistSaving}
-            hubPrimaryLabel={hubPrimaryLabel}
-            isStartingStudy={isStartingStudy}
-            nextScheduleBlock={nextScheduleBlock}
-            nextTask={nextTask}
-            onOpenSchedule={() => { setIsScheduleDrawerOpen(true); setIsChecklistDrawerOpen(false); void refreshScheduleData(); }}
-            onOpenTodayTasks={() => { setIsChecklistDrawerOpen(true); setIsScheduleDrawerOpen(false); }}
-            onPrimaryAction={handleHubPrimaryAction}
-            pendingTodayCount={pendingTodayItems.length}
-            scheduledBlockCount={scheduledBlocks.length}
-            scheduleBlockMeta={nextScheduleBlockMeta}
-            todayTaskCount={todayTaskCount}
-          />
-          <TodayPlanDrawer compact currentSubjectLabel={currentSubjectLabel} editingTodayDraft={editingTodayDraft} editingTodayId={editingTodayId} emptyDescription="可以在清单页拖入，也可以直接在这里补一条今天要推进的任务。" emptyTitle="今天还没有进入任务" isOpen={isChecklistDrawerOpen} items={checklistData?.today_items ?? []} onBeginEdit={beginEditTodayItem} onCancelEdit={() => setEditingTodayId(null)} onChangeEdit={(patch) => setEditingTodayDraft((current) => ({ ...(current ?? emptyTodayDraft), ...patch }))} onClose={() => setIsChecklistDrawerOpen(false)} onComplete={(item) => void handleCompleteTodayItem(item)} onCreate={() => void handleCreateTodayItem()} onDelete={(itemId) => void handleDeleteTodayItem(itemId)} onDraftChange={(patch) => setTodayDraft((current) => ({ ...current, ...patch }))} onRefresh={() => void refreshChecklistData()} onSaveEdit={() => void handleSaveTodayEdit()} onToggleComposer={() => setShowTodayComposer((current) => !current)} saving={checklistSaving} showComposer={showTodayComposer} subtitle="今日队列" title="今日任务" todayDate={checklistData?.today_date ?? ''} todayDraft={todayDraft} variant="drawer" />
-          <ScheduleDrawer canStart={desktopReady} isOpen={isScheduleDrawerOpen} data={scheduleData} draft={scheduleDraft} saving={checklistSaving} onClose={() => setIsScheduleDrawerOpen(false)} onRefresh={() => void refreshScheduleData()} onDraftChange={(patch) => setScheduleDraft((current) => ({ ...current, ...patch }))} onCreate={() => void handleCreateScheduleBlock()} onDelete={(blockId) => void handleDeleteScheduleBlock(blockId)} onStart={(block) => void handleStartScheduleBlock(block)} />
-          <div className="start-readiness-grid" aria-label="开始前确认">
-            <article className={mode === 'strict' || normalWhitelistEnabled ? 'start-readiness-card is-guarded' : 'start-readiness-card is-soft'}>
-              <ShieldCheck size={18} />
-              <div><strong>{whitelistReadinessTitle}</strong><p>{whitelistReadinessCopy}</p></div>
-            </article>
-            <article className={mode === 'strict' ? 'start-readiness-card is-warning' : 'start-readiness-card'}>
-              <Square size={18} />
-              <div><strong>{exitReadinessTitle}</strong><p>{exitReadinessCopy}</p></div>
-            </article>
-            <article className="start-readiness-card">
-              <Coffee size={18} />
-              <div><strong>{autoStartBreakAfterFocus ? '自动进入休息' : '手动确认休息'}</strong><p>{breakReadinessCopy}</p></div>
-            </article>
-          </div>
-          <button aria-busy={isStartingStudy} className="start-ritual-button" disabled={!desktopReady || isStartingStudy} onClick={handleStart} type="button">
+          <button aria-busy={isStartingStudy} className="start-ritual-button" disabled={isStartingStudy} onClick={handleStart} type="button">
             <Play size={22} />
-            {isStartingStudy ? '正在开始' : desktopReady ? '开始学习' : '请在桌面应用中开始'}
+            {isStartingStudy ? '正在开始' : '开始学习'}
           </button>
         </section>
         <aside className="control-panel">
-          <div className="panel-title"><div><p className="eyebrow">本次配置</p><h3>学习节奏</h3></div><BookOpen size={20} /></div>
+          <div className="panel-title"><div><p className="eyebrow">Plan</p><h3>本次节奏</h3></div><BookOpen size={20} /></div>
           <div className="preset-grid">
             <PresetSelect label="学习模式" items={studyPresetMinutes} selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} />
             <PresetSelect label="番茄时长" items={focusPresetMinutes} selected={focusMinutes} suffix="m" onSelect={setFocusMinutes} />
@@ -887,16 +779,12 @@ export default function FocusPage() {
               <input checked={normalWhitelistEnabled} onChange={(event) => setNormalWhitelistEnabled(event.target.checked)} role="switch" type="checkbox" />
             </label>
           )}
-          <label className="capability-row focus-whitelist-toggle">
-            <span>番茄到点自动休息</span>
-            <input checked={autoStartBreakAfterFocus} onChange={(event) => setAutoStartBreakAfterFocus(event.target.checked)} role="switch" type="checkbox" />
-          </label>
         </aside>
       </div>
       <div className="dashboard-strip">
-        <section className="soft-panel"><div className="panel-title"><div><p className="eyebrow">今日状态</p><h3>学习进度</h3></div><CheckCircle2 size={20} /></div><div className="stats-grid four"><Metric icon={Timer} label="今日" value={formatDuration(stats?.today_seconds ?? 0)} /><Metric icon={Timer} label="本周" value={formatDuration(stats?.week_seconds ?? 0)} /><Metric icon={Timer} label="本月" value={formatDuration(stats?.month_seconds ?? 0)} /><Metric icon={ShieldCheck} label="拦截" value={String(stats?.interruption_count ?? 0)} /></div></section>
-        <section className="soft-panel"><div className="panel-title"><div><p className="eyebrow">学习守护</p><h3>白名单状态</h3></div><Gauge size={20} /></div><div className="monitor-callout"><Leaf size={18} /><div><strong>{whitelistReadinessTitle}</strong><p>{whitelistReadinessCopy}</p></div></div></section>
-        <section className="soft-panel history-panel"><div className="panel-title"><div><p className="eyebrow">最近记录</p><h3>学习履历</h3></div><BellRing size={20} /></div>{history.length === 0 ? <div className="empty-state compact">还没有专注记录。</div> : <div className="compact-history">{history.slice(0, 4).map((session) => <article className="list-row compact-row" key={session.id}><div><strong>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</strong><p>{formatSessionTimeRange(session)}</p></div><div className="history-meta"><span>{sessionStatusLabel(session.status)}</span><strong>{formatDuration(session.actual_seconds || session.planned_seconds)}</strong></div></article>)}</div>}</section>
+        <section className="soft-panel"><div className="panel-title"><div><p className="eyebrow">Today</p><h3>今日状态</h3></div><CheckCircle2 size={20} /></div><div className="stats-grid four"><Metric icon={Timer} label="今日" value={formatDuration(stats?.today_seconds ?? 0)} /><Metric icon={Timer} label="本周" value={formatDuration(stats?.week_seconds ?? 0)} /><Metric icon={Timer} label="本月" value={formatDuration(stats?.month_seconds ?? 0)} /><Metric icon={ShieldCheck} label="拦截" value={String(stats?.interruption_count ?? 0)} /></div></section>
+        <section className="soft-panel"><div className="panel-title"><div><p className="eyebrow">Monitor</p><h3>白名单状态</h3></div><Gauge size={20} /></div><div className="monitor-callout"><Leaf size={18} /><div><strong>准备就绪</strong><p>{mode === 'normal' && !normalWhitelistEnabled ? '普通模式本次不执行白名单。' : '开始学习后会持续检查前台窗口，并关闭非白名单软件或网站。'}</p></div></div></section>
+        <section className="soft-panel history-panel"><div className="panel-title"><div><p className="eyebrow">History</p><h3>最近记录</h3></div><BellRing size={20} /></div>{history.length === 0 ? <div className="empty-state compact">还没有专注记录。</div> : <div className="compact-history">{history.slice(0, 4).map((session) => <article className="list-row compact-row" key={session.id}><div><strong>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</strong><p>{formatSessionTimeRange(session)}</p></div><div className="history-meta"><span>{sessionStatusLabel(session.status)}</span><strong>{formatDuration(session.actual_seconds || session.planned_seconds)}</strong></div></article>)}</div>}</section>
       </div>
     </section>
   );
