@@ -83,4 +83,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Revert focus page UI to v1.8.4 and update core-flow smoke (00ba592)
 
+## v1.9.2 - 2026-06-08
+
+### Desktop
+#### Changed
+- Wake focus window for critical study reminders (20fa0f9)
+
 
