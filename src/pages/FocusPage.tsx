@@ -846,9 +846,9 @@ function markReminderSeen(studyState: StudyModeState, deviceId?: string | null) 
 }
 function buildReminder(studyState: StudyModeState) {
   if (studyState.status === 'active' && studyState.phase === 'focus') return { title: studyState.cycle_index > 1 ? '下一轮番茄钟开始' : '番茄钟开始', body: '第 ' + studyState.cycle_index + ' 轮开始，专注 ' + formatDuration(studyState.focus_seconds) + '。' };
-  if (studyState.status === 'active' && studyState.phase === 'awaiting_break') return { title: '番茄钟结束', body: '本轮已经到点。确认后进入 ' + nextBreakLabel(studyState) + '；未确认前学习时间继续累计。' };
+  if (studyState.status === 'active' && studyState.phase === 'awaiting_break') return { title: '番茄钟结束', body: '本轮已经到点。确认后进入 ' + nextBreakLabel(studyState) + '；未确认前学习时间继续累计。', wakeWindow: true };
   if (studyState.status === 'active' && studyState.phase === 'break') return { title: breakKindLabel(studyState.break_kind) + '开始', body: formatDuration(studyState.effective_break_seconds) + ' 后自动进入下一轮番茄钟。' };
-  if (studyState.status === 'finished' || studyState.phase === 'finished') return { title: '学习模式完成', body: '本次学习已完成，共累计 ' + formatDuration(studyState.study_elapsed_seconds) + '。' };
+  if (studyState.status === 'finished' || studyState.phase === 'finished') return { title: '学习模式完成', body: '本次学习已完成，共累计 ' + formatDuration(studyState.study_elapsed_seconds) + '。', wakeWindow: true };
   return null;
 }
 function foregroundSummary(check: FocusAppCheck) {

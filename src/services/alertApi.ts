@@ -5,6 +5,7 @@ import type { AppSettings, ReminderSoundId, ReminderSoundSource } from '../types
 type ReminderPayload = {
   title: string;
   body: string;
+  wakeWindow?: boolean;
 };
 
 type SoundStop = () => void;
@@ -351,7 +352,7 @@ function stopPreviewAudio() {
 
 async function showDesktopNotification(payload: ReminderPayload, settings: ReminderSoundSettings, notificationId: string) {
   try {
-    await showStudyReminder(payload.title, payload.body, toastSoundId(settings), notificationId);
+    await showStudyReminder(payload.title, payload.body, toastSoundId(settings), notificationId, payload.wakeWindow ?? false);
     return;
   } catch {
     // Continue to plugin/browser notification fallback.

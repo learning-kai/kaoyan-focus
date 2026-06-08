@@ -4,8 +4,8 @@ export async function pingBackend(): Promise<string> {
   return invokeCommand<string>('ping');
 }
 
-export async function showStudyReminder(title: string, body: string, soundId?: string, notificationId?: string): Promise<void> {
-  await invokeCommand<void>('show_study_reminder', { title, body, soundId, notificationId });
+export async function showStudyReminder(title: string, body: string, soundId?: string, notificationId?: string, wakeWindow = false): Promise<void> {
+  await invokeCommand<void>('show_study_reminder', { title, body, soundId, notificationId, wakeWindow });
 }
 
 export async function openExternalUrl(url: string): Promise<void> {

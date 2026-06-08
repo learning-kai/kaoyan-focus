@@ -1,14 +1,20 @@
-use std::sync::Mutex;
+use std::{sync::Mutex, time::Duration};
 
 #[cfg(windows)]
 use ::windows::{
     core::PCWSTR,
-    Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
+    Win32::UI::{
+        Shell::ShellExecuteW,
+        WindowsAndMessaging::{
+            SetForegroundWindow, SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE,
+            SWP_SHOWWINDOW, SW_RESTORE, SW_SHOWNORMAL,
+        },
+    },
 };
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, WindowEvent,
+    Emitter, Manager, UserAttentionType, WindowEvent,
 };
 #[cfg(windows)]
 use tauri_winrt_notification::{Duration as ToastDuration, LoopableSound, Scenario, Sound, Toast};
@@ -44,6 +50,7 @@ pub struct AppState {
 }
 
 const REMINDER_NOTIFICATION_CLOSED_EVENT: &str = "study-reminder-notification-closed";
+const CRITICAL_REMINDER_TOPMOST_RESET_MS: u64 = 8_000;
 
 impl AppState {
     fn should_prevent_exit(&self, app: Option<&tauri::AppHandle>) -> Result<bool, String> {
@@ -85,29 +92,49 @@ fn show_study_reminder(
     body: String,
     sound_id: Option<String>,
     notification_id: Option<String>,
+    wake_window: Option<bool>,
 ) -> Result<(), String> {
+    let should_wake_window = wake_window.unwrap_or(false);
+    if should_wake_window {
+        wake_main_window_for_reminder(&app);
+    }
+
     #[cfg(windows)]
     {
         let app_id = app.config().identifier.as_str();
         let sound = toast_sound_for_id(sound_id.as_deref());
+        let scenario = if should_wake_window {
+            Scenario::Alarm
+        } else {
+            Scenario::Reminder
+        };
 
-        show_toast_with_close_event(&app, app_id, &title, &body, sound, notification_id.clone())
-            .or_else(|_| {
-                show_toast_with_close_event(
-                    &app,
-                    Toast::POWERSHELL_APP_ID,
-                    &title,
-                    &body,
-                    sound,
-                    notification_id,
-                )
-            })
-            .map_err(|error| error.to_string())?;
+        show_toast_with_close_event(
+            &app,
+            app_id,
+            &title,
+            &body,
+            sound,
+            scenario,
+            notification_id.clone(),
+        )
+        .or_else(|_| {
+            show_toast_with_close_event(
+                &app,
+                Toast::POWERSHELL_APP_ID,
+                &title,
+                &body,
+                sound,
+                scenario,
+                notification_id,
+            )
+        })
+        .map_err(|error| error.to_string())?;
     }
 
     #[cfg(not(windows))]
     {
-        let _ = (app, title, body, sound_id, notification_id);
+        let _ = (app, title, body, sound_id, notification_id, wake_window);
     }
 
     Ok(())
@@ -120,6 +147,7 @@ fn show_toast_with_close_event(
     title: &str,
     body: &str,
     sound: Option<Sound>,
+    scenario: Scenario,
     notification_id: Option<String>,
 ) -> Result<(), tauri_winrt_notification::Error> {
     let app_for_dismiss = app.clone();
@@ -130,7 +158,7 @@ fn show_toast_with_close_event(
     Toast::new(app_id)
         .title(title)
         .text1(body)
-        .scenario(Scenario::Reminder)
+        .scenario(scenario)
         .duration(ToastDuration::Long)
         .sound(sound)
         .on_dismissed(move |_| {
@@ -148,6 +176,41 @@ fn show_toast_with_close_event(
             Ok(())
         })
         .show()
+}
+
+fn wake_main_window_for_reminder(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_always_on_top(true);
+    let _ = window.request_user_attention(Some(UserAttentionType::Critical));
+
+    #[cfg(windows)]
+    if let Ok(hwnd) = window.hwnd() {
+        unsafe {
+            let _ = ShowWindow(hwnd, SW_RESTORE);
+            let _ = SetWindowPos(
+                hwnd,
+                Some(HWND_TOPMOST),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+            );
+            let _ = SetForegroundWindow(hwnd);
+        }
+    }
+
+    let _ = window.set_focus();
+    let reset_window = window.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(CRITICAL_REMINDER_TOPMOST_RESET_MS)).await;
+        let _ = reset_window.set_always_on_top(false);
+    });
 }
 
 #[cfg(windows)]
