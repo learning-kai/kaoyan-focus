@@ -71,4 +71,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ### Desktop
 - No commits found.
 
+## v1.9.0 - 2026-06-08
+
+### Desktop
+#### Changed
+- Refactor focus study app flows and UI (31a171e)
+
 
