@@ -142,11 +142,12 @@ export function useAutoSync(setLastAutoSyncMessage: (message: string | null) => 
       window.clearTimeout(startupTimerId);
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [setLastAutoSyncMessage]);
 }
 
 export function useSyncTakeoverNavigation(setActivePage: (page: AppPage) => void) {
   useEffect(() => {
+    let disposed = false;
     let unlisten: (() => void) | undefined;
 
     void listenTauriEvent<{ active_state_changed?: boolean; took_over_active_mode?: boolean }>(
@@ -157,15 +158,21 @@ export function useSyncTakeoverNavigation(setActivePage: (page: AppPage) => void
         }
       },
     ).then((dispose) => {
+      if (disposed) {
+        dispose();
+        return;
+      }
+
       unlisten = dispose;
     }).catch(() => {
       // Browser previews and partial desktop runtimes should not surface event wiring noise.
     });
 
     return () => {
+      disposed = true;
       unlisten?.();
     };
-  }, []);
+  }, [setActivePage]);
 }
 
 export function useAutoUpdateCheck(setLastAutoUpdateMessage: (message: string | null) => void) {

@@ -35,11 +35,11 @@ async function waitForUrl(url, timeoutMs = 30000) {
 }
 
 function startDevServer() {
-  const child = spawn(
-    process.platform === 'win32' ? 'npm.cmd' : 'npm',
-    ['run', 'dev', '--', '--host', '127.0.0.1'],
-    { shell: false, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
+  const command = process.platform === 'win32' ? 'cmd.exe' : 'npm';
+  const args = process.platform === 'win32'
+    ? ['/d', '/s', '/c', 'npm.cmd', 'run', 'dev', '--', '--host', '127.0.0.1']
+    : ['run', 'dev', '--', '--host', '127.0.0.1'];
+  const child = spawn(command, args, { shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', (chunk) => process.stdout.write(chunk));
   child.stderr.on('data', (chunk) => process.stderr.write(chunk));
   return child;
@@ -157,6 +157,39 @@ async function clickByExpression(client, label, expression) {
   if (!clicked) throw new Error(`Could not click ${label}`);
 }
 
+async function readThemeState(client) {
+  return client.evaluate(`
+    (() => {
+      const themeColor = document.querySelector('meta[name="theme-color"]')?.getAttribute('content') || null;
+      return {
+        activeTheme: document.documentElement.dataset.theme || null,
+        activeThemeLabel: document.querySelector('.theme-toggle button[aria-pressed="true"]')?.textContent?.trim() || null,
+        themeColor,
+      };
+    })()
+  `);
+}
+
+async function dispatchAltShortcut(client, label, key, targetSelector = null) {
+  const result = await client.evaluate(`
+    (() => {
+      const target = ${targetSelector ? `document.querySelector(${JSON.stringify(targetSelector)})` : 'window'};
+      if (!target) return { dispatched: false, defaultPrevented: false };
+      if (target instanceof HTMLElement) target.focus();
+      const event = new KeyboardEvent('keydown', {
+        key: ${JSON.stringify(key)},
+        altKey: true,
+        bubbles: true,
+        cancelable: true
+      });
+      target.dispatchEvent(event);
+      return { dispatched: true, defaultPrevented: event.defaultPrevented };
+    })()
+  `);
+  if (!result?.dispatched) throw new Error(`Could not dispatch ${label}`);
+  return result;
+}
+
 async function dragByExpression(client, label, expression, deltaY) {
   const point = await client.evaluate(expression);
   if (!point) throw new Error(`Could not find drag target for ${label}`);
@@ -222,7 +255,8 @@ function smokeRuntimeMockSource() {
     emailSettings: { enabled: false, smtp_host: '', smtp_port: 465, smtp_security: 'tls', username: '', password: '', password_configured: false, from: '', to: '' },
     feishuSettings: { enabled: false, app_id: '', app_secret: '', app_secret_configured: false, redirect_uri: 'http://localhost:1420/feishu/callback' },
     todayItems: [], scheduleBlocks: [], nextTodayId: 1, nextBlockId: 1, nextStudyId: 1,
-    studyState: { ...idleStudyState }, syncRuns: [], invokeLog: []
+    studyState: { ...idleStudyState }, syncRuns: [], invokeLog: [],
+    lastCopiedText: null, lastDownloadName: null, lastDownloadHref: null, lastDownloadBlob: null
   };
   const subjects = [
     { id: 1, name: '政治', color: '#8b5cf6', enabled: true, created_at: nowIso(), updated_at: nowIso() },
@@ -243,6 +277,56 @@ function smokeRuntimeMockSource() {
     templates: []
   });
   const focusStats = () => ({ today_seconds: 0, week_seconds: 0, month_seconds: 0, interruption_count: 0, subjects: subjects.map((subject) => ({ subject, total_seconds: 0 })) });
+  try {
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          state.lastCopiedText = String(text);
+          return undefined;
+        },
+      },
+    });
+  } catch {
+    // Clipboard stubbing is best-effort for browser smoke coverage.
+  }
+  try {
+    const originalCreateObjectURL = URL.createObjectURL?.bind(URL);
+    URL.createObjectURL = (blob) => {
+      state.lastDownloadBlob = blob;
+      return originalCreateObjectURL ? originalCreateObjectURL(blob) : 'blob:smoke';
+    };
+  } catch {
+    // Download capture is best-effort for browser smoke coverage.
+  }
+  try {
+    const originalAnchorClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function click() {
+      if (this.download) {
+        state.lastDownloadName = this.download;
+        state.lastDownloadHref = this.href;
+        return undefined;
+      }
+      return originalAnchorClick.call(this);
+    };
+  } catch {
+    // Download capture is best-effort for browser smoke coverage.
+  }
+  try {
+    const originalExecCommand = document.execCommand?.bind(document);
+    document.execCommand = (command) => {
+      if (command === 'copy') {
+        const activeElement = document.activeElement;
+        if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
+          state.lastCopiedText = activeElement.value;
+        }
+        return true;
+      }
+      return originalExecCommand ? originalExecCommand(command) : false;
+    };
+  } catch {
+    // Clipboard fallback is best-effort for browser smoke coverage.
+  }
   const syncResult = (trigger = 'manual') => {
     state.syncRuns.unshift({
       id: state.syncRuns.length + 1, sync_id: 'smoke-sync-' + (state.syncRuns.length + 1),
@@ -309,6 +393,10 @@ function smokeRuntimeMockSource() {
       case 'list_focus_sessions': return state.studyState.current_session ? [clone(state.studyState.current_session)] : [];
       case 'get_focus_stats_summary': return focusStats();
       case 'check_focus_foreground_app': return { allowed: true, foreground_app: { process_name: 'msedge.exe', window_title: 'Smoke', executable_path: null, browser_url: null }, matched_rule: null, checked_at: nowIso(), action_taken: 'none' };
+      case 'list_interruption_summary': return [
+        { process_name: 'msedge.exe', process_path: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', window_title: 'Smoke stats', interruption_count: 2, last_interrupted_at: nowIso() },
+        { process_name: 'wechat.exe', process_path: 'C:\\Program Files\\WeChat\\WeChat.exe', window_title: 'Smoke chat', interruption_count: 1, last_interrupted_at: nowIso() }
+      ];
       case 'get_checklist_page_data': return checklistData();
       case 'create_today_plan_item': {
         const draft = args.draft || {};
@@ -470,16 +558,19 @@ try {
 
   await waitForCondition(client, 'focus landing content', `document.body.innerText.toLowerCase().includes('focus ritual') && document.body.innerText.includes('进入学习模式') && document.body.innerText.includes('下一轮专注')`);
   await waitForCondition(client, 'desktop runtime mock', `document.body.innerText.includes('Windows 桌面') || document.body.innerText.includes('浏览器预览')`);
+  await waitForCondition(client, 'focus hash/title synced', `location.hash === '#focus' && document.title === '考研专注'`);
+  await waitForCondition(client, 'focus main content focused', `document.activeElement?.id === 'main-content'`);
+  const initialThemeState = await readThemeState(client);
+  if (initialThemeState.activeTheme !== 'light' || initialThemeState.themeColor !== '#f8fbff') {
+    throw new Error(`Unexpected initial theme state: ${JSON.stringify(initialThemeState)}`);
+  }
 
-  await clickByExpression(client, 'checklist navigation', `
-    (() => {
-      const button = [...document.querySelectorAll('.nav-item')].find((node) => node.textContent.includes('清单'));
-      if (!button) return false;
-      button.click();
-      return true;
-    })()
-  `);
+  const checklistShortcut = await dispatchAltShortcut(client, 'checklist keyboard navigation', '2');
+  if (!checklistShortcut.defaultPrevented) {
+    throw new Error('Checklist keyboard navigation did not consume Alt+2');
+  }
   await waitForCondition(client, 'checklist page loaded', `Boolean(document.querySelector('.checklist-clean-shell .today-drawer-add')) && document.body.innerText.includes('进入任务')`);
+  await waitForCondition(client, 'checklist main content focused', `document.activeElement?.id === 'main-content'`);
   await clickByExpression(client, 'open today task composer', `
     (() => {
       const button = document.querySelector('.checklist-clean-shell .today-drawer-add');
@@ -510,15 +601,18 @@ try {
   `);
   await waitForCondition(client, 'today task created', `window.__SMOKE_STATE.todayItems.some((item) => item.title === ${JSON.stringify(smokeTaskTitle)}) && document.body.innerText.includes(${JSON.stringify(smokeTaskTitle)})`);
 
-  await clickByExpression(client, 'schedule navigation', `
-    (() => {
-      const button = [...document.querySelectorAll('.nav-item')].find((node) => node.textContent.includes('课表'));
-      if (!button) return false;
-      button.click();
-      return true;
-    })()
-  `);
+  const scheduleShortcut = await dispatchAltShortcut(client, 'schedule keyboard navigation', '3');
+  if (!scheduleShortcut.defaultPrevented) {
+    throw new Error('Schedule keyboard navigation did not consume Alt+3');
+  }
   await waitForCondition(client, 'schedule page loaded', `Boolean(document.querySelector('.schedule-lane')) && document.body.innerText.includes(${JSON.stringify(smokeTaskTitle)})`);
+  await waitForCondition(client, 'schedule main content focused', `document.activeElement?.id === 'main-content'`);
+  await waitForCondition(client, 'schedule hash/title synced', `location.hash === '#schedule' && document.title.startsWith('课表') && document.title.endsWith('考研专注')`);
+  const blockedSettingsShortcut = await dispatchAltShortcut(client, 'blocked settings keyboard navigation', '8', '.date-stepper input');
+  if (blockedSettingsShortcut.defaultPrevented) {
+    throw new Error('Input-scoped Alt+8 shortcut should not be consumed by global navigation');
+  }
+  await waitForCondition(client, 'keyboard navigation stays blocked in date input', `location.hash === '#schedule' && document.body.innerText.includes('今日课表')`);
   await clickByExpression(client, 'open schedule block composer', `
     (() => {
       const button = [...document.querySelectorAll('.schedule-actions .primary-button')].find((node) => node.textContent.includes('时间块'));
@@ -637,6 +731,60 @@ try {
     })()
   `);
   await waitForCondition(client, 'active focus shell', `Boolean(document.querySelector('.focus-active-shell')) && window.__SMOKE_STATE.studyState.status === 'active'`);
+  await waitForCondition(client, 'focus main content focused after schedule start', `document.activeElement?.id === 'main-content'`);
+
+  const statsShortcut = await dispatchAltShortcut(client, 'stats keyboard navigation', '6');
+  if (!statsShortcut.defaultPrevented) {
+    throw new Error('Stats keyboard navigation did not consume Alt+6');
+  }
+  await waitForCondition(client, 'stats page loaded', `Boolean(document.querySelector('.stats-toolbar')) && document.body.innerText.includes('筛选学习记录')`);
+  await waitForCondition(client, 'stats main content focused', `document.activeElement?.id === 'main-content'`);
+  await waitForCondition(client, 'stats hash/title synced', `location.hash === '#stats' && document.title.startsWith('统计') && document.title.endsWith('考研专注')`);
+  await client.evaluate(`
+    (() => {
+      const statusSelect = document.querySelectorAll('.stats-toolbar-grid select')[0];
+      if (!statusSelect) return false;
+      statusSelect.value = 'finished';
+      statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'stats finished filter empty', `document.body.innerText.includes('没有符合筛选条件的记录')`);
+  await clickByExpression(client, 'reset stats filters', `
+    (() => {
+      const button = [...document.querySelectorAll('.stats-toolbar-actions button')].find((node) => node.textContent.includes('重置筛选'));
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'stats filters reset', `document.body.innerText.includes('筛选学习记录') && document.body.innerText.includes('显示')`);
+  await clickByExpression(client, 'copy stats summary', `
+    (() => {
+      const button = [...document.querySelectorAll('.stats-toolbar-actions button')].find((node) => node.textContent.includes('复制摘要'));
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'stats summary copied', `Boolean(window.__SMOKE_STATE.lastCopiedText) && window.__SMOKE_STATE.lastCopiedText.includes('考研专注学习统计摘要')`);
+  await clickByExpression(client, 'export stats csv', `
+    (() => {
+      const button = [...document.querySelectorAll('.stats-toolbar-actions button')].find((node) => node.textContent.includes('导出 CSV'));
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'stats csv exported', `Boolean(window.__SMOKE_STATE.lastDownloadName) && window.__SMOKE_STATE.lastDownloadName.startsWith('kaoyan-focus-sessions-')`);
+  await waitForCondition(client, 'stats csv blob captured', `Boolean(window.__SMOKE_STATE.lastDownloadBlob)`);
+  const exportedCsv = await client.evaluate(`window.__SMOKE_STATE.lastDownloadBlob ? window.__SMOKE_STATE.lastDownloadBlob.text() : null`);
+  if (!exportedCsv || !String(exportedCsv).includes('记录ID') || !String(exportedCsv).includes('状态')) {
+    throw new Error(`Unexpected CSV export payload: ${exportedCsv}`);
+  }
+
+  await client.evaluate(`window.history.back()`);
+  await waitForCondition(client, 'returned to focus from history', `location.hash === '#focus' && document.body.innerText.includes('专注中')`);
 
   await clickByExpression(client, 'settings navigation', `
     (() => {
@@ -647,6 +795,7 @@ try {
     })()
   `);
   await waitForCondition(client, 'settings page', `document.body.innerText.includes('节奏与数据控制')`);
+  await waitForCondition(client, 'settings main content focused', `document.activeElement?.id === 'main-content'`);
   await clickByExpression(client, 'sync settings tab', `
     (() => {
       const button = [...document.querySelectorAll('.settings-section-tabs button')].find((node) => node.textContent.includes('同步'));
@@ -660,6 +809,20 @@ try {
     document.body.innerText.includes('测试连接') &&
     document.body.innerText.includes('学习模式正在运行，全部配置改动已锁定')
   `);
+
+  await clickByExpression(client, 'dawn theme toggle', `
+    (() => {
+      const button = [...document.querySelectorAll('.theme-toggle button')].find((node) => node.textContent.includes('晨光'));
+      if (!button) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'theme updated to dawn', `document.documentElement.dataset.theme === 'dawn'`);
+  const updatedThemeState = await readThemeState(client);
+  if (updatedThemeState.activeTheme !== 'dawn' || updatedThemeState.activeThemeLabel !== '晨光' || updatedThemeState.themeColor !== '#f7fbf8') {
+    throw new Error(`Unexpected updated theme state: ${JSON.stringify(updatedThemeState)}`);
+  }
 
   if (consoleErrors.length > 0) {
     throw new Error(`Console errors found: ${consoleErrors.join('\\n')}`);

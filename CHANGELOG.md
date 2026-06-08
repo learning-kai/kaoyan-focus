@@ -6,6 +6,7 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ### Added
 
+- Added hash-aware main navigation with `Alt+1` through `Alt+8` shortcuts and smoke coverage for keyboard routing.
 - Added GitHub Actions CI for frontend type checking, frontend builds, Rust formatting, Clippy and Rust tests.
 - Added repository hygiene files for editor defaults, dependency updates, toolchain hints, support, conduct, ownership and asset attribution.
 - Added a public screenshot and demo asset policy under `docs/assets/`.
@@ -53,40 +54,49 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ## v1.8.2 - 2026-06-07
 
 ### Desktop
+
 #### Added
+
 - feat: polish app experience and release workflow (c527744)
 - feat: add new components and hooks for improved user interaction and styling (4ff88b8)
 - feat: update version to 1.7.4 and enhance release process with Android support (c3728aa)
 
 #### Changed
+
 - chore: bump version to 1.8.1 and update dependencies (5fe5f68)
 
 ## v1.8.3 - 2026-06-07
 
 ### Desktop
+
 - No commits found.
 
 ## v1.8.4 - 2026-06-07
 
 ### Desktop
+
 - No commits found.
 
 ## v1.9.0 - 2026-06-08
 
 ### Desktop
+
 #### Changed
+
 - Refactor focus study app flows and UI (31a171e)
 
 ## v1.9.1 - 2026-06-08
 
 ### Desktop
+
 #### Changed
+
 - Revert focus page UI to v1.8.4 and update core-flow smoke (00ba592)
 
 ## v1.9.2 - 2026-06-08
 
 ### Desktop
+
 #### Changed
+
 - Wake focus window for critical study reminders (20fa0f9)
-
-

@@ -7,9 +7,11 @@ type LearningHubProps = {
   hubPrimaryDisabled: boolean;
   hubPrimaryLabel: string;
   isStartingStudy: boolean;
+  isSchedulingTask: boolean;
   nextScheduleBlock: ScheduleBlock | null;
   nextTask: TodayPlanItem | null;
   pendingTodayCount: number;
+  quickScheduleDisabled: boolean;
   scheduledBlockCount: number;
   scheduleBlockMeta: string | null;
   todayTaskCount: number;
@@ -17,6 +19,7 @@ type LearningHubProps = {
   onPrimaryAction: () => void;
   onOpenSchedule: () => void;
   onOpenTodayTasks: () => void;
+  onQuickScheduleTask: () => void;
 };
 
 export default function LearningHub({
@@ -25,47 +28,85 @@ export default function LearningHub({
   hubPrimaryDisabled,
   hubPrimaryLabel,
   isStartingStudy,
+  isSchedulingTask,
   nextScheduleBlock,
   nextTask,
   onOpenSchedule,
   onOpenTodayTasks,
   onPrimaryAction,
+  onQuickScheduleTask,
   pendingTodayCount,
+  quickScheduleDisabled,
   scheduledBlockCount,
   scheduleBlockMeta,
   todayTaskCount,
 }: LearningHubProps) {
   const hasScheduleStart = Boolean(nextScheduleBlock);
+  const hasTodayTasks = todayTaskCount > 0;
+  const PrimaryIcon = hasScheduleStart ? Play : hasTodayTasks ? CalendarClock : ClipboardList;
+  const primaryLabel = isStartingStudy ? '正在开始' : hubPrimaryLabel;
 
   return (
     <div className="learning-hub" aria-label="今日学习中枢">
       <div className="learning-hub-main">
         <p className="eyebrow">今日学习中枢</p>
-        <h3>{nextScheduleBlock ? nextScheduleBlock.title : nextTask ? nextTask.title : '先确定今天要推进什么'}</h3>
+        <h3>
+          {nextScheduleBlock
+            ? nextScheduleBlock.title
+            : nextTask
+              ? nextTask.title
+              : pendingTodayCount > 0
+                ? '先把今天剩下的任务理顺'
+                : '今天的任务已经收束'}
+        </h3>
         <p>
           {nextScheduleBlock
             ? scheduleBlockMeta
             : nextTask
-              ? `今日还有 ${pendingTodayCount} 项未完成。先排入课表，再开始专注。`
-              : '添加一条今日任务，应用会把它接到课表和专注流程里。'}
+              ? `今天还有 ${pendingTodayCount} 项未完成。先排进课表，再开始专注。`
+              : pendingTodayCount === 0 && todayTaskCount > 0
+                ? '今天的任务已经完成，可以直接开始下一轮专注，或者补一个新的时间块。'
+                : '添加一条今日任务，应用会把它接进课表和专注流程里。'}
         </p>
       </div>
+
       <div className="learning-hub-stats">
-        <span><strong>{pendingTodayCount}</strong> 待完成</span>
-        <span><strong>{scheduledBlockCount}</strong> 课表块</span>
-        <span><strong>{completedTodayItems}</strong> 已完成</span>
+        <span>
+          <strong>{pendingTodayCount}</strong>
+          <small>待完成</small>
+        </span>
+        <span>
+          <strong>{scheduledBlockCount}</strong>
+          <small>课表块</small>
+        </span>
+        <span>
+          <strong>{completedTodayItems}</strong>
+          <small>已完成</small>
+        </span>
       </div>
+
       <div className="learning-hub-actions">
         <button
-          aria-busy={isStartingStudy && hasScheduleStart}
+          aria-busy={isStartingStudy}
           className="primary-button"
           disabled={hubPrimaryDisabled}
           onClick={onPrimaryAction}
           type="button"
         >
-          {hasScheduleStart ? <Play size={16} /> : todayTaskCount > 0 ? <CalendarClock size={16} /> : <ClipboardList size={16} />}
-          {isStartingStudy && hasScheduleStart ? '正在开始' : hubPrimaryLabel}
+          <PrimaryIcon size={16} />
+          {primaryLabel}
         </button>
+        {nextTask && !nextScheduleBlock && (
+          <button
+            className="ghost-button"
+            disabled={quickScheduleDisabled}
+            onClick={onQuickScheduleTask}
+            type="button"
+          >
+            <CalendarClock size={16} />
+            {isSchedulingTask ? '安排中' : '安排下一任务'}
+          </button>
+        )}
         <button className="ghost-button" onClick={onOpenTodayTasks} type="button">
           <ClipboardList size={16} /> 今日任务
         </button>
@@ -73,7 +114,10 @@ export default function LearningHub({
           <CalendarClock size={16} /> 今日课表
         </button>
       </div>
-      {nextScheduleBlock && !desktopReady && <p className="learning-hub-note">浏览器预览不能启动桌面专注；请在 Windows 桌面应用中开始。</p>}
+
+      {nextScheduleBlock && !desktopReady && (
+        <p className="learning-hub-note">浏览器预览不能启动桌面专注，请在 Windows 桌面应用中开始。</p>
+      )}
     </div>
   );
 }

@@ -3,23 +3,26 @@ import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type D
 import { arrayMove } from '@dnd-kit/sortable';
 import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, Gauge, Leaf, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
+import LearningHub from '../components/focus/LearningHub';
 import ScheduleDrawer from '../components/ScheduleDrawer';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
 import { completeTodayPlanItem, createTodayPlanItem, deleteTodayPlanItem, getChecklistPageData, reorderTodayPlanItems, updateTodayPlanItem } from '../services/checklistApi';
 import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSessions, listSubjects, pauseStudyMode, resetStudyMode, resumeStudyMode, startStudyMode, updateStudyModeSubject } from '../services/focusApi';
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
-import { createScheduleBlock, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
+import { createScheduleBlock, createScheduleBlockFromTodayItem, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
 import { getAppSettings, getSyncDeviceId, saveAppSettings } from '../services/settingsApi';
 import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
 import { setStudyFullscreen } from '../services/systemApi';
 import { listenTauriEvent } from '../services/tauriEvents';
+import { isTauriRuntime } from '../services/tauriInvoke';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
 import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
 import type { FocusAppCheck } from '../types/monitor';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData } from '../types/schedule';
-import { formatDateKey } from '../utils/date';
+import { currentMinuteOfDay, formatDateKey } from '../utils/date';
+import { recommendScheduleBlock, type ScheduleRecommendation } from '../utils/scheduleRecommendation';
 
 const studyPresetMinutes = [60, 120, 180, 240];
 const focusPresetMinutes = [25, 45, 60, 90];
@@ -28,6 +31,9 @@ const longBreakPresetMinutes = [10, 15, 20, 30];
 const longBreakIntervalPresets = [2, 3, 4, 6];
 const ACTIVE_STATE_CALIBRATION_INTERVAL_MS = 15 * 1000;
 const FOCUS_TODAY_CONTAINER_ID = 'focus-today-container';
+const QUICK_SCHEDULE_DAY_START = 6 * 60;
+const QUICK_SCHEDULE_DAY_END = 24 * 60;
+const QUICK_SCHEDULE_SLOT_MINUTES = 15;
 const emptyTodayDraft: TodayPlanItemDraft = { title: '', note: '', dueDate: '', subjectId: null };
 type FocusConfirmRequest = { kind: 'normalExit' } | { kind: 'syncSourceCompletion'; item: TodayPlanItem };
 const emptyScheduleDraft = (date: string): ScheduleBlockDraft => ({
@@ -105,6 +111,49 @@ function formatTimeOnly(value: string | null) {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatMinuteOfDay(minute: number) {
+  const safeMinute = Math.max(0, Math.min(24 * 60, Math.floor(minute)));
+  const hours = Math.floor(safeMinute / 60).toString().padStart(2, '0');
+  const minutes = (safeMinute % 60).toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function roundUpToScheduleSlot(minute: number) {
+  return Math.ceil(minute / QUICK_SCHEDULE_SLOT_MINUTES) * QUICK_SCHEDULE_SLOT_MINUTES;
+}
+
+function findNextAvailableScheduleSlot(blocks: ScheduleBlock[], fromMinute: number, durationMinutes: number) {
+  const duration = Math.max(QUICK_SCHEDULE_SLOT_MINUTES, Math.ceil(durationMinutes / QUICK_SCHEDULE_SLOT_MINUTES) * QUICK_SCHEDULE_SLOT_MINUTES);
+  let startMinute = roundUpToScheduleSlot(Math.max(QUICK_SCHEDULE_DAY_START, fromMinute));
+  const sortedBlocks = [...blocks].sort((left, right) => left.start_minute - right.start_minute || left.end_minute - right.end_minute);
+
+  while (startMinute + duration <= QUICK_SCHEDULE_DAY_END) {
+    const overlap = sortedBlocks.find((block) => startMinute < block.end_minute && block.start_minute < startMinute + duration);
+    if (!overlap) {
+      return { startMinute, endMinute: startMinute + duration };
+    }
+    startMinute = roundUpToScheduleSlot(Math.max(startMinute + QUICK_SCHEDULE_SLOT_MINUTES, overlap.end_minute));
+  }
+
+  return null;
+}
+
+function describeScheduleRecommendation(
+  recommendation: ScheduleRecommendation | null,
+  subjectNameMap: Map<number, string>,
+) {
+  if (!recommendation) {
+    return null;
+  }
+
+  const kindLabel =
+    recommendation.kind === 'current' ? '当前' : recommendation.kind === 'next' ? '下一个' : '遗漏';
+  const block = recommendation.block;
+  const subjectLabel = block.subject_id ? subjectNameMap.get(block.subject_id) ?? '未指定科目' : '未指定科目';
+
+  return `${kindLabel}课表块 ${formatMinuteOfDay(block.start_minute)}-${formatMinuteOfDay(block.end_minute)} · ${block.title} / ${subjectLabel}`;
+}
+
 function secondsSince(value: string | null, now: number) {
   if (!value) return 0;
   const timestamp = new Date(value).getTime();
@@ -174,6 +223,7 @@ export default function FocusPage() {
   const [editingTodayDraft, setEditingTodayDraft] = useState<TodayPlanItemDraft>(emptyTodayDraft);
   const [checklistSaving, setChecklistSaving] = useState(false);
   const [isStartingStudy, setIsStartingStudy] = useState(false);
+  const [isQuickSchedulingTask, setIsQuickSchedulingTask] = useState(false);
   const [localClockNow, setLocalClockNow] = useState(() => Date.now());
   const [pendingConfirm, setPendingConfirm] = useState<FocusConfirmRequest | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -193,7 +243,24 @@ export default function FocusPage() {
   const displayedSubjectId = active ? studyState.subject_id : selectedSubjectId;
   const selectedSubjectName = displayedSubjectId ? subjectNameMap.get(displayedSubjectId) : null;
   const currentSubjectLabel = studyState.subject_id ? subjectNameMap.get(studyState.subject_id) ?? '当前科目' : null;
-  const todayTaskCount = checklistData?.today_items.length ?? 0;
+  const todayItems = checklistData?.today_items ?? [];
+  const todayTaskCount = todayItems.length;
+  const pendingTodayCount = todayItems.filter((item) => !item.completed).length;
+  const completedTodayItems = todayTaskCount - pendingTodayCount;
+  const nextTodayTask = todayItems.find((item) => !item.completed) ?? null;
+  const scheduleRecommendation = useMemo(
+    () => (scheduleData ? recommendScheduleBlock(scheduleData.day_blocks, currentMinuteOfDay(new Date(localClockNow))) : null),
+    [localClockNow, scheduleData],
+  );
+  const scheduleRecommendationBlock = scheduleRecommendation?.block ?? null;
+  const scheduleRecommendationMeta = describeScheduleRecommendation(scheduleRecommendation, subjectNameMap);
+  const desktopReady = isTauriRuntime();
+  const hubPrimaryAction =
+    scheduleRecommendation?.kind === 'current' && scheduleRecommendationBlock
+      ? () => void handleStartScheduleBlock(scheduleRecommendationBlock)
+      : handleStart;
+  const hubPrimaryLabel = scheduleRecommendation?.kind === 'current' ? '从课表开始' : '开始学习';
+  const quickScheduleDisabled = checklistSaving || isQuickSchedulingTask || !nextTodayTask;
   const timerValue = studyState.phase === 'idle' ? formatSeconds(focusMinutes * 60) : formatSeconds(localPhaseSeconds(studyState, localClockNow));
   const activeClockLabel = studyState.is_paused ? '暂停中' : studyState.phase === 'awaiting_break' ? '等待确认休息' : phaseLabel[studyState.phase];
   const whitelistStatusLabel = studyState.focus_enforcement_active ? '白名单执行中' : active && studyState.phase !== 'break' && !studyState.whitelist_enabled ? '白名单已关闭' : '休息阶段';
@@ -598,6 +665,42 @@ export default function FocusPage() {
     }, '课表时间块已添加。');
   }
 
+  async function handleQuickScheduleNextTask() {
+    if (!nextTodayTask || isQuickSchedulingTask) return;
+    try {
+      setIsQuickSchedulingTask(true);
+      setError(null);
+      setNotice(null);
+      const todayDate = formatDateKey();
+      const latestScheduleData = await getSchedulePageData(todayDate);
+      setScheduleData(latestScheduleData);
+      const slot = findNextAvailableScheduleSlot(
+        latestScheduleData.day_blocks,
+        currentMinuteOfDay(new Date(localClockNow)),
+        focusMinutes,
+      );
+
+      if (!slot) {
+        setError(`今天没有足够的 ${formatDuration(focusMinutes * 60)} 空档，请打开今日课表手动调整。`);
+        setIsChecklistDrawerOpen(false);
+        setIsScheduleDrawerOpen(true);
+        return;
+      }
+
+      await createScheduleBlockFromTodayItem(nextTodayTask.id, todayDate, slot.startMinute, slot.endMinute);
+      await refreshScheduleData();
+      setScheduleDraft(emptyScheduleDraft(todayDate));
+      setIsChecklistDrawerOpen(false);
+      setIsScheduleDrawerOpen(true);
+      setNotice(`已把“${nextTodayTask.title}”安排到 ${formatMinuteOfDay(slot.startMinute)}-${formatMinuteOfDay(slot.endMinute)}。`);
+      queueConfiguredSync('schedule_change');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setIsQuickSchedulingTask(false);
+    }
+  }
+
   async function handleDeleteScheduleBlock(blockId: number) {
     await withChecklistRefresh(async () => {
       await deleteScheduleBlock(blockId);
@@ -658,6 +761,57 @@ export default function FocusPage() {
       <p>仅完成今日任务不会修改源待办，适合今天只是阶段性推进。</p>
     </ConfirmDialog>
   ) : null;
+
+  const todayDrawer = (
+    <TodayPlanDrawer
+      compact
+      dndContainerId={FOCUS_TODAY_CONTAINER_ID}
+      dndIsOver={false}
+      currentSubjectLabel={currentSubjectLabel}
+      editingTodayDraft={editingTodayDraft}
+      editingTodayId={editingTodayId}
+      emptyDescription="可以在清单页拖入，也可以直接在这里补一条今天要推进的任务。"
+      emptyTitle="今天还没有进入任务"
+      isOpen={isChecklistDrawerOpen}
+      items={checklistData?.today_items ?? []}
+      onBeginEdit={beginEditTodayItem}
+      onCancelEdit={() => setEditingTodayId(null)}
+      onChangeEdit={(patch) => setEditingTodayDraft((current) => ({ ...(current ?? emptyTodayDraft), ...patch }))}
+      onClose={() => setIsChecklistDrawerOpen(false)}
+      onComplete={(item) => void handleCompleteTodayItem(item)}
+      onCreate={() => void handleCreateTodayItem()}
+      onDelete={(itemId) => void handleDeleteTodayItem(itemId)}
+      onDraftChange={(patch) => setTodayDraft((current) => ({ ...current, ...patch }))}
+      onRefresh={() => void refreshChecklistData()}
+      onSaveEdit={() => void handleSaveTodayEdit()}
+      onToggleComposer={() => setShowTodayComposer((current) => !current)}
+      saving={checklistSaving}
+      showComposer={showTodayComposer}
+      sortable
+      subtitle="今日队列"
+      title="今日任务"
+      getItemDragId={(item) => getTodaySortableId(item.id)}
+      todayDate={checklistData?.today_date ?? ''}
+      todayDraft={todayDraft}
+      variant="drawer"
+    />
+  );
+
+  const scheduleDrawer = (
+    <ScheduleDrawer
+      canStart={!active}
+      isOpen={isScheduleDrawerOpen}
+      data={scheduleData}
+      draft={scheduleDraft}
+      saving={checklistSaving || isQuickSchedulingTask || isStartingStudy}
+      onClose={() => setIsScheduleDrawerOpen(false)}
+      onRefresh={() => void refreshScheduleData()}
+      onDraftChange={(patch) => setScheduleDraft((current) => ({ ...current, ...patch }))}
+      onCreate={() => void handleCreateScheduleBlock()}
+      onDelete={(blockId) => void handleDeleteScheduleBlock(blockId)}
+      onStart={(block) => void handleStartScheduleBlock(block)}
+    />
+  );
 
   if (active) {
     return (
@@ -732,8 +886,8 @@ export default function FocusPage() {
               </div>
             </footer>
 
-            <TodayPlanDrawer compact dndContainerId={FOCUS_TODAY_CONTAINER_ID} dndIsOver={false} currentSubjectLabel={currentSubjectLabel} editingTodayDraft={editingTodayDraft} editingTodayId={editingTodayId} emptyDescription="可以在清单页拖入，也可以直接在这里补一条今天要推进的任务。" emptyTitle="今天还没有进入任务" isOpen={isChecklistDrawerOpen} items={checklistData?.today_items ?? []} onBeginEdit={beginEditTodayItem} onCancelEdit={() => setEditingTodayId(null)} onChangeEdit={(patch) => setEditingTodayDraft((current) => ({ ...(current ?? emptyTodayDraft), ...patch }))} onClose={() => setIsChecklistDrawerOpen(false)} onComplete={(item) => void handleCompleteTodayItem(item)} onCreate={() => void handleCreateTodayItem()} onDelete={(itemId) => void handleDeleteTodayItem(itemId)} onDraftChange={(patch) => setTodayDraft((current) => ({ ...current, ...patch }))} onRefresh={() => void refreshChecklistData()} onSaveEdit={() => void handleSaveTodayEdit()} onToggleComposer={() => setShowTodayComposer((current) => !current)} saving={checklistSaving} showComposer={showTodayComposer} sortable subtitle="今日队列" title="今日任务" getItemDragId={(item) => getTodaySortableId(item.id)} todayDate={checklistData?.today_date ?? ''} todayDraft={todayDraft} variant="drawer" />
-            <ScheduleDrawer canStart={false} isOpen={isScheduleDrawerOpen} data={scheduleData} draft={scheduleDraft} saving={checklistSaving} onClose={() => setIsScheduleDrawerOpen(false)} onRefresh={() => void refreshScheduleData()} onDraftChange={(patch) => setScheduleDraft((current) => ({ ...current, ...patch }))} onCreate={() => void handleCreateScheduleBlock()} onDelete={(blockId) => void handleDeleteScheduleBlock(blockId)} onStart={(block) => void handleStartScheduleBlock(block)} />
+            {todayDrawer}
+            {scheduleDrawer}
           </section>
           {focusConfirmDialog}
         </>
@@ -742,12 +896,33 @@ export default function FocusPage() {
   }
 
   return (
-    <section className="page-shell focus-prepare-shell">
+    <DndContext collisionDetection={closestCenter} onDragEnd={(event) => void handleTodayDrawerDragEnd(event)} sensors={sensors}>
+      <>
+    <section className={'page-shell focus-prepare-shell' + ((isChecklistDrawerOpen || isScheduleDrawerOpen) ? ' is-drawer-open' : '')}>
       <header className="page-header prepare-header">
         <div><p className="eyebrow">Focus Ritual</p><h2>进入学习模式</h2><p>设定本次学习长度、番茄节奏和休息规则。开始后界面会切换为极简番茄钟，配置入口自动锁定。</p></div>
         <div className={'phase-badge phase-' + studyState.phase}><span>{phaseLabel[studyState.phase]}</span><strong>{studyState.phase === 'finished' ? '已收束' : '待命'}</strong></div>
       </header>
       {error && <p className="alert error" role="alert">{error}</p>}{notice && <p aria-live="polite" className="alert success" role="status">{notice}</p>}{monitorError && <p className="alert error" role="alert">前台检测失败：{monitorError}</p>}
+      <LearningHub
+        completedTodayItems={completedTodayItems}
+        desktopReady={desktopReady}
+        hubPrimaryDisabled={isStartingStudy}
+        hubPrimaryLabel={hubPrimaryLabel}
+        isStartingStudy={isStartingStudy}
+        isSchedulingTask={isQuickSchedulingTask}
+        nextScheduleBlock={scheduleRecommendationBlock}
+        nextTask={nextTodayTask}
+        onOpenSchedule={handleToggleScheduleDrawer}
+        onOpenTodayTasks={handleToggleChecklistDrawer}
+        onPrimaryAction={hubPrimaryAction}
+        onQuickScheduleTask={() => void handleQuickScheduleNextTask()}
+        pendingTodayCount={pendingTodayCount}
+        quickScheduleDisabled={quickScheduleDisabled}
+        scheduledBlockCount={scheduleData?.day_blocks.length ?? 0}
+        scheduleBlockMeta={scheduleRecommendationMeta}
+        todayTaskCount={todayTaskCount}
+      />
       <div className="prepare-grid">
         <section className="start-console">
           <div className="timer-orbit"><span>下一轮专注</span><strong>{formatSeconds(focusMinutes * 60)}</strong><p>{selectedSubjectName ?? '未指定科目'} / {mode === 'strict' ? '强制模式' : '普通模式'}</p></div>
@@ -787,6 +962,11 @@ export default function FocusPage() {
         <section className="soft-panel history-panel"><div className="panel-title"><div><p className="eyebrow">History</p><h3>最近记录</h3></div><BellRing size={20} /></div>{history.length === 0 ? <div className="empty-state compact">还没有专注记录。</div> : <div className="compact-history">{history.slice(0, 4).map((session) => <article className="list-row compact-row" key={session.id}><div><strong>{session.subject_id ? subjectNameMap.get(session.subject_id) ?? '未知科目' : '未指定科目'}</strong><p>{formatSessionTimeRange(session)}</p></div><div className="history-meta"><span>{sessionStatusLabel(session.status)}</span><strong>{formatDuration(session.actual_seconds || session.planned_seconds)}</strong></div></article>)}</div>}</section>
       </div>
     </section>
+    {todayDrawer}
+    {scheduleDrawer}
+    {focusConfirmDialog}
+      </>
+    </DndContext>
   );
 }
 

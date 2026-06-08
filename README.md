@@ -137,7 +137,7 @@ npm.cmd run format:check
 发布前先预检：
 
 ```powershell
-npm.cmd run release:auto -- --version 1.8.1 --dry-run
+npm.cmd run release:auto -- --version $((Get-Content package.json -Raw | ConvertFrom-Json).version) --dry-run
 ```
 
 默认发布路径只处理桌面端。Android 相关发布步骤是维护者内部流程，只有显式传入 `--include-android` 或设置 `INCLUDE_ANDROID_RELEASE=1` 时才会参与版本同步和 tag 校验。

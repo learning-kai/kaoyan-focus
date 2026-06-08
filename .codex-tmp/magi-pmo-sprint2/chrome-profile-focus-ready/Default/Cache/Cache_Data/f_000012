@@ -1,0 +1,221 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/focus/LearningHub.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=43bb3876"; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import { CalendarClock, ClipboardList, Play } from "/node_modules/.vite/deps/lucide-react.js?v=43bb3876";
+export default function LearningHub({
+  completedTodayItems,
+  desktopReady,
+  hubPrimaryDisabled,
+  hubPrimaryLabel,
+  isStartingStudy,
+  isSchedulingTask,
+  nextScheduleBlock,
+  nextTask,
+  onOpenSchedule,
+  onOpenTodayTasks,
+  onPrimaryAction,
+  onQuickScheduleTask,
+  pendingTodayCount,
+  quickScheduleDisabled,
+  scheduledBlockCount,
+  scheduleBlockMeta,
+  todayTaskCount
+}) {
+  const hasScheduleStart = Boolean(nextScheduleBlock);
+  const hasTodayTasks = todayTaskCount > 0;
+  const PrimaryIcon = hasScheduleStart ? Play : hasTodayTasks ? CalendarClock : ClipboardList;
+  const primaryLabel = isStartingStudy ? "正在开始" : hubPrimaryLabel;
+  return /* @__PURE__ */ jsxDEV("div", { className: "learning-hub", "aria-label": "今日学习中枢", children: [
+    /* @__PURE__ */ jsxDEV("div", { className: "learning-hub-main", children: [
+      /* @__PURE__ */ jsxDEV("p", { className: "eyebrow", children: "今日学习中枢" }, void 0, false, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+        lineNumber: 52,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("h3", { children: nextScheduleBlock ? nextScheduleBlock.title : nextTask ? nextTask.title : pendingTodayCount > 0 ? "先把今天剩下的任务理顺" : "今天的任务已经收束" }, void 0, false, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+        lineNumber: 53,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("p", { children: nextScheduleBlock ? scheduleBlockMeta : nextTask ? `今天还有 ${pendingTodayCount} 项未完成。先排进课表，再开始专注。` : pendingTodayCount === 0 && todayTaskCount > 0 ? "今天的任务已经完成，可以直接开始下一轮专注，或者补一个新的时间块。" : "添加一条今日任务，应用会把它接进课表和专注流程里。" }, void 0, false, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+        lineNumber: 62,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+      lineNumber: 51,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "learning-hub-stats", children: [
+      /* @__PURE__ */ jsxDEV("span", { children: [
+        /* @__PURE__ */ jsxDEV("strong", { children: pendingTodayCount }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 75,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("small", { children: "待完成" }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 76,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+        lineNumber: 74,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("span", { children: [
+        /* @__PURE__ */ jsxDEV("strong", { children: scheduledBlockCount }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 79,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("small", { children: "课表块" }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 80,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+        lineNumber: 78,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("span", { children: [
+        /* @__PURE__ */ jsxDEV("strong", { children: completedTodayItems }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 83,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("small", { children: "已完成" }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 84,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+        lineNumber: 82,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+      lineNumber: 73,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "learning-hub-actions", children: [
+      /* @__PURE__ */ jsxDEV(
+        "button",
+        {
+          "aria-busy": isStartingStudy,
+          className: "primary-button",
+          disabled: hubPrimaryDisabled,
+          onClick: onPrimaryAction,
+          type: "button",
+          children: [
+            /* @__PURE__ */ jsxDEV(PrimaryIcon, { size: 16 }, void 0, false, {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+              lineNumber: 96,
+              columnNumber: 11
+            }, this),
+            primaryLabel
+          ]
+        },
+        void 0,
+        true,
+        {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 89,
+          columnNumber: 9
+        },
+        this
+      ),
+      nextTask && !nextScheduleBlock && /* @__PURE__ */ jsxDEV(
+        "button",
+        {
+          className: "ghost-button",
+          disabled: quickScheduleDisabled,
+          onClick: onQuickScheduleTask,
+          type: "button",
+          children: [
+            /* @__PURE__ */ jsxDEV(CalendarClock, { size: 16 }, void 0, false, {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+              lineNumber: 106,
+              columnNumber: 13
+            }, this),
+            isSchedulingTask ? "安排中" : "安排下一任务"
+          ]
+        },
+        void 0,
+        true,
+        {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 100,
+          columnNumber: 9
+        },
+        this
+      ),
+      /* @__PURE__ */ jsxDEV("button", { className: "ghost-button", onClick: onOpenTodayTasks, type: "button", children: [
+        /* @__PURE__ */ jsxDEV(ClipboardList, { size: 16 }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 111,
+          columnNumber: 11
+        }, this),
+        " 今日任务"
+      ] }, void 0, true, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+        lineNumber: 110,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("button", { className: "ghost-button", onClick: onOpenSchedule, type: "button", children: [
+        /* @__PURE__ */ jsxDEV(CalendarClock, { size: 16 }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+          lineNumber: 114,
+          columnNumber: 11
+        }, this),
+        " 今日课表"
+      ] }, void 0, true, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+        lineNumber: 113,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+      lineNumber: 88,
+      columnNumber: 7
+    }, this),
+    nextScheduleBlock && !desktopReady && /* @__PURE__ */ jsxDEV("p", { className: "learning-hub-note", children: "浏览器预览不能启动桌面专注，请在 Windows 桌面应用中开始。" }, void 0, false, {
+      fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+      lineNumber: 119,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx",
+    lineNumber: 50,
+    columnNumber: 5
+  }, this);
+}
+_c = LearningHub;
+var _c;
+$RefreshReg$(_c, "LearningHub");
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+function $RefreshReg$(type, id) {
+  return RefreshRuntime.register(type, "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/focus/LearningHub.tsx " + id);
+}
+function $RefreshSig$() {
+  return RefreshRuntime.createSignatureFunctionForTransform();
+}
+
+//# sourceMappingURL=data:application/json;base64,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QjtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUF3QjtBQUFBLFlBQ3ZCTixtQkFBbUIsUUFBUTtBQUFBO0FBQUE7QUFBQSxRQVA5QjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsTUFRQTtBQUFBLE1BRUYsdUJBQUMsWUFBTyxXQUFVLGdCQUFlLFNBQVNJLGtCQUFrQixNQUFLLFVBQy9EO0FBQUEsK0JBQUMsaUJBQWMsTUFBTSxNQUFyQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBQXdCO0FBQUEsUUFBRztBQUFBLFdBRDdCO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFFQTtBQUFBLE1BQ0EsdUJBQUMsWUFBTyxXQUFVLGdCQUFlLFNBQVNELGdCQUFnQixNQUFLLFVBQzdEO0FBQUEsK0JBQUMsaUJBQWMsTUFBTSxNQUFyQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBQXdCO0FBQUEsUUFBRztBQUFBLFdBRDdCO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFFQTtBQUFBLFNBM0JGO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0E0QkE7QUFBQSxJQUVDRixxQkFBcUIsQ0FBQ0wsZ0JBQ3JCLHVCQUFDLE9BQUUsV0FBVSxxQkFBb0IsaURBQWpDO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FBa0U7QUFBQSxPQXJFdEU7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQXVFQTtBQUVKO0FBQUNzQixLQWxHdUJ4QjtBQUFXLElBQUF3QjtBQUFBLGFBQUFBLElBQUEiLCJuYW1lcyI6WyJDYWxlbmRhckNsb2NrIiwiQ2xpcGJvYXJkTGlzdCIsIlBsYXkiLCJMZWFybmluZ0h1YiIsImNvbXBsZXRlZFRvZGF5SXRlbXMiLCJkZXNrdG9wUmVhZHkiLCJodWJQcmltYXJ5RGlzYWJsZWQiLCJodWJQcmltYXJ5TGFiZWwiLCJpc1N0YXJ0aW5nU3R1ZHkiLCJpc1NjaGVkdWxpbmdUYXNrIiwibmV4dFNjaGVkdWxlQmxvY2siLCJuZXh0VGFzayIsIm9uT3BlblNjaGVkdWxlIiwib25PcGVuVG9kYXlUYXNrcyIsIm9uUHJpbWFyeUFjdGlvbiIsIm9uUXVpY2tTY2hlZHVsZVRhc2siLCJwZW5kaW5nVG9kYXlDb3VudCIsInF1aWNrU2NoZWR1bGVEaXNhYmxlZCIsInNjaGVkdWxlZEJsb2NrQ291bnQiLCJzY2hlZHVsZUJsb2NrTWV0YSIsInRvZGF5VGFza0NvdW50IiwiaGFzU2NoZWR1bGVTdGFydCIsIkJvb2xlYW4iLCJoYXNUb2RheVRhc2tzIiwiUHJpbWFyeUljb24iLCJwcmltYXJ5TGFiZWwiLCJ0aXRsZSIsIl9jIl0sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbIkxlYXJuaW5nSHViLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBDYWxlbmRhckNsb2NrLCBDbGlwYm9hcmRMaXN0LCBQbGF5IH0gZnJvbSAnbHVjaWRlLXJlYWN0JztcbmltcG9ydCB0eXBlIHsgVG9kYXlQbGFuSXRlbSB9IGZyb20gJy4uLy4uL3R5cGVzL2NoZWNrbGlzdCc7XG5pbXBvcnQgdHlwZSB7IFNjaGVkdWxlQmxvY2sgfSBmcm9tICcuLi8uLi90eXBlcy9zY2hlZHVsZSc7XG5cbnR5cGUgTGVhcm5pbmdIdWJQcm9wcyA9IHtcbiAgY29tcGxldGVkVG9kYXlJdGVtczogbnVtYmVyO1xuICBodWJQcmltYXJ5RGlzYWJsZWQ6IGJvb2xlYW47XG4gIGh1YlByaW1hcnlMYWJlbDogc3RyaW5nO1xuICBpc1N0YXJ0aW5nU3R1ZHk6IGJvb2xlYW47XG4gIGlzU2NoZWR1bGluZ1Rhc2s6IGJvb2xlYW47XG4gIG5leHRTY2hlZHVsZUJsb2NrOiBTY2hlZHVsZUJsb2NrIHwgbnVsbDtcbiAgbmV4dFRhc2s6IFRvZGF5UGxhbkl0ZW0gfCBudWxsO1xuICBwZW5kaW5nVG9kYXlDb3VudDogbnVtYmVyO1xuICBxdWlja1NjaGVkdWxlRGlzYWJsZWQ6IGJvb2xlYW47XG4gIHNjaGVkdWxlZEJsb2NrQ291bnQ6IG51bWJlcjtcbiAgc2NoZWR1bGVCbG9ja01ldGE6IHN0cmluZyB8IG51bGw7XG4gIHRvZGF5VGFza0NvdW50OiBudW1iZXI7XG4gIGRlc2t0b3BSZWFkeTogYm9vbGVhbjtcbiAgb25QcmltYXJ5QWN0aW9uOiAoKSA9PiB2b2lkO1xuICBvbk9wZW5TY2hlZHVsZTogKCkgPT4gdm9pZDtcbiAgb25PcGVuVG9kYXlUYXNrczogKCkgPT4gdm9pZDtcbiAgb25RdWlja1NjaGVkdWxlVGFzazogKCkgPT4gdm9pZDtcbn07XG5cbmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIExlYXJuaW5nSHViKHtcbiAgY29tcGxldGVkVG9kYXlJdGVtcyxcbiAgZGVza3RvcFJlYWR5LFxuICBodWJQcmltYXJ5RGlzYWJsZWQsXG4gIGh1YlByaW1hcnlMYWJlbCxcbiAgaXNTdGFydGluZ1N0dWR5LFxuICBpc1NjaGVkdWxpbmdUYXNrLFxuICBuZXh0U2NoZWR1bGVCbG9jayxcbiAgbmV4dFRhc2ssXG4gIG9uT3BlblNjaGVkdWxlLFxuICBvbk9wZW5Ub2RheVRhc2tzLFxuICBvblByaW1hcnlBY3Rpb24sXG4gIG9uUXVpY2tTY2hlZHVsZVRhc2ssXG4gIHBlbmRpbmdUb2RheUNvdW50LFxuICBxdWlja1NjaGVkdWxlRGlzYWJsZWQsXG4gIHNjaGVkdWxlZEJsb2NrQ291bnQsXG4gIHNjaGVkdWxlQmxvY2tNZXRhLFxuICB0b2RheVRhc2tDb3VudCxcbn06IExlYXJuaW5nSHViUHJvcHMpIHtcbiAgY29uc3QgaGFzU2NoZWR1bGVTdGFydCA9IEJvb2xlYW4obmV4dFNjaGVkdWxlQmxvY2spO1xuICBjb25zdCBoYXNUb2RheVRhc2tzID0gdG9kYXlUYXNrQ291bnQgPiAwO1xuICBjb25zdCBQcmltYXJ5SWNvbiA9IGhhc1NjaGVkdWxlU3RhcnQgPyBQbGF5IDogaGFzVG9kYXlUYXNrcyA/IENhbGVuZGFyQ2xvY2sgOiBDbGlwYm9hcmRMaXN0O1xuICBjb25zdCBwcmltYXJ5TGFiZWwgPSBpc1N0YXJ0aW5nU3R1ZHkgPyAn5q2j5Zyo5byA5aeLJyA6IGh1YlByaW1hcnlMYWJlbDtcblxuICByZXR1cm4gKFxuICAgIDxkaXYgY2xhc3NOYW1lPVwibGVhcm5pbmctaHViXCIgYXJpYS1sYWJlbD1cIuS7iuaXpeWtpuS5oOS4reaeolwiPlxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJsZWFybmluZy1odWItbWFpblwiPlxuICAgICAgICA8cCBjbGFzc05hbWU9XCJleWVicm93XCI+5LuK5pel5a2m5Lmg5Lit5p6iPC9wPlxuICAgICAgICA8aDM+XG4gICAgICAgICAge25leHRTY2hlZHVsZUJsb2NrXG4gICAgICAgICAgICA/IG5leHRTY2hlZHVsZUJsb2NrLnRpdGxlXG4gICAgICAgICAgICA6IG5leHRUYXNrXG4gICAgICAgICAgICAgID8gbmV4dFRhc2sudGl0bGVcbiAgICAgICAgICAgICAgOiBwZW5kaW5nVG9kYXlDb3VudCA+IDBcbiAgICAgICAgICAgICAgICA/ICflhYjmiorku4rlpKnliankuIvnmoTku7vliqHnkIbpobonXG4gICAgICAgICAgICAgICAgOiAn5LuK5aSp55qE5Lu75Yqh5bey57uP5pS25p2fJ31cbiAgICAgICAgPC9oMz5cbiAgICAgICAgPHA+XG4gICAgICAgICAge25leHRTY2hlZHVsZUJsb2NrXG4gICAgICAgICAgICA/IHNjaGVkdWxlQmxvY2tNZXRhXG4gICAgICAgICAgICA6IG5leHRUYXNrXG4gICAgICAgICAgICAgID8gYOS7iuWkqei/mOaciSAke3BlbmRpbmdUb2RheUNvdW50fSDpobnmnKrlrozmiJDjgILlhYjmjpLov5vor77ooajvvIzlho3lvIDlp4vkuJPms6jjgIJgXG4gICAgICAgICAgICAgIDogcGVuZGluZ1RvZGF5Q291bnQgPT09IDAgJiYgdG9kYXlUYXNrQ291bnQgPiAwXG4gICAgICAgICAgICAgICAgPyAn5LuK5aSp55qE5Lu75Yqh5bey57uP5a6M5oiQ77yM5Y+v5Lul55u05o6l5byA5aeL5LiL5LiA6L2u5LiT5rOo77yM5oiW6ICF6KGl5LiA5Liq5paw55qE5pe26Ze05Z2X44CCJ1xuICAgICAgICAgICAgICAgIDogJ+a3u+WKoOS4gOadoeS7iuaXpeS7u+WKoe+8jOW6lOeUqOS8muaKiuWug+aOpei/m+ivvuihqOWSjOS4k+azqOa1geeoi+mHjOOAgid9XG4gICAgICAgIDwvcD5cbiAgICAgIDwvZGl2PlxuXG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cImxlYXJuaW5nLWh1Yi1zdGF0c1wiPlxuICAgICAgICA8c3Bhbj5cbiAgICAgICAgICA8c3Ryb25nPntwZW5kaW5nVG9kYXlDb3VudH08L3N0cm9uZz5cbiAgICAgICAgICA8c21hbGw+5b6F5a6M5oiQPC9zbWFsbD5cbiAgICAgICAgPC9zcGFuPlxuICAgICAgICA8c3Bhbj5cbiAgICAgICAgICA8c3Ryb25nPntzY2hlZHVsZWRCbG9ja0NvdW50fTwvc3Ryb25nPlxuICAgICAgICAgIDxzbWFsbD7or77ooajlnZc8L3NtYWxsPlxuICAgICAgICA8L3NwYW4+XG4gICAgICAgIDxzcGFuPlxuICAgICAgICAgIDxzdHJvbmc+e2NvbXBsZXRlZFRvZGF5SXRlbXN9PC9zdHJvbmc+XG4gICAgICAgICAgPHNtYWxsPuW3suWujOaIkDwvc21hbGw+XG4gICAgICAgIDwvc3Bhbj5cbiAgICAgIDwvZGl2PlxuXG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cImxlYXJuaW5nLWh1Yi1hY3Rpb25zXCI+XG4gICAgICAgIDxidXR0b25cbiAgICAgICAgICBhcmlhLWJ1c3k9e2lzU3RhcnRpbmdTdHVkeX1cbiAgICAgICAgICBjbGFzc05hbWU9XCJwcmltYXJ5LWJ1dHRvblwiXG4gICAgICAgICAgZGlzYWJsZWQ9e2h1YlByaW1hcnlEaXNhYmxlZH1cbiAgICAgICAgICBvbkNsaWNrPXtvblByaW1hcnlBY3Rpb259XG4gICAgICAgICAgdHlwZT1cImJ1dHRvblwiXG4gICAgICAgID5cbiAgICAgICAgICA8UHJpbWFyeUljb24gc2l6ZT17MTZ9IC8+XG4gICAgICAgICAge3ByaW1hcnlMYWJlbH1cbiAgICAgICAgPC9idXR0b24+XG4gICAgICAgIHtuZXh0VGFzayAmJiAhbmV4dFNjaGVkdWxlQmxvY2sgJiYgKFxuICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgIGNsYXNzTmFtZT1cImdob3N0LWJ1dHRvblwiXG4gICAgICAgICAgICBkaXNhYmxlZD17cXVpY2tTY2hlZHVsZURpc2FibGVkfVxuICAgICAgICAgICAgb25DbGljaz17b25RdWlja1NjaGVkdWxlVGFza31cbiAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxuICAgICAgICAgID5cbiAgICAgICAgICAgIDxDYWxlbmRhckNsb2NrIHNpemU9ezE2fSAvPlxuICAgICAgICAgICAge2lzU2NoZWR1bGluZ1Rhc2sgPyAn5a6J5o6S5LitJyA6ICflronmjpLkuIvkuIDku7vliqEnfVxuICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICApfVxuICAgICAgICA8YnV0dG9uIGNsYXNzTmFtZT1cImdob3N0LWJ1dHRvblwiIG9uQ2xpY2s9e29uT3BlblRvZGF5VGFza3N9IHR5cGU9XCJidXR0b25cIj5cbiAgICAgICAgICA8Q2xpcGJvYXJkTGlzdCBzaXplPXsxNn0gLz4g5LuK5pel5Lu75YqhXG4gICAgICAgIDwvYnV0dG9uPlxuICAgICAgICA8YnV0dG9uIGNsYXNzTmFtZT1cImdob3N0LWJ1dHRvblwiIG9uQ2xpY2s9e29uT3BlblNjaGVkdWxlfSB0eXBlPVwiYnV0dG9uXCI+XG4gICAgICAgICAgPENhbGVuZGFyQ2xvY2sgc2l6ZT17MTZ9IC8+IOS7iuaXpeivvuihqFxuICAgICAgICA8L2J1dHRvbj5cbiAgICAgIDwvZGl2PlxuXG4gICAgICB7bmV4dFNjaGVkdWxlQmxvY2sgJiYgIWRlc2t0b3BSZWFkeSAmJiAoXG4gICAgICAgIDxwIGNsYXNzTmFtZT1cImxlYXJuaW5nLWh1Yi1ub3RlXCI+5rWP6KeI5Zmo6aKE6KeI5LiN6IO95ZCv5Yqo5qGM6Z2i5LiT5rOo77yM6K+35ZyoIFdpbmRvd3Mg5qGM6Z2i5bqU55So5Lit5byA5aeL44CCPC9wPlxuICAgICAgKX1cbiAgICA8L2Rpdj5cbiAgKTtcbn1cbiJdLCJmaWxlIjoiRTovQmFpZHVTeW5jZGlzay/lpKflraYv5aSn5LiJL+Wkp+S4ieS4iy/ogIPnoJTkuJPms6gv6ICD56CU5LiT5rOoL3NyYy9jb21wb25lbnRzL2ZvY3VzL0xlYXJuaW5nSHViLnRzeCJ9

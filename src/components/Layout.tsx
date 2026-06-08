@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from 'react';
+import { useEffect, useRef, type MouseEvent, type PropsWithChildren } from 'react';
 import { AlarmClock, BookOpenCheck, CircleDot, Lock, MonitorUp } from 'lucide-react';
 import type { PageMeta } from '../navigation';
 import type { Alarm } from '../types/alarm';
@@ -25,6 +25,7 @@ function formatNextAlarm(alarm: Alarm | null) {
 }
 
 export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme, onThemeChange, children }: LayoutProps) {
+  const mainContentRef = useRef<HTMLElement>(null);
   const activeMeta = pages[activePage];
   const desktopReady = isTauriRuntime();
   const runtimeStatusTitle = desktopReady ? '后台待命' : '桌面模式未连接';
@@ -32,9 +33,45 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
   const primaryPages: AppPage[] = ['focus', 'checklist', 'schedule', 'whitelist', 'review'];
   const secondaryPages: AppPage[] = ['stats', 'alarm', 'settings'];
 
+  useEffect(() => {
+    mainContentRef.current?.focus({ preventScroll: true });
+  }, [activePage]);
+
+  function handleSkipLinkClick(event: MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    mainContentRef.current?.focus({ preventScroll: true });
+  }
+
+  function renderNavButton(page: AppPage) {
+    const meta = pages[page];
+    const Icon = meta.icon;
+
+    return (
+      <button
+        aria-current={page === activePage ? 'page' : undefined}
+        aria-keyshortcuts={meta.shortcut}
+        aria-label={`${meta.title}：${meta.description}，快捷键 ${meta.shortcut}`}
+        className={page === activePage ? 'nav-item active' : 'nav-item'}
+        key={page}
+        onClick={() => onNavigate(page)}
+        title={`${meta.title} · ${meta.description} · ${meta.shortcut}`}
+        type="button"
+      >
+        <Icon size={19} />
+        <span>
+          <strong>
+            <span className="nav-title-full">{meta.title}</span>
+            <span className="nav-title-short">{meta.shortTitle ?? meta.title}</span>
+          </strong>
+          <small>{meta.description}</small>
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main-content">跳到主内容</a>
+      <a className="skip-link" href="#main-content" onClick={handleSkipLinkClick}>跳到主内容</a>
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -49,54 +86,12 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
         <nav className="nav-list" aria-label="主导航">
           <div className="nav-group">
             <p className="nav-group-label">学习闭环</p>
-            {primaryPages.map((page) => {
-              const Icon = pages[page].icon;
-
-              return (
-                <button
-                  aria-current={page === activePage ? 'page' : undefined}
-                  className={page === activePage ? 'nav-item active' : 'nav-item'}
-                  key={page}
-                  onClick={() => onNavigate(page)}
-                  type="button"
-                >
-                  <Icon size={19} />
-                  <span>
-                    <strong>
-                      <span className="nav-title-full">{pages[page].title}</span>
-                      <span className="nav-title-short">{pages[page].shortTitle ?? pages[page].title}</span>
-                    </strong>
-                    <small>{pages[page].description}</small>
-                  </span>
-                </button>
-              );
-            })}
+            {primaryPages.map(renderNavButton)}
           </div>
 
           <div className="nav-group">
             <p className="nav-group-label">辅助能力</p>
-            {secondaryPages.map((page) => {
-              const Icon = pages[page].icon;
-
-              return (
-                <button
-                  aria-current={page === activePage ? 'page' : undefined}
-                  className={page === activePage ? 'nav-item active' : 'nav-item'}
-                  key={page}
-                  onClick={() => onNavigate(page)}
-                  type="button"
-                >
-                  <Icon size={19} />
-                  <span>
-                    <strong>
-                      <span className="nav-title-full">{pages[page].title}</span>
-                      <span className="nav-title-short">{pages[page].shortTitle ?? pages[page].title}</span>
-                    </strong>
-                    <small>{pages[page].description}</small>
-                  </span>
-                </button>
-              );
-            })}
+            {secondaryPages.map(renderNavButton)}
           </div>
         </nav>
 
@@ -109,7 +104,7 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
         </div>
       </aside>
 
-      <main className="main-panel" id="main-content">
+      <main className="main-panel" id="main-content" ref={mainContentRef} tabIndex={-1}>
         <div className="top-strip">
           <div className="top-strip-title">
             <CircleDot size={14} />

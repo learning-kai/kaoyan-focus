@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,7 +7,33 @@
       name="description"
       content="考研专注是本地优先的 Windows 学习专注应用，提供番茄节奏、白名单约束、课表计划、复盘统计和可选云端同步。"
     />
-    <meta name="theme-color" content="#08111d" />
+    <meta name="theme-color" content="#f8fbff" />
+    <script>
+      (() => {
+        const colors = {
+          dark: '#08111d',
+          light: '#f8fbff',
+          mono: '#f2f1ed',
+          dawn: '#f7fbf8',
+          forest: '#071612',
+          sakura: '#f8fbff',
+        };
+        let theme = 'light';
+        try {
+          const stored = localStorage.getItem('kaoyan-focus-theme');
+          if (stored && Object.prototype.hasOwnProperty.call(colors, stored)) {
+            theme = stored;
+          }
+        } catch {
+          // Keep the light shell default when storage is unavailable.
+        }
+        document.documentElement.dataset.theme = theme;
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+          meta.setAttribute('content', colors[theme]);
+        }
+      })();
+    </script>
     <meta property="og:title" content="考研专注" />
     <meta
       property="og:description"

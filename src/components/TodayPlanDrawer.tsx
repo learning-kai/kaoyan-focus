@@ -321,6 +321,7 @@ export default function TodayPlanDrawer({
   const canSort = sortable && Boolean(dndContainerId) && Boolean(getItemDragId);
   const sortableIds = canSort && getItemDragId ? items.map((item) => getItemDragId(item)) : [];
   const isDrawerVariant = variant === 'drawer';
+  const blockGlobalShortcuts = isDrawerVariant && isOpen;
   const drawerHidden = isDrawerVariant && !isOpen;
   const content = items.length === 0 ? (
     <div className={`empty-state empty-drop-zone${compact ? ' compact' : ''}`}>
@@ -354,7 +355,12 @@ export default function TodayPlanDrawer({
   );
 
   return (
-    <section aria-hidden={drawerHidden ? true : undefined} className={rootClassName} inert={drawerHidden ? true : undefined}>
+    <section
+      aria-hidden={drawerHidden ? true : undefined}
+      className={rootClassName}
+      data-block-global-shortcuts={blockGlobalShortcuts ? 'true' : undefined}
+      inert={drawerHidden ? true : undefined}
+    >
       <div className="panel-title today-drawer-head">
         <div>
           <p className="eyebrow">{subtitle}</p>

@@ -59,6 +59,14 @@ export function normalizeTheme(value: string | null | undefined): AppTheme {
   return APP_THEME_OPTIONS.some((option) => option.id === value) ? (value as AppTheme) : 'light';
 }
 
+function getThemeOption(theme: AppTheme) {
+  return APP_THEME_OPTIONS.find((option) => option.id === theme) ?? APP_THEME_OPTIONS[1];
+}
+
+export function getThemeColor(theme: AppTheme) {
+  return getThemeOption(theme).swatch[0];
+}
+
 export function readStoredTheme(): AppTheme {
   if (typeof window === 'undefined') {
     return 'light';
@@ -89,6 +97,7 @@ export function applyTheme(theme: AppTheme) {
   }
 
   document.documentElement.dataset.theme = theme;
+  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', getThemeColor(theme));
 }
 
 export function bootstrapTheme() {

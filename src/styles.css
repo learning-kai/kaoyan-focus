@@ -922,6 +922,47 @@ html[data-study-fullscreen='true'] body {
   grid-column: 1 / -1;
 }
 
+.stats-toolbar {
+  display: grid;
+  gap: 14px;
+}
+
+.stats-toolbar-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.stats-toolbar-grid .field-block {
+  min-width: 0;
+}
+
+.stats-toolbar-actions {
+  display: grid;
+  grid-template-columns: repeat(3, max-content) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stats-toolbar-actions > button {
+  min-width: 0;
+}
+
+.stats-toolbar-actions .board-title-meta {
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.stats-toolbar-actions .board-title-meta span {
+  max-width: 100%;
+}
+
+.stats-search-field input {
+  min-width: 0;
+}
+
 .start-ritual-button {
   min-height: 52px;
   justify-self: center;
@@ -5972,6 +6013,24 @@ html[data-theme='light'] .theme-toggle button.active {
     grid-template-columns: repeat(4, minmax(128px, 1fr));
   }
 
+  .stats-toolbar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats-toolbar-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+  }
+
+  .stats-toolbar-actions > button {
+    width: 100%;
+  }
+
+  .stats-toolbar-actions .board-title-meta {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
   .header-metrics {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6042,11 +6101,19 @@ html[data-theme='light'] .theme-toggle button.active {
   }
 
   .header-metrics,
+  .stats-grid.four,
+  .stats-hero-grid,
   .sound-option-grid,
   .schedule-composer,
   .template-composer,
-  .console-facts {
+  .console-facts,
+  .stats-toolbar-grid,
+  .stats-toolbar-actions {
     grid-template-columns: 1fr;
+  }
+
+  .stats-toolbar-actions .board-title-meta {
+    grid-column: auto;
   }
 
   .schedule-task-row {

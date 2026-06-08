@@ -1,0 +1,352 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/Layout.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=43bb3876"; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+var _s = $RefreshSig$();
+import __vite__cjsImport1_react from "/node_modules/.vite/deps/react.js?v=43bb3876"; const useEffect = __vite__cjsImport1_react["useEffect"]; const useRef = __vite__cjsImport1_react["useRef"];
+import { AlarmClock, BookOpenCheck, CircleDot, Lock, MonitorUp } from "/node_modules/.vite/deps/lucide-react.js?v=43bb3876";
+import { DESKTOP_RUNTIME_MESSAGE, isTauriRuntime } from "/src/services/tauriInvoke.ts";
+import { APP_THEME_OPTIONS } from "/src/theme.ts";
+function formatNextAlarm(alarm) {
+  if (!alarm) {
+    return "暂无闹钟";
+  }
+  return `${alarm.alarm_date} ${alarm.alarm_time}`;
+}
+export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme, onThemeChange, children }) {
+  _s();
+  const mainContentRef = useRef(null);
+  const activeMeta = pages[activePage];
+  const desktopReady = isTauriRuntime();
+  const runtimeStatusTitle = desktopReady ? "后台待命" : "桌面模式未连接";
+  const runtimeStatusText = desktopReady ? "托盘运行 / 本地数据" : "请在 Windows 桌面应用中运行";
+  const primaryPages = ["focus", "checklist", "schedule", "whitelist", "review"];
+  const secondaryPages = ["stats", "alarm", "settings"];
+  useEffect(() => {
+    mainContentRef.current?.focus({ preventScroll: true });
+  }, [activePage]);
+  function handleSkipLinkClick(event) {
+    event.preventDefault();
+    mainContentRef.current?.focus({ preventScroll: true });
+  }
+  function renderNavButton(page) {
+    const meta = pages[page];
+    const Icon = meta.icon;
+    return /* @__PURE__ */ jsxDEV(
+      "button",
+      {
+        "aria-current": page === activePage ? "page" : void 0,
+        "aria-keyshortcuts": meta.shortcut,
+        "aria-label": `${meta.title}：${meta.description}，快捷键 ${meta.shortcut}`,
+        className: page === activePage ? "nav-item active" : "nav-item",
+        onClick: () => onNavigate(page),
+        title: `${meta.title} · ${meta.description} · ${meta.shortcut}`,
+        type: "button",
+        children: [
+          /* @__PURE__ */ jsxDEV(Icon, { size: 19 }, void 0, false, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 60,
+            columnNumber: 9
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: [
+              /* @__PURE__ */ jsxDEV("span", { className: "nav-title-full", children: meta.title }, void 0, false, {
+                fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+                lineNumber: 63,
+                columnNumber: 13
+              }, this),
+              /* @__PURE__ */ jsxDEV("span", { className: "nav-title-short", children: meta.shortTitle ?? meta.title }, void 0, false, {
+                fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+                lineNumber: 64,
+                columnNumber: 13
+              }, this)
+            ] }, void 0, true, {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+              lineNumber: 62,
+              columnNumber: 11
+            }, this),
+            /* @__PURE__ */ jsxDEV("small", { children: meta.description }, void 0, false, {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+              lineNumber: 66,
+              columnNumber: 11
+            }, this)
+          ] }, void 0, true, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 61,
+            columnNumber: 9
+          }, this)
+        ]
+      },
+      page,
+      true,
+      {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+        lineNumber: 50,
+        columnNumber: 7
+      },
+      this
+    );
+  }
+  return /* @__PURE__ */ jsxDEV("div", { className: "app-shell", children: [
+    /* @__PURE__ */ jsxDEV("a", { className: "skip-link", href: "#main-content", onClick: handleSkipLinkClick, children: "跳到主内容" }, void 0, false, {
+      fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+      lineNumber: 74,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("aside", { className: "sidebar", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "brand", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ jsxDEV(BookOpenCheck, { size: 24 }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 78,
+          columnNumber: 13
+        }, this) }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 77,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("h1", { children: "考研专注" }, void 0, false, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 81,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("p", { children: "本地学习控制台" }, void 0, false, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 82,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 80,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+        lineNumber: 76,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("nav", { className: "nav-list", "aria-label": "主导航", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "nav-group", children: [
+          /* @__PURE__ */ jsxDEV("p", { className: "nav-group-label", children: "学习闭环" }, void 0, false, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 88,
+            columnNumber: 13
+          }, this),
+          primaryPages.map(renderNavButton)
+        ] }, void 0, true, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 87,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "nav-group", children: [
+          /* @__PURE__ */ jsxDEV("p", { className: "nav-group-label", children: "辅助能力" }, void 0, false, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 93,
+            columnNumber: 13
+          }, this),
+          secondaryPages.map(renderNavButton)
+        ] }, void 0, true, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 92,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+        lineNumber: 86,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "sidebar-foot", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "status-dot" }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 99,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("strong", { children: runtimeStatusTitle }, void 0, false, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 101,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { title: desktopReady ? void 0 : DESKTOP_RUNTIME_MESSAGE, children: runtimeStatusText }, void 0, false, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 102,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 100,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+        lineNumber: 98,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+      lineNumber: 75,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("main", { className: "main-panel", id: "main-content", ref: mainContentRef, tabIndex: -1, children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "top-strip", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "top-strip-title", children: [
+          /* @__PURE__ */ jsxDEV(CircleDot, { size: 14 }, void 0, false, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 110,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { className: "top-strip-title-copy", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: activeMeta.title }, void 0, false, {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+              lineNumber: 112,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("small", { children: activeMeta.description }, void 0, false, {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+              lineNumber: 113,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 111,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 109,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "top-strip-status", children: [
+          /* @__PURE__ */ jsxDEV("span", { className: desktopReady ? "runtime-pill is-ready" : "runtime-pill is-preview", children: [
+            /* @__PURE__ */ jsxDEV(MonitorUp, { size: 14 }, void 0, false, {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+              lineNumber: 118,
+              columnNumber: 15
+            }, this),
+            " ",
+            desktopReady ? "Windows 桌面壳" : "浏览器预览"
+          ] }, void 0, true, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 117,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { className: nextAlarm ? "next-alarm-pill active" : "next-alarm-pill", children: [
+            /* @__PURE__ */ jsxDEV(AlarmClock, { size: 14 }, void 0, false, {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+              lineNumber: 121,
+              columnNumber: 15
+            }, this),
+            " ",
+            formatNextAlarm(nextAlarm)
+          ] }, void 0, true, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 120,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: [
+            /* @__PURE__ */ jsxDEV(Lock, { size: 14 }, void 0, false, {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+              lineNumber: 123,
+              columnNumber: 19
+            }, this),
+            " 学习中自动锁定配置"
+          ] }, void 0, true, {
+            fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+            lineNumber: 123,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 116,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "theme-toggle", role: "group", "aria-label": "主题切换", children: APP_THEME_OPTIONS.map(
+          (option) => /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              "aria-pressed": theme === option.id,
+              className: theme === option.id ? "active" : "",
+              onClick: () => onThemeChange(option.id),
+              title: option.description,
+              type: "button",
+              children: [
+                /* @__PURE__ */ jsxDEV(
+                  "span",
+                  {
+                    "aria-hidden": "true",
+                    className: "theme-swatch",
+                    style: { background: `linear-gradient(135deg, ${option.swatch[0]}, ${option.swatch[1]} 58%, ${option.swatch[2]})` }
+                  },
+                  void 0,
+                  false,
+                  {
+                    fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+                    lineNumber: 135,
+                    columnNumber: 17
+                  },
+                  this
+                ),
+                option.shortLabel
+              ]
+            },
+            option.id,
+            true,
+            {
+              fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+              lineNumber: 127,
+              columnNumber: 13
+            },
+            this
+          )
+        ) }, void 0, false, {
+          fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+          lineNumber: 125,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+        lineNumber: 108,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "page-transition", children }, activePage, false, {
+        fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+        lineNumber: 145,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+      lineNumber: 107,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx",
+    lineNumber: 73,
+    columnNumber: 5
+  }, this);
+}
+_s(Layout, "nAlFvl+UM+TZ2lNKO5qkeXFt2yQ=");
+_c = Layout;
+var _c;
+$RefreshReg$(_c, "Layout");
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+function $RefreshReg$(type, id) {
+  return RefreshRuntime.register(type, "E:/BaiduSyncdisk/大学/大三/大三下/考研专注/考研专注/src/components/Layout.tsx " + id);
+}
+function $RefreshSig$() {
+  return RefreshRuntime.createSignatureFunctionForTransform();
+}
+
+//# sourceMappingURL=data:application/json;base64,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bUNOLFlBQXRDO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFFQTtBQUFBLFNBeENGO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0F5Q0E7QUFBQSxPQTNFRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBNEVBO0FBRUo7QUFBQ08sR0E1SHVCUixRQUFNO0FBQUEsS0FBTkE7QUFBTSxJQUFBc0M7QUFBQSxhQUFBQSxJQUFBIiwibmFtZXMiOlsidXNlRWZmZWN0IiwidXNlUmVmIiwiQWxhcm1DbG9jayIsIkJvb2tPcGVuQ2hlY2siLCJDaXJjbGVEb3QiLCJMb2NrIiwiTW9uaXRvclVwIiwiREVTS1RPUF9SVU5USU1FX01FU1NBR0UiLCJpc1RhdXJpUnVudGltZSIsIkFQUF9USEVNRV9PUFRJT05TIiwiZm9ybWF0TmV4dEFsYXJtIiwiYWxhcm0iLCJhbGFybV9kYXRlIiwiYWxhcm1fdGltZSIsIkxheW91dCIsImFjdGl2ZVBhZ2UiLCJuZXh0QWxhcm0iLCJwYWdlcyIsIm9uTmF2aWdhdGUiLCJ0aGVtZSIsIm9uVGhlbWVDaGFuZ2UiLCJjaGlsZHJlbiIsIl9zIiwibWFpbkNvbnRlbnRSZWYiLCJhY3RpdmVNZXRhIiwiZGVza3RvcFJlYWR5IiwicnVudGltZVN0YXR1c1RpdGxlIiwicnVudGltZVN0YXR1c1RleHQiLCJwcmltYXJ5UGFnZXMiLCJzZWNvbmRhcnlQYWdlcyIsImN1cnJlbnQiLCJmb2N1cyIsInByZXZlbnRTY3JvbGwiLCJoYW5kbGVTa2lwTGlua0NsaWNrIiwiZXZlbnQiLCJwcmV2ZW50RGVmYXVsdCIsInJlbmRlck5hdkJ1dHRvbiIsInBhZ2UiLCJtZXRhIiwiSWNvbiIsImljb24iLCJ1bmRlZmluZWQiLCJzaG9ydGN1dCIsInRpdGxlIiwiZGVzY3JpcHRpb24iLCJzaG9ydFRpdGxlIiwibWFwIiwib3B0aW9uIiwiaWQiLCJiYWNrZ3JvdW5kIiwic3dhdGNoIiwic2hvcnRMYWJlbCIsIl9jIl0sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbIkxheW91dC50c3giXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgdXNlRWZmZWN0LCB1c2VSZWYsIHR5cGUgTW91c2VFdmVudCwgdHlwZSBQcm9wc1dpdGhDaGlsZHJlbiB9IGZyb20gJ3JlYWN0JztcbmltcG9ydCB7IEFsYXJtQ2xvY2ssIEJvb2tPcGVuQ2hlY2ssIENpcmNsZURvdCwgTG9jaywgTW9uaXRvclVwIH0gZnJvbSAnbHVjaWRlLXJlYWN0JztcbmltcG9ydCB0eXBlIHsgUGFnZU1ldGEgfSBmcm9tICcuLi9uYXZpZ2F0aW9uJztcbmltcG9ydCB0eXBlIHsgQWxhcm0gfSBmcm9tICcuLi90eXBlcy9hbGFybSc7XG5pbXBvcnQgdHlwZSB7IEFwcFBhZ2UgfSBmcm9tICcuLi90eXBlcy9uYXZpZ2F0aW9uJztcbmltcG9ydCB0eXBlIHsgQXBwVGhlbWUgfSBmcm9tICcuLi90eXBlcy9zZXR0aW5ncyc7XG5pbXBvcnQgeyBERVNLVE9QX1JVTlRJTUVfTUVTU0FHRSwgaXNUYXVyaVJ1bnRpbWUgfSBmcm9tICcuLi9zZXJ2aWNlcy90YXVyaUludm9rZSc7XG5pbXBvcnQgeyBBUFBfVEhFTUVfT1BUSU9OUyB9IGZyb20gJy4uL3RoZW1lJztcblxudHlwZSBMYXlvdXRQcm9wcyA9IFByb3BzV2l0aENoaWxkcmVuPHtcbiAgYWN0aXZlUGFnZTogQXBwUGFnZTtcbiAgbmV4dEFsYXJtOiBBbGFybSB8IG51bGw7XG4gIHBhZ2VzOiBSZWNvcmQ8QXBwUGFnZSwgUGFnZU1ldGE+O1xuICBvbk5hdmlnYXRlOiAocGFnZTogQXBwUGFnZSkgPT4gdm9pZDtcbiAgdGhlbWU6IEFwcFRoZW1lO1xuICBvblRoZW1lQ2hhbmdlOiAodGhlbWU6IEFwcFRoZW1lKSA9PiB2b2lkO1xufT47XG5cbmZ1bmN0aW9uIGZvcm1hdE5leHRBbGFybShhbGFybTogQWxhcm0gfCBudWxsKSB7XG4gIGlmICghYWxhcm0pIHtcbiAgICByZXR1cm4gJ+aaguaXoOmXuemSnyc7XG4gIH1cblxuICByZXR1cm4gYCR7YWxhcm0uYWxhcm1fZGF0ZX0gJHthbGFybS5hbGFybV90aW1lfWA7XG59XG5cbmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIExheW91dCh7IGFjdGl2ZVBhZ2UsIG5leHRBbGFybSwgcGFnZXMsIG9uTmF2aWdhdGUsIHRoZW1lLCBvblRoZW1lQ2hhbmdlLCBjaGlsZHJlbiB9OiBMYXlvdXRQcm9wcykge1xuICBjb25zdCBtYWluQ29udGVudFJlZiA9IHVzZVJlZjxIVE1MRWxlbWVudD4obnVsbCk7XG4gIGNvbnN0IGFjdGl2ZU1ldGEgPSBwYWdlc1thY3RpdmVQYWdlXTtcbiAgY29uc3QgZGVza3RvcFJlYWR5ID0gaXNUYXVyaVJ1bnRpbWUoKTtcbiAgY29uc3QgcnVudGltZVN0YXR1c1RpdGxlID0gZGVza3RvcFJlYWR5ID8gJ+WQjuWPsOW+heWRvScgOiAn5qGM6Z2i5qih5byP5pyq6L+e5o6lJztcbiAgY29uc3QgcnVudGltZVN0YXR1c1RleHQgPSBkZXNrdG9wUmVhZHkgPyAn5omY55uY6L+Q6KGMIC8g5pys5Zyw5pWw5o2uJyA6ICfor7flnKggV2luZG93cyDmoYzpnaLlupTnlKjkuK3ov5DooYwnO1xuICBjb25zdCBwcmltYXJ5UGFnZXM6IEFwcFBhZ2VbXSA9IFsnZm9jdXMnLCAnY2hlY2tsaXN0JywgJ3NjaGVkdWxlJywgJ3doaXRlbGlzdCcsICdyZXZpZXcnXTtcbiAgY29uc3Qgc2Vjb25kYXJ5UGFnZXM6IEFwcFBhZ2VbXSA9IFsnc3RhdHMnLCAnYWxhcm0nLCAnc2V0dGluZ3MnXTtcblxuICB1c2VFZmZlY3QoKCkgPT4ge1xuICAgIG1haW5Db250ZW50UmVmLmN1cnJlbnQ/LmZvY3VzKHsgcHJldmVudFNjcm9sbDogdHJ1ZSB9KTtcbiAgfSwgW2FjdGl2ZVBhZ2VdKTtcblxuICBmdW5jdGlvbiBoYW5kbGVTa2lwTGlua0NsaWNrKGV2ZW50OiBNb3VzZUV2ZW50PEhUTUxBbmNob3JFbGVtZW50Pikge1xuICAgIGV2ZW50LnByZXZlbnREZWZhdWx0KCk7XG4gICAgbWFpbkNvbnRlbnRSZWYuY3VycmVudD8uZm9jdXMoeyBwcmV2ZW50U2Nyb2xsOiB0cnVlIH0pO1xuICB9XG5cbiAgZnVuY3Rpb24gcmVuZGVyTmF2QnV0dG9uKHBhZ2U6IEFwcFBhZ2UpIHtcbiAgICBjb25zdCBtZXRhID0gcGFnZXNbcGFnZV07XG4gICAgY29uc3QgSWNvbiA9IG1ldGEuaWNvbjtcblxuICAgIHJldHVybiAoXG4gICAgICA8YnV0dG9uXG4gICAgICAgIGFyaWEtY3VycmVudD17cGFnZSA9PT0gYWN0aXZlUGFnZSA/ICdwYWdlJyA6IHVuZGVmaW5lZH1cbiAgICAgICAgYXJpYS1rZXlzaG9ydGN1dHM9e21ldGEuc2hvcnRjdXR9XG4gICAgICAgIGFyaWEtbGFiZWw9e2Ake21ldGEudGl0bGV977yaJHttZXRhLmRlc2NyaXB0aW9ufe+8jOW/q+aNt+mUriAke21ldGEuc2hvcnRjdXR9YH1cbiAgICAgICAgY2xhc3NOYW1lPXtwYWdlID09PSBhY3RpdmVQYWdlID8gJ25hdi1pdGVtIGFjdGl2ZScgOiAnbmF2LWl0ZW0nfVxuICAgICAgICBrZXk9e3BhZ2V9XG4gICAgICAgIG9uQ2xpY2s9eygpID0+IG9uTmF2aWdhdGUocGFnZSl9XG4gICAgICAgIHRpdGxlPXtgJHttZXRhLnRpdGxlfSDCtyAke21ldGEuZGVzY3JpcHRpb259IMK3ICR7bWV0YS5zaG9ydGN1dH1gfVxuICAgICAgICB0eXBlPVwiYnV0dG9uXCJcbiAgICAgID5cbiAgICAgICAgPEljb24gc2l6ZT17MTl9IC8+XG4gICAgICAgIDxzcGFuPlxuICAgICAgICAgIDxzdHJvbmc+XG4gICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJuYXYtdGl0bGUtZnVsbFwiPnttZXRhLnRpdGxlfTwvc3Bhbj5cbiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cIm5hdi10aXRsZS1zaG9ydFwiPnttZXRhLnNob3J0VGl0bGUgPz8gbWV0YS50aXRsZX08L3NwYW4+XG4gICAgICAgICAgPC9zdHJvbmc+XG4gICAgICAgICAgPHNtYWxsPnttZXRhLmRlc2NyaXB0aW9ufTwvc21hbGw+XG4gICAgICAgIDwvc3Bhbj5cbiAgICAgIDwvYnV0dG9uPlxuICAgICk7XG4gIH1cblxuICByZXR1cm4gKFxuICAgIDxkaXYgY2xhc3NOYW1lPVwiYXBwLXNoZWxsXCI+XG4gICAgICA8YSBjbGFzc05hbWU9XCJza2lwLWxpbmtcIiBocmVmPVwiI21haW4tY29udGVudFwiIG9uQ2xpY2s9e2hhbmRsZVNraXBMaW5rQ2xpY2t9Pui3s+WIsOS4u+WGheWuuTwvYT5cbiAgICAgIDxhc2lkZSBjbGFzc05hbWU9XCJzaWRlYmFyXCI+XG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiYnJhbmRcIj5cbiAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJicmFuZC1tYXJrXCIgYXJpYS1oaWRkZW49XCJ0cnVlXCI+XG4gICAgICAgICAgICA8Qm9va09wZW5DaGVjayBzaXplPXsyNH0gLz5cbiAgICAgICAgICA8L3NwYW4+XG4gICAgICAgICAgPGRpdj5cbiAgICAgICAgICAgIDxoMT7ogIPnoJTkuJPms6g8L2gxPlxuICAgICAgICAgICAgPHA+5pys5Zyw5a2m5Lmg5o6n5Yi25Y+wPC9wPlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICA8L2Rpdj5cblxuICAgICAgICA8bmF2IGNsYXNzTmFtZT1cIm5hdi1saXN0XCIgYXJpYS1sYWJlbD1cIuS4u+WvvOiIqlwiPlxuICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwibmF2LWdyb3VwXCI+XG4gICAgICAgICAgICA8cCBjbGFzc05hbWU9XCJuYXYtZ3JvdXAtbGFiZWxcIj7lrabkuaDpl63njq88L3A+XG4gICAgICAgICAgICB7cHJpbWFyeVBhZ2VzLm1hcChyZW5kZXJOYXZCdXR0b24pfVxuICAgICAgICAgIDwvZGl2PlxuXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJuYXYtZ3JvdXBcIj5cbiAgICAgICAgICAgIDxwIGNsYXNzTmFtZT1cIm5hdi1ncm91cC1sYWJlbFwiPui+heWKqeiDveWKmzwvcD5cbiAgICAgICAgICAgIHtzZWNvbmRhcnlQYWdlcy5tYXAocmVuZGVyTmF2QnV0dG9uKX1cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgPC9uYXY+XG5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJzaWRlYmFyLWZvb3RcIj5cbiAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJzdGF0dXMtZG90XCIgLz5cbiAgICAgICAgICA8ZGl2PlxuICAgICAgICAgICAgPHN0cm9uZz57cnVudGltZVN0YXR1c1RpdGxlfTwvc3Ryb25nPlxuICAgICAgICAgICAgPHNwYW4gdGl0bGU9e2Rlc2t0b3BSZWFkeSA/IHVuZGVmaW5lZCA6IERFU0tUT1BfUlVOVElNRV9NRVNTQUdFfT57cnVudGltZVN0YXR1c1RleHR9PC9zcGFuPlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvYXNpZGU+XG5cbiAgICAgIDxtYWluIGNsYXNzTmFtZT1cIm1haW4tcGFuZWxcIiBpZD1cIm1haW4tY29udGVudFwiIHJlZj17bWFpbkNvbnRlbnRSZWZ9IHRhYkluZGV4PXstMX0+XG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwidG9wLXN0cmlwXCI+XG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJ0b3Atc3RyaXAtdGl0bGVcIj5cbiAgICAgICAgICAgIDxDaXJjbGVEb3Qgc2l6ZT17MTR9IC8+XG4gICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJ0b3Atc3RyaXAtdGl0bGUtY29weVwiPlxuICAgICAgICAgICAgICA8c3Ryb25nPnthY3RpdmVNZXRhLnRpdGxlfTwvc3Ryb25nPlxuICAgICAgICAgICAgICA8c21hbGw+e2FjdGl2ZU1ldGEuZGVzY3JpcHRpb259PC9zbWFsbD5cbiAgICAgICAgICAgIDwvc3Bhbj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInRvcC1zdHJpcC1zdGF0dXNcIj5cbiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT17ZGVza3RvcFJlYWR5ID8gJ3J1bnRpbWUtcGlsbCBpcy1yZWFkeScgOiAncnVudGltZS1waWxsIGlzLXByZXZpZXcnfT5cbiAgICAgICAgICAgICAgPE1vbml0b3JVcCBzaXplPXsxNH0gLz4ge2Rlc2t0b3BSZWFkeSA/ICdXaW5kb3dzIOahjOmdouWjsycgOiAn5rWP6KeI5Zmo6aKE6KeIJ31cbiAgICAgICAgICAgIDwvc3Bhbj5cbiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT17bmV4dEFsYXJtID8gJ25leHQtYWxhcm0tcGlsbCBhY3RpdmUnIDogJ25leHQtYWxhcm0tcGlsbCd9PlxuICAgICAgICAgICAgICA8QWxhcm1DbG9jayBzaXplPXsxNH0gLz4ge2Zvcm1hdE5leHRBbGFybShuZXh0QWxhcm0pfVxuICAgICAgICAgICAgPC9zcGFuPlxuICAgICAgICAgICAgPHNwYW4+PExvY2sgc2l6ZT17MTR9IC8+IOWtpuS5oOS4reiHquWKqOmUgeWumumFjee9rjwvc3Bhbj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInRoZW1lLXRvZ2dsZVwiIHJvbGU9XCJncm91cFwiIGFyaWEtbGFiZWw9XCLkuLvpopjliIfmjaJcIj5cbiAgICAgICAgICAgIHtBUFBfVEhFTUVfT1BUSU9OUy5tYXAoKG9wdGlvbikgPT4gKFxuICAgICAgICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgICAgICAgYXJpYS1wcmVzc2VkPXt0aGVtZSA9PT0gb3B0aW9uLmlkfVxuICAgICAgICAgICAgICAgIGNsYXNzTmFtZT17dGhlbWUgPT09IG9wdGlvbi5pZCA/ICdhY3RpdmUnIDogJyd9XG4gICAgICAgICAgICAgICAga2V5PXtvcHRpb24uaWR9XG4gICAgICAgICAgICAgICAgb25DbGljaz17KCkgPT4gb25UaGVtZUNoYW5nZShvcHRpb24uaWQpfVxuICAgICAgICAgICAgICAgIHRpdGxlPXtvcHRpb24uZGVzY3JpcHRpb259XG4gICAgICAgICAgICAgICAgdHlwZT1cImJ1dHRvblwiXG4gICAgICAgICAgICAgID5cbiAgICAgICAgICAgICAgICA8c3BhblxuICAgICAgICAgICAgICAgICAgYXJpYS1oaWRkZW49XCJ0cnVlXCJcbiAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT1cInRoZW1lLXN3YXRjaFwiXG4gICAgICAgICAgICAgICAgICBzdHlsZT17eyBiYWNrZ3JvdW5kOiBgbGluZWFyLWdyYWRpZW50KDEzNWRlZywgJHtvcHRpb24uc3dhdGNoWzBdfSwgJHtvcHRpb24uc3dhdGNoWzFdfSA1OCUsICR7b3B0aW9uLnN3YXRjaFsyXX0pYCB9fVxuICAgICAgICAgICAgICAgIC8+XG4gICAgICAgICAgICAgICAge29wdGlvbi5zaG9ydExhYmVsfVxuICAgICAgICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgICAgICkpfVxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICA8L2Rpdj5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJwYWdlLXRyYW5zaXRpb25cIiBrZXk9e2FjdGl2ZVBhZ2V9PlxuICAgICAgICAgIHtjaGlsZHJlbn1cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L21haW4+XG4gICAgPC9kaXY+XG4gICk7XG59XG4iXSwiZmlsZSI6IkU6L0JhaWR1U3luY2Rpc2sv5aSn5a2mL+Wkp+S4iS/lpKfkuInkuIsv6ICD56CU5LiT5rOoL+iAg+eglOS4k+azqC9zcmMvY29tcG9uZW50cy9MYXlvdXQudHN4In0=

@@ -57,9 +57,15 @@ export default function ScheduleDrawer({
 }: ScheduleDrawerProps) {
   const canCreate = Boolean(draft.title.trim()) && !saving;
   const nowTop = currentTopPercent();
+  const blockGlobalShortcuts = isOpen;
 
   return (
-    <section aria-hidden={!isOpen ? true : undefined} className={`schedule-drawer${isOpen ? ' is-open' : ''}`} inert={!isOpen ? true : undefined}>
+    <section
+      aria-hidden={!isOpen ? true : undefined}
+      className={`schedule-drawer${isOpen ? ' is-open' : ''}`}
+      data-block-global-shortcuts={blockGlobalShortcuts ? 'true' : undefined}
+      inert={!isOpen ? true : undefined}
+    >
       <div className="panel-title schedule-drawer-head">
         <div>
           <p className="eyebrow">今日安排</p>
