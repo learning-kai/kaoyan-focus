@@ -23,6 +23,7 @@ const REMAINING_REFRESH_MS = 1000;
 const TITLE = '专注悬浮窗';
 const HOVER_EXPAND_DELAY_MS = 120;
 const HOVER_COLLAPSE_DELAY_MS = 180;
+const HOVER_COLLAPSE_RETRY_MS = 40;
 const HOVER_REENTRY_LOCK_MS = 220;
 
 const idleState: StudyModeState = {
@@ -375,13 +376,23 @@ export default function FocusWidgetPage() {
       collapseTimerRef.current = null;
     }
 
-    collapseTimerRef.current = window.setTimeout(() => {
-      collapseTimerRef.current = null;
-      if (dockModeRef.current !== 'peek') return;
-      if (Date.now() < hoverLockUntilRef.current) return;
-      if (shellRef.current?.matches(':hover')) return;
-      void collapseToEdge();
-    }, HOVER_COLLAPSE_DELAY_MS);
+    const scheduleCollapseAttempt = (delayMs: number) => {
+      collapseTimerRef.current = window.setTimeout(() => {
+        collapseTimerRef.current = null;
+        if (dockModeRef.current !== 'peek') return;
+
+        const lockRemainingMs = hoverLockUntilRef.current - Date.now();
+        if (lockRemainingMs > 0) {
+          scheduleCollapseAttempt(lockRemainingMs + HOVER_COLLAPSE_RETRY_MS);
+          return;
+        }
+
+        if (shellRef.current?.matches(':hover')) return;
+        void collapseToEdge();
+      }, delayMs);
+    };
+
+    scheduleCollapseAttempt(HOVER_COLLAPSE_DELAY_MS);
   }, [canInteract, collapseToEdge]);
 
   if (dockState.mode === 'collapsed') {
@@ -409,10 +420,12 @@ export default function FocusWidgetPage() {
     );
   }
 
+  const expandedEdgeClass = dockState.edge ? ` edge-${dockState.edge}` : '';
+
   return (
     <section
       ref={shellRef}
-      className={`focus-widget-shell is-${dockState.mode}`}
+      className={`focus-widget-shell is-${dockState.mode}${expandedEdgeClass}`}
       onMouseEnter={handleExpandedMouseEnter}
       onMouseLeave={handleExpandedMouseLeave}
     >

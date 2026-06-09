@@ -55,6 +55,17 @@ body {
     linear-gradient(180deg, #09121f 0%, #070c14 100%);
 }
 
+html.focus-widget-document,
+html.focus-widget-document body.focus-widget-body,
+html.focus-widget-document body.focus-widget-body #root {
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent !important;
+  scrollbar-gutter: auto;
+}
+
 button,
 input,
 select {

@@ -14,6 +14,11 @@ async function renderCurrentWindow() {
   }
 
   const isFocusWidgetWindow = new URLSearchParams(window.location.search).get('windowLabel') === 'focus-widget';
+  if (isFocusWidgetWindow) {
+    document.documentElement.classList.add('focus-widget-document');
+    document.body.classList.add('focus-widget-body');
+  }
+
   const EntryApp = isFocusWidgetWindow ? (await import('./pages/FocusWidgetPage')).default : (await import('./App')).default;
 
   ReactDOM.createRoot(root).render(
