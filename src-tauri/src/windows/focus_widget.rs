@@ -14,7 +14,7 @@ use tauri::{
 use crate::{
     commands::{
         focus::StudyModeState,
-        settings::{get_app_settings, save_focus_widget_geometry, AppSettings},
+        settings::{get_app_settings, save_app_settings, save_focus_widget_geometry, AppSettings},
     },
     storage::db::open_database,
 };
@@ -51,6 +51,8 @@ const COLLAPSED_BAR_HEIGHT: f64 = 36.0;
 const EDGE_COLLAPSE_THRESHOLD: f64 = 18.0;
 const EDGE_SAFE_MARGIN: f64 = 8.0;
 const GEOMETRY_DEBOUNCE_MS: u64 = 250;
+const DOCK_ANIMATION_MS: u64 = 170;
+const DOCK_ANIMATION_STEPS: u32 = 12;
 
 static CREATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static RUNTIME_STATE: OnceLock<Mutex<FocusWidgetRuntimeState>> = OnceLock::new();
@@ -111,6 +113,7 @@ struct FocusWidgetRuntimeState {
     normal_geometry: Option<FocusWidgetGeometry>,
     geometry_event_generation: u64,
     geometry_suppression_generation: u64,
+    window_animation_generation: u64,
     suppress_geometry_events: bool,
 }
 
@@ -191,7 +194,8 @@ impl FocusWidget {
         }
 
         let geometry = focus_widget_geometry_from_settings(&settings);
-        let window = build_focus_widget_window(&self.app, geometry, settings.focus_widget_always_on_top)?;
+        let window =
+            build_focus_widget_window(&self.app, geometry, settings.focus_widget_always_on_top)?;
         attach_window_handlers(&self.app, &window);
         Ok(window)
     }
@@ -224,6 +228,24 @@ impl FocusWidget {
             self.show()?;
             Ok(true)
         }
+    }
+
+    pub fn always_on_top(&self) -> Result<bool, String> {
+        Ok(get_app_settings(self.app.clone())?.focus_widget_always_on_top)
+    }
+
+    pub fn toggle_always_on_top(&self) -> Result<bool, String> {
+        let mut settings = get_app_settings(self.app.clone())?;
+        settings.focus_widget_always_on_top = !settings.focus_widget_always_on_top;
+        let settings = save_app_settings(self.app.clone(), settings)?;
+
+        if let Some(window) = self.window() {
+            window
+                .set_always_on_top(settings.focus_widget_always_on_top)
+                .map_err(|error| error.to_string())?;
+        }
+
+        Ok(settings.focus_widget_always_on_top)
     }
 
     pub fn bring_to_main(&self) -> Result<(), String> {
@@ -282,6 +304,14 @@ pub fn hide(app: &AppHandle) -> Result<(), String> {
 
 pub fn toggle_visibility(app: &AppHandle) -> Result<bool, String> {
     focus_widget(app).toggle_visibility()
+}
+
+pub fn get_always_on_top(app: &AppHandle) -> Result<bool, String> {
+    focus_widget(app).always_on_top()
+}
+
+pub fn toggle_always_on_top(app: &AppHandle) -> Result<bool, String> {
+    focus_widget(app).toggle_always_on_top()
 }
 
 pub fn bring_to_main(app: &AppHandle) -> Result<(), String> {
@@ -680,17 +710,21 @@ fn collapse_window_to_edge(
     let size = collapsed_size(edge);
     let position = docked_position(edge, &area, current_geometry, size);
     let next_state = FocusWidgetDockState::collapsed(edge);
+    let target_geometry = FocusWidgetGeometry {
+        x: Some(position.x.unwrap_or(area.x)),
+        y: Some(position.y.unwrap_or(area.y)),
+        width: size.width,
+        height: size.height,
+    };
 
-    set_dock_state(app, next_state);
     suppress_geometry_events_briefly();
     apply_size_constraints(window, true)?;
-    window
-        .set_size(LogicalSize::new(size.width, size.height))
-        .map_err(|error| error.to_string())?;
-    window
-        .set_position(LogicalPosition::new(position.x.unwrap_or(area.x), position.y.unwrap_or(area.y)))
-        .map_err(|error| error.to_string())?;
-    Ok(next_state)
+    if animate_focus_widget_geometry(window, current_geometry, target_geometry)? {
+        set_dock_state(app, next_state);
+        Ok(next_state)
+    } else {
+        Ok(current_dock_state())
+    }
 }
 
 fn expand_window_to_edge(
@@ -700,8 +734,11 @@ fn expand_window_to_edge(
     mode: FocusWidgetDockMode,
 ) -> Result<FocusWidgetDockState, String> {
     let current_geometry = logical_geometry_from_window(window)?;
-    let normal_geometry = runtime_normal_geometry()
-        .unwrap_or_else(|| normalize_normal_geometry(focus_widget_geometry_from_settings(&get_app_settings(app.clone()).unwrap_or_default())));
+    let normal_geometry = runtime_normal_geometry().unwrap_or_else(|| {
+        normalize_normal_geometry(focus_widget_geometry_from_settings(
+            &get_app_settings(app.clone()).unwrap_or_default(),
+        ))
+    });
     let area = current_work_area(window)?;
     let expanded_geometry = expanded_position(edge, &area, normal_geometry, current_geometry);
     let next_state = match mode {
@@ -713,16 +750,76 @@ fn expand_window_to_edge(
     set_dock_state(app, next_state);
     suppress_geometry_events_briefly();
     apply_size_constraints(window, false)?;
-    window
-        .set_size(LogicalSize::new(expanded_geometry.width, expanded_geometry.height))
-        .map_err(|error| error.to_string())?;
-    if let (Some(x), Some(y)) = (expanded_geometry.x, expanded_geometry.y) {
+    if animate_focus_widget_geometry(window, current_geometry, expanded_geometry)? {
+        Ok(next_state)
+    } else {
+        Ok(current_dock_state())
+    }
+}
+
+fn animate_focus_widget_geometry(
+    window: &WebviewWindow,
+    from: FocusWidgetGeometry,
+    to: FocusWidgetGeometry,
+) -> Result<bool, String> {
+    let generation = next_window_animation_generation();
+    let start_x = from.x.unwrap_or_else(|| to.x.unwrap_or(0.0));
+    let start_y = from.y.unwrap_or_else(|| to.y.unwrap_or(0.0));
+    let end_x = to.x.unwrap_or(start_x);
+    let end_y = to.y.unwrap_or(start_y);
+    let frame_delay =
+        Duration::from_millis((DOCK_ANIMATION_MS / DOCK_ANIMATION_STEPS as u64).max(1));
+
+    for step in 1..=DOCK_ANIMATION_STEPS {
+        if !is_current_window_animation(generation) {
+            return Ok(false);
+        }
+
+        let progress = ease_out_cubic(step as f64 / DOCK_ANIMATION_STEPS as f64);
+        let next_x = lerp(start_x, end_x, progress);
+        let next_y = lerp(start_y, end_y, progress);
+        let next_width = lerp(from.width, to.width, progress);
+        let next_height = lerp(from.height, to.height, progress);
+
         window
-            .set_position(LogicalPosition::new(x, y))
+            .set_position(LogicalPosition::new(next_x, next_y))
             .map_err(|error| error.to_string())?;
+        window
+            .set_size(LogicalSize::new(next_width, next_height))
+            .map_err(|error| error.to_string())?;
+
+        if step < DOCK_ANIMATION_STEPS {
+            std::thread::sleep(frame_delay);
+        }
     }
 
-    Ok(next_state)
+    Ok(is_current_window_animation(generation))
+}
+
+fn next_window_animation_generation() -> u64 {
+    runtime_state()
+        .lock()
+        .map(|mut runtime| {
+            runtime.window_animation_generation =
+                runtime.window_animation_generation.wrapping_add(1);
+            runtime.window_animation_generation
+        })
+        .unwrap_or(0)
+}
+
+fn is_current_window_animation(generation: u64) -> bool {
+    runtime_state()
+        .lock()
+        .map(|runtime| runtime.window_animation_generation == generation)
+        .unwrap_or(false)
+}
+
+fn lerp(from: f64, to: f64, progress: f64) -> f64 {
+    from + (to - from) * progress
+}
+
+fn ease_out_cubic(progress: f64) -> f64 {
+    1.0 - (1.0 - progress).powi(3)
 }
 
 fn nearest_dock_edge(window: &WebviewWindow) -> Result<Option<FocusWidgetDockEdge>, String> {
@@ -750,8 +847,7 @@ fn nearest_dock_edge(window: &WebviewWindow) -> Result<Option<FocusWidgetDockEdg
         .into_iter()
         .filter(|(_, distance)| *distance <= EDGE_COLLAPSE_THRESHOLD)
         .min_by(|(_, left), (_, right)| {
-            left.partial_cmp(right)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|(edge, _)| edge))
 }
@@ -812,8 +908,10 @@ fn docked_position(
     let source_y = source.y.unwrap_or(area.y);
     let centered_x = source_x + (source.width - size.width) / 2.0;
     let centered_y = source_y + (source.height - size.height) / 2.0;
-    let x_limit = (area.x + area.width - size.width - EDGE_SAFE_MARGIN).max(area.x + EDGE_SAFE_MARGIN);
-    let y_limit = (area.y + area.height - size.height - EDGE_SAFE_MARGIN).max(area.y + EDGE_SAFE_MARGIN);
+    let x_limit =
+        (area.x + area.width - size.width - EDGE_SAFE_MARGIN).max(area.x + EDGE_SAFE_MARGIN);
+    let y_limit =
+        (area.y + area.height - size.height - EDGE_SAFE_MARGIN).max(area.y + EDGE_SAFE_MARGIN);
 
     match edge {
         FocusWidgetDockEdge::Left => FocusWidgetGeometry {
@@ -852,8 +950,10 @@ fn expanded_position(
     let normal = normalize_normal_geometry(normal);
     let current_x = current.x.unwrap_or(area.x);
     let current_y = current.y.unwrap_or(area.y);
-    let x_limit = (area.x + area.width - normal.width - EDGE_SAFE_MARGIN).max(area.x + EDGE_SAFE_MARGIN);
-    let y_limit = (area.y + area.height - normal.height - EDGE_SAFE_MARGIN).max(area.y + EDGE_SAFE_MARGIN);
+    let x_limit =
+        (area.x + area.width - normal.width - EDGE_SAFE_MARGIN).max(area.x + EDGE_SAFE_MARGIN);
+    let y_limit =
+        (area.y + area.height - normal.height - EDGE_SAFE_MARGIN).max(area.y + EDGE_SAFE_MARGIN);
     let centered_x = current_x + (current.width - normal.width) / 2.0;
     let centered_y = current_y + (current.height - normal.height) / 2.0;
     let normal_x = normal.x.unwrap_or(centered_x);

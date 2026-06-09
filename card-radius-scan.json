@@ -1,0 +1,3093 @@
+{
+  "lowSurfaceReports": [
+    {
+      "route": "/",
+      "theme": "light",
+      "count": 7,
+      "samples": [
+        {
+          "route": "/",
+          "theme": "light",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "rgb(238, 243, 248)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/",
+          "theme": "light",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/",
+          "theme": "light",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/checklist",
+      "theme": "light",
+      "count": 7,
+      "samples": [
+        {
+          "route": "/checklist",
+          "theme": "light",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "rgb(238, 243, 248)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "light",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "light",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/schedule",
+      "theme": "light",
+      "count": 7,
+      "samples": [
+        {
+          "route": "/schedule",
+          "theme": "light",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "rgb(238, 243, 248)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "light",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "light",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/whitelist",
+      "theme": "light",
+      "count": 7,
+      "samples": [
+        {
+          "route": "/whitelist",
+          "theme": "light",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "rgb(238, 243, 248)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "light",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "light",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/review",
+      "theme": "light",
+      "count": 7,
+      "samples": [
+        {
+          "route": "/review",
+          "theme": "light",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "rgb(238, 243, 248)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/review",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/review",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/review",
+          "theme": "light",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/review",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/review",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/review",
+          "theme": "light",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/stats",
+      "theme": "light",
+      "count": 7,
+      "samples": [
+        {
+          "route": "/stats",
+          "theme": "light",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "rgb(238, 243, 248)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/stats",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/stats",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/stats",
+          "theme": "light",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/stats",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/stats",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/stats",
+          "theme": "light",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/alarm",
+      "theme": "light",
+      "count": 7,
+      "samples": [
+        {
+          "route": "/alarm",
+          "theme": "light",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "rgb(238, 243, 248)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "light",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "light",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/settings",
+      "theme": "light",
+      "count": 7,
+      "samples": [
+        {
+          "route": "/settings",
+          "theme": "light",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "rgb(238, 243, 248)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/settings",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/settings",
+          "theme": "light",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/settings",
+          "theme": "light",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        },
+        {
+          "route": "/settings",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/settings",
+          "theme": "light",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(101, 115, 135)"
+        },
+        {
+          "route": "/settings",
+          "theme": "light",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(22, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/",
+      "theme": "mono",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/",
+          "theme": "mono",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.931451 0.920627 0.895373)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/",
+          "theme": "mono",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        }
+      ]
+    },
+    {
+      "route": "/checklist",
+      "theme": "mono",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/checklist",
+          "theme": "mono",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.931451 0.920627 0.895373)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "mono",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        }
+      ]
+    },
+    {
+      "route": "/schedule",
+      "theme": "mono",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/schedule",
+          "theme": "mono",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.931451 0.920627 0.895373)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "mono",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        }
+      ]
+    },
+    {
+      "route": "/whitelist",
+      "theme": "mono",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/whitelist",
+          "theme": "mono",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.931451 0.920627 0.895373)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "mono",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        }
+      ]
+    },
+    {
+      "route": "/review",
+      "theme": "mono",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/review",
+          "theme": "mono",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.931451 0.920627 0.895373)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/review",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/review",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/review",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/review",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/review",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/review",
+          "theme": "mono",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/review",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        }
+      ]
+    },
+    {
+      "route": "/stats",
+      "theme": "mono",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/stats",
+          "theme": "mono",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.931451 0.920627 0.895373)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/stats",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/stats",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/stats",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/stats",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/stats",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/stats",
+          "theme": "mono",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/stats",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        }
+      ]
+    },
+    {
+      "route": "/alarm",
+      "theme": "mono",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/alarm",
+          "theme": "mono",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.931451 0.920627 0.895373)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "mono",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        }
+      ]
+    },
+    {
+      "route": "/settings",
+      "theme": "mono",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/settings",
+          "theme": "mono",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.931451 0.920627 0.895373)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/settings",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/settings",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/settings",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        },
+        {
+          "route": "/settings",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/settings",
+          "theme": "mono",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(109, 112, 109)"
+        },
+        {
+          "route": "/settings",
+          "theme": "mono",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/settings",
+          "theme": "mono",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(37, 40, 45)"
+        }
+      ]
+    },
+    {
+      "route": "/",
+      "theme": "dawn",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/",
+          "theme": "dawn",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.967529 0.974745 0.953098)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/",
+          "theme": "dawn",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/checklist",
+      "theme": "dawn",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/checklist",
+          "theme": "dawn",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.967529 0.974745 0.953098)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "dawn",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/schedule",
+      "theme": "dawn",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/schedule",
+          "theme": "dawn",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.967529 0.974745 0.953098)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "dawn",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/whitelist",
+      "theme": "dawn",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/whitelist",
+          "theme": "dawn",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.967529 0.974745 0.953098)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "dawn",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/review",
+      "theme": "dawn",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/review",
+          "theme": "dawn",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.967529 0.974745 0.953098)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/review",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/review",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/review",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/review",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/review",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/review",
+          "theme": "dawn",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/review",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/stats",
+      "theme": "dawn",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/stats",
+          "theme": "dawn",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.967529 0.974745 0.953098)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/stats",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/stats",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/stats",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/stats",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/stats",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/stats",
+          "theme": "dawn",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/stats",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/alarm",
+      "theme": "dawn",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/alarm",
+          "theme": "dawn",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.967529 0.974745 0.953098)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "dawn",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/settings",
+      "theme": "dawn",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/settings",
+          "theme": "dawn",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.967529 0.974745 0.953098)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/settings",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/settings",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/settings",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        },
+        {
+          "route": "/settings",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/settings",
+          "theme": "dawn",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(105, 116, 134)"
+        },
+        {
+          "route": "/settings",
+          "theme": "dawn",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/settings",
+          "theme": "dawn",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(23, 32, 51)"
+        }
+      ]
+    },
+    {
+      "route": "/",
+      "theme": "forest",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/",
+          "theme": "forest",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.935059 0.971137 0.942275)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/",
+          "theme": "forest",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        }
+      ]
+    },
+    {
+      "route": "/checklist",
+      "theme": "forest",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/checklist",
+          "theme": "forest",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.935059 0.971137 0.942275)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "forest",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        }
+      ]
+    },
+    {
+      "route": "/schedule",
+      "theme": "forest",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/schedule",
+          "theme": "forest",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.935059 0.971137 0.942275)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "forest",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        }
+      ]
+    },
+    {
+      "route": "/whitelist",
+      "theme": "forest",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/whitelist",
+          "theme": "forest",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.935059 0.971137 0.942275)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "forest",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        }
+      ]
+    },
+    {
+      "route": "/review",
+      "theme": "forest",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/review",
+          "theme": "forest",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.935059 0.971137 0.942275)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/review",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/review",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/review",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/review",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/review",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/review",
+          "theme": "forest",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/review",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        }
+      ]
+    },
+    {
+      "route": "/stats",
+      "theme": "forest",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/stats",
+          "theme": "forest",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.935059 0.971137 0.942275)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/stats",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/stats",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/stats",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/stats",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/stats",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/stats",
+          "theme": "forest",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/stats",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        }
+      ]
+    },
+    {
+      "route": "/alarm",
+      "theme": "forest",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/alarm",
+          "theme": "forest",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.935059 0.971137 0.942275)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "forest",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        }
+      ]
+    },
+    {
+      "route": "/settings",
+      "theme": "forest",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/settings",
+          "theme": "forest",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.935059 0.971137 0.942275)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/settings",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/settings",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/settings",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        },
+        {
+          "route": "/settings",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/settings",
+          "theme": "forest",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(95, 123, 106)"
+        },
+        {
+          "route": "/settings",
+          "theme": "forest",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/settings",
+          "theme": "forest",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(29, 53, 40)"
+        }
+      ]
+    },
+    {
+      "route": "/",
+      "theme": "sakura",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/",
+          "theme": "sakura",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.971137 0.963922 0.974745)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/",
+          "theme": "sakura",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        }
+      ]
+    },
+    {
+      "route": "/checklist",
+      "theme": "sakura",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/checklist",
+          "theme": "sakura",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.971137 0.963922 0.974745)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "sakura",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/checklist",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        }
+      ]
+    },
+    {
+      "route": "/schedule",
+      "theme": "sakura",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/schedule",
+          "theme": "sakura",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.971137 0.963922 0.974745)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "sakura",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/schedule",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        }
+      ]
+    },
+    {
+      "route": "/whitelist",
+      "theme": "sakura",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/whitelist",
+          "theme": "sakura",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.971137 0.963922 0.974745)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "sakura",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/whitelist",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        }
+      ]
+    },
+    {
+      "route": "/review",
+      "theme": "sakura",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/review",
+          "theme": "sakura",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.971137 0.963922 0.974745)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/review",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/review",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/review",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/review",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/review",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/review",
+          "theme": "sakura",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/review",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        }
+      ]
+    },
+    {
+      "route": "/stats",
+      "theme": "sakura",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/stats",
+          "theme": "sakura",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.971137 0.963922 0.974745)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/stats",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/stats",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/stats",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/stats",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/stats",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/stats",
+          "theme": "sakura",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/stats",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        }
+      ]
+    },
+    {
+      "route": "/alarm",
+      "theme": "sakura",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/alarm",
+          "theme": "sakura",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.971137 0.963922 0.974745)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "sakura",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/alarm",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        }
+      ]
+    },
+    {
+      "route": "/settings",
+      "theme": "sakura",
+      "count": 8,
+      "samples": [
+        {
+          "route": "/settings",
+          "theme": "sakura",
+          "tag": "main",
+          "cls": "main-panel",
+          "radius": 0,
+          "bg": "color(srgb 0.971137 0.963922 0.974745)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/settings",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/settings",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "settings-tab-panel",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/settings",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "panel-title",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        },
+        {
+          "route": "/settings",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/settings",
+          "theme": "sakura",
+          "tag": "p",
+          "cls": "panel-copy",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(111, 114, 132)"
+        },
+        {
+          "route": "/settings",
+          "theme": "sakura",
+          "tag": "button",
+          "cls": "sound-option-card.active",
+          "radius": 12,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgba(0, 0, 0, 0)"
+        },
+        {
+          "route": "/settings",
+          "theme": "sakura",
+          "tag": "div",
+          "cls": "row-actions",
+          "radius": 0,
+          "bg": "rgba(0, 0, 0, 0)",
+          "border": "rgb(32, 35, 56)"
+        }
+      ]
+    }
+  ],
+  "totalReports": 40
+}

@@ -6,6 +6,12 @@ html[data-theme='sakura'] {
   --surface-glass: color-mix(in srgb, var(--surface) 82%, transparent);
   --surface-glass-strong: color-mix(in srgb, var(--surface-strong) 92%, transparent);
   --surface-panel: color-mix(in srgb, var(--surface) 90%, transparent);
+  --radius: 14px;
+  --radius-control: 12px;
+  --radius-card: 14px;
+  --radius-panel: 18px;
+  --radius-shell: 20px;
+  --radius-lg: 18px;
   --surface-card: linear-gradient(
     180deg,
     color-mix(in srgb, var(--theme-card-sheen) 78%, var(--surface-strong)),
@@ -1698,6 +1704,12 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) {
+  --radius: 14px;
+  --radius-control: 12px;
+  --radius-card: 14px;
+  --radius-panel: 18px;
+  --radius-shell: 20px;
+  --radius-lg: 18px;
   --surface-card: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 250, 253, 0.9));
   --surface-card-soft: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.84));
   --surface-card-muted: linear-gradient(180deg, rgba(251, 253, 255, 0.94), rgba(245, 249, 253, 0.88));
@@ -2227,8 +2239,21 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
     .checklist-categories-panel
   ) {
   border-color: var(--line);
+  border-radius: var(--radius-panel);
   background: var(--surface-card) !important;
   box-shadow: var(--shadow-panel);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  .page-shell {
+  border-radius: var(--radius-shell);
 }
 
 :is(
@@ -2310,8 +2335,35 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
   ) {
   color: var(--ink);
   border-color: var(--line);
+  border-radius: var(--radius-card);
   background: var(--surface-card-soft) !important;
   box-shadow: var(--shadow-card);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .text-input,
+    .number-input,
+    .select-input,
+    .time-input,
+    .date-stepper input,
+    .schedule-composer input,
+    .schedule-composer select,
+    .schedule-block-editor input,
+    .schedule-quick-add input,
+    .schedule-quick-add select,
+    .review-textarea,
+    .settings-save-copy b,
+    .settings-save-copy small
+  ) {
+  border-radius: var(--radius-control);
 }
 
 :is(
@@ -2423,6 +2475,29 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
   border-color: var(--line-strong);
   background: var(--surface-card-hover) !important;
   box-shadow: var(--shadow-card);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .today-item-row.is-current,
+    .category-tab.active,
+    .checklist-board-panel.is-highlighted,
+    .alarm-row.is-upcoming,
+    .alarm-row.is-targeted,
+    .alarm-row.is-ringing,
+    .schedule-block,
+    .week-block,
+    .schedule-drawer-block,
+    .schedule-drag-preview
+  ) {
+  border-radius: var(--radius-card) !important;
 }
 
 :is(

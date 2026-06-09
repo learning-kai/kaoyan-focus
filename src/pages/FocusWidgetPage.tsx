@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftToLine, EyeOff } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeftToLine, EyeOff, Pin, PinOff } from 'lucide-react';
 import { getStudyModeState, listSubjects } from '../services/focusApi';
 import {
   collapseFocusWidgetToEdge,
   defaultFocusWidgetDockState,
+  getFocusWidgetAlwaysOnTop,
   getFocusWidgetDockState,
   hideFocusWidget,
   listenFocusWidgetDockState,
   peekFocusWidgetFromEdge,
   returnFocusWidgetToMain,
+  toggleFocusWidgetAlwaysOnTop,
   type FocusWidgetDockEdge,
 } from '../services/focusWidgetApi';
 import { STUDY_SYNC_STATE_CHANGED_EVENT } from '../services/syncApi';
@@ -19,6 +21,9 @@ import './FocusWidgetPage.css';
 
 const REMAINING_REFRESH_MS = 1000;
 const TITLE = '专注悬浮窗';
+const HOVER_EXPAND_DELAY_MS = 120;
+const HOVER_COLLAPSE_DELAY_MS = 180;
+const HOVER_REENTRY_LOCK_MS = 220;
 
 const idleState: StudyModeState = {
   id: null,
@@ -70,7 +75,14 @@ export default function FocusWidgetPage() {
   const [studyState, setStudyState] = useState<StudyModeState>(idleState);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [dockState, setDockState] = useState(defaultFocusWidgetDockState);
+  const [alwaysOnTop, setAlwaysOnTop] = useState(false);
+  const [isAlwaysOnTopUpdating, setIsAlwaysOnTopUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const shellRef = useRef<HTMLElement | null>(null);
+  const expandTimerRef = useRef<number | null>(null);
+  const collapseTimerRef = useRef<number | null>(null);
+  const hoverLockUntilRef = useRef(0);
+  const dockModeRef = useRef(dockState.mode);
   const canInteract = isTauriRuntime();
 
   useEffect(() => {
@@ -185,6 +197,47 @@ export default function FocusWidgetPage() {
     };
   }, [canInteract]);
 
+  useEffect(() => {
+    dockModeRef.current = dockState.mode;
+  }, [dockState.mode]);
+
+  useEffect(() => {
+    return () => {
+      if (expandTimerRef.current !== null) {
+        window.clearTimeout(expandTimerRef.current);
+        expandTimerRef.current = null;
+      }
+      if (collapseTimerRef.current !== null) {
+        window.clearTimeout(collapseTimerRef.current);
+        collapseTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canInteract) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    void getFocusWidgetAlwaysOnTop()
+      .then((nextAlwaysOnTop) => {
+        if (!cancelled) {
+          setAlwaysOnTop(nextAlwaysOnTop);
+        }
+      })
+      .catch((reason) => {
+        if (!cancelled) {
+          setError(reason instanceof Error ? reason.message : String(reason));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canInteract]);
+
   const remainingSeconds = studyState.phase_remaining_seconds;
   const progressPercent = studyState.planned_seconds > 0
     ? Math.max(0, Math.min(100, Math.round((studyState.study_elapsed_seconds / studyState.planned_seconds) * 100)))
@@ -220,33 +273,126 @@ export default function FocusWidgetPage() {
     }
   }, [canInteract]);
 
+  const toggleAlwaysOnTop = useCallback(async () => {
+    if (!canInteract || isAlwaysOnTopUpdating) return;
+
+    try {
+      setIsAlwaysOnTopUpdating(true);
+      setAlwaysOnTop(await toggleFocusWidgetAlwaysOnTop());
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setIsAlwaysOnTopUpdating(false);
+    }
+  }, [canInteract, isAlwaysOnTopUpdating]);
+
   const peekFromEdge = useCallback(async () => {
-    if (!canInteract || dockState.mode !== 'collapsed') return;
+    if (!canInteract || dockModeRef.current !== 'collapsed') return;
+
+    if (expandTimerRef.current !== null) {
+      window.clearTimeout(expandTimerRef.current);
+      expandTimerRef.current = null;
+    }
+    if (collapseTimerRef.current !== null) {
+      window.clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+    hoverLockUntilRef.current = Date.now() + HOVER_REENTRY_LOCK_MS;
 
     try {
       setDockState(await peekFocusWidgetFromEdge());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
-  }, [canInteract, dockState.mode]);
+  }, [canInteract]);
 
   const collapseToEdge = useCallback(async () => {
-    if (!canInteract || dockState.mode !== 'peek') return;
+    if (!canInteract || dockModeRef.current !== 'peek') return;
+
+    if (expandTimerRef.current !== null) {
+      window.clearTimeout(expandTimerRef.current);
+      expandTimerRef.current = null;
+    }
+    if (collapseTimerRef.current !== null) {
+      window.clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+    hoverLockUntilRef.current = Date.now() + HOVER_REENTRY_LOCK_MS;
 
     try {
       setDockState(await collapseFocusWidgetToEdge());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
-  }, [canInteract, dockState.mode]);
+  }, [canInteract]);
+
+  const handleCollapsedMouseEnter = useCallback(() => {
+    if (!canInteract || dockModeRef.current !== 'collapsed') return;
+    if (Date.now() < hoverLockUntilRef.current) return;
+
+    if (collapseTimerRef.current !== null) {
+      window.clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+    if (expandTimerRef.current !== null) {
+      window.clearTimeout(expandTimerRef.current);
+      expandTimerRef.current = null;
+    }
+
+    expandTimerRef.current = window.setTimeout(() => {
+      expandTimerRef.current = null;
+      if (dockModeRef.current !== 'collapsed') return;
+      if (Date.now() < hoverLockUntilRef.current) return;
+      if (!shellRef.current?.matches(':hover')) return;
+      void peekFromEdge();
+    }, HOVER_EXPAND_DELAY_MS);
+  }, [canInteract, peekFromEdge]);
+
+  const handleCollapsedMouseLeave = useCallback(() => {
+    if (expandTimerRef.current !== null) {
+      window.clearTimeout(expandTimerRef.current);
+      expandTimerRef.current = null;
+    }
+  }, []);
+
+  const handleExpandedMouseEnter = useCallback(() => {
+    if (collapseTimerRef.current !== null) {
+      window.clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+  }, []);
+
+  const handleExpandedMouseLeave = useCallback(() => {
+    if (!canInteract || dockModeRef.current !== 'peek') return;
+
+    if (expandTimerRef.current !== null) {
+      window.clearTimeout(expandTimerRef.current);
+      expandTimerRef.current = null;
+    }
+    if (collapseTimerRef.current !== null) {
+      window.clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+
+    collapseTimerRef.current = window.setTimeout(() => {
+      collapseTimerRef.current = null;
+      if (dockModeRef.current !== 'peek') return;
+      if (Date.now() < hoverLockUntilRef.current) return;
+      if (shellRef.current?.matches(':hover')) return;
+      void collapseToEdge();
+    }, HOVER_COLLAPSE_DELAY_MS);
+  }, [canInteract, collapseToEdge]);
 
   if (dockState.mode === 'collapsed') {
     const edge = dockState.edge ?? 'left';
     return (
       <section
+        ref={shellRef}
         aria-label={`${stageLabel}，剩余 ${formatWidgetSeconds(remainingSeconds)}，${combinedLabel}`}
         className={`focus-widget-shell is-collapsed edge-${edge}`}
-        onMouseEnter={() => void peekFromEdge()}
+        onMouseEnter={() => void handleCollapsedMouseEnter()}
+        onMouseLeave={handleCollapsedMouseLeave}
       >
         <button
           className="focus-widget-collapsed-tab"
@@ -265,8 +411,10 @@ export default function FocusWidgetPage() {
 
   return (
     <section
+      ref={shellRef}
       className={`focus-widget-shell is-${dockState.mode}`}
-      onMouseLeave={() => void collapseToEdge()}
+      onMouseEnter={handleExpandedMouseEnter}
+      onMouseLeave={handleExpandedMouseLeave}
     >
       <div className="focus-widget-panel">
         <header className="focus-widget-topbar">
@@ -284,6 +432,17 @@ export default function FocusWidgetPage() {
               type="button"
             >
               <ArrowLeftToLine size={15} />
+            </button>
+            <button
+              aria-label={alwaysOnTop ? '取消置顶' : '置顶显示'}
+              aria-pressed={alwaysOnTop}
+              className={`focus-widget-icon-button${alwaysOnTop ? ' is-active' : ''}`}
+              disabled={!canInteract || isAlwaysOnTopUpdating}
+              onClick={() => void toggleAlwaysOnTop()}
+              title={alwaysOnTop ? '取消置顶' : '置顶显示'}
+              type="button"
+            >
+              {alwaysOnTop ? <Pin size={15} /> : <PinOff size={15} />}
             </button>
             <button
               aria-label="隐藏"

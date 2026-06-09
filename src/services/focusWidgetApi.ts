@@ -24,6 +24,14 @@ export function hideFocusWidget(): Promise<void> {
   return invokeCommand<void>('hide_focus_widget');
 }
 
+export function getFocusWidgetAlwaysOnTop(): Promise<boolean> {
+  return invokeCommand<boolean>('focus_widget_get_always_on_top');
+}
+
+export function toggleFocusWidgetAlwaysOnTop(): Promise<boolean> {
+  return invokeCommand<boolean>('focus_widget_toggle_always_on_top');
+}
+
 export function getFocusWidgetDockState(): Promise<FocusWidgetDockState> {
   return invokeCommand<FocusWidgetDockState>('focus_widget_get_dock_state');
 }

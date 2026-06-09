@@ -1,5 +1,6 @@
 .focus-widget-document,
 .focus-widget-body {
+  margin: 0;
   width: 100vw;
   height: 100vh;
   min-height: 0;
@@ -14,13 +15,13 @@
 }
 
 .focus-widget-shell {
-  --widget-text: #1d1d1f;
-  --widget-muted: rgba(60, 60, 67, 0.68);
-  --widget-soft: rgba(60, 60, 67, 0.34);
-  --widget-line: rgba(255, 255, 255, 0.62);
-  --widget-hairline: rgba(60, 60, 67, 0.16);
-  --widget-material: rgba(246, 248, 252, 0.76);
-  --widget-material-strong: rgba(255, 255, 255, 0.84);
+  --widget-text: rgba(18, 22, 30, 0.94);
+  --widget-muted: rgba(48, 52, 63, 0.64);
+  --widget-soft: rgba(48, 52, 63, 0.42);
+  --widget-line: rgba(255, 255, 255, 0.72);
+  --widget-hairline: rgba(54, 66, 86, 0.14);
+  --widget-material: rgba(244, 248, 255, 0.46);
+  --widget-material-strong: rgba(255, 255, 255, 0.62);
   --widget-blue: #0a84ff;
   --widget-green: #30d158;
   --widget-red: #ff453a;
@@ -41,31 +42,98 @@
   height: 100%;
   display: grid;
   grid-template-rows: auto auto auto auto;
-  gap: 6px;
-  padding: 10px 11px 9px;
+  gap: 3px;
+  padding: 9px 11px 8px;
   overflow: hidden;
   border: 1px solid var(--widget-line);
-  border-radius: 8px;
+  border-radius: 24px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.2)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.2) 42%, rgba(255, 255, 255, 0.46) 100%),
+    linear-gradient(180deg, rgba(244, 250, 255, 0.5), rgba(235, 243, 255, 0.28)),
     var(--widget-material);
   box-shadow:
-    0 16px 30px rgba(31, 35, 43, 0.18),
-    0 4px 10px rgba(31, 35, 43, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -1px 0 rgba(60, 60, 67, 0.05);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
+    0 22px 48px rgba(32, 39, 55, 0.2),
+    0 8px 18px rgba(32, 39, 55, 0.12),
+    inset 0 1px 1px rgba(255, 255, 255, 0.86),
+    inset 0 -1px 1px rgba(53, 65, 87, 0.08);
+  backdrop-filter: blur(32px) saturate(190%) contrast(105%);
+  -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(105%);
 }
 
 .focus-widget-panel::before {
   content: '';
   position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  border-radius: 23px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.42), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.28)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56), transparent 44%);
+  mix-blend-mode: screen;
+}
+
+.focus-widget-panel::after {
+  content: '';
+  position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 15% 0%, rgba(10, 132, 255, 0.14), transparent 38%),
-    radial-gradient(circle at 92% 12%, rgba(48, 209, 88, 0.09), transparent 32%);
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24),
+    inset 0 18px 32px rgba(255, 255, 255, 0.2),
+    inset 0 -18px 28px rgba(58, 73, 96, 0.06);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .focus-widget-shell.is-peek .focus-widget-panel {
+    animation: focus-widget-glass-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .focus-widget-shell.is-collapsed .focus-widget-collapsed-tab {
+    animation: focus-widget-tab-in 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .edge-left .focus-widget-collapsed-tab {
+    transform-origin: left center;
+  }
+
+  .edge-right .focus-widget-collapsed-tab {
+    transform-origin: right center;
+  }
+
+  .edge-top .focus-widget-collapsed-tab {
+    transform-origin: center top;
+  }
+
+  .edge-bottom .focus-widget-collapsed-tab {
+    transform-origin: center bottom;
+  }
+}
+
+@keyframes focus-widget-glass-in {
+  from {
+    opacity: 0.76;
+    transform: translateY(2px) scale(0.97);
+    filter: blur(0.35px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes focus-widget-tab-in {
+  from {
+    opacity: 0.72;
+    transform: scale(0.92);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .focus-widget-topbar,
@@ -81,14 +149,15 @@
 
 .focus-widget-topbar {
   justify-content: space-between;
-  gap: 8px;
+  gap: 7px;
+  min-height: 24px;
 }
 
 .focus-widget-stage {
   gap: 6px;
   color: var(--widget-muted);
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 10.5px;
+  font-weight: 680;
   line-height: 1;
   overflow: hidden;
   white-space: nowrap;
@@ -103,8 +172,8 @@
 }
 
 .focus-widget-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   flex: 0 0 auto;
   border-radius: 999px;
   background: var(--widget-green);
@@ -115,40 +184,64 @@
 
 .focus-widget-actions {
   flex: 0 0 auto;
-  gap: 5px;
+  gap: 4px;
 }
 
 .focus-widget-icon-button,
 .focus-widget-collapsed-tab {
   -webkit-app-region: no-drag;
-  border: 1px solid rgba(60, 60, 67, 0.12);
-  color: rgba(29, 29, 31, 0.78);
-  background: rgba(255, 255, 255, 0.48);
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  color: rgba(23, 29, 38, 0.74);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.22)),
+    rgba(250, 252, 255, 0.34);
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
 }
 
 .focus-widget-icon-button {
-  width: 24px;
-  height: 24px;
+  width: 23px;
+  height: 23px;
   display: inline-grid;
   place-items: center;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 11px;
   line-height: 1;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54);
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  box-shadow:
+    0 1px 2px rgba(31, 35, 43, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.64);
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .focus-widget-icon-button:hover,
 .focus-widget-collapsed-tab:hover {
-  border-color: rgba(10, 132, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.72);
   color: var(--widget-text);
-  background: rgba(255, 255, 255, 0.76);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.32)),
+    rgba(250, 252, 255, 0.46);
+}
+
+.focus-widget-icon-button.is-active {
+  border-color: rgba(255, 255, 255, 0.76);
+  color: #075ec4;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(196, 224, 255, 0.38)),
+    rgba(10, 132, 255, 0.18);
+  box-shadow:
+    0 0 0 3px rgba(10, 132, 255, 0.1),
+    0 4px 12px rgba(10, 132, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .focus-widget-icon-button:active {
-  background: rgba(229, 229, 234, 0.76);
+  transform: translateY(1px) scale(0.98);
+  background: rgba(235, 242, 252, 0.52);
 }
 
 .focus-widget-icon-button:disabled,
@@ -162,12 +255,15 @@
   z-index: 1;
   min-width: 0;
   color: var(--widget-text);
-  font-size: 38px;
-  line-height: 0.94;
-  font-weight: 720;
+  font-size: 50px;
+  line-height: 0.9;
+  font-weight: 760;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   white-space: nowrap;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.54),
+    0 12px 28px rgba(18, 32, 56, 0.12);
 }
 
 .focus-widget-subject,
@@ -176,13 +272,13 @@
   position: relative;
   z-index: 1;
   margin: 0;
-  font-size: 11px;
-  line-height: 1.2;
+  font-size: 10.5px;
+  line-height: 1.15;
 }
 
 .focus-widget-subject {
   color: var(--widget-muted);
-  font-weight: 560;
+  font-weight: 620;
 }
 
 .focus-widget-progress {
@@ -191,35 +287,39 @@
   min-width: 0;
   display: grid;
   align-self: end;
-  gap: 5px;
+  gap: 4px;
 }
 
 .focus-widget-progress-row {
   justify-content: space-between;
   gap: 8px;
   color: var(--widget-soft);
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .focus-widget-progress-row strong {
   color: rgba(29, 29, 31, 0.82);
-  font-size: 11px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 }
 
 .focus-widget-bar {
-  height: 4px;
+  height: 5px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(120, 120, 128, 0.18);
-  box-shadow: inset 0 1px 1px rgba(60, 60, 67, 0.08);
+  background: rgba(96, 112, 132, 0.14);
+  box-shadow:
+    inset 0 1px 1px rgba(60, 60, 67, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 .focus-widget-bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--widget-blue), #64d2ff);
-  box-shadow: 0 0 10px rgba(10, 132, 255, 0.22);
+  background: linear-gradient(90deg, #007aff, #5ac8fa);
+  box-shadow:
+    0 0 10px rgba(10, 132, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38);
   transition: width 140ms ease;
 }
 
@@ -242,43 +342,129 @@
 }
 
 .focus-widget-collapsed-tab {
+  position: relative;
+  isolation: isolate;
   width: 100%;
   height: 100%;
   min-width: 0;
   display: grid;
   align-items: center;
   justify-items: center;
-  gap: 5px;
-  padding: 7px 4px;
+  gap: 6px;
+  padding: 8px 4px;
   border-radius: 0;
+  overflow: hidden;
   font-size: 11px;
   line-height: 1;
+  color: rgba(18, 22, 30, 0.86);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.26)),
-    rgba(246, 248, 252, 0.78);
+    radial-gradient(circle at 22% 10%, rgba(255, 255, 255, 0.76), transparent 34%),
+    radial-gradient(circle at 92% 92%, rgba(90, 200, 250, 0.18), transparent 42%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.2) 48%, rgba(255, 255, 255, 0.42)),
+    rgba(244, 248, 255, 0.38);
   box-shadow:
-    0 10px 18px rgba(31, 35, 43, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    0 14px 30px rgba(31, 38, 52, 0.14),
+    0 3px 10px rgba(31, 38, 52, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.84),
+    inset 0 -1px 1px rgba(54, 66, 86, 0.06);
+  backdrop-filter: blur(32px) saturate(190%) contrast(104%);
+  -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(104%);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.focus-widget-collapsed-tab::before,
+.focus-widget-collapsed-tab::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.focus-widget-collapsed-tab::before {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.42), transparent 26%, transparent 74%, rgba(255, 255, 255, 0.24)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), transparent 48%);
+  opacity: 0.88;
+  mix-blend-mode: screen;
+}
+
+.focus-widget-collapsed-tab::after {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.38),
+    inset 0 12px 24px rgba(255, 255, 255, 0.18),
+    inset 0 -12px 20px rgba(48, 63, 84, 0.05);
+}
+
+.focus-widget-collapsed-tab > * {
+  position: relative;
+  z-index: 1;
+}
+
+.focus-widget-collapsed-tab:hover {
+  border-color: rgba(255, 255, 255, 0.76);
+  background:
+    radial-gradient(circle at 22% 10%, rgba(255, 255, 255, 0.86), transparent 36%),
+    radial-gradient(circle at 92% 92%, rgba(90, 200, 250, 0.22), transparent 44%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.26) 48%, rgba(255, 255, 255, 0.48)),
+    rgba(244, 248, 255, 0.46);
+  box-shadow:
+    0 16px 34px rgba(31, 38, 52, 0.16),
+    0 4px 12px rgba(31, 38, 52, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.88),
+    inset 0 -1px 1px rgba(54, 66, 86, 0.06);
+}
+
+.focus-widget-collapsed-tab:active {
+  transform: scale(0.98);
+}
+
+.focus-widget-collapsed-tab .focus-widget-dot {
+  width: 7px;
+  height: 7px;
+  background: linear-gradient(180deg, #5ef27f, #28c84f);
+  box-shadow:
+    0 0 0 3px rgba(48, 209, 88, 0.12),
+    0 0 12px rgba(48, 209, 88, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.56);
 }
 
 .focus-widget-collapsed-tab strong {
   color: var(--widget-text);
-  font-size: 13px;
-  font-weight: 720;
+  font-size: 13.5px;
+  font-weight: 760;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.62),
+    0 8px 18px rgba(18, 32, 56, 0.12);
 }
 
 .focus-widget-collapsed-tab span:last-child {
   color: var(--widget-muted);
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 9.5px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .edge-left .focus-widget-collapsed-tab,
 .edge-right .focus-widget-collapsed-tab {
   grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.edge-left .focus-widget-collapsed-tab {
+  border-radius: 0 22px 22px 0;
+  border-left-color: rgba(255, 255, 255, 0.2);
+}
+
+.edge-right .focus-widget-collapsed-tab {
+  border-radius: 22px 0 0 22px;
+  border-right-color: rgba(255, 255, 255, 0.2);
 }
 
 .edge-left .focus-widget-collapsed-tab strong,
@@ -296,7 +482,18 @@
 .edge-bottom .focus-widget-collapsed-tab {
   grid-template-columns: auto auto minmax(0, 1fr);
   justify-items: start;
-  padding: 4px 10px;
+  gap: 8px;
+  padding: 4px 12px;
+}
+
+.edge-top .focus-widget-collapsed-tab {
+  border-top-color: rgba(255, 255, 255, 0.2);
+  border-radius: 0 0 22px 22px;
+}
+
+.edge-bottom .focus-widget-collapsed-tab {
+  border-bottom-color: rgba(255, 255, 255, 0.2);
+  border-radius: 22px 22px 0 0;
 }
 
 .edge-top .focus-widget-collapsed-tab span:last-child,

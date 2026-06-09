@@ -308,6 +308,16 @@ fn focus_widget_get_dock_state(
 }
 
 #[tauri::command]
+fn focus_widget_get_always_on_top(app: tauri::AppHandle) -> Result<bool, String> {
+    windows::focus_widget::get_always_on_top(&app)
+}
+
+#[tauri::command]
+fn focus_widget_toggle_always_on_top(app: tauri::AppHandle) -> Result<bool, String> {
+    windows::focus_widget::toggle_always_on_top(&app)
+}
+
+#[tauri::command]
 fn focus_widget_peek_from_edge(
     app: tauri::AppHandle,
 ) -> Result<windows::focus_widget::FocusWidgetDockState, String> {
@@ -441,6 +451,8 @@ pub fn run() {
             focus_widget_return_to_main,
             hide_focus_widget,
             focus_widget_get_dock_state,
+            focus_widget_get_always_on_top,
+            focus_widget_toggle_always_on_top,
             focus_widget_peek_from_edge,
             focus_widget_collapse_to_edge,
             commands::alarm::list_alarms,
