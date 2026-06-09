@@ -116,4 +116,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Unify light theme card surfaces (1988884)
 
+## v1.10.0 - 2026-06-09
+
+### Desktop
+#### Added
+- Add focus widget window for study mode (aaed2af)
+
 
