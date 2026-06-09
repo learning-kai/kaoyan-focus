@@ -170,4 +170,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Smooth focus widget expand animation (896a172)
 
+## v1.12.2 - 2026-06-09
+
+### Desktop
+#### Changed
+- Speed up focus widget collapse animation (e882edb)
+
 
