@@ -152,4 +152,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Smooth focus widget collapse edges (f063ef7)
 
+## v1.11.5 - 2026-06-09
+
+### Desktop
+#### Changed
+- Suppress Windows title bar in focus widget (29a3f71)
+
 
