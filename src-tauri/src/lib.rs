@@ -353,9 +353,16 @@ pub fn run() {
 
             let show_item =
                 MenuItem::with_id(app, "tray_show", "显示主界面", true, Option::<&str>::None)?;
+            let toggle_widget_item = MenuItem::with_id(
+                app,
+                "tray_toggle_focus_widget",
+                "打开/关闭小悬浮窗",
+                true,
+                Option::<&str>::None,
+            )?;
             let quit_item =
                 MenuItem::with_id(app, "tray_quit", "退出", true, Option::<&str>::None)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&show_item, &toggle_widget_item, &quit_item])?;
             let icon = app.default_window_icon().cloned().ok_or_else(|| {
                 tauri::Error::AssetNotFound("default window icon not found".to_string())
             })?;
@@ -368,6 +375,11 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "tray_show" => {
                         let _ = show_main_window(app);
+                    }
+                    "tray_toggle_focus_widget" => {
+                        if let Err(error) = windows::focus_widget::toggle_visibility(app) {
+                            eprintln!("Failed to toggle focus widget from tray: {error}");
+                        }
                     }
                     "tray_quit" => {
                         if let Some(state) = app.try_state::<AppState>() {

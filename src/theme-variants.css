@@ -6,6 +6,35 @@ html[data-theme='sakura'] {
   --surface-glass: color-mix(in srgb, var(--surface) 82%, transparent);
   --surface-glass-strong: color-mix(in srgb, var(--surface-strong) 92%, transparent);
   --surface-panel: color-mix(in srgb, var(--surface) 90%, transparent);
+  --surface-card: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--theme-card-sheen) 78%, var(--surface-strong)),
+    color-mix(in srgb, var(--theme-card-wash) 80%, var(--surface))
+  );
+  --surface-card-soft: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--theme-card-sheen) 70%, var(--surface-strong)),
+    color-mix(in srgb, var(--theme-card-wash) 72%, var(--surface))
+  );
+  --surface-card-muted: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--theme-card-wash) 78%, var(--surface-strong)),
+    color-mix(in srgb, var(--surface-soft) 84%, var(--theme-card-sheen))
+  );
+  --surface-card-hover: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--theme-card-sheen) 86%, var(--surface-strong)),
+    color-mix(in srgb, var(--theme-card-wash) 86%, var(--surface-strong))
+  );
+  --surface-control: color-mix(in srgb, var(--theme-card-sheen) 62%, var(--surface-soft));
+  --surface-control-hover: color-mix(in srgb, var(--theme-card-sheen) 78%, var(--surface-strong));
+  --surface-nav: color-mix(in srgb, var(--theme-card-wash) 72%, transparent);
+  --surface-nav-active: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--theme-card-accent) 12%, transparent),
+    transparent 72%
+  ), color-mix(in srgb, var(--theme-card-sheen) 78%, var(--surface-strong));
+  --shadow-card: var(--shadow-soft);
   --shadow-panel: var(--shadow);
   --shadow-hover: 0 18px 38px color-mix(in srgb, var(--blue) 18%, transparent);
   --shadow-control: var(--shadow-soft);
@@ -29,6 +58,9 @@ html[data-theme='mono'] {
   --surface: #f6f3ed;
   --surface-strong: #fffdf8;
   --surface-soft: #ece7dd;
+  --theme-card-sheen: #fffaf0;
+  --theme-card-wash: #eee7d9;
+  --theme-card-accent: #767f77;
   --ink: #25282d;
   --muted: #6d706d;
   --line: rgba(78, 82, 79, 0.2);
@@ -53,8 +85,11 @@ html[data-theme='dawn'] {
   --bg: #f6f8f2;
   --bg-elevated: #ffffff;
   --surface: #fffdf7;
-  --surface-strong: #ffffff;
+  --surface-strong: #fffcf5;
   --surface-soft: #f3f7ec;
+  --theme-card-sheen: #fff5e9;
+  --theme-card-wash: #edf7f0;
+  --theme-card-accent: #ef9160;
   --ink: #172033;
   --muted: #697486;
   --line: rgba(115, 127, 145, 0.2);
@@ -79,8 +114,11 @@ html[data-theme='forest'] {
   --bg: #edf7ef;
   --bg-elevated: #f7fcf8;
   --surface: #f5fbf6;
-  --surface-strong: #ffffff;
+  --surface-strong: #fbfffc;
   --surface-soft: #e6f3ea;
+  --theme-card-sheen: #f7fff9;
+  --theme-card-wash: #e5f5eb;
+  --theme-card-accent: #5aa978;
   --ink: #1d3528;
   --muted: #5f7b6a;
   --line: rgba(101, 145, 116, 0.2);
@@ -105,8 +143,11 @@ html[data-theme='sakura'] {
   --bg: #f7f5f8;
   --bg-elevated: #ffffff;
   --surface: #fff9fb;
-  --surface-strong: #ffffff;
+  --surface-strong: #fffafd;
   --surface-soft: #f2f6ff;
+  --theme-card-sheen: #fff2f7;
+  --theme-card-wash: #f2f5ff;
+  --theme-card-accent: #d47791;
   --ink: #202338;
   --muted: #6f7284;
   --line: rgba(134, 128, 154, 0.2);
@@ -412,8 +453,8 @@ html[data-theme='sakura'] .category-task-row,
 html[data-theme='sakura'] .review-metric,
 html[data-theme='sakura'] .review-score-row {
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-card-soft);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='forest'] .header-metrics article,
@@ -446,20 +487,20 @@ html[data-theme='forest'] .category-task-row,
 html[data-theme='forest'] .review-metric,
 html[data-theme='forest'] .review-score-row {
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-card-soft);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='mono'] .nav-item,
 html[data-theme='dawn'] .nav-item,
 html[data-theme='sakura'] .nav-item {
   color: var(--muted);
-  background: color-mix(in srgb, var(--surface-strong) 64%, transparent);
+  background: var(--surface-nav);
 }
 
 html[data-theme='forest'] .nav-item {
   color: var(--muted);
-  background: color-mix(in srgb, var(--surface-strong) 64%, transparent);
+  background: var(--surface-nav);
 }
 
 html[data-theme='mono'] .nav-item:hover,
@@ -470,16 +511,16 @@ html[data-theme='sakura'] .nav-item:hover,
 html[data-theme='sakura'] .nav-item.active {
   color: var(--ink);
   border-color: var(--line-strong);
-  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-control-hover);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='forest'] .nav-item:hover,
 html[data-theme='forest'] .nav-item.active {
   color: var(--ink);
   border-color: var(--line-strong);
-  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-control-hover);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='mono'] .nav-item[aria-current='page'],
@@ -487,17 +528,13 @@ html[data-theme='dawn'] .nav-item[aria-current='page'],
 html[data-theme='sakura'] .nav-item[aria-current='page'] {
   color: var(--ink);
   border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--blue) 12%, transparent), transparent 70%),
-    color-mix(in srgb, var(--surface-strong) 94%, transparent);
+  background: var(--surface-nav-active);
 }
 
 html[data-theme='forest'] .nav-item[aria-current='page'] {
   color: var(--ink);
   border-color: color-mix(in srgb, var(--green) 36%, var(--line));
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--green) 14%, transparent), transparent 70%),
-    color-mix(in srgb, var(--surface-strong) 94%, transparent);
+  background: var(--surface-nav-active);
 }
 
 html[data-theme='mono'] .secondary-action,
@@ -532,7 +569,7 @@ html[data-theme='sakura'] .theme-choice-grid button,
 html[data-theme='sakura'] .settings-collapse-button {
   color: var(--ink);
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  background: var(--surface-control);
 }
 
 html[data-theme='forest'] .secondary-action,
@@ -547,7 +584,7 @@ html[data-theme='forest'] .theme-choice-grid button,
 html[data-theme='forest'] .settings-collapse-button {
   color: var(--ink);
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  background: var(--surface-control);
 }
 
 html[data-theme='mono'] .secondary-action:hover,
@@ -578,8 +615,8 @@ html[data-theme='sakura'] .theme-toggle button:hover,
 html[data-theme='sakura'] .icon-button:hover,
 html[data-theme='sakura'] .theme-choice-grid button:hover {
   border-color: var(--line-strong);
-  background: var(--surface-strong);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-control-hover);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='forest'] .secondary-action:hover,
@@ -592,8 +629,8 @@ html[data-theme='forest'] .theme-toggle button:hover,
 html[data-theme='forest'] .icon-button:hover,
 html[data-theme='forest'] .theme-choice-grid button:hover {
   border-color: var(--line-strong);
-  background: var(--surface-strong);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-control-hover);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='mono'] .primary-action,
@@ -687,7 +724,7 @@ html[data-theme='sakura'] .schedule-quick-add input,
 html[data-theme='sakura'] .schedule-quick-add select {
   color: var(--ink);
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  background: var(--surface-control);
 }
 
 html[data-theme='forest'] .text-input,
@@ -701,7 +738,7 @@ html[data-theme='forest'] .schedule-quick-add input,
 html[data-theme='forest'] .schedule-quick-add select {
   color: var(--ink);
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  background: var(--surface-control);
 }
 
 html[data-theme='mono'] .text-input::placeholder,
@@ -767,23 +804,23 @@ html[data-theme='forest'] .alert.success {
 html[data-theme='mono'] .alert.neutral,
 html[data-theme='dawn'] .alert.neutral,
 html[data-theme='sakura'] .alert.neutral {
-  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+  background: var(--surface-card-soft);
 }
 
 html[data-theme='forest'] .alert.neutral {
-  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+  background: var(--surface-card-soft);
 }
 
 html[data-theme='mono'] .top-strip-status span,
 html[data-theme='dawn'] .top-strip-status span,
 html[data-theme='sakura'] .top-strip-status span {
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  background: var(--surface-card-muted);
 }
 
 html[data-theme='forest'] .top-strip-status span {
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  background: var(--surface-card-muted);
 }
 
 html[data-theme='mono'] .top-strip-status .is-ready,
@@ -883,14 +920,14 @@ html[data-theme='dawn'] .focus-round-button,
 html[data-theme='sakura'] .focus-round-button {
   color: var(--ink);
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  background: var(--surface-card-soft);
   box-shadow: var(--shadow-strong);
 }
 
 html[data-theme='forest'] .focus-round-button {
   color: var(--ink);
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  background: var(--surface-card-soft);
   box-shadow: var(--shadow-strong);
 }
 
@@ -917,15 +954,15 @@ html[data-theme='dawn'] .focus-quiet-action,
 html[data-theme='sakura'] .focus-quiet-action {
   color: color-mix(in srgb, var(--ink) 78%, var(--muted));
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-control);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='forest'] .focus-quiet-action {
   color: color-mix(in srgb, var(--ink) 80%, var(--muted));
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-control);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='mono'] .focus-quiet-action:hover,
@@ -935,39 +972,39 @@ html[data-theme='dawn'] .focus-quiet-action.is-active,
 html[data-theme='sakura'] .focus-quiet-action:hover,
 html[data-theme='sakura'] .focus-quiet-action.is-active {
   color: var(--ink);
-  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  background: var(--surface-control-hover);
 }
 
 html[data-theme='forest'] .focus-quiet-action:hover,
 html[data-theme='forest'] .focus-quiet-action.is-active {
   color: var(--ink);
-  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  background: var(--surface-control-hover);
 }
 
 html[data-theme='mono'] .schedule-lane,
 html[data-theme='dawn'] .schedule-lane,
 html[data-theme='sakura'] .schedule-lane {
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 54%, transparent);
+  background: color-mix(in srgb, var(--theme-card-wash) 54%, transparent);
 }
 
 html[data-theme='forest'] .schedule-lane {
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 54%, transparent);
+  background: color-mix(in srgb, var(--theme-card-wash) 54%, transparent);
 }
 
 html[data-theme='mono'] .schedule-block,
 html[data-theme='dawn'] .schedule-block,
 html[data-theme='sakura'] .schedule-block {
   border-color: color-mix(in srgb, var(--blue) 18%, var(--line));
-  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-card-soft);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='forest'] .schedule-block {
   border-color: color-mix(in srgb, var(--green) 22%, var(--line));
-  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-card-soft);
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='mono'] .category-politics,
@@ -1196,13 +1233,13 @@ html[data-theme='forest'] .time-input,
 html[data-theme='sakura'] .time-input {
   color: var(--ink);
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  background: var(--surface-control);
 }
 
 html[data-theme='forest'] .time-input {
   color: var(--ink);
   border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  background: var(--surface-control);
 }
 
 html[data-theme='dark'] {
@@ -1301,10 +1338,10 @@ html[data-theme='sakura'] {
     .review-hero,
     .focus-control-dock,
     .schedule-quick-add
-  ) {
+) {
   border-color: var(--line);
-  background: var(--surface);
-  box-shadow: var(--shadow-control);
+  background: var(--surface-card, var(--surface));
+  box-shadow: var(--shadow-panel, var(--shadow-control));
 }
 
 :is(
@@ -1337,6 +1374,7 @@ html[data-theme='sakura'] {
     .learning-hub-stats span,
     .learning-hub-card,
     .today-item-row,
+    .today-drawer-tool-card,
     .board-column,
     .row-icon,
     .checklist-task-card,
@@ -1344,8 +1382,11 @@ html[data-theme='sakura'] {
     .task-composer,
     .task-inline-editor,
     .empty-state,
+    .empty-drop-zone,
+    .compact-drop-zone,
     .monitor-callout,
     .potplayer-hint,
+    .whitelist-subject-heading,
     .category-tab,
     .category-task-row,
     .review-metric,
@@ -1362,11 +1403,16 @@ html[data-theme='sakura'] {
     .week-day,
     .week-block,
     .schedule-loading-hint,
+    .schedule-placement-hint,
+    .readiness-badge,
+    .focus-hud-card,
+    .focus-hud-icon,
+    .focus-minimal-status,
     .live-badge
   ) {
   border-color: var(--line);
-  background: var(--surface-strong);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-card-soft, var(--surface-strong));
+  box-shadow: var(--shadow-card, var(--shadow-soft));
 }
 
 :is(
@@ -1385,7 +1431,7 @@ html[data-theme='sakura'] {
   ) {
   border-color: var(--line);
   color: var(--muted);
-  background: var(--surface-soft);
+  background: var(--surface-card-muted, var(--surface-soft));
 }
 
 :is(
@@ -1420,7 +1466,7 @@ html[data-theme='sakura'] {
   ) {
   border-color: var(--line);
   color: var(--ink);
-  background: var(--surface-soft);
+  background: var(--surface-control, var(--surface-soft));
   box-shadow: none;
 }
 
@@ -1452,10 +1498,10 @@ html[data-theme='sakura'] {
     .weekday-pills button:hover,
     .learning-hub-card:hover,
     .review-score-row button:hover
-  ) {
+) {
   border-color: var(--line-strong);
-  background: var(--surface-strong);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-control-hover, var(--surface-strong));
+  box-shadow: var(--shadow-card, var(--shadow-soft));
 }
 
 :is(
@@ -1486,8 +1532,8 @@ html[data-theme='sakura'] {
   )
   :is(.schedule-block) {
   border-color: color-mix(in srgb, var(--blue) 18%, var(--line));
-  background: var(--surface-strong);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-card-soft, var(--surface-strong));
+  box-shadow: var(--shadow-card, var(--shadow-soft));
 }
 
 :is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])
@@ -1629,15 +1675,15 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
   )[data-study-fullscreen='true']
   :is(.focus-round-button, .focus-quiet-action, .focus-hud-card, .focus-hud-icon, .focus-minimal-status, .live-badge) {
   border-color: var(--line);
-  background: var(--surface-strong);
-  box-shadow: var(--shadow-soft);
+  background: var(--surface-card-soft, var(--surface-strong));
+  box-shadow: var(--shadow-card, var(--shadow-soft));
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 
 :is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])[data-study-fullscreen='true']
   :is(.focus-hud-card:hover, .focus-hud-card.is-active, .focus-quiet-action:hover, .focus-quiet-action.is-active) {
-  background: color-mix(in srgb, var(--blue-soft) 62%, var(--surface-strong));
+  background: var(--surface-card-hover);
 }
 
 :is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])[data-study-fullscreen='true']
@@ -1896,6 +1942,604 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
   box-shadow: var(--shadow-card);
 }
 
+/* Final surface sync for custom light themes so cards never fall back to neutral gray/white boxes. */
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura']) :is(
+  .top-strip,
+  .page-shell,
+  .command-panel,
+  .soft-panel,
+  .start-console,
+  .control-panel,
+  .learning-hub,
+  .automation-settings-panel,
+  .reminder-sound-panel,
+  .settings-save-row,
+  .confirm-dialog,
+  .today-plan-drawer,
+  .today-plan-panel,
+  .schedule-drawer,
+  .checklist-board-panel,
+  .schedule-hero,
+  .schedule-toolbar,
+  .schedule-composer,
+  .template-composer,
+  .today-task-rail,
+  .template-rail,
+  .review-hero,
+  .review-summary-panel,
+  .review-editor,
+  .focus-control-dock,
+  .schedule-quick-add,
+  .settings-section-tabs
+) {
+  border-color: var(--line);
+  background: var(--surface-card) !important;
+  box-shadow: var(--shadow-panel);
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura']) :is(
+  .header-metrics article,
+  .metric-card:not(.danger),
+  .core-fact,
+  .details-card,
+  .phase-badge,
+  .start-readiness-card:not(.is-guarded):not(.is-soft):not(.is-warning),
+  .readiness-badge:not(.ready):not(.preview),
+  .setting-row,
+  .capability-row,
+  .tool-row,
+  .list-row,
+  .record-row,
+  .subject-stat-row,
+  .blocked-option,
+  .process-option,
+  .sound-option-card:not(.active),
+  .custom-sound-picker:not(.disabled),
+  .custom-sound-file,
+  .sound-volume-row,
+  .learning-hub-stats span,
+  .learning-hub-card,
+  .today-item-row:not(.is-current):not(.is-dragging),
+  .today-drawer-tool-card,
+  .board-column,
+  .row-icon:not(.danger):not(.enabled),
+  .checklist-task-card,
+  .today-composer,
+  .task-composer,
+  .task-inline-editor,
+  .empty-state,
+  .monitor-callout,
+  .potplayer-hint,
+  .whitelist-subject-heading,
+  .category-tab:not(.active),
+  .category-task-row:not(.is-dragging),
+  .review-metric,
+  .review-score-row,
+  .alarm-row:not(.is-upcoming):not(.is-targeted):not(.is-ringing),
+  .alarm-time-card,
+  .alarm-reschedule-editor,
+  .schedule-drawer-composer,
+  .schedule-drawer-block:not(.category-politics):not(.category-english):not(.category-math):not(.category-major):not(.category-general):not(.conflict),
+  .schedule-task-row:not(.picking),
+  .template-row,
+  .date-stepper,
+  .week-day,
+  .week-block:not(.category-politics):not(.category-english):not(.category-math):not(.category-major):not(.category-general),
+  .schedule-loading-hint,
+  .schedule-placement-hint,
+  .schedule-empty,
+  .settings-loading-state,
+  .preset-row,
+  .path-hint,
+  .sidebar-foot,
+  .focus-hud-card,
+  .focus-hud-icon,
+  .focus-minimal-status,
+  .live-badge
+) {
+  border-color: var(--line);
+  background: var(--surface-card-soft) !important;
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura']) :is(
+  .command-panel .metric-card:not(.danger),
+  .command-panel .details-card,
+  .command-panel .setting-row,
+  .command-panel .capability-row,
+  .soft-panel .metric-card:not(.danger),
+  .soft-panel .details-card,
+  .soft-panel .setting-row,
+  .soft-panel .capability-row,
+  .settings-shell .details-card,
+  .settings-shell .setting-row,
+  .settings-shell .capability-row,
+  .start-console .core-fact,
+  .control-panel .details-card,
+  .today-plan-drawer .today-item-row:not(.is-current):not(.is-dragging)
+) {
+  background: var(--surface-card-muted) !important;
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura']) :is(
+  .text-input,
+  .number-input,
+  .select-input,
+  .time-input,
+  .date-stepper input,
+  .schedule-composer input,
+  .schedule-composer select,
+  .schedule-block-editor input,
+  .schedule-quick-add input,
+  .schedule-quick-add select,
+  .review-textarea
+) {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--surface-control) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--theme-card-sheen) 58%, transparent);
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura']) :is(
+  .secondary-action:not(.danger-action),
+  .ghost-action,
+  .small-action:not(.danger):not(.enabled),
+  .small-action.is-muted,
+  .chip:not(.active),
+  .segmented-control button:not(.active),
+  .stepper-control button,
+  .theme-toggle button:not(.active),
+  .icon-button,
+  .theme-choice-grid button:not(.active),
+  .settings-collapse-button,
+  .settings-section-tabs button:not([aria-selected='true']),
+  .schedule-page .ghost-button,
+  .schedule-task-row button,
+  .template-row button,
+  .schedule-block-actions button,
+  .schedule-drawer-actions button,
+  .date-stepper button,
+  .weekday-pills button:not(.active),
+  .schedule-quick-slots button,
+  .review-score-row button:not(.active),
+  .focus-quiet-action,
+  .focus-round-button.secondary
+) {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--surface-control) !important;
+  box-shadow: none;
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura']) :is(
+  .secondary-action:hover:not(.danger-action),
+  .ghost-action:hover,
+  .small-action:hover:not(.danger):not(.enabled),
+  .chip:hover:not(.active),
+  .segmented-control button:hover:not(.active),
+  .stepper-control button:hover,
+  .theme-toggle button:hover:not(.active),
+  .icon-button:hover,
+  .theme-choice-grid button:hover:not(.active),
+  .settings-collapse-button:hover,
+  .settings-section-tabs button:hover:not([aria-selected='true']),
+  .schedule-page .ghost-button:hover,
+  .schedule-task-row button:hover,
+  .template-row button:hover,
+  .schedule-block-actions button:hover,
+  .schedule-drawer-actions button:hover,
+  .date-stepper button:hover,
+  .weekday-pills button:hover:not(.active),
+  .schedule-quick-slots button:hover,
+  .review-score-row button:hover:not(.active),
+  .focus-quiet-action:hover,
+  .focus-round-button.secondary:hover
+) {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface-control-hover) !important;
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura']) :is(
+  .metric-card:hover:not(.danger),
+  .core-fact:hover,
+  .details-card:hover,
+  .phase-badge:hover,
+  .setting-row:hover,
+  .capability-row:hover,
+  .tool-row:hover,
+  .list-row:hover,
+  .record-row:hover,
+  .subject-stat-row:hover,
+  .blocked-option:hover,
+  .process-option:hover,
+  .sound-option-card:hover:not(.active),
+  .learning-hub-card:hover,
+  .today-item-row:hover:not(.is-current):not(.is-dragging),
+  .category-tab:hover:not(.active),
+  .category-task-row:hover:not(.is-dragging),
+  .schedule-task-row:hover:not(.picking),
+  .template-row:hover,
+  .week-day:hover,
+  .week-block:hover,
+  .alarm-row:hover:not(.is-upcoming):not(.is-targeted):not(.is-ringing),
+  .checklist-task-card:hover,
+  .review-metric:hover,
+  .review-score-row:hover,
+  .focus-hud-card:hover,
+  .focus-hud-card.is-active
+) {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface-card-hover) !important;
+  box-shadow: var(--shadow-card);
+}
+
+/* Unified card surface contract for all light-family themes. */
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .page-shell,
+    .page-loading-shell,
+    .command-panel,
+    .soft-panel,
+    .start-console,
+    .control-panel,
+    .learning-hub,
+    .automation-settings-panel,
+    .reminder-sound-panel,
+    .settings-save-row,
+    .confirm-dialog,
+    .app-error-card,
+    .today-plan-drawer,
+    .today-plan-panel,
+    .schedule-drawer,
+    .checklist-board-panel,
+    .schedule-hero,
+    .schedule-toolbar,
+    .schedule-composer,
+    .template-composer,
+    .today-task-rail,
+    .template-rail,
+    .review-hero,
+    .review-summary-panel,
+    .review-editor,
+    .focus-control-dock,
+    .schedule-quick-add,
+    .settings-section-tabs,
+    .stats-toolbar,
+    .sync-backend-panel,
+    .add-rule-panel,
+    .source-panel,
+    .picker-panel,
+    .alarm-composer,
+    .alarm-section,
+    .focus-prepare-shell,
+    .checklist-clean-shell,
+    .checklist-categories-panel
+  ) {
+  border-color: var(--line);
+  background: var(--surface-card) !important;
+  box-shadow: var(--shadow-panel);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .header-metrics article,
+    .metric-card:not(.danger),
+    .core-fact,
+    .details-card,
+    .phase-badge,
+    .start-readiness-card:not(.is-guarded):not(.is-soft):not(.is-warning),
+    .readiness-badge:not(.ready):not(.preview),
+    .setting-row,
+    .rhythm-card,
+    .capability-row,
+    .sync-toggle-row,
+    .tool-row,
+    .list-row,
+    .compact-row,
+    .whitelist-row,
+    .interruption-row,
+    .record-row,
+    .subject-stat-row,
+    .blocked-option,
+    .process-option,
+    .sound-option-card:not(.active),
+    .theme-choice-grid button:not(.active),
+    .custom-sound-picker:not(.disabled),
+    .custom-sound-file,
+    .sound-volume-row,
+    .learning-hub-stats span,
+    .learning-hub-card,
+    .learning-hub-card-wide,
+    .today-item-row:not(.is-current):not(.is-dragging),
+    .today-drawer-tool-card,
+    .board-column,
+    .row-icon:not(.danger):not(.enabled),
+    .checklist-task-card,
+    .today-composer,
+    .task-composer,
+    .task-inline-editor,
+    .empty-state,
+    .monitor-callout,
+    .potplayer-hint,
+    .whitelist-subject-heading,
+    .category-tab:not(.active),
+    .category-task-row:not(.is-dragging),
+    .review-metric,
+    .review-score-row,
+    .alarm-row:not(.is-upcoming):not(.is-targeted):not(.is-ringing),
+    .alarm-time-card,
+    .alarm-reschedule-editor,
+    .schedule-drawer-composer,
+    .schedule-drawer-block:not(.category-politics):not(.category-english):not(.category-math):not(.category-major):not(.category-general):not(.conflict),
+    .schedule-task-row:not(.picking),
+    .template-row,
+    .date-stepper,
+    .week-day,
+    .week-block:not(.category-politics):not(.category-english):not(.category-math):not(.category-major):not(.category-general),
+    .schedule-loading-hint,
+    .schedule-placement-hint,
+    .schedule-empty,
+    .settings-loading-state,
+    .preset-row,
+    .path-hint,
+    .sidebar-foot,
+    .focus-hud-card:not(.is-active),
+    .focus-hud-icon,
+    .focus-minimal-status,
+    .live-badge,
+    .confirm-dialog-body,
+    .schedule-drag-preview
+  ) {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--surface-card-soft) !important;
+  box-shadow: var(--shadow-card);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .command-panel .metric-card:not(.danger),
+    .command-panel .details-card,
+    .command-panel .setting-row,
+    .command-panel .capability-row,
+    .soft-panel .metric-card:not(.danger),
+    .soft-panel .details-card,
+    .soft-panel .setting-row,
+    .soft-panel .capability-row,
+    .settings-shell .details-card,
+    .settings-shell .setting-row,
+    .settings-shell .capability-row,
+    .start-console .core-fact,
+    .control-panel .details-card,
+    .today-plan-drawer .today-item-row:not(.is-current):not(.is-dragging),
+    .confirm-dialog .confirm-dialog-body
+  ) {
+  background: var(--surface-card-muted) !important;
+  box-shadow: var(--shadow-card);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.schedule-drag-preview span, .confirm-dialog-body, .alarm-time-card span, .alarm-row-main span, .alarm-row-main small) {
+  color: var(--muted);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  .schedule-drag-preview.is-move {
+  border-color: color-mix(in srgb, var(--blue) 34%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 72%, var(--surface-strong)) !important;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.schedule-drag-preview.is-resize-start, .schedule-drag-preview.is-resize-end) {
+  border-color: color-mix(in srgb, var(--amber) 34%, var(--line));
+  background: color-mix(in srgb, var(--amber-soft) 72%, var(--surface-strong)) !important;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .metric-card:hover:not(.danger),
+    .core-fact:hover,
+    .details-card:hover,
+    .phase-badge:hover,
+    .setting-row:hover,
+    .capability-row:hover,
+    .tool-row:hover,
+    .list-row:hover,
+    .record-row:hover,
+    .subject-stat-row:hover,
+    .blocked-option:hover,
+    .process-option:hover,
+    .sound-option-card:hover:not(.active),
+    .theme-choice-grid button:hover:not(.active),
+    .learning-hub-card:hover,
+    .today-item-row:hover:not(.is-current):not(.is-dragging),
+    .category-tab:hover:not(.active),
+    .category-task-row:hover:not(.is-dragging),
+    .schedule-task-row:hover:not(.picking),
+    .template-row:hover,
+    .week-day:hover,
+    .week-block:hover,
+    .alarm-row:hover:not(.is-upcoming):not(.is-targeted):not(.is-ringing),
+    .checklist-task-card:hover,
+    .review-metric:hover,
+    .review-score-row:hover,
+    .focus-hud-card:hover,
+    .focus-hud-card.is-active
+  ) {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface-card-hover) !important;
+  box-shadow: var(--shadow-card);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  .settings-loading-state {
+  border-color: var(--line);
+  background: var(--surface-card-soft, #ffffff) !important;
+  box-shadow: var(--shadow-card, var(--shadow-soft));
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  .settings-save-copy
+  :is(b, small) {
+  border-color: var(--line);
+  background: var(--surface-control, var(--surface-card-soft)) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 54%, transparent);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  .settings-save-copy
+  b {
+  color: var(--theme-card-accent, var(--blue)) !important;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  .settings-save-copy
+  small {
+  color: var(--muted) !important;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .primary-action,
+    .start-ritual-button,
+    .segmented-control button.active,
+    .segmented-control .active,
+    .chip.active,
+    .custom-sound-confirm,
+    .sound-option-card.active,
+    .theme-toggle button.active,
+    .theme-choice-grid button.active,
+    .schedule-page .primary-button,
+    .settings-section-tabs button[role='tab'][aria-selected='true'],
+    .weekday-pills button.active,
+    .review-score-row button.active
+  ) {
+  color: var(--theme-active-ink, #ffffff) !important;
+  border-color: transparent !important;
+  background: var(--theme-accent-gradient, linear-gradient(135deg, #3869d4, #239a75)) !important;
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--blue) 18%, transparent);
+}
+
+html[data-theme='forest']
+  :is(
+    .primary-action,
+    .start-ritual-button,
+    .segmented-control button.active,
+    .segmented-control .active,
+    .chip.active,
+    .custom-sound-confirm,
+    .sound-option-card.active,
+    .theme-toggle button.active,
+    .theme-choice-grid button.active,
+    .schedule-page .primary-button,
+    .settings-section-tabs button[role='tab'][aria-selected='true'],
+    .weekday-pills button.active,
+    .review-score-row button.active
+  ) {
+  --theme-active-ink: #173326;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.sound-option-card.active strong, .sound-option-card.active span, .theme-choice-grid button.active strong, .theme-choice-grid button.active small) {
+  color: var(--theme-active-ink, #ffffff) !important;
+}
+
 html[data-theme='mono'] {
   --switch-track-off: color-mix(in srgb, var(--surface-soft) 82%, #d5d0c5);
   --switch-track-off-border: rgba(78, 82, 79, 0.36);
@@ -1947,13 +2591,15 @@ html[data-theme='sakura'] {
   .focus-whitelist-toggle,
   .live-primary-toggle
 ):has(input[type='checkbox']:checked) {
-  border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
-  background: color-mix(in srgb, var(--blue) 9%, var(--surface-strong));
+  border-color: color-mix(in srgb, var(--blue) 30%, var(--line)) !important;
+  background: color-mix(in srgb, var(--blue) 12%, var(--theme-card-sheen)) !important;
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='forest'] :is(.capability-row, .focus-whitelist-toggle, .live-primary-toggle):has(input[type='checkbox']:checked) {
-  border-color: color-mix(in srgb, var(--green) 34%, var(--line));
-  background: color-mix(in srgb, var(--green) 12%, var(--surface-strong));
+  border-color: color-mix(in srgb, var(--green) 34%, var(--line)) !important;
+  background: color-mix(in srgb, var(--green) 16%, var(--theme-card-sheen)) !important;
+  box-shadow: var(--shadow-card);
 }
 
 html[data-theme='dark'] :is(.capability-row, .focus-whitelist-toggle, .live-primary-toggle):has(input[type='checkbox']:checked) {

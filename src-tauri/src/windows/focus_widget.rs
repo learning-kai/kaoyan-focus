@@ -201,6 +201,31 @@ impl FocusWidget {
         self.hide_without_manual_suppression()
     }
 
+    pub fn show(&self) -> Result<(), String> {
+        clear_manual_hidden_for_current_study_mode(&self.app);
+        let settings = get_app_settings(self.app.clone())?;
+        let window = self.ensure()?;
+        show_window_without_focus(&window, settings.focus_widget_always_on_top)?;
+        emit_focus_widget_dock_state(&self.app);
+        schedule_edge_collapse_check(&self.app);
+        Ok(())
+    }
+
+    pub fn toggle_visibility(&self) -> Result<bool, String> {
+        let is_visible = self
+            .window()
+            .and_then(|window| window.is_visible().ok())
+            .unwrap_or(false);
+
+        if is_visible {
+            self.hide()?;
+            Ok(false)
+        } else {
+            self.show()?;
+            Ok(true)
+        }
+    }
+
     pub fn bring_to_main(&self) -> Result<(), String> {
         mark_manual_hidden_for_current_study_mode(&self.app);
 
@@ -253,6 +278,10 @@ pub fn focus_widget(app: &AppHandle) -> FocusWidget {
 
 pub fn hide(app: &AppHandle) -> Result<(), String> {
     focus_widget(app).hide()
+}
+
+pub fn toggle_visibility(app: &AppHandle) -> Result<bool, String> {
+    focus_widget(app).toggle_visibility()
 }
 
 pub fn bring_to_main(app: &AppHandle) -> Result<(), String> {
@@ -1063,6 +1092,19 @@ fn mark_manual_hidden_for_current_study_mode(app: &AppHandle) {
         runtime.current_study_mode_id = Some(study_mode_id);
         runtime.manual_hidden_for_study_mode_id = Some(study_mode_id);
         runtime.auto_visible_study_mode_id = None;
+    }
+}
+
+fn clear_manual_hidden_for_current_study_mode(app: &AppHandle) {
+    let Ok(snapshot) = load_background_study_mode_visibility(app) else {
+        return;
+    };
+
+    if let Ok(mut runtime) = runtime_state().lock() {
+        runtime.current_study_mode_id = snapshot.study_mode_id;
+        if runtime.manual_hidden_for_study_mode_id == snapshot.study_mode_id {
+            runtime.manual_hidden_for_study_mode_id = None;
+        }
     }
 }
 
