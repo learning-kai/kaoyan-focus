@@ -119,7 +119,7 @@ impl Default for AppSettings {
             focus_widget_x: None,
             focus_widget_y: None,
             focus_widget_width: Some(280),
-            focus_widget_height: Some(144),
+            focus_widget_height: Some(172),
             sync_backend: "webdav".to_string(),
             primary_owner_device_id: None,
             primary_owner_updated_at: None,
@@ -499,7 +499,7 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
     set_setting(
         &connection,
         FOCUS_WIDGET_HEIGHT_KEY,
-        &normalized.focus_widget_height.unwrap_or(144).to_string(),
+        &normalized.focus_widget_height.unwrap_or(172).to_string(),
         &now,
     )?;
     set_setting(

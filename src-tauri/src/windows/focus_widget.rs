@@ -17,7 +17,11 @@ use windows::Win32::{
         CombineRgn, CreateRectRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn, HGDIOBJ,
         RGN_ERROR, RGN_OR,
     },
-    UI::WindowsAndMessaging::GetClientRect,
+    UI::WindowsAndMessaging::{
+        GetClientRect, GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_STYLE,
+        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_CAPTION,
+        WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME,
+    },
 };
 
 use crate::{
@@ -31,7 +35,7 @@ use crate::{
 pub const FOCUS_WIDGET_LABEL: &str = "focus-widget";
 
 const MAIN_WINDOW_LABEL: &str = "main";
-const FOCUS_WIDGET_TITLE: &str = "Focus Widget";
+const FOCUS_WIDGET_TITLE: &str = "";
 const FOCUS_WIDGET_DOCK_STATE_CHANGED_EVENT: &str = "focus-widget-dock-state-changed";
 const FOCUS_WIDGET_STUDY_STATE_EVENT: &str = "focus-widget-study-state";
 const FOCUS_WIDGET_STUDY_STATE_CHANGED_EVENT: &str = "focus-widget-study-state-changed";
@@ -46,23 +50,23 @@ const FOCUS_WIDGET_INITIALIZATION_SCRIPT: &str = r#"
 "#;
 
 const DEFAULT_WIDTH: i64 = 280;
-const DEFAULT_HEIGHT: i64 = 144;
+const DEFAULT_HEIGHT: i64 = 172;
 const MIN_NORMAL_WIDTH: i64 = 240;
 const MAX_NORMAL_WIDTH: i64 = 420;
-const MIN_NORMAL_HEIGHT: i64 = 112;
+const MIN_NORMAL_HEIGHT: i64 = 172;
 const MAX_NORMAL_HEIGHT: i64 = 240;
 const MIN_WINDOW_WIDTH: i64 = 36;
 const MIN_WINDOW_HEIGHT: i64 = 36;
 const COLLAPSED_SIDE_WIDTH: f64 = 36.0;
-const COLLAPSED_SIDE_HEIGHT: f64 = 132.0;
-const COLLAPSED_BAR_WIDTH: f64 = 280.0;
+const COLLAPSED_SIDE_HEIGHT: f64 = 112.0;
+const COLLAPSED_BAR_WIDTH: f64 = 220.0;
 const COLLAPSED_BAR_HEIGHT: f64 = 36.0;
 const EDGE_COLLAPSE_THRESHOLD: f64 = 18.0;
 const EDGE_SAFE_MARGIN: f64 = 8.0;
 const GEOMETRY_DEBOUNCE_MS: u64 = 250;
 const DOCK_EXPAND_ANIMATION_MS: u64 = 260;
-const DOCK_COLLAPSE_ANIMATION_MS: u64 = 220;
-const DOCK_ANIMATION_FRAME_MS: u64 = 15;
+const DOCK_COLLAPSE_ANIMATION_MS: u64 = 260;
+const DOCK_ANIMATION_FRAME_MS: u64 = 16;
 const FLOATING_WINDOW_RADIUS: i32 = 32;
 const COLLAPSED_WINDOW_RADIUS: i32 = 22;
 const PEEK_MOUSE_POLL_MS: u64 = 90;
@@ -761,8 +765,11 @@ fn collapse_window_to_edge(
         target_geometry,
         DockAnimationKind::Collapse,
     )? {
-        set_dock_state(app, next_state);
+        let changed = store_dock_state(next_state);
         apply_focus_widget_window_shape(window);
+        if changed {
+            emit_dock_state_change(app, next_state);
+        }
         Ok(next_state)
     } else {
         Ok(current_dock_state())
@@ -799,6 +806,7 @@ fn expand_window_to_edge(
         expanded_geometry,
         DockAnimationKind::Expand,
     )? {
+        apply_focus_widget_window_shape(window);
         if next_state.mode == FocusWidgetDockMode::Peek {
             schedule_peek_mouse_auto_collapse(app);
         }
@@ -823,6 +831,8 @@ fn animate_focus_widget_geometry(
     let steps = dock_animation_steps(duration);
     let started_at = Instant::now();
 
+    prepare_focus_widget_window_animation(window);
+
     for step in 1..=steps {
         if !is_current_window_animation(generation) {
             return Ok(false);
@@ -845,26 +855,71 @@ fn animate_focus_widget_geometry(
         let next_width = lerp(from.width, to.width, progress);
         let next_height = lerp(from.height, to.height, progress);
 
-        window
-            .set_position(LogicalPosition::new(next_x, next_y))
-            .map_err(|error| error.to_string())?;
-        window
-            .set_size(LogicalSize::new(next_width, next_height))
-            .map_err(|error| error.to_string())?;
-        apply_focus_widget_window_shape(window);
+        set_focus_widget_geometry_frame(window, next_x, next_y, next_width, next_height)?;
+    }
 
-        if step == steps && is_current_window_animation(generation) {
-            window
-                .set_position(LogicalPosition::new(end_x, end_y))
-                .map_err(|error| error.to_string())?;
-            window
-                .set_size(LogicalSize::new(to.width, to.height))
-                .map_err(|error| error.to_string())?;
-            apply_focus_widget_window_shape(window);
-        }
+    if is_current_window_animation(generation) {
+        set_focus_widget_geometry_frame(window, end_x, end_y, to.width, to.height)?;
     }
 
     Ok(is_current_window_animation(generation))
+}
+
+#[cfg(windows)]
+fn set_focus_widget_geometry_frame(
+    window: &WebviewWindow,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    let Ok(hwnd) = window.hwnd() else {
+        return set_focus_widget_geometry_frame_fallback(window, x, y, width, height);
+    };
+    let scale_factor = window.scale_factor().map_err(|error| error.to_string())?;
+    let physical_x = (x * scale_factor).round() as i32;
+    let physical_y = (y * scale_factor).round() as i32;
+    let physical_width = ((width * scale_factor).round() as i32).max(1);
+    let physical_height = ((height * scale_factor).round() as i32).max(1);
+
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            None,
+            physical_x,
+            physical_y,
+            physical_width,
+            physical_height,
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        )
+    }
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(windows))]
+fn set_focus_widget_geometry_frame(
+    window: &WebviewWindow,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    set_focus_widget_geometry_frame_fallback(window, x, y, width, height)
+}
+
+fn set_focus_widget_geometry_frame_fallback(
+    window: &WebviewWindow,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    window
+        .set_position(LogicalPosition::new(x, y))
+        .map_err(|error| error.to_string())?;
+    window
+        .set_size(LogicalSize::new(width, height))
+        .map_err(|error| error.to_string())
 }
 
 fn next_window_animation_generation() -> u64 {
@@ -914,7 +969,7 @@ fn dock_animation_steps(duration: Duration) -> u32 {
 fn dock_animation_ease(kind: DockAnimationKind, progress: f64) -> f64 {
     match kind {
         DockAnimationKind::Expand => cubic_bezier_y_for_x(progress, 0.16, 1.0, 0.30, 1.0),
-        DockAnimationKind::Collapse => cubic_bezier_y_for_x(progress, 0.20, 0.86, 0.20, 1.0),
+        DockAnimationKind::Collapse => cubic_bezier_y_for_x(progress, 0.30, 0.0, 0.20, 1.0),
     }
 }
 
@@ -1236,6 +1291,8 @@ fn apply_focus_widget_window_shape(window: &WebviewWindow) {
         return;
     };
 
+    enforce_focus_widget_chrome_less(hwnd);
+
     let mut rect = RECT::default();
     if unsafe { GetClientRect(hwnd, &mut rect) }.is_err() {
         return;
@@ -1261,6 +1318,42 @@ fn apply_focus_widget_window_shape(window: &WebviewWindow) {
 
 #[cfg(not(windows))]
 fn apply_focus_widget_window_shape(_window: &WebviewWindow) {}
+
+#[cfg(windows)]
+fn prepare_focus_widget_window_animation(window: &WebviewWindow) {
+    if let Ok(hwnd) = window.hwnd() {
+        enforce_focus_widget_chrome_less(hwnd);
+        let _ = unsafe { SetWindowRgn(hwnd, None, true) };
+    }
+}
+
+#[cfg(not(windows))]
+fn prepare_focus_widget_window_animation(_window: &WebviewWindow) {}
+
+#[cfg(windows)]
+fn enforce_focus_widget_chrome_less(hwnd: windows::Win32::Foundation::HWND) {
+    let style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
+    let blocked_style_bits =
+        (WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX).0 as isize;
+    let next_style = style & !blocked_style_bits;
+
+    if next_style == style {
+        return;
+    }
+
+    unsafe {
+        SetWindowLongPtrW(hwnd, GWL_STYLE, next_style);
+        let _ = SetWindowPos(
+            hwnd,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+    }
+}
 
 #[cfg(windows)]
 fn focus_widget_window_radius(
@@ -1402,7 +1495,13 @@ fn current_dock_state() -> FocusWidgetDockState {
 }
 
 fn set_dock_state(app: &AppHandle, next_state: FocusWidgetDockState) {
-    let changed = match runtime_state().lock() {
+    if store_dock_state(next_state) {
+        emit_dock_state_change(app, next_state);
+    }
+}
+
+fn store_dock_state(next_state: FocusWidgetDockState) -> bool {
+    match runtime_state().lock() {
         Ok(mut runtime) => {
             let changed = runtime.dock_state != next_state;
             runtime.dock_state = next_state;
@@ -1411,11 +1510,11 @@ fn set_dock_state(app: &AppHandle, next_state: FocusWidgetDockState) {
             changed
         }
         Err(_) => false,
-    };
-
-    if changed {
-        let _ = app.emit(FOCUS_WIDGET_DOCK_STATE_CHANGED_EVENT, next_state);
     }
+}
+
+fn emit_dock_state_change(app: &AppHandle, next_state: FocusWidgetDockState) {
+    let _ = app.emit(FOCUS_WIDGET_DOCK_STATE_CHANGED_EVENT, next_state);
 }
 
 fn emit_focus_widget_dock_state(app: &AppHandle) {

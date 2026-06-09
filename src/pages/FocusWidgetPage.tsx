@@ -78,6 +78,7 @@ export default function FocusWidgetPage() {
   const [dockState, setDockState] = useState(defaultFocusWidgetDockState);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [isAlwaysOnTopUpdating, setIsAlwaysOnTopUpdating] = useState(false);
+  const [isRetracting, setIsRetracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const shellRef = useRef<HTMLElement | null>(null);
   const expandTimerRef = useRef<number | null>(null);
@@ -200,6 +201,9 @@ export default function FocusWidgetPage() {
 
   useEffect(() => {
     dockModeRef.current = dockState.mode;
+    if (dockState.mode !== 'peek') {
+      setIsRetracting(false);
+    }
   }, [dockState.mode]);
 
   useEffect(() => {
@@ -253,6 +257,7 @@ export default function FocusWidgetPage() {
   const roundLabel = `第 ${Math.max(studyState.cycle_index, 1)} 轮`;
   const combinedLabel = `${subjectName} / ${roundLabel}`;
   const progressLabel = `${progressPercent}%`;
+  const elapsedLabel = formatCompactDuration(studyState.study_elapsed_seconds);
 
   const returnToMain = useCallback(async () => {
     if (!canInteract) return;
@@ -300,6 +305,7 @@ export default function FocusWidgetPage() {
       collapseTimerRef.current = null;
     }
     hoverLockUntilRef.current = Date.now() + HOVER_REENTRY_LOCK_MS;
+    setIsRetracting(false);
 
     try {
       setDockState(await peekFocusWidgetFromEdge());
@@ -320,10 +326,13 @@ export default function FocusWidgetPage() {
       collapseTimerRef.current = null;
     }
     hoverLockUntilRef.current = Date.now() + HOVER_REENTRY_LOCK_MS;
+    setIsRetracting(true);
 
     try {
+      await waitForNextPaint();
       setDockState(await collapseFocusWidgetToEdge());
     } catch (reason) {
+      setIsRetracting(false);
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   }, [canInteract]);
@@ -425,7 +434,7 @@ export default function FocusWidgetPage() {
   return (
     <section
       ref={shellRef}
-      className={`focus-widget-shell is-${dockState.mode}${expandedEdgeClass}`}
+      className={`focus-widget-shell is-${dockState.mode}${isRetracting ? ' is-retracting' : ''}${expandedEdgeClass}`}
       onMouseEnter={handleExpandedMouseEnter}
       onMouseLeave={handleExpandedMouseLeave}
     >
@@ -475,6 +484,10 @@ export default function FocusWidgetPage() {
         <p className="focus-widget-subject">{combinedLabel}</p>
 
         <div className="focus-widget-progress" aria-label={`总进度 ${progressLabel}`}>
+          <div className="focus-widget-meta-row" aria-hidden="true">
+            <span>已进行 {elapsedLabel}</span>
+            <span>{roundLabel}</span>
+          </div>
           <div className="focus-widget-progress-row">
             <span>总进度</span>
             <strong>{progressLabel}</strong>
@@ -500,6 +513,24 @@ function formatWidgetSeconds(totalSeconds: number) {
   const minutes = Math.floor((safeSeconds % 3600) / 60).toString().padStart(2, '0');
   const seconds = Math.floor(safeSeconds % 60).toString().padStart(2, '0');
   return hours > 0 ? `${hours}:${minutes}:${seconds}` : `${minutes}:${seconds}`;
+}
+
+function formatCompactDuration(totalSeconds: number) {
+  const safeSeconds = Math.max(Math.floor(totalSeconds), 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+  }
+  return `${minutes}m`;
+}
+
+function waitForNextPaint() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
 }
 
 function formatCollapsedSeconds(totalSeconds: number, edge: FocusWidgetDockEdge) {
