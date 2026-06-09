@@ -134,4 +134,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Added
 - Add tray toggle for focus widget and refresh theme cards (714750b)
 
+## v1.11.2 - 2026-06-09
+
+### Desktop
+#### Changed
+- Show the focus widget for paused and idle study states (d5d845f)
+
 
