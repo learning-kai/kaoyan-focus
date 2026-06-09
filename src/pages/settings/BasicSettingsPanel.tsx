@@ -1,5 +1,5 @@
 import type { ChangeEvent, CSSProperties } from 'react';
-import { BellRing, Coffee, Music2, Play, Power, RotateCcw, Save, Settings2, UploadCloud, VolumeX } from 'lucide-react';
+import { BellRing, Coffee, MonitorUp, Music2, Play, Power, RotateCcw, Save, Settings2, UploadCloud, VolumeX } from 'lucide-react';
 import type { AppSettings, AppTheme, ReminderSoundId, ReminderSoundSource } from '../../types/settings';
 import { APP_THEME_OPTIONS } from '../../theme';
 import { SettingNumber } from './SettingsPrimitives';
@@ -213,6 +213,52 @@ export function BasicSettingsPanel({
                 </label>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="setting-row mode-setting">
+          <div>
+            <strong>悬浮窗倒计时</strong>
+            <p>学习模式 active 时显示独立置顶小窗；暂停、结束或退出后自动隐藏。</p>
+          </div>
+          <div className="segmented-control">
+            <button className={settings.focus_widget_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ focus_widget_enabled: true })} type="button">
+              <MonitorUp size={15} />
+              开启
+            </button>
+            <button className={!settings.focus_widget_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ focus_widget_enabled: false })} type="button">
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <div className="setting-row mode-setting">
+          <div>
+            <strong>自动跟随学习模式</strong>
+            <p>开始学习后自动显示悬浮窗；手动隐藏后，本次学习不会再次自动弹出。</p>
+          </div>
+          <div className="segmented-control">
+            <button className={settings.focus_widget_auto_follow ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_auto_follow: true })} type="button">
+              开启
+            </button>
+            <button className={!settings.focus_widget_auto_follow ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_auto_follow: false })} type="button">
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <div className="setting-row mode-setting">
+          <div>
+            <strong>记住悬浮窗位置</strong>
+            <p>拖动或调整悬浮窗后保存位置和尺寸，下次 active 学习模式恢复到同一位置。</p>
+          </div>
+          <div className="segmented-control">
+            <button className={settings.focus_widget_remember_geometry ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_remember_geometry: true })} type="button">
+              开启
+            </button>
+            <button className={!settings.focus_widget_remember_geometry ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_remember_geometry: false })} type="button">
+              关闭
+            </button>
           </div>
         </div>
 

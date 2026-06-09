@@ -4,12 +4,12 @@
   --motion-base: 180ms;
   --motion-slow: 260ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --surface-glass: rgba(12, 20, 32, 0.78);
-  --surface-glass-strong: rgba(14, 24, 38, 0.92);
-  --surface-panel: rgba(14, 23, 36, 0.88);
-  --shadow-panel: 0 18px 44px rgba(1, 6, 15, 0.34);
-  --shadow-hover: 0 18px 38px rgba(31, 85, 168, 0.18);
-  --shadow-control: 0 10px 22px rgba(1, 6, 15, 0.18);
+  --surface-glass: rgba(13, 21, 34, 0.8);
+  --surface-glass-strong: rgba(16, 26, 41, 0.94);
+  --surface-panel: rgba(14, 23, 36, 0.9);
+  --shadow-panel: 0 20px 48px rgba(1, 6, 15, 0.32);
+  --shadow-hover: 0 18px 38px rgba(31, 85, 168, 0.16);
+  --shadow-control: 0 12px 24px rgba(1, 6, 15, 0.16);
   --z-sticky: 30;
   --z-nav: 70;
 }
@@ -48,11 +48,11 @@ button {
 .sidebar {
   z-index: var(--z-nav);
   background:
-    linear-gradient(180deg, rgba(13, 22, 35, 0.94), rgba(8, 14, 23, 0.9)),
+    linear-gradient(180deg, rgba(11, 18, 29, 0.94), rgba(8, 13, 22, 0.9)),
     var(--bg);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.035), 12px 0 34px rgba(1, 6, 15, 0.18);
-  -webkit-backdrop-filter: blur(24px) saturate(130%);
-  backdrop-filter: blur(24px) saturate(130%);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.03), 12px 0 34px rgba(1, 6, 15, 0.16);
+  -webkit-backdrop-filter: blur(24px) saturate(128%);
+  backdrop-filter: blur(24px) saturate(128%);
 }
 
 .brand {
@@ -125,68 +125,13 @@ button {
   align-content: start;
 }
 
-.top-strip {
-  min-height: 60px;
-  box-shadow: 0 14px 34px rgba(1, 6, 15, 0.2);
-  background:
-    linear-gradient(180deg, rgba(17, 29, 46, 0.86), rgba(11, 19, 31, 0.8)),
-    var(--surface-glass);
-  -webkit-backdrop-filter: blur(22px) saturate(130%);
-  backdrop-filter: blur(22px) saturate(130%);
-}
-
-.top-strip-title,
-.top-strip-status :is(span, button) {
-  min-width: 0;
-}
-
-.top-strip-status {
-  align-items: center;
-  gap: 8px;
-}
-
-.top-strip-status :is(span, button) {
-  min-height: 30px;
-  max-width: min(340px, 42vw);
-  padding: 5px 9px;
-  overflow: hidden;
-  border: 1px solid rgba(145, 167, 199, 0.14);
-  border-radius: 999px;
-  background: rgba(145, 167, 199, 0.055);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.top-strip-status button.next-alarm-pill {
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.top-strip-status button.next-alarm-pill:focus-visible {
-  outline: 2px solid rgba(147, 197, 253, 0.82);
-  outline-offset: 3px;
-}
-
-.top-strip-status .is-ready {
-  color: #c9f7e5;
-  border-color: rgba(79, 208, 161, 0.2);
-  background: rgba(79, 208, 161, 0.09);
-}
-
-.top-strip-status .is-preview {
-  color: #d9e6ff;
-  border-color: rgba(121, 167, 255, 0.2);
-  background: rgba(121, 167, 255, 0.09);
-}
-
 .page-shell {
   width: min(100%, 1280px);
   margin-inline: auto;
   gap: 18px;
-  border-radius: 16px;
+  border-radius: 18px;
   background:
-    linear-gradient(180deg, rgba(16, 27, 43, 0.9), rgba(10, 17, 28, 0.86)),
+    linear-gradient(180deg, rgba(12, 20, 33, 0.86), rgba(9, 15, 24, 0.82)),
     var(--surface-panel);
   box-shadow: var(--shadow-panel);
 }
@@ -197,13 +142,14 @@ button {
 }
 
 .page-header h2 {
-  font-size: 30px;
+  font-size: 29px;
   font-weight: 760;
   text-wrap: balance;
 }
 
 .page-header p:not(.eyebrow) {
   max-width: 68ch;
+  line-height: 1.58;
 }
 
 .command-panel,
@@ -409,22 +355,10 @@ button {
     rgba(9, 15, 25, 0.5);
 }
 
-@media (min-width: 961px) {
-  .top-strip {
-    position: sticky;
-    top: 18px;
-    z-index: var(--z-sticky);
-  }
-}
-
 @media (max-width: 960px) {
   .page-shell {
     width: 100%;
     border-radius: 14px;
-  }
-
-  .top-strip-status :is(span, button) {
-    max-width: 100%;
   }
 
   .settings-section-tabs {
@@ -434,10 +368,9 @@ button {
 
 @media (max-width: 680px) {
   .app-shell,
-  .sidebar,
-  .main-panel,
-  .top-strip,
-  .page-shell {
+.sidebar,
+.main-panel,
+.page-shell {
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -456,8 +389,7 @@ button {
     overflow: hidden;
   }
 
-  .brand,
-  .sidebar-foot {
+  .brand {
     display: none;
   }
 
@@ -529,53 +461,6 @@ button {
     padding: 10px;
   }
 
-  .top-strip {
-    min-height: 0;
-    margin-bottom: 10px;
-    border-radius: 14px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-    padding: 10px;
-  }
-
-  .top-strip-title {
-    min-height: 32px;
-  }
-
-  .top-strip-status {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    grid-column: 1 / -1;
-    gap: 6px;
-    overflow: visible;
-    font-size: 11px;
-    scrollbar-width: none;
-  }
-
-  .top-strip-status::-webkit-scrollbar {
-    display: none;
-  }
-
-  .top-strip-status :is(span, button) {
-    flex: 1 1 120px;
-    max-width: 100%;
-    min-height: 28px;
-    padding: 4px 8px;
-  }
-
-  .top-strip-status .next-alarm-pill {
-    flex-basis: 100%;
-  }
-
-  .theme-toggle button {
-    min-width: 42px;
-    min-height: 34px;
-    gap: 4px;
-    padding-inline: 10px;
-  }
-
   .settings-section-tabs {
     display: flex;
     gap: 8px;
@@ -621,8 +506,8 @@ button {
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) {
-  --surface-glass: rgba(255, 255, 255, 0.82);
-  --surface-glass-strong: rgba(255, 255, 255, 0.94);
+  --surface-glass: rgba(255, 255, 255, 0.84);
+  --surface-glass-strong: rgba(255, 255, 255, 0.95);
   --surface-panel: rgba(255, 255, 255, 0.9);
   --shadow-panel: 0 18px 42px rgba(82, 101, 129, 0.12);
   --shadow-hover: 0 18px 38px rgba(56, 105, 212, 0.14);
@@ -644,7 +529,6 @@ button {
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.86), 12px 0 34px rgba(82, 101, 129, 0.08);
 }
 
-:is(html[data-theme='light'], html:not([data-theme])) .top-strip,
 :is(html[data-theme='light'], html:not([data-theme])) .page-shell,
 :is(html[data-theme='light'], html:not([data-theme])) .command-panel,
 :is(html[data-theme='light'], html:not([data-theme])) .soft-panel,
@@ -685,11 +569,6 @@ button {
   box-shadow: 0 8px 20px rgba(82, 101, 129, 0.07);
 }
 
-:is(html[data-theme='light'], html:not([data-theme])) .top-strip-status :is(span, button) {
-  border-color: rgba(113, 131, 159, 0.18);
-  background: rgba(248, 250, 252, 0.82);
-}
-
 :is(html[data-theme='light'], html:not([data-theme])) .time-input {
   color: var(--ink);
   border-color: rgba(115, 133, 160, 0.26);
@@ -711,57 +590,6 @@ button {
   }
 }
 
-@media (max-width: 960px) {
-  .top-strip {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-
-  .top-strip-title {
-    min-width: 0;
-  }
-
-  .top-strip-status {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 6px;
-    max-width: 100%;
-    overflow-x: auto;
-    padding-bottom: 1px;
-    scrollbar-width: none;
-  }
-
-  .top-strip-status::-webkit-scrollbar {
-    display: none;
-  }
-
-  .top-strip-status :is(span, button) {
-    flex: 0 0 auto;
-    min-height: 26px;
-    max-width: min(72vw, 260px);
-    padding: 4px 8px;
-    white-space: nowrap;
-  }
-}
-
-@media (max-width: 680px) {
-  .top-strip {
-    padding: 8px 10px;
-  }
-
-  .theme-toggle {
-    display: none !important;
-  }
-
-  .top-strip-status {
-    grid-column: 1;
-  }
-
-  .top-strip-status :is(span, button) {
-    font-size: 11px;
-  }
-}
-
 :is(html[data-theme='light'], html:not([data-theme])) {
   --surface-card: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 250, 253, 0.9));
   --surface-card-soft: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.84));
@@ -769,7 +597,6 @@ button {
   --shadow-card: 0 8px 20px rgba(82, 101, 129, 0.07);
 }
 
-:is(html[data-theme='light'], html:not([data-theme])) .top-strip,
 :is(html[data-theme='light'], html:not([data-theme])) .page-shell,
 :is(html[data-theme='light'], html:not([data-theme])) .command-panel,
 :is(html[data-theme='light'], html:not([data-theme])) .soft-panel,
@@ -836,18 +663,8 @@ button {
   box-shadow: var(--shadow-card);
 }
 
-:is(html[data-theme='light'], html:not([data-theme])) .sidebar-foot {
-  background: var(--surface-card-soft);
-  box-shadow: var(--shadow-card);
-}
-
 :is(html[data-theme='light'], html:not([data-theme])) .alert {
   box-shadow: var(--shadow-card);
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .top-strip-status :is(span, button) {
-  border-color: rgba(113, 131, 159, 0.16);
-  background: rgba(248, 250, 252, 0.9);
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .nav-item {
@@ -866,7 +683,6 @@ button {
 :is(html[data-theme='light'], html:not([data-theme])) .chip,
 :is(html[data-theme='light'], html:not([data-theme])) .segmented-control button,
 :is(html[data-theme='light'], html:not([data-theme])) .stepper-control button,
-:is(html[data-theme='light'], html:not([data-theme])) .icon-button,
-:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button {
+:is(html[data-theme='light'], html:not([data-theme])) .icon-button {
   background: rgba(255, 255, 255, 0.72);
 }

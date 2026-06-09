@@ -14,6 +14,13 @@ const LAUNCH_AT_STARTUP_KEY: &str = "launch_at_startup";
 const AUTO_START_BREAK_AFTER_FOCUS_KEY: &str = "auto_start_break_after_focus";
 const SCHEDULE_REMINDER_ENABLED_KEY: &str = "schedule_reminder_enabled";
 const SCHEDULE_REMINDER_LEAD_MINUTES_KEY: &str = "schedule_reminder_lead_minutes";
+const FOCUS_WIDGET_ENABLED_KEY: &str = "focus_widget_enabled";
+const FOCUS_WIDGET_AUTO_FOLLOW_KEY: &str = "focus_widget_auto_follow";
+const FOCUS_WIDGET_REMEMBER_GEOMETRY_KEY: &str = "focus_widget_remember_geometry";
+const FOCUS_WIDGET_X_KEY: &str = "focus_widget_x";
+const FOCUS_WIDGET_Y_KEY: &str = "focus_widget_y";
+const FOCUS_WIDGET_WIDTH_KEY: &str = "focus_widget_width";
+const FOCUS_WIDGET_HEIGHT_KEY: &str = "focus_widget_height";
 const BREAK_MINUTES_KEY: &str = "break_minutes";
 const LONG_BREAK_MINUTES_KEY: &str = "long_break_minutes";
 const LONG_BREAK_INTERVAL_KEY: &str = "long_break_interval";
@@ -47,6 +54,13 @@ pub struct AppSettings {
     pub auto_start_break_after_focus: bool,
     pub schedule_reminder_enabled: bool,
     pub schedule_reminder_lead_minutes: i64,
+    pub focus_widget_enabled: bool,
+    pub focus_widget_auto_follow: bool,
+    pub focus_widget_remember_geometry: bool,
+    pub focus_widget_x: Option<i64>,
+    pub focus_widget_y: Option<i64>,
+    pub focus_widget_width: Option<i64>,
+    pub focus_widget_height: Option<i64>,
     pub sync_backend: String,
     pub primary_owner_device_id: Option<String>,
     pub primary_owner_updated_at: Option<i64>,
@@ -96,6 +110,13 @@ impl Default for AppSettings {
             auto_start_break_after_focus: false,
             schedule_reminder_enabled: true,
             schedule_reminder_lead_minutes: 5,
+            focus_widget_enabled: false,
+            focus_widget_auto_follow: true,
+            focus_widget_remember_geometry: true,
+            focus_widget_x: None,
+            focus_widget_y: None,
+            focus_widget_width: Some(280),
+            focus_widget_height: Some(144),
             sync_backend: "webdav".to_string(),
             primary_owner_device_id: None,
             primary_owner_updated_at: None,
@@ -178,6 +199,37 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             defaults.schedule_reminder_lead_minutes,
         )?
         .clamp(0, 60),
+        focus_widget_enabled: get_bool_setting(
+            &connection,
+            FOCUS_WIDGET_ENABLED_KEY,
+            defaults.focus_widget_enabled,
+        )?,
+        focus_widget_auto_follow: get_bool_setting(
+            &connection,
+            FOCUS_WIDGET_AUTO_FOLLOW_KEY,
+            defaults.focus_widget_auto_follow,
+        )?,
+        focus_widget_remember_geometry: get_bool_setting(
+            &connection,
+            FOCUS_WIDGET_REMEMBER_GEOMETRY_KEY,
+            defaults.focus_widget_remember_geometry,
+        )?,
+        focus_widget_x: get_optional_i64_setting_allow_zero(&connection, FOCUS_WIDGET_X_KEY)?
+            .map(|value| value.clamp(-32768, 32768)),
+        focus_widget_y: get_optional_i64_setting_allow_zero(&connection, FOCUS_WIDGET_Y_KEY)?
+            .map(|value| value.clamp(-32768, 32768)),
+        focus_widget_width: get_optional_i64_setting_allow_zero(
+            &connection,
+            FOCUS_WIDGET_WIDTH_KEY,
+        )?
+        .or(defaults.focus_widget_width)
+        .map(|value| value.clamp(240, 420)),
+        focus_widget_height: get_optional_i64_setting_allow_zero(
+            &connection,
+            FOCUS_WIDGET_HEIGHT_KEY,
+        )?
+        .or(defaults.focus_widget_height)
+        .map(|value| value.clamp(112, 240)),
         sync_backend: normalize_sync_backend(&get_string_setting(
             &connection,
             SYNC_BACKEND_KEY,
@@ -261,6 +313,21 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         auto_start_break_after_focus: settings.auto_start_break_after_focus,
         schedule_reminder_enabled: settings.schedule_reminder_enabled,
         schedule_reminder_lead_minutes: settings.schedule_reminder_lead_minutes.clamp(0, 60),
+        focus_widget_enabled: settings.focus_widget_enabled,
+        focus_widget_auto_follow: settings.focus_widget_auto_follow,
+        focus_widget_remember_geometry: settings.focus_widget_remember_geometry,
+        focus_widget_x: settings
+            .focus_widget_x
+            .map(|value| value.clamp(-32768, 32768)),
+        focus_widget_y: settings
+            .focus_widget_y
+            .map(|value| value.clamp(-32768, 32768)),
+        focus_widget_width: settings
+            .focus_widget_width
+            .map(|value| value.clamp(240, 420)),
+        focus_widget_height: settings
+            .focus_widget_height
+            .map(|value| value.clamp(112, 240)),
         sync_backend: normalize_sync_backend(&settings.sync_backend),
         primary_owner_device_id: settings
             .primary_owner_device_id
@@ -358,6 +425,66 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
     )?;
     set_setting(
         &connection,
+        FOCUS_WIDGET_ENABLED_KEY,
+        if normalized.focus_widget_enabled {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_AUTO_FOLLOW_KEY,
+        if normalized.focus_widget_auto_follow {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_REMEMBER_GEOMETRY_KEY,
+        if normalized.focus_widget_remember_geometry {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_X_KEY,
+        &normalized
+            .focus_widget_x
+            .map(|value| value.to_string())
+            .unwrap_or_default(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_Y_KEY,
+        &normalized
+            .focus_widget_y
+            .map(|value| value.to_string())
+            .unwrap_or_default(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_WIDTH_KEY,
+        &normalized.focus_widget_width.unwrap_or(280).to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_HEIGHT_KEY,
+        &normalized.focus_widget_height.unwrap_or(144).to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
         SYNC_BACKEND_KEY,
         &normalized.sync_backend,
         &now,
@@ -444,6 +571,44 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
     sync_launch_at_startup(&app, normalized.launch_at_startup)?;
 
     Ok(normalized)
+}
+
+pub fn save_focus_widget_geometry(
+    app: &AppHandle,
+    x: i64,
+    y: i64,
+    width: i64,
+    height: i64,
+) -> Result<(), String> {
+    let connection = open_database(&database_path(app)?)?;
+    let now = Utc::now().to_rfc3339();
+
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_X_KEY,
+        &x.clamp(-32768, 32768).to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_Y_KEY,
+        &y.clamp(-32768, 32768).to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_WIDTH_KEY,
+        &width.clamp(240, 420).to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_HEIGHT_KEY,
+        &height.clamp(112, 240).to_string(),
+        &now,
+    )?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -672,6 +837,14 @@ fn get_optional_i64_setting(
 ) -> Result<Option<i64>, String> {
     let raw = get_string_setting(connection, key, "")?;
     Ok(raw.trim().parse::<i64>().ok().filter(|value| *value > 0))
+}
+
+fn get_optional_i64_setting_allow_zero(
+    connection: &rusqlite::Connection,
+    key: &str,
+) -> Result<Option<i64>, String> {
+    let raw = get_string_setting(connection, key, "")?;
+    Ok(raw.trim().parse::<i64>().ok())
 }
 
 fn set_setting(

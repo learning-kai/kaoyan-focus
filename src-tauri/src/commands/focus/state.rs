@@ -2,13 +2,17 @@
     let connection = open_database(&database_path(app)?)?;
     let Some(record) = get_active_study_mode_record(&connection)? else {
         set_runtime_state(state, false, None)?;
-        return load_current_study_mode_state(&connection, Utc::now());
+        let next_state = load_current_study_mode_state(&connection, Utc::now())?;
+        sync_focus_widget_for_state(app, &next_state);
+        return Ok(next_state);
     };
 
     let now = Utc::now();
     if record.paused_at.is_some() {
         set_runtime_state(state, true, record.current_session_id)?;
-        return study_mode_record_to_state(&connection, &record, now);
+        let next_state = study_mode_record_to_state(&connection, &record, now)?;
+        sync_focus_widget_for_state(app, &next_state);
+        return Ok(next_state);
     }
 
     match record.phase.as_str() {
@@ -37,7 +41,9 @@
                     )
                     .map_err(|error| error.to_string())?;
                 set_runtime_state(state, true, Some(session.id))?;
-                return load_current_study_mode_state(&connection, now);
+                let next_state = load_current_study_mode_state(&connection, now)?;
+                sync_focus_widget_for_state(app, &next_state);
+                return Ok(next_state);
             }
 
             let phase_elapsed_seconds = phase_elapsed_seconds(&record, now)?;
@@ -49,7 +55,9 @@
             );
             if focus_run_seconds <= 0 {
                 complete_study_mode_record(&connection, state, &record, now, "completed")?;
-                return load_study_mode_state_by_id(&connection, record.id, now);
+                let next_state = load_study_mode_state_by_id(&connection, record.id, now)?;
+                sync_focus_widget_for_state(app, &next_state);
+                return Ok(next_state);
             }
             if phase_elapsed_seconds >= focus_run_seconds {
                 let focus_end =
@@ -65,7 +73,9 @@
                         "completed",
                         Some(next_accumulated),
                     )?;
-                    return load_study_mode_state_by_id(&connection, record.id, now);
+                    let next_state = load_study_mode_state_by_id(&connection, record.id, now)?;
+                    sync_focus_widget_for_state(app, &next_state);
+                    return Ok(next_state);
                 }
                 connection
                     .execute(
@@ -107,7 +117,9 @@
                     "completed",
                     Some(record.planned_seconds),
                 )?;
-                return load_study_mode_state_by_id(&connection, record.id, now);
+                let next_state = load_study_mode_state_by_id(&connection, record.id, now)?;
+                sync_focus_widget_for_state(app, &next_state);
+                return Ok(next_state);
             }
         }
         "break" => {
@@ -156,7 +168,9 @@
         set_runtime_state(state, false, None)?;
     }
 
-    load_current_study_mode_state(&connection, now)
+    let next_state = load_current_study_mode_state(&connection, now)?;
+    sync_focus_widget_for_state(app, &next_state);
+    Ok(next_state)
 }
 
 fn complete_study_mode_record(

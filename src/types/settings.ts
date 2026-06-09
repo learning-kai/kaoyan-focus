@@ -18,6 +18,13 @@ export type AppSettings = {
   auto_start_break_after_focus: boolean;
   schedule_reminder_enabled: boolean;
   schedule_reminder_lead_minutes: number;
+  focus_widget_enabled: boolean;
+  focus_widget_auto_follow: boolean;
+  focus_widget_remember_geometry: boolean;
+  focus_widget_x: number | null;
+  focus_widget_y: number | null;
+  focus_widget_width: number | null;
+  focus_widget_height: number | null;
   sync_backend: SyncBackend;
   primary_owner_device_id: string | null;
   primary_owner_updated_at: number | null;

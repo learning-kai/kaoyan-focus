@@ -6,16 +6,21 @@
     crate::commands::feishu::sync_feishu_bridge_after_local_change(app.clone(), trigger);
 }
 
-pub fn sync_study_runtime_state(app: &AppHandle) -> Result<(), String> {
+pub fn sync_study_runtime_state(app: &AppHandle) -> Result<bool, String> {
     let connection = open_database(&database_path(app)?)?;
     let state = app.state::<AppState>();
     if let Some(record) = get_active_study_mode_record(&connection)? {
         set_runtime_state(state.inner(), true, record.current_session_id)?;
+        return Ok(record.paused_at.is_none());
     } else {
         set_runtime_state(state.inner(), false, None)?;
     }
 
-    Ok(())
+    Ok(false)
+}
+
+pub(crate) fn sync_focus_widget_for_state(app: &AppHandle, state: &StudyModeState) {
+    let _ = crate::windows::focus_widget::sync_visibility_with_study_mode_state(app, state);
 }
 
 fn current_study_runtime_marker(app: &AppHandle) -> Result<Option<StudyRuntimeSyncMarker>, String> {

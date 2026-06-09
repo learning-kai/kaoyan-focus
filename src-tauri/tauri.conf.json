@@ -12,11 +12,28 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "考研专注",
         "width": 1100,
         "height": 760,
         "minWidth": 960,
         "minHeight": 680
+      },
+      {
+        "label": "focus-widget",
+        "title": "专注悬浮窗",
+        "url": "/?windowLabel=focus-widget",
+        "width": 360,
+        "height": 240,
+        "minWidth": 320,
+        "minHeight": 220,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "shadow": false
       }
     ],
     "security": {

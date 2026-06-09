@@ -41,10 +41,10 @@ export const APP_THEME_OPTIONS: AppThemeOption[] = [
   },
   {
     id: 'forest',
-    label: '松林绿幕',
+    label: '清新浅绿',
     shortLabel: '森林',
-    description: '深绿暗色，适合夜间沉浸学习。',
-    swatch: ['#071612', '#65dba4', '#88b9ff'],
+    description: '清新淡绿，低饱和明亮，适合长时间学习。',
+    swatch: ['#f4fbf6', '#75b68f', '#9edcc1'],
   },
   {
     id: 'sakura',

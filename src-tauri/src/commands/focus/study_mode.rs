@@ -93,6 +93,7 @@ pub fn start_study_mode(
 
     set_runtime_state(state.inner(), true, Some(session_id))?;
     let next_state = load_current_study_mode_state(&connection, Utc::now())?;
+    sync_focus_widget_for_state(&app, &next_state);
     trigger_shared_sync(&app, "focus_state_change");
     Ok(next_state)
 }
@@ -217,6 +218,7 @@ pub fn confirm_study_break(
 ) -> Result<StudyModeState, String> {
     let current_state = advance_study_mode(&app, state.inner())?;
     if current_state.status != "active" {
+        sync_focus_widget_for_state(&app, &current_state);
         return Ok(current_state);
     }
 
@@ -227,7 +229,9 @@ pub fn confirm_study_break(
     let connection = open_database(&database_path(&app)?)?;
     let Some(record) = get_active_study_mode_record(&connection)? else {
         set_runtime_state(state.inner(), false, None)?;
-        return Ok(idle_study_mode_state());
+        let next_state = idle_study_mode_state();
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
     };
 
     if record.paused_at.is_some() {
@@ -238,7 +242,9 @@ pub fn confirm_study_break(
     let device_id = load_or_create_device_id(&connection)?;
     if study_elapsed_seconds(&record, now)? >= record.planned_seconds {
         complete_study_mode_record(&connection, state.inner(), &record, now, "completed")?;
-        return load_current_study_mode_state(&connection, now);
+        let next_state = load_current_study_mode_state(&connection, now)?;
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
     }
 
     if let Some(session_id) = record.current_session_id {
@@ -285,6 +291,7 @@ pub fn confirm_study_break(
 
     set_runtime_state(state.inner(), true, None)?;
     let next_state = load_current_study_mode_state(&connection, now)?;
+    sync_focus_widget_for_state(&app, &next_state);
     trigger_shared_sync(&app, "focus_state_change");
     Ok(next_state)
 }
@@ -296,6 +303,7 @@ pub fn pause_study_mode(
 ) -> Result<StudyModeState, String> {
     let current_state = advance_study_mode(&app, state.inner())?;
     if current_state.status != "active" {
+        sync_focus_widget_for_state(&app, &current_state);
         return Ok(current_state);
     }
 
@@ -306,11 +314,15 @@ pub fn pause_study_mode(
     let connection = open_database(&database_path(&app)?)?;
     let Some(record) = get_active_study_mode_record(&connection)? else {
         set_runtime_state(state.inner(), false, None)?;
-        return Ok(idle_study_mode_state());
+        let next_state = idle_study_mode_state();
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
     };
 
     if record.paused_at.is_some() {
-        return load_current_study_mode_state(&connection, Utc::now());
+        let next_state = load_current_study_mode_state(&connection, Utc::now())?;
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
     }
 
     let now_dt = Utc::now();
@@ -342,6 +354,7 @@ pub fn pause_study_mode(
         .map_err(|error| error.to_string())?;
 
     let next_state = load_current_study_mode_state(&connection, Utc::now())?;
+    sync_focus_widget_for_state(&app, &next_state);
     trigger_shared_sync(&app, "focus_state_change");
     Ok(next_state)
 }
@@ -354,11 +367,15 @@ pub fn resume_study_mode(
     let connection = open_database(&database_path(&app)?)?;
     let Some(record) = get_active_study_mode_record(&connection)? else {
         set_runtime_state(state.inner(), false, None)?;
-        return Ok(idle_study_mode_state());
+        let next_state = idle_study_mode_state();
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
     };
 
     let Some(paused_at) = record.paused_at.as_deref() else {
-        return advance_study_mode(&app, state.inner());
+        let next_state = advance_study_mode(&app, state.inner())?;
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
     };
 
     let now = Utc::now();
@@ -393,6 +410,7 @@ pub fn resume_study_mode(
         .map_err(|error| error.to_string())?;
 
     let next_state = advance_study_mode(&app, state.inner())?;
+    sync_focus_widget_for_state(&app, &next_state);
     trigger_shared_sync(&app, "focus_state_change");
     Ok(next_state)
 }
@@ -407,7 +425,9 @@ pub fn update_study_mode_subject(
     let connection = open_database(&database_path(&app)?)?;
     let Some(record) = get_active_study_mode_record(&connection)? else {
         set_runtime_state(state.inner(), false, None)?;
-        return Ok(idle_study_mode_state());
+        let next_state = idle_study_mode_state();
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
     };
 
     validate_subject_id(&connection, subject_id)?;
@@ -453,6 +473,7 @@ pub fn update_study_mode_subject(
     }
 
     let next_state = load_current_study_mode_state(&connection, Utc::now())?;
+    sync_focus_widget_for_state(&app, &next_state);
     trigger_shared_sync(&app, "focus_state_change");
     Ok(next_state)
 }
@@ -466,7 +487,9 @@ pub fn emergency_exit_study_mode(
     let connection = open_database(&database_path(&app)?)?;
     let Some(record) = get_active_study_mode_record(&connection)? else {
         set_runtime_state(state.inner(), false, None)?;
-        return Ok(idle_study_mode_state());
+        let next_state = idle_study_mode_state();
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
     };
 
     if record.mode != "strict" {
@@ -516,6 +539,7 @@ pub fn emergency_exit_study_mode(
 
     set_runtime_state(state.inner(), false, None)?;
     let next_state = load_current_study_mode_state(&connection, now)?;
+    sync_focus_widget_for_state(&app, &next_state);
     trigger_shared_sync(&app, "focus_state_change");
     Ok(next_state)
 }
@@ -576,14 +600,17 @@ pub fn reset_study_mode(
     }
 
     set_runtime_state(state.inner(), false, None)?;
+    let next_state = idle_study_mode_state();
+    sync_focus_widget_for_state(&app, &next_state);
     trigger_shared_sync(&app, "focus_state_change");
-    Ok(idle_study_mode_state())
+    Ok(next_state)
 }
 
 pub fn tick_background_study_mode(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
     let before_marker = current_study_runtime_marker(app).ok().flatten();
     let study_state = advance_study_mode(app, state.inner())?;
+    sync_focus_widget_for_state(app, &study_state);
     let after_marker = study_runtime_marker(&study_state);
     if before_marker != after_marker {
         let app = app.clone();

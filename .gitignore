@@ -4,6 +4,8 @@ src-tauri/target/
 src-tauri/gen/
 src-tauri/updater/tauri-update.key
 .claude/
+.codex-tmp/
+.playwright-mcp/
 .DS_Store
 *.log
 theme-check-*.png

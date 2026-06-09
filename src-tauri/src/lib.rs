@@ -51,6 +51,7 @@ pub struct AppState {
 
 const REMINDER_NOTIFICATION_CLOSED_EVENT: &str = "study-reminder-notification-closed";
 const CRITICAL_REMINDER_TOPMOST_RESET_MS: u64 = 8_000;
+const MAIN_WINDOW_LABEL: &str = "main";
 
 impl AppState {
     fn should_prevent_exit(&self, app: Option<&tauri::AppHandle>) -> Result<bool, String> {
@@ -77,11 +78,16 @@ fn ping() -> &'static str {
 }
 
 #[tauri::command]
-fn set_study_mode_active(state: tauri::State<'_, AppState>, active: bool) -> Result<(), String> {
+fn set_study_mode_active(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    active: bool,
+) -> Result<(), String> {
     *state
         .study_mode_active
         .lock()
         .map_err(|error| error.to_string())? = active;
+    sync_focus_widget_window(&app, active);
     Ok(())
 }
 
@@ -179,12 +185,11 @@ fn show_toast_with_close_event(
 }
 
 fn wake_main_window_for_reminder(app: &tauri::AppHandle) {
-    let Some(window) = app.get_webview_window("main") else {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
         return;
     };
 
-    let _ = window.show();
-    let _ = window.unminimize();
+    let _ = show_main_window(app);
     let _ = window.set_always_on_top(true);
     let _ = window.request_user_attention(Some(UserAttentionType::Critical));
 
@@ -211,6 +216,10 @@ fn wake_main_window_for_reminder(app: &tauri::AppHandle) {
         tokio::time::sleep(Duration::from_millis(CRITICAL_REMINDER_TOPMOST_RESET_MS)).await;
         let _ = reset_window.set_always_on_top(false);
     });
+}
+
+pub(crate) fn sync_focus_widget_window(app: &tauri::AppHandle, _should_show: bool) {
+    let _ = windows::focus_widget::sync_visibility_with_background_study_mode(app);
 }
 
 #[cfg(windows)]
@@ -281,6 +290,16 @@ fn open_study_dashboard(
     Ok(launch)
 }
 
+#[tauri::command]
+fn focus_widget_return_to_main(app: tauri::AppHandle) -> Result<(), String> {
+    windows::focus_widget::bring_to_main(&app)
+}
+
+#[tauri::command]
+fn hide_focus_widget(app: tauri::AppHandle) -> Result<(), String> {
+    windows::focus_widget::hide(&app)
+}
+
 #[cfg(windows)]
 fn wide_null(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
@@ -308,6 +327,7 @@ pub fn run() {
                     eprintln!("Failed to sync autostart setting: {error}");
                 }
             }
+            let _ = windows::focus_widget::restore_on_app_startup(&app_handle);
             background_tasks::start(&app_handle);
 
             let show_item =
@@ -354,8 +374,19 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            WindowEvent::Moved(_) | WindowEvent::Resized(_)
+                if window.label() == windows::focus_widget::FOCUS_WIDGET_LABEL =>
+            {
+                let _ = windows::focus_widget::refresh_geometry(window.app_handle());
+            }
+            WindowEvent::CloseRequested { api, .. }
+                if window.label() == windows::focus_widget::FOCUS_WIDGET_LABEL =>
+            {
+                api.prevent_close();
+                let _ = windows::focus_widget::hide(window.app_handle());
+            }
+            WindowEvent::CloseRequested { api, .. } => {
                 if let Some(state) = window.try_state::<AppState>() {
                     if state
                         .should_prevent_exit(Some(window.app_handle()))
@@ -367,12 +398,15 @@ pub fn run() {
                     }
                 }
             }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             ping,
             set_study_mode_active,
             open_external_url,
             open_study_dashboard,
+            focus_widget_return_to_main,
+            hide_focus_widget,
             commands::alarm::list_alarms,
             commands::alarm::create_alarm,
             commands::alarm::update_alarm,
@@ -488,8 +522,10 @@ pub fn run() {
 }
 
 fn show_main_window(app: &tauri::AppHandle) -> Result<(), tauri::Error> {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         window.show()?;
+        let _ = window.unminimize();
+        let _ = window.set_fullscreen(false);
         window.set_focus()?;
     }
 

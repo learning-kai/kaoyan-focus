@@ -422,6 +422,7 @@ pub fn start_study_mode_from_schedule_block(
 
     trigger_shared_sync(&app, "focus_state_change");
     trigger_shared_sync(&app, "schedule_change");
+    focus::sync_focus_widget_for_state(&app, &next_state);
     Ok(next_state)
 }
 

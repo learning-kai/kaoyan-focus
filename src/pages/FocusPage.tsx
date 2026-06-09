@@ -255,11 +255,6 @@ export default function FocusPage() {
   const scheduleRecommendationBlock = scheduleRecommendation?.block ?? null;
   const scheduleRecommendationMeta = describeScheduleRecommendation(scheduleRecommendation, subjectNameMap);
   const desktopReady = isTauriRuntime();
-  const hubPrimaryAction =
-    scheduleRecommendation?.kind === 'current' && scheduleRecommendationBlock
-      ? () => void handleStartScheduleBlock(scheduleRecommendationBlock)
-      : handleStart;
-  const hubPrimaryLabel = scheduleRecommendation?.kind === 'current' ? '从课表开始' : '开始学习';
   const quickScheduleDisabled = checklistSaving || isQuickSchedulingTask || !nextTodayTask;
   const timerValue = studyState.phase === 'idle' ? formatSeconds(focusMinutes * 60) : formatSeconds(localPhaseSeconds(studyState, localClockNow));
   const activeClockLabel = studyState.is_paused ? '暂停中' : studyState.phase === 'awaiting_break' ? '等待确认休息' : phaseLabel[studyState.phase];
@@ -907,15 +902,11 @@ export default function FocusPage() {
       <LearningHub
         completedTodayItems={completedTodayItems}
         desktopReady={desktopReady}
-        hubPrimaryDisabled={isStartingStudy}
-        hubPrimaryLabel={hubPrimaryLabel}
-        isStartingStudy={isStartingStudy}
         isSchedulingTask={isQuickSchedulingTask}
         nextScheduleBlock={scheduleRecommendationBlock}
         nextTask={nextTodayTask}
         onOpenSchedule={handleToggleScheduleDrawer}
         onOpenTodayTasks={handleToggleChecklistDrawer}
-        onPrimaryAction={hubPrimaryAction}
         onQuickScheduleTask={() => void handleQuickScheduleNextTask()}
         pendingTodayCount={pendingTodayCount}
         quickScheduleDisabled={quickScheduleDisabled}
