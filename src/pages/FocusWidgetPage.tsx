@@ -25,6 +25,7 @@ const HOVER_EXPAND_DELAY_MS = 120;
 const HOVER_COLLAPSE_DELAY_MS = 180;
 const HOVER_COLLAPSE_RETRY_MS = 40;
 const HOVER_REENTRY_LOCK_MS = 220;
+const RETRACT_PREPARE_MS = 90;
 
 const idleState: StudyModeState = {
   id: null,
@@ -330,6 +331,7 @@ export default function FocusWidgetPage() {
 
     try {
       await waitForNextPaint();
+      await waitForMilliseconds(RETRACT_PREPARE_MS);
       setDockState(await collapseFocusWidgetToEdge());
     } catch (reason) {
       setIsRetracting(false);
@@ -530,6 +532,12 @@ function waitForNextPaint() {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => resolve());
     });
+  });
+}
+
+function waitForMilliseconds(delayMs: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, delayMs);
   });
 }
 

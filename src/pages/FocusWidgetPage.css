@@ -105,6 +105,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .focus-widget-panel,
+  .focus-widget-time,
   .focus-widget-collapsed-tab {
     will-change: transform, opacity, filter;
   }
@@ -114,8 +115,18 @@
   }
 
   .focus-widget-shell.is-retracting .focus-widget-panel {
-    animation: focus-widget-glass-out 220ms cubic-bezier(0.36, 0, 0.18, 1) both;
+    animation: focus-widget-glass-out 240ms cubic-bezier(0.36, 0, 0.18, 1) both;
     pointer-events: none;
+  }
+
+  .focus-widget-shell.is-retracting .focus-widget-time {
+    animation: focus-widget-time-contract 120ms cubic-bezier(0.34, 0, 0.18, 1) both;
+  }
+
+  .focus-widget-shell.is-retracting .focus-widget-topbar,
+  .focus-widget-shell.is-retracting .focus-widget-subject,
+  .focus-widget-shell.is-retracting .focus-widget-progress {
+    animation: focus-widget-detail-fade-out 120ms ease-out both;
   }
 
   .focus-widget-shell.is-collapsed .focus-widget-collapsed-tab {
@@ -193,6 +204,32 @@
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1, 1);
     filter: blur(0) saturate(1);
+  }
+}
+
+@keyframes focus-widget-time-contract {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 0.9;
+    transform: translate3d(0, -1px, 0) scale(0.62);
+    filter: blur(0.2px);
+  }
+}
+
+@keyframes focus-widget-detail-fade-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    opacity: 0.2;
+    transform: translate3d(0, -2px, 0);
   }
 }
 
