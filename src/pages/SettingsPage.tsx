@@ -87,6 +87,7 @@ const defaultSettings: AppSettings = {
   focus_widget_enabled: false,
   focus_widget_auto_follow: true,
   focus_widget_remember_geometry: true,
+  focus_widget_always_on_top: true,
   focus_widget_x: null,
   focus_widget_y: null,
   focus_widget_width: 280,

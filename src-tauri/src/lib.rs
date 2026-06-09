@@ -300,6 +300,27 @@ fn hide_focus_widget(app: tauri::AppHandle) -> Result<(), String> {
     windows::focus_widget::hide(&app)
 }
 
+#[tauri::command]
+fn focus_widget_get_dock_state(
+    app: tauri::AppHandle,
+) -> windows::focus_widget::FocusWidgetDockState {
+    windows::focus_widget::get_dock_state(&app)
+}
+
+#[tauri::command]
+fn focus_widget_peek_from_edge(
+    app: tauri::AppHandle,
+) -> Result<windows::focus_widget::FocusWidgetDockState, String> {
+    windows::focus_widget::peek_from_edge(&app)
+}
+
+#[tauri::command]
+fn focus_widget_collapse_to_edge(
+    app: tauri::AppHandle,
+) -> Result<windows::focus_widget::FocusWidgetDockState, String> {
+    windows::focus_widget::collapse_to_edge(&app)
+}
+
 #[cfg(windows)]
 fn wide_null(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
@@ -407,6 +428,9 @@ pub fn run() {
             open_study_dashboard,
             focus_widget_return_to_main,
             hide_focus_widget,
+            focus_widget_get_dock_state,
+            focus_widget_peek_from_edge,
+            focus_widget_collapse_to_edge,
             commands::alarm::list_alarms,
             commands::alarm::create_alarm,
             commands::alarm::update_alarm,

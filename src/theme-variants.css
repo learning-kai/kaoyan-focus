@@ -1,5 +1,6 @@
 html[data-theme='mono'],
 html[data-theme='dawn'],
+html[data-theme='forest'],
 html[data-theme='sakura'] {
   color-scheme: light;
   --surface-glass: color-mix(in srgb, var(--surface) 82%, transparent);
@@ -11,13 +12,13 @@ html[data-theme='sakura'] {
 }
 
 html[data-theme='forest'] {
-  color-scheme: dark;
-  --surface-glass: rgba(12, 31, 24, 0.78);
-  --surface-glass-strong: rgba(13, 39, 30, 0.94);
-  --surface-panel: rgba(13, 35, 28, 0.88);
-  --shadow-panel: 0 22px 52px rgba(0, 10, 7, 0.48);
-  --shadow-hover: 0 18px 38px rgba(101, 219, 164, 0.14);
-  --shadow-control: 0 12px 26px rgba(0, 10, 7, 0.3);
+  color-scheme: light;
+  --surface-glass: color-mix(in srgb, var(--surface) 84%, transparent);
+  --surface-glass-strong: color-mix(in srgb, var(--surface-strong) 94%, transparent);
+  --surface-panel: color-mix(in srgb, var(--surface) 92%, transparent);
+  --shadow-panel: var(--shadow);
+  --shadow-hover: 0 18px 38px rgba(84, 151, 107, 0.16);
+  --shadow-control: var(--shadow-soft);
 }
 
 html[data-theme='mono'] {
@@ -32,9 +33,9 @@ html[data-theme='mono'] {
   --muted: #6d706d;
   --line: rgba(78, 82, 79, 0.2);
   --line-strong: rgba(78, 82, 79, 0.36);
-  --blue: #34383e;
-  --blue-soft: rgba(52, 56, 62, 0.1);
-  --green: #717c72;
+  --blue: #555b60;
+  --blue-soft: rgba(85, 91, 96, 0.12);
+  --green: #767f77;
   --green-soft: rgba(113, 124, 114, 0.12);
   --amber: #9b743c;
   --amber-soft: rgba(155, 116, 60, 0.14);
@@ -43,7 +44,7 @@ html[data-theme='mono'] {
   --shadow: 0 18px 44px rgba(73, 70, 63, 0.12);
   --shadow-soft: 0 10px 22px rgba(73, 70, 63, 0.08);
   --shadow-strong: 0 22px 54px rgba(73, 70, 63, 0.16);
-  --focus-ring: 0 0 0 3px rgba(52, 56, 62, 0.16);
+  --focus-ring: 0 0 0 3px rgba(85, 91, 96, 0.18);
 }
 
 html[data-theme='dawn'] {
@@ -73,29 +74,29 @@ html[data-theme='dawn'] {
 }
 
 html[data-theme='forest'] {
-  color: #e1f7eb;
-  background: #0a1713;
-  --bg: #0a1713;
-  --bg-elevated: #10251e;
-  --surface: #123027;
-  --surface-strong: #193e32;
-  --surface-soft: #102a22;
-  --ink: #e5f8ee;
-  --muted: #92b9a6;
-  --line: rgba(143, 211, 178, 0.16);
-  --line-strong: rgba(143, 211, 178, 0.3);
-  --blue: #88b9ff;
-  --blue-soft: rgba(136, 185, 255, 0.13);
-  --green: #65dba4;
-  --green-soft: rgba(101, 219, 164, 0.16);
-  --amber: #dfbb72;
-  --amber-soft: rgba(223, 187, 114, 0.16);
-  --red: #ff8d80;
-  --red-soft: rgba(255, 141, 128, 0.14);
-  --shadow: 0 22px 52px rgba(0, 10, 7, 0.48);
-  --shadow-soft: 0 12px 28px rgba(0, 10, 7, 0.3);
-  --shadow-strong: 0 28px 64px rgba(0, 10, 7, 0.56);
-  --focus-ring: 0 0 0 3px rgba(101, 219, 164, 0.24);
+  color: #1d3528;
+  background: #edf7ef;
+  --bg: #edf7ef;
+  --bg-elevated: #f7fcf8;
+  --surface: #f5fbf6;
+  --surface-strong: #ffffff;
+  --surface-soft: #e6f3ea;
+  --ink: #1d3528;
+  --muted: #5f7b6a;
+  --line: rgba(101, 145, 116, 0.2);
+  --line-strong: rgba(87, 130, 102, 0.34);
+  --blue: #6d9fb2;
+  --blue-soft: rgba(109, 159, 178, 0.12);
+  --green: #5aa978;
+  --green-soft: rgba(90, 169, 120, 0.14);
+  --amber: #bd9256;
+  --amber-soft: rgba(189, 146, 86, 0.14);
+  --red: #c7655d;
+  --red-soft: rgba(199, 101, 93, 0.13);
+  --shadow: 0 20px 46px rgba(89, 126, 98, 0.13);
+  --shadow-soft: 0 10px 24px rgba(89, 126, 98, 0.08);
+  --shadow-strong: 0 24px 58px rgba(89, 126, 98, 0.16);
+  --focus-ring: 0 0 0 3px rgba(90, 169, 120, 0.18);
 }
 
 html[data-theme='sakura'] {
@@ -159,11 +160,11 @@ html[data-theme='dawn'] body {
 html[data-theme='forest'] body {
   color: var(--ink);
   background:
-    linear-gradient(rgba(143, 211, 178, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(143, 211, 178, 0.028) 1px, transparent 1px),
-    radial-gradient(circle at 18% 8%, rgba(101, 219, 164, 0.12), transparent 25%),
-    radial-gradient(circle at 88% 0%, rgba(136, 185, 255, 0.08), transparent 24%),
-    linear-gradient(180deg, #0a1914 0%, #07130f 100%);
+    linear-gradient(rgba(93, 142, 110, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(93, 142, 110, 0.032) 1px, transparent 1px),
+    radial-gradient(circle at 18% 8%, rgba(154, 213, 174, 0.22), transparent 25%),
+    radial-gradient(circle at 88% 0%, rgba(109, 159, 178, 0.12), transparent 24%),
+    linear-gradient(180deg, #f6fbf7 0%, #e8f4eb 100%);
   background-size:
     30px 30px,
     30px 30px,
@@ -190,16 +191,18 @@ html[data-theme='sakura'] body {
 
 html[data-theme='mono'] .main-panel,
 html[data-theme='dawn'] .main-panel,
+html[data-theme='forest'] .main-panel,
 html[data-theme='sakura'] .main-panel {
   background: color-mix(in srgb, var(--bg) 92%, white);
 }
 
 html[data-theme='forest'] .main-panel {
-  background: #0a1713;
+  background: color-mix(in srgb, var(--bg) 92%, white);
 }
 
 html[data-theme='mono'] .sidebar,
 html[data-theme='dawn'] .sidebar,
+html[data-theme='forest'] .sidebar,
 html[data-theme='sakura'] .sidebar {
   color: var(--ink);
   border-right-color: var(--line);
@@ -216,10 +219,16 @@ html[data-theme='sakura'] .sidebar {
 }
 
 html[data-theme='forest'] .sidebar {
-  background: linear-gradient(180deg, rgba(11, 31, 24, 0.96), rgba(5, 18, 14, 0.92)), var(--bg);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-strong) 88%, transparent),
+      color-mix(in srgb, var(--surface-soft) 82%, transparent)
+    ),
+    var(--bg);
   box-shadow:
-    inset -1px 0 0 rgba(143, 211, 178, 0.05),
-    12px 0 34px rgba(0, 10, 7, 0.25);
+    inset -1px 0 0 rgba(255, 255, 255, 0.76),
+    12px 0 34px rgba(89, 126, 98, 0.08);
 }
 
 html[data-theme='mono'] .brand-mark,
@@ -232,7 +241,7 @@ html[data-theme='sakura'] .brand-mark {
 }
 
 html[data-theme='mono'] {
-  --theme-accent-gradient: linear-gradient(145deg, #2b2d31, #8a928b);
+  --theme-accent-gradient: linear-gradient(145deg, #555b60, #7b847c);
   --theme-mark-ink: #f8f6f1;
 }
 
@@ -242,8 +251,8 @@ html[data-theme='dawn'] {
 }
 
 html[data-theme='forest'] {
-  --theme-accent-gradient: linear-gradient(145deg, #65dba4, #88b9ff);
-  --theme-mark-ink: #06120f;
+  --theme-accent-gradient: linear-gradient(145deg, #78bd8f, #a8d8b5);
+  --theme-mark-ink: #173326;
 }
 
 html[data-theme='sakura'] {
@@ -303,8 +312,13 @@ html[data-theme='forest'] .settings-save-row,
 html[data-theme='forest'] .confirm-dialog {
   border-color: var(--line);
   background:
-    radial-gradient(circle at 12% 0%, rgba(101, 219, 164, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(16, 42, 33, 0.92), rgba(9, 27, 21, 0.88)), var(--surface);
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--green) 9%, transparent), transparent 34%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-strong) 90%, transparent),
+      color-mix(in srgb, var(--surface) 82%, transparent)
+    ),
+    var(--surface);
   box-shadow: var(--shadow-strong);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -432,7 +446,7 @@ html[data-theme='forest'] .category-task-row,
 html[data-theme='forest'] .review-metric,
 html[data-theme='forest'] .review-score-row {
   border-color: var(--line);
-  background: linear-gradient(180deg, rgba(19, 49, 39, 0.88), rgba(10, 30, 23, 0.84)), var(--surface);
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
   box-shadow: var(--shadow-soft);
 }
 
@@ -445,7 +459,7 @@ html[data-theme='sakura'] .nav-item {
 
 html[data-theme='forest'] .nav-item {
   color: var(--muted);
-  background: rgba(12, 31, 24, 0.5);
+  background: color-mix(in srgb, var(--surface-strong) 64%, transparent);
 }
 
 html[data-theme='mono'] .nav-item:hover,
@@ -464,7 +478,7 @@ html[data-theme='forest'] .nav-item:hover,
 html[data-theme='forest'] .nav-item.active {
   color: var(--ink);
   border-color: var(--line-strong);
-  background: rgba(18, 47, 37, 0.92);
+  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
   box-shadow: var(--shadow-soft);
 }
 
@@ -481,7 +495,9 @@ html[data-theme='sakura'] .nav-item[aria-current='page'] {
 html[data-theme='forest'] .nav-item[aria-current='page'] {
   color: var(--ink);
   border-color: color-mix(in srgb, var(--green) 36%, var(--line));
-  background: linear-gradient(90deg, rgba(101, 219, 164, 0.14), transparent 70%), rgba(18, 47, 37, 0.94);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--green) 14%, transparent), transparent 70%),
+    color-mix(in srgb, var(--surface-strong) 94%, transparent);
 }
 
 html[data-theme='mono'] .secondary-action,
@@ -531,7 +547,7 @@ html[data-theme='forest'] .theme-choice-grid button,
 html[data-theme='forest'] .settings-collapse-button {
   color: var(--ink);
   border-color: var(--line);
-  background: rgba(15, 39, 31, 0.88);
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
 }
 
 html[data-theme='mono'] .secondary-action:hover,
@@ -576,7 +592,7 @@ html[data-theme='forest'] .theme-toggle button:hover,
 html[data-theme='forest'] .icon-button:hover,
 html[data-theme='forest'] .theme-choice-grid button:hover {
   border-color: var(--line-strong);
-  background: rgba(20, 52, 41, 0.96);
+  background: var(--surface-strong);
   box-shadow: var(--shadow-soft);
 }
 
@@ -620,13 +636,15 @@ html[data-theme='sakura'] .theme-choice-grid button.active {
 
 html[data-theme='forest'] .primary-action,
 html[data-theme='forest'] .start-ritual-button,
+html[data-theme='forest'] .schedule-page .primary-button,
 html[data-theme='forest'] .segmented-control .active,
 html[data-theme='forest'] .chip.active,
 html[data-theme='forest'] .custom-sound-confirm,
 html[data-theme='forest'] .sound-option-card.active,
 html[data-theme='forest'] .theme-toggle button.active,
-html[data-theme='forest'] .theme-choice-grid button.active {
-  --theme-active-ink: #06120f;
+html[data-theme='forest'] .theme-choice-grid button.active,
+html[data-theme='forest'][data-study-fullscreen='true'] .focus-action-badge {
+  --theme-active-ink: #173326;
 }
 
 html[data-theme='mono'] .sound-option-card.active strong,
@@ -683,7 +701,7 @@ html[data-theme='forest'] .schedule-quick-add input,
 html[data-theme='forest'] .schedule-quick-add select {
   color: var(--ink);
   border-color: var(--line);
-  background: rgba(7, 22, 17, 0.78);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
 }
 
 html[data-theme='mono'] .text-input::placeholder,
@@ -697,7 +715,7 @@ html[data-theme='sakura'] .number-input::placeholder {
 
 html[data-theme='forest'] .text-input::placeholder,
 html[data-theme='forest'] .number-input::placeholder {
-  color: color-mix(in srgb, var(--muted) 72%, #06120f);
+  color: color-mix(in srgb, var(--muted) 76%, white);
 }
 
 html[data-theme='mono'] .alert.error,
@@ -718,7 +736,11 @@ html[data-theme='sakura'] .alert.danger {
 html[data-theme='forest'] .alert.error,
 html[data-theme='forest'] .alert.danger {
   border-color: color-mix(in srgb, var(--red) 34%, var(--line));
-  background: linear-gradient(180deg, rgba(78, 31, 31, 0.88), rgba(45, 22, 22, 0.88));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--red-soft) 74%, white),
+    color-mix(in srgb, var(--red-soft) 36%, white)
+  );
 }
 
 html[data-theme='mono'] .alert.success,
@@ -735,7 +757,11 @@ html[data-theme='sakura'] .alert.success {
 
 html[data-theme='forest'] .alert.success {
   border-color: color-mix(in srgb, var(--green) 34%, var(--line));
-  background: linear-gradient(180deg, rgba(18, 58, 43, 0.88), rgba(12, 40, 31, 0.88));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--green-soft) 74%, white),
+    color-mix(in srgb, var(--green-soft) 36%, white)
+  );
 }
 
 html[data-theme='mono'] .alert.neutral,
@@ -745,7 +771,7 @@ html[data-theme='sakura'] .alert.neutral {
 }
 
 html[data-theme='forest'] .alert.neutral {
-  background: rgba(15, 39, 31, 0.88);
+  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
 }
 
 html[data-theme='mono'] .top-strip-status span,
@@ -757,7 +783,7 @@ html[data-theme='sakura'] .top-strip-status span {
 
 html[data-theme='forest'] .top-strip-status span {
   border-color: var(--line);
-  background: rgba(15, 39, 31, 0.72);
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
 }
 
 html[data-theme='mono'] .top-strip-status .is-ready,
@@ -777,9 +803,9 @@ html[data-theme='sakura'] .row-icon.enabled {
 html[data-theme='forest'] .top-strip-status .is-ready,
 html[data-theme='forest'] .small-action.enabled,
 html[data-theme='forest'] .row-icon.enabled {
-  color: #c9ffe5;
+  color: color-mix(in srgb, var(--green) 74%, var(--ink));
   border-color: color-mix(in srgb, var(--green) 34%, var(--line));
-  background: rgba(101, 219, 164, 0.12);
+  background: color-mix(in srgb, var(--green-soft) 70%, white);
 }
 
 html[data-theme='mono'] .top-strip-status .is-preview,
@@ -791,9 +817,9 @@ html[data-theme='sakura'] .top-strip-status .is-preview {
 }
 
 html[data-theme='forest'] .top-strip-status .is-preview {
-  color: #d8e7ff;
+  color: color-mix(in srgb, var(--blue) 76%, var(--ink));
   border-color: color-mix(in srgb, var(--blue) 34%, var(--line));
-  background: rgba(136, 185, 255, 0.11);
+  background: color-mix(in srgb, var(--blue-soft) 70%, white);
 }
 
 html[data-theme='mono'] .next-alarm-pill.active,
@@ -803,7 +829,7 @@ html[data-theme='sakura'] .next-alarm-pill.active {
 }
 
 html[data-theme='forest'] .next-alarm-pill.active {
-  color: #cfe0ff;
+  color: color-mix(in srgb, var(--blue) 82%, var(--ink));
 }
 
 html[data-theme='mono'] .timer-orbit,
@@ -817,7 +843,9 @@ html[data-theme='sakura'] .timer-orbit {
 
 html[data-theme='forest'] .timer-orbit {
   border-color: var(--line);
-  background: radial-gradient(circle at 50% 30%, rgba(101, 219, 164, 0.12), transparent 62%), rgba(7, 22, 17, 0.88);
+  background:
+    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--green) 12%, transparent), transparent 62%),
+    color-mix(in srgb, var(--surface-strong) 84%, transparent);
 }
 
 html[data-theme='mono'] .focus-active-shell,
@@ -832,8 +860,8 @@ html[data-theme='sakura'] .focus-active-shell {
 html[data-theme='forest'] .focus-active-shell {
   color: var(--ink);
   background:
-    radial-gradient(circle at 50% 48%, rgba(101, 219, 164, 0.12), transparent 30%),
-    linear-gradient(180deg, #0a1c16 0%, #04100d 100%);
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--green) 11%, transparent), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 92%, white) 0%, var(--bg) 100%);
 }
 
 html[data-theme='mono'] .focus-active-bg,
@@ -846,8 +874,8 @@ html[data-theme='sakura'] .focus-active-bg {
 
 html[data-theme='forest'] .focus-active-bg {
   background:
-    radial-gradient(circle at 50% 38%, rgba(101, 219, 164, 0.09), transparent 30%),
-    radial-gradient(circle at 52% 68%, rgba(136, 185, 255, 0.07), transparent 26%);
+    radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--green) 9%, transparent), transparent 30%),
+    radial-gradient(circle at 52% 68%, color-mix(in srgb, var(--blue) 7%, transparent), transparent 26%);
 }
 
 html[data-theme='mono'] .focus-round-button,
@@ -862,7 +890,7 @@ html[data-theme='sakura'] .focus-round-button {
 html[data-theme='forest'] .focus-round-button {
   color: var(--ink);
   border-color: var(--line);
-  background: rgba(15, 39, 31, 0.66);
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
   box-shadow: var(--shadow-strong);
 }
 
@@ -881,7 +909,7 @@ html[data-theme='sakura'] .focus-round-button.secondary {
 }
 
 html[data-theme='forest'] .focus-round-button.secondary {
-  color: #f1cf88;
+  color: color-mix(in srgb, var(--amber) 74%, var(--ink));
 }
 
 html[data-theme='mono'] .focus-quiet-action,
@@ -896,7 +924,7 @@ html[data-theme='sakura'] .focus-quiet-action {
 html[data-theme='forest'] .focus-quiet-action {
   color: color-mix(in srgb, var(--ink) 80%, var(--muted));
   border-color: var(--line);
-  background: rgba(15, 39, 31, 0.62);
+  background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
   box-shadow: var(--shadow-soft);
 }
 
@@ -913,7 +941,7 @@ html[data-theme='sakura'] .focus-quiet-action.is-active {
 html[data-theme='forest'] .focus-quiet-action:hover,
 html[data-theme='forest'] .focus-quiet-action.is-active {
   color: var(--ink);
-  background: rgba(20, 52, 41, 0.82);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
 }
 
 html[data-theme='mono'] .schedule-lane,
@@ -925,7 +953,7 @@ html[data-theme='sakura'] .schedule-lane {
 
 html[data-theme='forest'] .schedule-lane {
   border-color: var(--line);
-  background: rgba(7, 22, 17, 0.66);
+  background: color-mix(in srgb, var(--surface-strong) 54%, transparent);
 }
 
 html[data-theme='mono'] .schedule-block,
@@ -938,7 +966,7 @@ html[data-theme='sakura'] .schedule-block {
 
 html[data-theme='forest'] .schedule-block {
   border-color: color-mix(in srgb, var(--green) 22%, var(--line));
-  background: rgba(19, 49, 39, 0.86);
+  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
   box-shadow: var(--shadow-soft);
 }
 
@@ -1029,29 +1057,45 @@ html[data-theme='sakura'] .week-block.category-major {
 html[data-theme='forest'] .category-politics,
 html[data-theme='forest'] .schedule-block.category-politics,
 html[data-theme='forest'] .week-block.category-politics {
-  border-color: rgba(255, 141, 128, 0.24);
-  background: linear-gradient(180deg, rgba(88, 39, 36, 0.52), rgba(19, 49, 39, 0.82));
+  border-color: color-mix(in srgb, var(--red) 26%, var(--line));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--red-soft) 70%, white),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent)
+  );
 }
 
 html[data-theme='forest'] .category-english,
 html[data-theme='forest'] .schedule-block.category-english,
 html[data-theme='forest'] .week-block.category-english {
-  border-color: rgba(136, 185, 255, 0.24);
-  background: linear-gradient(180deg, rgba(43, 62, 94, 0.5), rgba(19, 49, 39, 0.82));
+  border-color: color-mix(in srgb, var(--blue) 24%, var(--line));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--blue-soft) 70%, white),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent)
+  );
 }
 
 html[data-theme='forest'] .category-math,
 html[data-theme='forest'] .schedule-block.category-math,
 html[data-theme='forest'] .week-block.category-math {
-  border-color: rgba(223, 187, 114, 0.26);
-  background: linear-gradient(180deg, rgba(88, 69, 36, 0.5), rgba(19, 49, 39, 0.82));
+  border-color: color-mix(in srgb, var(--amber) 28%, var(--line));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--amber-soft) 74%, white),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent)
+  );
 }
 
 html[data-theme='forest'] .category-major,
 html[data-theme='forest'] .schedule-block.category-major,
 html[data-theme='forest'] .week-block.category-major {
-  border-color: rgba(101, 219, 164, 0.26);
-  background: linear-gradient(180deg, rgba(38, 92, 67, 0.5), rgba(19, 49, 39, 0.82));
+  border-color: color-mix(in srgb, var(--green) 26%, var(--line));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--green-soft) 72%, white),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent)
+  );
 }
 
 html[data-theme='mono'] .confirm-backdrop,
@@ -1061,7 +1105,7 @@ html[data-theme='sakura'] .confirm-backdrop {
 }
 
 html[data-theme='forest'] .confirm-backdrop {
-  background: rgba(0, 10, 7, 0.58);
+  background: rgba(42, 45, 52, 0.24);
 }
 
 html[data-theme='mono'] .confirm-dialog-body,
@@ -1073,7 +1117,7 @@ html[data-theme='sakura'] .confirm-dialog-body {
 
 html[data-theme='forest'] .confirm-dialog-body {
   border-color: var(--line);
-  background: rgba(7, 22, 17, 0.68);
+  background: color-mix(in srgb, var(--surface-soft) 72%, white);
 }
 
 html[data-theme='mono'] .confirm-dialog-icon,
@@ -1087,12 +1131,13 @@ html[data-theme='sakura'] .confirm-dialog-icon {
 html[data-theme='forest'] .confirm-dialog-icon {
   color: var(--green);
   border-color: color-mix(in srgb, var(--green) 28%, var(--line));
-  background: rgba(101, 219, 164, 0.12);
+  background: color-mix(in srgb, var(--green-soft) 78%, white);
 }
 
 @media (max-width: 680px) {
   html[data-theme='mono'] .sidebar,
   html[data-theme='dawn'] .sidebar,
+  html[data-theme='forest'] .sidebar,
   html[data-theme='sakura'] .sidebar {
     background:
       linear-gradient(
@@ -1105,13 +1150,20 @@ html[data-theme='forest'] .confirm-dialog-icon {
   }
 
   html[data-theme='forest'] .sidebar {
-    background: linear-gradient(180deg, rgba(11, 31, 24, 0.98), rgba(5, 18, 14, 0.94)), var(--bg);
-    box-shadow: 0 12px 28px rgba(0, 10, 7, 0.28);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--surface-strong) 94%, transparent),
+        color-mix(in srgb, var(--surface-soft) 88%, transparent)
+      ),
+      var(--bg);
+    box-shadow: 0 12px 28px rgba(89, 126, 98, 0.1);
   }
 }
 
 html[data-theme='mono'] .automation-settings-panel,
 html[data-theme='dawn'] .automation-settings-panel,
+html[data-theme='forest'] .automation-settings-panel,
 html[data-theme='sakura'] .automation-settings-panel {
   border-color: var(--line);
   background:
@@ -1128,13 +1180,19 @@ html[data-theme='sakura'] .automation-settings-panel {
 html[data-theme='forest'] .automation-settings-panel {
   border-color: var(--line);
   background:
-    radial-gradient(circle at 12% 0%, rgba(101, 219, 164, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(16, 42, 33, 0.92), rgba(9, 27, 21, 0.88)), var(--surface);
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--green) 7%, transparent), transparent 34%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-strong) 90%, transparent),
+      color-mix(in srgb, var(--surface) 82%, transparent)
+    ),
+    var(--surface);
   box-shadow: var(--shadow-strong);
 }
 
 html[data-theme='mono'] .time-input,
 html[data-theme='dawn'] .time-input,
+html[data-theme='forest'] .time-input,
 html[data-theme='sakura'] .time-input {
   color: var(--ink);
   border-color: var(--line);
@@ -1144,7 +1202,7 @@ html[data-theme='sakura'] .time-input {
 html[data-theme='forest'] .time-input {
   color: var(--ink);
   border-color: var(--line);
-  background: rgba(7, 22, 17, 0.78);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
 }
 
 html[data-theme='dark'] {
@@ -1182,14 +1240,19 @@ html[data-theme='sakura'] {
     .soft-panel,
     .start-console,
     .control-panel,
+    .learning-hub,
     .automation-settings-panel,
     .reminder-sound-panel,
     .settings-save-row,
     .confirm-backdrop,
     .confirm-dialog,
     .today-plan-drawer,
+    .today-plan-panel,
     .schedule-drawer,
+    .checklist-board-panel,
     .schedule-quick-add,
+    .schedule-composer,
+    .template-composer,
     .settings-section-tabs,
     .custom-sound-picker,
     .custom-sound-file,
@@ -1220,14 +1283,19 @@ html[data-theme='sakura'] {
     .soft-panel,
     .start-console,
     .control-panel,
+    .learning-hub,
     .automation-settings-panel,
     .reminder-sound-panel,
     .settings-save-row,
     .confirm-dialog,
     .today-plan-drawer,
+    .today-plan-panel,
     .schedule-drawer,
+    .checklist-board-panel,
     .schedule-hero,
     .schedule-toolbar,
+    .schedule-composer,
+    .template-composer,
     .today-task-rail,
     .template-rail,
     .review-hero,
@@ -1253,6 +1321,7 @@ html[data-theme='sakura'] {
     .details-card,
     .phase-badge,
     .alert,
+    .start-readiness-card,
     .setting-row,
     .capability-row,
     .tool-row,
@@ -1265,8 +1334,11 @@ html[data-theme='sakura'] {
     .custom-sound-picker,
     .custom-sound-file,
     .sound-volume-row,
+    .learning-hub-stats span,
+    .learning-hub-card,
     .today-item-row,
     .board-column,
+    .row-icon,
     .checklist-task-card,
     .today-composer,
     .task-composer,
@@ -1283,6 +1355,7 @@ html[data-theme='sakura'] {
     .alarm-reschedule-editor,
     .schedule-drawer-composer,
     .schedule-drawer-block,
+    .schedule-drawer-actions button,
     .schedule-task-row,
     .template-row,
     .date-stepper,
@@ -1336,9 +1409,11 @@ html[data-theme='sakura'] {
     .settings-collapse-button,
     .settings-section-tabs button,
     .schedule-page .ghost-button,
+    .schedule-page .primary-button,
     .schedule-task-row button,
     .template-row button,
     .schedule-block-actions button,
+    .schedule-drawer-actions button,
     .date-stepper button,
     .weekday-pills button,
     .review-score-row button
@@ -1372,8 +1447,10 @@ html[data-theme='sakura'] {
     .schedule-task-row button:hover,
     .template-row button:hover,
     .schedule-block-actions button:hover,
+    .schedule-drawer-actions button:hover,
     .date-stepper button:hover,
     .weekday-pills button:hover,
+    .learning-hub-card:hover,
     .review-score-row button:hover
   ) {
   border-color: var(--line-strong);
@@ -1413,51 +1490,51 @@ html[data-theme='sakura'] {
   box-shadow: var(--shadow-soft);
 }
 
-:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])
   :is(.category-tab.active, .today-item-row.is-current, .checklist-board-panel.is-highlighted, .alarm-row.is-upcoming) {
   border-color: color-mix(in srgb, var(--blue) 28%, var(--line));
   background: color-mix(in srgb, var(--blue-soft) 64%, var(--surface-strong));
 }
 
-:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura']) .alarm-row.is-targeted {
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura']) .alarm-row.is-targeted {
   border-color: color-mix(in srgb, var(--blue) 36%, var(--line));
   background: color-mix(in srgb, var(--blue-soft) 76%, var(--surface-strong));
 }
 
-:is(html[data-theme='dark'], html[data-theme='forest'])
+:is(html[data-theme='dark'])
   :is(.category-tab.active, .today-item-row.is-current, .checklist-board-panel.is-highlighted, .alarm-row.is-upcoming) {
   border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
   background: color-mix(in srgb, var(--blue) 10%, var(--surface-strong));
 }
 
-:is(html[data-theme='dark'], html[data-theme='forest']) .alarm-row.is-targeted {
+:is(html[data-theme='dark']) .alarm-row.is-targeted {
   border-color: color-mix(in srgb, var(--blue) 38%, var(--line));
   background: color-mix(in srgb, var(--blue) 14%, var(--surface-strong));
 }
 
-:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura']) .alarm-row.is-ringing {
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura']) .alarm-row.is-ringing {
   border-color: color-mix(in srgb, var(--amber) 34%, var(--line));
   background: color-mix(in srgb, var(--amber-soft) 72%, var(--surface-strong));
 }
 
-:is(html[data-theme='dark'], html[data-theme='forest']) .alarm-row.is-ringing {
+:is(html[data-theme='dark']) .alarm-row.is-ringing {
   border-color: color-mix(in srgb, var(--amber) 36%, var(--line));
   background: color-mix(in srgb, var(--amber) 12%, var(--surface-strong));
 }
 
-:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])
   :is(.schedule-task-row.picking, .schedule-lane.picking, .schedule-lane.dragging) {
   border-color: color-mix(in srgb, var(--green) 32%, var(--line));
   background: color-mix(in srgb, var(--green-soft) 62%, var(--surface));
 }
 
-:is(html[data-theme='dark'], html[data-theme='forest'])
+:is(html[data-theme='dark'])
   :is(.schedule-task-row.picking, .schedule-lane.picking, .schedule-lane.dragging) {
   border-color: color-mix(in srgb, var(--green) 34%, var(--line));
   background: color-mix(in srgb, var(--green) 10%, var(--surface));
 }
 
-:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])
   :is(
     .schedule-block.conflict,
     .alert.error,
@@ -1472,7 +1549,7 @@ html[data-theme='sakura'] {
   background: color-mix(in srgb, var(--red-soft) 72%, var(--surface-strong));
 }
 
-:is(html[data-theme='dark'], html[data-theme='forest'])
+:is(html[data-theme='dark'])
   :is(
     .schedule-block.conflict,
     .alert.error,
@@ -1498,8 +1575,21 @@ html[data-theme='sakura'] {
   background: color-mix(in srgb, var(--green) 12%, var(--surface-strong));
 }
 
-:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])
+  :is(.start-readiness-card.is-guarded, .schedule-placement-hint, .list-drop-zone, .today-drop-area.is-over, .category-drop-area.is-over) {
+  border-color: color-mix(in srgb, var(--green) 30%, var(--line));
+  background: color-mix(in srgb, var(--green-soft) 68%, var(--surface-strong));
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])
+  :is(.start-readiness-card.is-soft, .start-readiness-card.is-warning) {
+  border-color: color-mix(in srgb, var(--amber) 30%, var(--line));
+  background: color-mix(in srgb, var(--amber-soft) 70%, var(--surface-strong));
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])
   :is(
+    .schedule-page .primary-button,
     .settings-section-tabs button[role='tab'][aria-selected='true'],
     .weekday-pills button.active,
     .review-score-row button.active
@@ -1510,8 +1600,9 @@ html[data-theme='sakura'] {
   box-shadow: 0 12px 24px color-mix(in srgb, var(--blue) 18%, transparent);
 }
 
-:is(html[data-theme='dark'], html[data-theme='forest'])
+:is(html[data-theme='dark'])
   :is(
+    .schedule-page .primary-button,
     .settings-section-tabs button[role='tab'][aria-selected='true'],
     .weekday-pills button.active,
     .review-score-row button.active
@@ -1525,8 +1616,8 @@ html[data-theme='sakura'] {
 html[data-theme='forest'] .focus-active-shell,
 html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
   background:
-    radial-gradient(circle at 50% 48%, rgba(101, 219, 164, 0.1), transparent 30%),
-    linear-gradient(180deg, #0e221b 0%, #0a1713 100%);
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--green) 11%, transparent), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 92%, white) 0%, var(--bg) 100%);
 }
 
 :is(
@@ -1536,7 +1627,7 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
     html[data-theme='forest'],
     html[data-theme='sakura']
   )[data-study-fullscreen='true']
-  :is(.focus-round-button, .focus-quiet-action, .focus-hud-card, .focus-minimal-status, .live-badge) {
+  :is(.focus-round-button, .focus-quiet-action, .focus-hud-card, .focus-hud-icon, .focus-minimal-status, .live-badge) {
   border-color: var(--line);
   background: var(--surface-strong);
   box-shadow: var(--shadow-soft);
@@ -1544,12 +1635,18 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
   -webkit-backdrop-filter: none;
 }
 
-:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura'])[data-study-fullscreen='true']
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])[data-study-fullscreen='true']
   :is(.focus-hud-card:hover, .focus-hud-card.is-active, .focus-quiet-action:hover, .focus-quiet-action.is-active) {
   background: color-mix(in srgb, var(--blue-soft) 62%, var(--surface-strong));
 }
 
-:is(html[data-theme='dark'], html[data-theme='forest'])[data-study-fullscreen='true']
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='forest'], html[data-theme='sakura'])[data-study-fullscreen='true']
+  .focus-action-badge {
+  color: var(--theme-active-ink, #ffffff);
+  background: var(--theme-accent-gradient);
+}
+
+:is(html[data-theme='dark'])[data-study-fullscreen='true']
   :is(.focus-hud-card:hover, .focus-hud-card.is-active, .focus-quiet-action:hover, .focus-quiet-action.is-active) {
   background: color-mix(in srgb, var(--blue) 10%, var(--surface-strong));
 }
@@ -1673,4 +1770,374 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
   .theme-toggle button
 ) {
   background: rgba(255, 255, 255, 0.72);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) {
+  --surface-card-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.92));
+  --surface-control-hover: rgba(248, 250, 252, 0.96);
+  --switch-track-off: #e3e9f1;
+  --switch-track-off-border: rgba(90, 108, 136, 0.34);
+  --switch-thumb-off: #ffffff;
+  --switch-track-on: linear-gradient(135deg, #3869d4, #239a75);
+  --switch-thumb-on: #ffffff;
+  --switch-on-shadow: 0 8px 18px rgba(56, 105, 212, 0.2);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .learning-hub,
+  .today-plan-panel,
+  .checklist-board-panel,
+  .schedule-drawer,
+  .schedule-hero,
+  .schedule-toolbar,
+  .today-task-rail,
+  .template-rail,
+  .review-hero,
+  .focus-control-dock,
+  .schedule-quick-add,
+  .schedule-composer,
+  .template-composer,
+  .settings-section-tabs
+) {
+  border-color: var(--line);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .start-readiness-card,
+  .learning-hub-stats span,
+  .learning-hub-card,
+  .row-icon,
+  .category-tab,
+  .category-task-row,
+  .review-metric,
+  .review-score-row,
+  .alarm-row,
+  .alarm-time-card,
+  .alarm-reschedule-editor,
+  .schedule-drawer-composer,
+  .schedule-drawer-block:not(.category-politics):not(.category-english):not(.category-math):not(.category-major):not(.category-general),
+  .schedule-drawer-actions button,
+  .schedule-task-row,
+  .template-row,
+  .date-stepper,
+  .week-day,
+  .week-block,
+  .schedule-loading-hint,
+  .live-badge
+) {
+  border-color: var(--line);
+  background: var(--surface-card-soft);
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .secondary-action:hover:not(.danger-action),
+  .ghost-action:hover,
+  .small-action:hover:not(.danger),
+  .chip:hover:not(.active),
+  .segmented-control button:hover:not(.active),
+  .stepper-control button:hover,
+  .theme-toggle button:hover:not(.active),
+  .icon-button:hover,
+  .theme-choice-grid button:hover:not(.active),
+  .settings-collapse-button:hover,
+  .settings-section-tabs button:hover:not([aria-selected='true']),
+  .schedule-page .ghost-button:hover,
+  .schedule-task-row button:hover,
+  .template-row button:hover,
+  .schedule-block-actions button:hover,
+  .schedule-drawer-actions button:hover,
+  .date-stepper button:hover,
+  .weekday-pills button:hover:not(.active),
+  .schedule-quick-slots button:hover,
+  .review-score-row button:hover:not(.active),
+  .process-option:hover,
+  .sound-option-card:hover:not(.active),
+  .custom-sound-picker:hover:not(.disabled)
+) {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface-control-hover);
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .metric-card:hover:not(.danger),
+  .core-fact:hover,
+  .details-card:hover,
+  .phase-badge:hover,
+  .setting-row:hover,
+  .capability-row:hover,
+  .tool-row:hover,
+  .list-row:hover,
+  .record-row:hover,
+  .subject-stat-row:hover,
+  .blocked-option:hover,
+  .learning-hub-card:hover,
+  .today-item-row:hover:not(.is-current),
+  .category-tab:hover:not(.active),
+  .category-task-row:hover,
+  .schedule-task-row:hover:not(.picking),
+  .template-row:hover,
+  .week-day:hover,
+  .week-block:hover,
+  .alarm-row:hover:not(.is-upcoming):not(.is-targeted):not(.is-ringing),
+  .checklist-task-card:hover,
+  .review-metric:hover,
+  .review-score-row:hover
+) {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface-card-hover);
+  box-shadow: var(--shadow-card);
+}
+
+html[data-theme='mono'] {
+  --switch-track-off: color-mix(in srgb, var(--surface-soft) 82%, #d5d0c5);
+  --switch-track-off-border: rgba(78, 82, 79, 0.36);
+  --switch-thumb-off: #fffdf8;
+  --switch-track-on: linear-gradient(135deg, #555b60, #767f77);
+  --switch-thumb-on: #ffffff;
+  --switch-on-shadow: 0 8px 18px rgba(85, 91, 96, 0.18);
+}
+
+html[data-theme='dawn'] {
+  --switch-track-off: color-mix(in srgb, var(--surface-soft) 82%, #e1e8dc);
+  --switch-track-off-border: rgba(87, 99, 122, 0.34);
+  --switch-thumb-off: #ffffff;
+  --switch-track-on: linear-gradient(135deg, #356fd6, #2f9d83);
+  --switch-thumb-on: #ffffff;
+  --switch-on-shadow: 0 8px 18px rgba(53, 111, 214, 0.18);
+}
+
+html[data-theme='forest'] {
+  --switch-track-off: color-mix(in srgb, var(--surface-soft) 82%, #d4ead9);
+  --switch-track-off-border: rgba(87, 130, 102, 0.34);
+  --switch-thumb-off: #ffffff;
+  --switch-track-on: linear-gradient(135deg, #4f9b69, #78bd8f);
+  --switch-thumb-on: #ffffff;
+  --switch-on-shadow: 0 8px 18px rgba(90, 169, 120, 0.2);
+}
+
+html[data-theme='sakura'] {
+  --switch-track-off: color-mix(in srgb, var(--surface-soft) 82%, #e7e9f5);
+  --switch-track-off-border: rgba(105, 99, 130, 0.34);
+  --switch-thumb-off: #ffffff;
+  --switch-track-on: linear-gradient(135deg, #5579df, #d47791);
+  --switch-thumb-on: #ffffff;
+  --switch-on-shadow: 0 8px 18px rgba(85, 121, 223, 0.18);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .capability-row,
+  .focus-whitelist-toggle,
+  .live-primary-toggle
+):has(input[type='checkbox']:checked) {
+  border-color: color-mix(in srgb, var(--blue) 32%, var(--line));
+  background: color-mix(in srgb, var(--blue) 9%, var(--surface-strong));
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura']) :is(
+  .capability-row,
+  .focus-whitelist-toggle,
+  .live-primary-toggle
+):has(input[type='checkbox']:checked) {
+  border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
+  background: color-mix(in srgb, var(--blue) 9%, var(--surface-strong));
+}
+
+html[data-theme='forest'] :is(.capability-row, .focus-whitelist-toggle, .live-primary-toggle):has(input[type='checkbox']:checked) {
+  border-color: color-mix(in srgb, var(--green) 34%, var(--line));
+  background: color-mix(in srgb, var(--green) 12%, var(--surface-strong));
+}
+
+html[data-theme='dark'] :is(.capability-row, .focus-whitelist-toggle, .live-primary-toggle):has(input[type='checkbox']:checked) {
+  border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
+  background: color-mix(in srgb, var(--blue) 14%, var(--surface-strong));
+}
+
+/* Theme-synced task sorting states. */
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  ) {
+  --task-sort-accent: var(--blue);
+  --task-sort-accent-soft: var(--blue-soft);
+  --task-sort-ink: var(--ink);
+}
+
+html[data-theme='dawn'] {
+  --task-sort-accent: var(--amber);
+  --task-sort-accent-soft: var(--amber-soft);
+}
+
+html[data-theme='forest'] {
+  --task-sort-accent: var(--green);
+  --task-sort-accent-soft: var(--green-soft);
+  --task-sort-ink: #173326;
+}
+
+html[data-theme='sakura'] {
+  --task-sort-accent: var(--red);
+  --task-sort-accent-soft: var(--red-soft);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.today-plan-drawer.is-sortable .today-drop-area, .category-drop-area) {
+  color: var(--ink);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  .today-plan-drawer.is-sortable .today-drop-area {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 42%, transparent);
+}
+
+html[data-theme='dark'] .today-plan-drawer.is-sortable .today-drop-area {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 36%, transparent);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.list-drop-zone, .empty-drop-zone, .compact-drop-zone) {
+  border-color: color-mix(in srgb, var(--task-sort-accent) 24%, var(--line));
+  background: color-mix(in srgb, var(--task-sort-accent-soft) 42%, var(--surface-strong));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(
+    .today-plan-drawer.is-sortable .today-drop-area.is-over,
+    .today-drop-area.is-over,
+    .category-drop-area.is-over,
+    .list-drop-zone:hover,
+    .empty-drop-zone:hover
+  ) {
+  outline-color: color-mix(in srgb, var(--task-sort-accent) 46%, transparent);
+  border-color: color-mix(in srgb, var(--task-sort-accent) 38%, var(--line)) !important;
+  background: color-mix(in srgb, var(--task-sort-accent-soft) 72%, var(--surface-strong)) !important;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--task-sort-accent) 16%, transparent),
+    var(--shadow-card, var(--shadow-soft)) !important;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.today-item-handle, .category-task-handle, .task-drag) {
+  color: color-mix(in srgb, var(--task-sort-accent) 58%, var(--muted)) !important;
+  border-color: color-mix(in srgb, var(--task-sort-accent) 24%, var(--line)) !important;
+  background: color-mix(in srgb, var(--task-sort-accent-soft) 48%, var(--surface-strong)) !important;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.today-item-handle:hover, .category-task-handle:hover) {
+  color: var(--task-sort-ink) !important;
+  border-color: color-mix(in srgb, var(--task-sort-accent) 42%, var(--line)) !important;
+  background: color-mix(in srgb, var(--task-sort-accent-soft) 74%, var(--surface-strong)) !important;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--task-sort-accent) 14%, transparent) !important;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.today-item-row.is-dragging, .category-task-row.is-dragging) {
+  opacity: 0.9;
+  border-color: color-mix(in srgb, var(--task-sort-accent) 42%, var(--line)) !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--task-sort-accent-soft) 84%, var(--surface-strong)),
+      color-mix(in srgb, var(--surface-strong) 86%, var(--task-sort-accent-soft))
+    ) !important;
+  box-shadow: var(--shadow-hover, var(--shadow-card, var(--shadow-soft))) !important;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  :is(.today-item-row.is-dragging .today-item-handle, .category-task-row.is-dragging .category-task-handle) {
+  color: var(--task-sort-ink) !important;
+  border-color: color-mix(in srgb, var(--task-sort-accent) 46%, var(--line)) !important;
+  background: color-mix(in srgb, var(--task-sort-accent-soft) 82%, var(--surface-strong)) !important;
+}
+
+:is(
+    html[data-theme='light'],
+    html:not([data-theme]),
+    html[data-theme='dark'],
+    html[data-theme='mono'],
+    html[data-theme='dawn'],
+    html[data-theme='forest'],
+    html[data-theme='sakura']
+  )
+  .today-plan-list::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--task-sort-accent) 24%, transparent);
 }

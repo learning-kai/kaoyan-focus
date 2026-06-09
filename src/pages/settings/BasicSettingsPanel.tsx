@@ -262,6 +262,21 @@ export function BasicSettingsPanel({
           </div>
         </div>
 
+        <div className="setting-row mode-setting">
+          <div>
+            <strong>悬浮窗总在最前</strong>
+            <p>开启后悬浮窗保持在其他窗口上方；关闭后按普通窗口层级显示。</p>
+          </div>
+          <div className="segmented-control">
+            <button className={settings.focus_widget_always_on_top ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_always_on_top: true })} type="button">
+              置顶
+            </button>
+            <button className={!settings.focus_widget_always_on_top ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_always_on_top: false })} type="button">
+              普通层级
+            </button>
+          </div>
+        </div>
+
         <div className="reminder-sound-panel">
           <div className="reminder-sound-heading">
             <div>
