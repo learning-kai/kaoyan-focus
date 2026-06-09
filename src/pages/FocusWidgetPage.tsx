@@ -331,6 +331,9 @@ export default function FocusWidgetPage() {
 
   const collapseToEdge = useCallback(async () => {
     if (!canInteract || dockModeRef.current !== 'peek') return;
+    const previousDockState = dockState;
+    const edge = previousDockState.edge;
+    if (!edge) return;
 
     if (expandTimerRef.current !== null) {
       window.clearTimeout(expandTimerRef.current);
@@ -346,12 +349,18 @@ export default function FocusWidgetPage() {
     try {
       await waitForNextPaint();
       await waitForMilliseconds(RETRACT_PREPARE_MS);
+      dockModeRef.current = 'collapsed';
+      setDockState({ mode: 'collapsed', edge });
+      await waitForNextPaint();
       setDockState(await collapseFocusWidgetToEdge());
+      setError(null);
     } catch (reason) {
+      dockModeRef.current = previousDockState.mode;
+      setDockState(previousDockState);
       setIsRetracting(false);
       setError(reason instanceof Error ? reason.message : String(reason));
     }
-  }, [canInteract]);
+  }, [canInteract, dockState]);
 
   const handleCollapsedMouseEnter = useCallback(() => {
     if (!canInteract || dockModeRef.current !== 'collapsed') return;
