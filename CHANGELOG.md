@@ -140,4 +140,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Show the focus widget for paused and idle study states (d5d845f)
 
+## v1.11.3 - 2026-06-09
+
+### Desktop
+#### Changed
+- Refine focus widget dock animations and glass motion (5e2615d)
+
 
