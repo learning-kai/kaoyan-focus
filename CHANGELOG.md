@@ -100,3 +100,14 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 
 - Wake focus window for critical study reminders (20fa0f9)
+
+## v1.9.3 - 2026-06-09
+
+### Desktop
+#### Added
+- Add cleanup probes and system diagnostic tests (7e8cff9)
+
+#### Changed
+- Improve focus workflow and UI feedback across the app (8af17fd)
+
+
