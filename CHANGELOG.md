@@ -110,4 +110,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Improve focus workflow and UI feedback across the app (8af17fd)
 
+## v1.9.4 - 2026-06-09
+
+### Desktop
+#### Changed
+- Unify light theme card surfaces (1988884)
+
 
