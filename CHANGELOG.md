@@ -122,4 +122,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Added
 - Add focus widget window for study mode (aaed2af)
 
+## v1.11.0 - 2026-06-09
+
+### Desktop
+#### Fixed
+- Fix task drag sorting theme colors (c488ec1)
+
 
