@@ -176,4 +176,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Speed up focus widget collapse animation (e882edb)
 
+## v1.12.3 - 2026-06-09
+
+### Desktop
+#### Changed
+- Prevent focus widget collapse from blocking clicks (d0f13ab)
+
 
