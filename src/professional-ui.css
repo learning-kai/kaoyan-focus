@@ -761,3 +761,112 @@ button {
     font-size: 11px;
   }
 }
+
+:is(html[data-theme='light'], html:not([data-theme])) {
+  --surface-card: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 250, 253, 0.9));
+  --surface-card-soft: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.84));
+  --surface-card-muted: linear-gradient(180deg, rgba(251, 253, 255, 0.94), rgba(245, 249, 253, 0.88));
+  --shadow-card: 0 8px 20px rgba(82, 101, 129, 0.07);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .top-strip,
+:is(html[data-theme='light'], html:not([data-theme])) .page-shell,
+:is(html[data-theme='light'], html:not([data-theme])) .command-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .soft-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .start-console,
+:is(html[data-theme='light'], html:not([data-theme])) .control-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .automation-settings-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .reminder-sound-panel,
+:is(html[data-theme='light'], html:not([data-theme])) .settings-save-row {
+  background: var(--surface-card);
+  box-shadow: var(--shadow-panel);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .header-metrics article,
+  .metric-card,
+  .core-fact,
+  .details-card,
+  .alert,
+  .phase-badge,
+  .setting-row,
+  .capability-row,
+  .tool-row,
+  .list-row,
+  .record-row,
+  .subject-stat-row,
+  .blocked-option,
+  .process-option,
+  .sound-option-card,
+  .custom-sound-picker,
+  .custom-sound-file,
+  .sound-volume-row,
+  .today-item-row,
+  .board-column,
+  .checklist-task-card,
+  .today-composer,
+  .task-composer,
+  .task-inline-editor,
+  .monitor-callout,
+  .empty-state,
+  .schedule-loading-hint,
+  .whitelist-subject-heading,
+  .potplayer-hint
+) {
+  background: var(--surface-card-soft);
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .command-panel .metric-card,
+  .command-panel .details-card,
+  .command-panel .setting-row,
+  .command-panel .capability-row,
+  .soft-panel .metric-card,
+  .soft-panel .details-card,
+  .soft-panel .setting-row,
+  .soft-panel .capability-row,
+  .settings-shell .details-card,
+  .settings-shell .setting-row,
+  .settings-shell .capability-row,
+  .start-console .core-fact,
+  .control-panel .details-card
+) {
+  background: var(--surface-card-muted);
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .sidebar-foot {
+  background: var(--surface-card-soft);
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .alert {
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .top-strip-status :is(span, button) {
+  border-color: rgba(113, 131, 159, 0.16);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item {
+  background: rgba(255, 255, 255, 0.74);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item[aria-current='page'] {
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .settings-collapse-button,
+:is(html[data-theme='light'], html:not([data-theme])) .secondary-action,
+:is(html[data-theme='light'], html:not([data-theme])) .ghost-action,
+:is(html[data-theme='light'], html:not([data-theme])) .small-action,
+:is(html[data-theme='light'], html:not([data-theme])) .chip,
+:is(html[data-theme='light'], html:not([data-theme])) .segmented-control button,
+:is(html[data-theme='light'], html:not([data-theme])) .stepper-control button,
+:is(html[data-theme='light'], html:not([data-theme])) .icon-button,
+:is(html[data-theme='light'], html:not([data-theme])) .theme-toggle button {
+  background: rgba(255, 255, 255, 0.72);
+}

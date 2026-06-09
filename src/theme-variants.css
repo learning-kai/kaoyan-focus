@@ -1553,3 +1553,124 @@ html[data-theme='forest'][data-study-fullscreen='true'] .focus-active-shell {
   :is(.focus-hud-card:hover, .focus-hud-card.is-active, .focus-quiet-action:hover, .focus-quiet-action.is-active) {
   background: color-mix(in srgb, var(--blue) 10%, var(--surface-strong));
 }
+
+:is(html[data-theme='light'], html:not([data-theme])) {
+  --surface-card: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 250, 253, 0.9));
+  --surface-card-soft: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.84));
+  --surface-card-muted: linear-gradient(180deg, rgba(251, 253, 255, 0.94), rgba(245, 249, 253, 0.88));
+  --shadow-card: 0 8px 20px rgba(82, 101, 129, 0.07);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .top-strip,
+  .page-shell,
+  .command-panel,
+  .soft-panel,
+  .start-console,
+  .control-panel,
+  .automation-settings-panel,
+  .reminder-sound-panel,
+  .settings-save-row
+) {
+  background: var(--surface-card);
+  box-shadow: var(--shadow-panel);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .header-metrics article,
+  .metric-card,
+  .core-fact,
+  .details-card,
+  .phase-badge,
+  .setting-row,
+  .capability-row,
+  .tool-row,
+  .list-row,
+  .record-row,
+  .subject-stat-row,
+  .blocked-option,
+  .process-option,
+  .sound-option-card,
+  .custom-sound-picker,
+  .custom-sound-file,
+  .sound-volume-row,
+  .today-item-row,
+  .board-column,
+  .checklist-task-card,
+  .today-composer,
+  .task-composer,
+  .task-inline-editor,
+  .monitor-callout,
+  .empty-state,
+  .schedule-loading-hint,
+  .whitelist-subject-heading,
+  .potplayer-hint
+) {
+  background: var(--surface-card-soft);
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .command-panel .metric-card,
+  .command-panel .details-card,
+  .command-panel .setting-row,
+  .command-panel .capability-row,
+  .soft-panel .metric-card,
+  .soft-panel .details-card,
+  .soft-panel .setting-row,
+  .soft-panel .capability-row,
+  .settings-shell .details-card,
+  .settings-shell .setting-row,
+  .settings-shell .capability-row,
+  .start-console .core-fact,
+  .control-panel .details-card
+) {
+  background: var(--surface-card-muted);
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .alert,
+  .alert.error,
+  .alert.danger,
+  .alert.success,
+  .alert.neutral,
+  .metric-card.danger,
+  .count-pill,
+  .row-icon.danger
+) {
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .sidebar-foot {
+  background: var(--surface-card-soft);
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .top-strip-status :is(span, button) {
+  border-color: rgba(113, 131, 159, 0.16);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item {
+  background: rgba(255, 255, 255, 0.74);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item:hover,
+:is(html[data-theme='light'], html:not([data-theme])) .nav-item[aria-current='page'] {
+  box-shadow: var(--shadow-card);
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) :is(
+  .settings-collapse-button,
+  .secondary-action,
+  .ghost-action,
+  .small-action,
+  .chip,
+  .segmented-control button,
+  .stepper-control button,
+  .icon-button,
+  .theme-toggle button
+) {
+  background: rgba(255, 255, 255, 0.72);
+}
