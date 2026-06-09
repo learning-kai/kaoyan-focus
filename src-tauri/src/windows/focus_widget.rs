@@ -12,15 +12,17 @@ use tauri::{
 };
 #[cfg(windows)]
 use windows::Win32::{
-    Foundation::RECT,
+    Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
     Graphics::Gdi::{
         CombineRgn, CreateRectRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn, HGDIOBJ,
         RGN_ERROR, RGN_OR,
     },
     UI::WindowsAndMessaging::{
-        GetClientRect, GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_STYLE,
-        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_CAPTION,
-        WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME,
+        CallWindowProcW, GetClientRect, GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos,
+        GWL_EXSTYLE, GWL_STYLE, GWL_WNDPROC, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
+        SWP_NOSIZE, SWP_NOZORDER, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCPAINT, WNDPROC, WS_CAPTION,
+        WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_STATICEDGE, WS_EX_WINDOWEDGE, WS_MAXIMIZEBOX,
+        WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME,
     },
 };
 
@@ -59,7 +61,7 @@ const MIN_WINDOW_WIDTH: i64 = 36;
 const MIN_WINDOW_HEIGHT: i64 = 36;
 const COLLAPSED_SIDE_WIDTH: f64 = 36.0;
 const COLLAPSED_SIDE_HEIGHT: f64 = 112.0;
-const COLLAPSED_BAR_WIDTH: f64 = 220.0;
+const COLLAPSED_BAR_WIDTH: f64 = 172.0;
 const COLLAPSED_BAR_HEIGHT: f64 = 36.0;
 const EDGE_COLLAPSE_THRESHOLD: f64 = 18.0;
 const EDGE_SAFE_MARGIN: f64 = 8.0;
@@ -75,6 +77,8 @@ const PEEK_MOUSE_EXIT_MARGIN: f64 = 10.0;
 
 static CREATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static RUNTIME_STATE: OnceLock<Mutex<FocusWidgetRuntimeState>> = OnceLock::new();
+#[cfg(windows)]
+static FOCUS_WIDGET_ORIGINAL_WNDPROC: OnceLock<usize> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub struct FocusWidget {
@@ -426,7 +430,7 @@ fn build_focus_widget_window(
         .title(FOCUS_WIDGET_TITLE)
         .decorations(false)
         .transparent(true)
-        .resizable(true)
+        .resizable(false)
         .skip_taskbar(true)
         .always_on_top(always_on_top)
         .shadow(false)
@@ -445,6 +449,7 @@ fn build_focus_widget_window(
     }
 
     let window = builder.build().map_err(|error| error.to_string())?;
+    install_focus_widget_chrome_guard(&window);
     apply_focus_widget_window_shape(&window);
     Ok(window)
 }
@@ -457,10 +462,11 @@ fn configure_focus_widget_window(
     let dock_state = current_dock_state();
     let _ = window.set_title(FOCUS_WIDGET_TITLE);
     let _ = window.set_decorations(false);
-    let _ = window.set_resizable(true);
+    let _ = window.set_resizable(false);
     let _ = window.set_skip_taskbar(true);
     let _ = window.set_always_on_top(settings.focus_widget_always_on_top);
     let _ = window.set_shadow(false);
+    install_focus_widget_chrome_guard(window);
     apply_size_constraints(window, dock_state.mode == FocusWidgetDockMode::Collapsed)?;
 
     if settings.focus_widget_remember_geometry && dock_state.is_floating() {
@@ -831,7 +837,7 @@ fn animate_focus_widget_geometry(
     let steps = dock_animation_steps(duration);
     let started_at = Instant::now();
 
-    prepare_focus_widget_window_animation(window);
+    prepare_focus_widget_window_animation(window, kind);
 
     for step in 1..=steps {
         if !is_current_window_animation(generation) {
@@ -1281,7 +1287,6 @@ fn apply_size_constraints(window: &WebviewWindow, compact: bool) -> Result<(), S
         MAX_NORMAL_WIDTH as f64,
         MAX_NORMAL_HEIGHT as f64,
     )));
-    let _ = window.set_resizable(!compact);
     Ok(())
 }
 
@@ -1320,29 +1325,87 @@ fn apply_focus_widget_window_shape(window: &WebviewWindow) {
 fn apply_focus_widget_window_shape(_window: &WebviewWindow) {}
 
 #[cfg(windows)]
-fn prepare_focus_widget_window_animation(window: &WebviewWindow) {
-    if let Ok(hwnd) = window.hwnd() {
-        enforce_focus_widget_chrome_less(hwnd);
-        let _ = unsafe { SetWindowRgn(hwnd, None, true) };
+fn install_focus_widget_chrome_guard(window: &WebviewWindow) {
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+
+    enforce_focus_widget_chrome_less(hwnd);
+
+    if FOCUS_WIDGET_ORIGINAL_WNDPROC.get().is_some() {
+        return;
+    }
+
+    let previous = unsafe {
+        SetWindowLongPtrW(
+            hwnd,
+            GWL_WNDPROC,
+            focus_widget_wndproc as *const () as isize,
+        )
+    };
+    if previous != 0 {
+        let _ = FOCUS_WIDGET_ORIGINAL_WNDPROC.set(previous as usize);
     }
 }
 
 #[cfg(not(windows))]
-fn prepare_focus_widget_window_animation(_window: &WebviewWindow) {}
+fn install_focus_widget_chrome_guard(_window: &WebviewWindow) {}
 
 #[cfg(windows)]
-fn enforce_focus_widget_chrome_less(hwnd: windows::Win32::Foundation::HWND) {
+fn prepare_focus_widget_window_animation(window: &WebviewWindow, kind: DockAnimationKind) {
+    if let Ok(hwnd) = window.hwnd() {
+        enforce_focus_widget_chrome_less(hwnd);
+        if matches!(kind, DockAnimationKind::Expand) {
+            let _ = unsafe { SetWindowRgn(hwnd, None, false) };
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn prepare_focus_widget_window_animation(_window: &WebviewWindow, _kind: DockAnimationKind) {}
+
+#[cfg(windows)]
+unsafe extern "system" fn focus_widget_wndproc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    match msg {
+        WM_NCCALCSIZE | WM_NCPAINT | WM_NCACTIVATE => return LRESULT(0),
+        _ => {}
+    }
+
+    if let Some(previous) = FOCUS_WIDGET_ORIGINAL_WNDPROC.get().copied() {
+        let previous: WNDPROC = unsafe { std::mem::transmute(previous) };
+        return unsafe { CallWindowProcW(previous, hwnd, msg, wparam, lparam) };
+    }
+
+    LRESULT(0)
+}
+
+#[cfg(windows)]
+fn enforce_focus_widget_chrome_less(hwnd: HWND) {
     let style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
     let blocked_style_bits =
         (WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX).0 as isize;
     let next_style = style & !blocked_style_bits;
+    let ex_style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
+    let blocked_ex_style_bits =
+        (WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE).0 as isize;
+    let next_ex_style = ex_style & !blocked_ex_style_bits;
 
-    if next_style == style {
+    if next_style == style && next_ex_style == ex_style {
         return;
     }
 
     unsafe {
-        SetWindowLongPtrW(hwnd, GWL_STYLE, next_style);
+        if next_style != style {
+            SetWindowLongPtrW(hwnd, GWL_STYLE, next_style);
+        }
+        if next_ex_style != ex_style {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, next_ex_style);
+        }
         let _ = SetWindowPos(
             hwnd,
             None,
