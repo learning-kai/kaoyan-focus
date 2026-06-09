@@ -146,4 +146,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Refine focus widget dock animations and glass motion (5e2615d)
 
+## v1.11.4 - 2026-06-09
+
+### Desktop
+#### Changed
+- Smooth focus widget collapse edges (f063ef7)
+
 
