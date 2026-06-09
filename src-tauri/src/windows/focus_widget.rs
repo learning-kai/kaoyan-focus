@@ -436,6 +436,7 @@ fn build_focus_widget_window(
         .shadow(false)
         .visible(false)
         .focused(false)
+        .focusable(false)
         .prevent_overflow()
         .min_inner_size(MIN_WINDOW_WIDTH as f64, MIN_WINDOW_HEIGHT as f64)
         .max_inner_size(MAX_NORMAL_WIDTH as f64, MAX_NORMAL_HEIGHT as f64)
@@ -465,11 +466,24 @@ fn configure_focus_widget_window(
     let _ = window.set_resizable(false);
     let _ = window.set_skip_taskbar(true);
     let _ = window.set_always_on_top(settings.focus_widget_always_on_top);
+    let _ = window.set_focusable(false);
     let _ = window.set_shadow(false);
     install_focus_widget_chrome_guard(window);
     apply_size_constraints(window, dock_state.mode == FocusWidgetDockMode::Collapsed)?;
 
-    if settings.focus_widget_remember_geometry && dock_state.is_floating() {
+    if let Some(edge) = dock_state.edge.filter(|_| dock_state.mode == FocusWidgetDockMode::Collapsed) {
+        let area = current_work_area(window)?;
+        let size = collapsed_size(edge);
+        let current_geometry = logical_geometry_from_window(window)?;
+        let position = docked_position(edge, &area, current_geometry, size);
+        set_focus_widget_geometry_frame(
+            window,
+            position.x.unwrap_or(area.x),
+            position.y.unwrap_or(area.y),
+            size.width,
+            size.height,
+        )?;
+    } else if settings.focus_widget_remember_geometry && dock_state.is_floating() {
         window
             .set_size(LogicalSize::new(geometry.width, geometry.height))
             .map_err(|error| error.to_string())?;
@@ -554,6 +568,7 @@ fn apply_study_mode_visibility(
 }
 
 fn show_window_without_focus(window: &WebviewWindow, always_on_top: bool) -> Result<(), String> {
+    let _ = window.set_focusable(false);
     window.show().map_err(|error| error.to_string())?;
     let _ = window.unminimize();
     let _ = window.set_always_on_top(always_on_top);
@@ -765,19 +780,26 @@ fn collapse_window_to_edge(
 
     suppress_geometry_events_briefly();
     apply_size_constraints(window, true)?;
+    store_dock_state(next_state);
     if animate_focus_widget_geometry(
         window,
         current_geometry,
         target_geometry,
         DockAnimationKind::Collapse,
     )? {
-        let changed = store_dock_state(next_state);
         apply_focus_widget_window_shape(window);
-        if changed {
-            emit_dock_state_change(app, next_state);
-        }
+        emit_dock_state_change(app, next_state);
         Ok(next_state)
     } else {
+        set_focus_widget_geometry_frame(
+            window,
+            target_geometry.x.unwrap_or(area.x),
+            target_geometry.y.unwrap_or(area.y),
+            target_geometry.width,
+            target_geometry.height,
+        )?;
+        apply_focus_widget_window_shape(window);
+        emit_dock_state_change(app, next_state);
         Ok(current_dock_state())
     }
 }

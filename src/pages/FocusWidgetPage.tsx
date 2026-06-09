@@ -349,9 +349,6 @@ export default function FocusWidgetPage() {
     try {
       await waitForNextPaint();
       await waitForMilliseconds(RETRACT_PREPARE_MS);
-      dockModeRef.current = 'collapsed';
-      setDockState({ mode: 'collapsed', edge });
-      await waitForNextPaint();
       setDockState(await collapseFocusWidgetToEdge());
       setError(null);
     } catch (reason) {
