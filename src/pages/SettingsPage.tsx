@@ -5,7 +5,7 @@ import { IntegrationsPanel } from './settings/IntegrationsPanel';
 import { SyncSettingsPanel } from './settings/SyncSettingsPanel';
 import { SystemPanel } from './settings/SystemPanel';
 import { formatBytes } from './settings/SettingsPrimitives';
-import type { ObjectStorageBusyAction, SettingsPanelKey, WebDavBusyAction } from './settings/types';
+import type { AppDataLocation, ObjectStorageBusyAction, SettingsPanelKey, WebDavBusyAction } from './settings/types';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { getRuntimeHealth } from '../services/healthApi';
 import { getStudyModeState } from '../services/focusApi';
@@ -15,6 +15,7 @@ import { previewReminderSound } from '../services/alertApi';
 import {
   getAppDataLocation,
   getAppSettings,
+  openAppDataLocation,
   saveAppSettings,
   resetCustomReminderSound,
   saveCustomReminderSound,
@@ -36,6 +37,10 @@ import {
   uploadDatabaseToObjectStorage,
   uploadDatabaseToWebDav,
 } from '../services/syncApi';
+import { copyTextToClipboard } from '../utils/clipboard';
+import { downloadTextFile } from '../utils/fileDownload';
+import { buildSystemDiagnosticSummary } from '../utils/systemDiagnostic';
+import { formatDateKey } from '../utils/date';
 import {
   getFeishuSyncSettings,
   getFeishuSyncStatus,
@@ -205,9 +210,10 @@ export default function SettingsPage({
   const [emailSettings, setEmailSettings] = useState<EmailReminderSettings>(defaultEmailReminderSettings);
   const [feishuSettings, setFeishuSettings] = useState<FeishuSyncSettings>(defaultFeishuSettings);
   const [feishuStatus, setFeishuStatus] = useState<FeishuSyncStatus | null>(null);
-  const [dataLocation, setDataLocation] = useState<string | null>(null);
+  const [dataLocation, setDataLocation] = useState<AppDataLocation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [systemMessage, setSystemMessage] = useState<string | null>(null);
   const [webDavMessage, setWebDavMessage] = useState<string | null>(null);
   const [objectStorageMessage, setObjectStorageMessage] = useState<string | null>(null);
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
@@ -327,6 +333,18 @@ export default function SettingsPage({
     return () => window.clearInterval(intervalId);
   }, [settingsLocked]);
 
+  useEffect(() => {
+    if (!systemMessage) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSystemMessage(null);
+    }, 2500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [systemMessage]);
+
   async function initializeSettingsPage() {
     setError(null);
     setSettingsLoaded(false);
@@ -402,10 +420,80 @@ export default function SettingsPage({
   async function refreshDataLocation() {
     try {
       const location = await getAppDataLocation();
-      setDataLocation(location.database_path);
+      setDataLocation(location);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
+  }
+
+  async function handleOpenAppDataLocation() {
+    try {
+      setSystemMessage(null);
+      const location = await openAppDataLocation();
+      setDataLocation(location);
+      setError(null);
+      setSystemMessage('数据目录已在资源管理器中打开。');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function handleCopyAppDataLocation() {
+    try {
+      setSystemMessage(null);
+      const location = dataLocation ?? (await getAppDataLocation());
+      setDataLocation(location);
+      setError(null);
+      await copyTextToClipboard(
+        [`数据目录: ${location.app_data_dir}`, `SQLite 文件: ${location.database_path}`].join('\n'),
+      );
+      setSystemMessage('数据目录信息已复制到剪贴板。');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function handleCopySystemDiagnosticSummary() {
+    try {
+      setSystemMessage(null);
+      const summary = getSystemDiagnosticSummary();
+      await copyTextToClipboard(summary);
+      setError(null);
+      setSystemMessage('系统诊断摘要已复制到剪贴板。');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function handleDownloadSystemDiagnosticSummary() {
+    try {
+      setSystemMessage(null);
+      const summary = getSystemDiagnosticSummary();
+      downloadTextFile(`kaoyan-focus-diagnostic-${formatDateKey()}.txt`, summary);
+      setError(null);
+      setSystemMessage('系统诊断摘要已导出到本地。');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  function getSystemDiagnosticSummary() {
+    return buildSystemDiagnosticSummary({
+      availableUpdate,
+      autoUpdateMessage: lastAutoUpdateMessage,
+      dataLocation,
+      emailSettings,
+      feishuSettings,
+      feishuStatus,
+      foregroundApp,
+      lastAutoSyncMessage,
+      objectStorageSettings,
+      runtimeHealth,
+      settings,
+      updateMessage: visibleUpdateMessage,
+      updateProgress,
+      webDavSettings,
+    });
   }
 
   async function refreshSyncDetails() {
@@ -1021,6 +1109,10 @@ export default function SettingsPage({
           handleCheckUpdate={handleCheckUpdate}
           handleDetectForegroundApp={handleDetectForegroundApp}
           handleInstallUpdate={handleInstallUpdate}
+          handleCopyAppDataLocation={handleCopyAppDataLocation}
+          handleCopySystemDiagnosticSummary={handleCopySystemDiagnosticSummary}
+          handleDownloadSystemDiagnosticSummary={handleDownloadSystemDiagnosticSummary}
+          handleOpenAppDataLocation={handleOpenAppDataLocation}
           handleRefreshRuntimeHealth={refreshRuntimeHealth}
           installingUpdate={installingUpdate}
           loading={loading}
@@ -1032,6 +1124,7 @@ export default function SettingsPage({
           runtimeHealthMessage={runtimeHealthMessage}
           settings={settings}
           settingsLocked={settingsLocked}
+          systemMessage={systemMessage}
           togglePanel={togglePanel}
           updateMessage={visibleUpdateMessage}
           updateProgress={updateProgress}

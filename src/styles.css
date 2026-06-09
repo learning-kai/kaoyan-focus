@@ -34,6 +34,7 @@
 html {
   width: 100%;
   min-width: 0;
+  scrollbar-gutter: stable;
   background: var(--bg);
 }
 
@@ -302,7 +303,7 @@ svg {
   font-size: 12px;
 }
 
-.top-strip-status span {
+.top-strip-status :is(span, button) {
   display: inline-flex;
   gap: 6px;
   align-items: center;
@@ -313,6 +314,23 @@ svg {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+button.next-alarm-pill {
+  border: 0;
+  padding: 0;
+  font: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+button.next-alarm-pill:focus-visible {
+  outline: 2px solid rgba(147, 197, 253, 0.82);
+  outline-offset: 3px;
+}
+
+button.next-alarm-pill:hover {
+  color: #eff6ff;
 }
 
 .next-alarm-pill.active {
@@ -3618,6 +3636,11 @@ html[data-study-fullscreen='true'] .focus-resume-action {
     rgba(9, 15, 25, 0.64);
 }
 
+.alarm-row.is-targeted {
+  border-color: rgba(147, 197, 253, 0.56);
+  box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.12), 0 18px 40px rgba(2, 6, 17, 0.2);
+}
+
 .alarm-row.is-ringing {
   border-color: rgba(242, 181, 107, 0.42);
   background:
@@ -5189,6 +5212,13 @@ html[data-theme='light'] .alarm-row.is-upcoming {
     rgba(255, 255, 255, 0.74);
 }
 
+html[data-theme='light'] .alarm-row.is-targeted {
+  border-color: rgba(56, 105, 212, 0.34);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(56, 105, 212, 0.12), transparent 32%),
+    rgba(247, 251, 255, 0.92);
+}
+
 html[data-theme='light'] .alarm-row.is-ringing {
   border-color: rgba(213, 146, 61, 0.3);
   background:
@@ -5979,7 +6009,7 @@ html[data-theme='light'] .theme-toggle button.active {
     gap: 8px;
   }
 
-  .top-strip-status span {
+  .top-strip-status :is(span, button) {
     max-width: 100%;
   }
 

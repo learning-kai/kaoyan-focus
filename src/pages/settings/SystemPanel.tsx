@@ -4,6 +4,9 @@ import {
   ChevronDown,
   Database,
   Download,
+  Copy,
+  ClipboardList,
+  FolderOpen,
   HardDrive,
   MonitorDot,
   RefreshCw,
@@ -21,18 +24,22 @@ import type {
   WebDavSettings,
 } from '../../types/settings';
 import { Capability, Detail } from './SettingsPrimitives';
-import type { SettingsPanelKey } from './types';
+import type { AppDataLocation, SettingsPanelKey } from './types';
 
 type SystemPanelProps = {
   availableUpdate: AppUpdate | null;
   autoUpdateMessage: string | null;
   checkingUpdate: boolean;
-  dataLocation: string | null;
+  dataLocation: AppDataLocation | null;
   expandedPanels: Record<SettingsPanelKey, boolean>;
   foregroundApp: ForegroundApp | null;
   handleCheckUpdate: () => Promise<void>;
   handleDetectForegroundApp: () => Promise<void>;
   handleInstallUpdate: () => Promise<void>;
+  handleCopyAppDataLocation: () => Promise<void>;
+  handleCopySystemDiagnosticSummary: () => Promise<void>;
+  handleDownloadSystemDiagnosticSummary: () => Promise<void>;
+  handleOpenAppDataLocation: () => Promise<void>;
   handleRefreshRuntimeHealth: () => Promise<void>;
   installingUpdate: boolean;
   loading: boolean;
@@ -44,6 +51,7 @@ type SystemPanelProps = {
   runtimeHealthMessage: string | null;
   settings: AppSettings;
   settingsLocked: boolean;
+  systemMessage: string | null;
   togglePanel: (panel: SettingsPanelKey) => void;
   updateMessage: string | null;
   updateProgress: number | null;
@@ -122,6 +130,10 @@ export function SystemPanel({
   handleCheckUpdate,
   handleDetectForegroundApp,
   handleInstallUpdate,
+  handleCopyAppDataLocation,
+  handleCopySystemDiagnosticSummary,
+  handleDownloadSystemDiagnosticSummary,
+  handleOpenAppDataLocation,
   handleRefreshRuntimeHealth,
   installingUpdate,
   loading,
@@ -133,6 +145,7 @@ export function SystemPanel({
   runtimeHealthMessage,
   settings,
   settingsLocked,
+  systemMessage,
   togglePanel,
   updateMessage,
   updateProgress,
@@ -177,13 +190,6 @@ export function SystemPanel({
                 <Capability enabled icon={ShieldCheck} text="记录非白名单应用干扰事件" />
                 <Capability enabled={Boolean(dataLocation)} icon={Database} text="SQLite 本地数据目录可用" />
               </div>
-
-              {dataLocation && (
-                <div className="details-card">
-                  <span>数据文件路径</span>
-                  <strong>{dataLocation}</strong>
-                </div>
-              )}
             </>
           )}
         </section>
@@ -423,13 +429,61 @@ export function SystemPanel({
                 />
               </div>
 
+              <div style={{ minHeight: '48px', position: 'relative' }}>
+                <p
+                  aria-atomic="true"
+                  aria-live="polite"
+                  className="alert success"
+                  role="status"
+                  style={{
+                    inset: 0,
+                    margin: 0,
+                    opacity: systemMessage ? 1 : 0,
+                    overflow: 'hidden',
+                    pointerEvents: 'none',
+                    position: 'absolute',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {systemMessage ?? '\u00A0'}
+                </p>
+              </div>
+
               <div className="details-card stacked">
-                <Detail label="数据目录" value={dataLocation ?? '尚未读取到本机数据目录'} />
-                <Detail label="同步后端" value={syncBackendLabel(settings.sync_backend)} />
+                <Detail label="数据目录" value={dataLocation?.app_data_dir ?? '尚未读取到本机数据目录'} />
+                <Detail label="SQLite 文件" value={dataLocation?.database_path ?? '尚未读取到本机数据库文件'} />
                 <Detail
                   label="主设备标识"
                   value={settings.primary_owner_device_id ? '已绑定当前同步主设备' : '未绑定主设备'}
                 />
+              </div>
+
+              <div className="row-actions">
+                <button className="secondary-action" onClick={() => void handleCopyAppDataLocation()} type="button">
+                  <Copy size={17} />
+                  复制路径信息
+                </button>
+                <button
+                  className="secondary-action"
+                  onClick={() => void handleCopySystemDiagnosticSummary()}
+                  type="button"
+                >
+                  <ClipboardList size={17} />
+                  复制诊断摘要
+                </button>
+                <button
+                  className="secondary-action"
+                  onClick={() => void handleDownloadSystemDiagnosticSummary()}
+                  type="button"
+                >
+                  <Download size={17} />
+                  导出诊断摘要
+                </button>
+                <button className="secondary-action" onClick={() => void handleOpenAppDataLocation()} type="button">
+                  <FolderOpen size={17} />
+                  打开数据目录
+                </button>
               </div>
 
               <div className="details-card stacked">

@@ -9,9 +9,10 @@ import { APP_THEME_OPTIONS } from '../theme';
 
 type LayoutProps = PropsWithChildren<{
   activePage: AppPage;
+  skipMainContentFocus?: boolean;
   nextAlarm: Alarm | null;
   pages: Record<AppPage, PageMeta>;
-  onNavigate: (page: AppPage) => void;
+  onNavigate: (page: AppPage, options?: { alarmId?: number }) => void;
   theme: AppTheme;
   onThemeChange: (theme: AppTheme) => void;
 }>;
@@ -24,9 +25,27 @@ function formatNextAlarm(alarm: Alarm | null) {
   return `${alarm.alarm_date} ${alarm.alarm_time}`;
 }
 
-export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme, onThemeChange, children }: LayoutProps) {
+export default function Layout({
+  activePage,
+  nextAlarm,
+  pages,
+  onNavigate,
+  skipMainContentFocus = false,
+  theme,
+  onThemeChange,
+  children,
+}: LayoutProps) {
   const mainContentRef = useRef<HTMLElement>(null);
   const activeMeta = pages[activePage];
+  const nextAlarmLabel = nextAlarm
+    ? {
+        text: `${nextAlarm.alarm_time}${nextAlarm.title.trim() ? ` 路 ${nextAlarm.title.trim()}` : ''}`,
+        title: `${nextAlarm.alarm_date} ${nextAlarm.alarm_time}${nextAlarm.title.trim() ? ` 路 ${nextAlarm.title.trim()}` : ''}`,
+      }
+    : {
+        text: '鏆傛棤闂归挓',
+        title: '鏆傛棤鍙敤闂归挓',
+      };
   const desktopReady = isTauriRuntime();
   const runtimeStatusTitle = desktopReady ? '后台待命' : '桌面模式未连接';
   const runtimeStatusText = desktopReady ? '托盘运行 / 本地数据' : '请在 Windows 桌面应用中运行';
@@ -34,8 +53,12 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
   const secondaryPages: AppPage[] = ['stats', 'alarm', 'settings'];
 
   useEffect(() => {
+    if (skipMainContentFocus) {
+      return;
+    }
+
     mainContentRef.current?.focus({ preventScroll: true });
-  }, [activePage]);
+  }, [activePage, skipMainContentFocus]);
 
   function handleSkipLinkClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
@@ -117,9 +140,21 @@ export default function Layout({ activePage, nextAlarm, pages, onNavigate, theme
             <span className={desktopReady ? 'runtime-pill is-ready' : 'runtime-pill is-preview'}>
               <MonitorUp size={14} /> {desktopReady ? 'Windows 桌面壳' : '浏览器预览'}
             </span>
-            <span className={nextAlarm ? 'next-alarm-pill active' : 'next-alarm-pill'}>
-              <AlarmClock size={14} /> {formatNextAlarm(nextAlarm)}
-            </span>
+            {nextAlarm ? (
+              <button
+                aria-label={`Open alarm page: ${nextAlarmLabel.title}`}
+                className="next-alarm-pill active"
+                onClick={() => onNavigate('alarm', { alarmId: nextAlarm.id })}
+                title={nextAlarmLabel.title}
+                type="button"
+              >
+                <AlarmClock size={14} /> {nextAlarmLabel.text}
+              </button>
+            ) : (
+              <span className="next-alarm-pill" title={nextAlarmLabel.title}>
+                <AlarmClock size={14} /> {nextAlarmLabel.text}
+              </span>
+            )}
             <span><Lock size={14} /> 学习中自动锁定配置</span>
           </div>
           <div className="theme-toggle" role="group" aria-label="主题切换">

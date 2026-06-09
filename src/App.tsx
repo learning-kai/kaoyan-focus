@@ -75,10 +75,22 @@ export default function App() {
   const [lastAutoSyncMessage, setLastAutoSyncMessage] = useState<string | null>(null);
   const [lastAutoUpdateMessage, setLastAutoUpdateMessage] = useState<string | null>(null);
   const [nextAlarm, setNextAlarm] = useState<Alarm | null>(null);
+  const [alarmFocusId, setAlarmFocusId] = useState<number | null>(null);
   const [theme, setTheme] = useState<AppTheme>(() => bootstrapTheme());
   const hasSyncedPageRef = useRef(false);
-  const navigateToPage = useCallback((page: AppPage) => {
+  const navigateToPage = useCallback((page: AppPage, options?: { alarmId?: number }) => {
     setActivePage(page);
+    if (page !== 'alarm') {
+      setAlarmFocusId(null);
+      return;
+    }
+
+    if (options?.alarmId != null) {
+      setAlarmFocusId(options.alarmId);
+    }
+  }, []);
+  const clearAlarmFocusTarget = useCallback(() => {
+    setAlarmFocusId(null);
   }, []);
 
   useEffect(() => {
@@ -198,6 +210,8 @@ export default function App() {
             theme={theme}
             onThemeChange={handleThemeChange}
           />
+        ) : activePage === 'alarm' ? (
+          <ActivePage focusAlarmId={alarmFocusId} onFocusAlarmHandled={clearAlarmFocusTarget} />
         ) : (
           <ActivePage />
         )}
@@ -209,6 +223,7 @@ export default function App() {
     <AppErrorBoundary>
       <Layout
         activePage={activePage}
+        skipMainContentFocus={activePage === 'alarm'}
         nextAlarm={nextAlarm}
         pages={pages}
         onNavigate={navigateToPage}

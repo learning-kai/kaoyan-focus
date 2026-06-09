@@ -430,6 +430,7 @@ pub fn run() {
             commands::focus::get_focus_stats_summary,
             commands::settings::get_app_settings,
             commands::settings::get_app_data_location,
+            commands::settings::open_app_data_location,
             commands::settings::get_sync_device_id,
             commands::settings::save_app_settings,
             commands::settings::save_custom_reminder_sound,

@@ -11,6 +11,7 @@ const edgePath =
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const smokeTaskTitle = `核心路径任务 ${Date.now()}`;
 const smokeScheduleTitle = `核心路径课表 ${Date.now()}`;
+const smokeAlarmTitle = `核心路径闹钟 ${Date.now()}`;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -127,6 +128,13 @@ async function waitForCondition(client, label, expression, timeoutMs = 15000) {
       const state = window.__SMOKE_STATE;
       if (!state) return 'no smoke state';
       return JSON.stringify({
+        activeElement: document.activeElement ? {
+          tag: document.activeElement.tagName,
+          id: document.activeElement.id || null,
+          className: document.activeElement.className || null,
+          text: (document.activeElement.textContent || '').slice(0, 120),
+          ariaLabel: document.activeElement.getAttribute?.('aria-label') || null,
+        } : null,
         studyStatus: state.studyState?.status,
         blocks: state.scheduleBlocks?.map((block) => ({
           title: block.title,
@@ -256,7 +264,10 @@ function smokeRuntimeMockSource() {
     feishuSettings: { enabled: false, app_id: '', app_secret: '', app_secret_configured: false, redirect_uri: 'http://localhost:1420/feishu/callback' },
     todayItems: [], scheduleBlocks: [], nextTodayId: 1, nextBlockId: 1, nextStudyId: 1,
     studyState: { ...idleStudyState }, syncRuns: [], invokeLog: [],
-    lastCopiedText: null, lastDownloadName: null, lastDownloadHref: null, lastDownloadBlob: null
+    lastCopiedText: null, lastDownloadName: null, lastDownloadHref: null, lastDownloadBlob: null,
+    lastRemovedDownloadName: null, lastRemovedDownloadHref: null, lastRevokedUrl: null,
+    failNextDownloadClick: false,
+    lastOpenedPath: null
   };
   const subjects = [
     { id: 1, name: '政治', color: '#8b5cf6', enabled: true, created_at: nowIso(), updated_at: nowIso() },
@@ -277,6 +288,24 @@ function smokeRuntimeMockSource() {
     templates: []
   });
   const focusStats = () => ({ today_seconds: 0, week_seconds: 0, month_seconds: 0, interruption_count: 0, subjects: subjects.map((subject) => ({ subject, total_seconds: 0 })) });
+  const appDataLocation = { app_data_dir: 'smoke', database_path: 'smoke/kaoyan-focus.sqlite3' };
+  const nextAlarmAt = new Date(Date.now() + 60 * 60 * 1000);
+  const nextAlarmDate = nextAlarmAt.toLocaleDateString('en-CA');
+  const nextAlarmTime = nextAlarmAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const alarms = [{
+    id: 1,
+    title: ${JSON.stringify(smokeAlarmTitle)},
+    note: 'smoke',
+    alarm_date: nextAlarmDate,
+    alarm_time: nextAlarmTime,
+    alarm_at: nextAlarmAt.toISOString(),
+    enabled: true,
+    status: 'scheduled',
+    fired_at: null,
+    dismissed_at: null,
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  }];
   try {
     Object.defineProperty(window.navigator, 'clipboard', {
       configurable: true,
@@ -305,12 +334,37 @@ function smokeRuntimeMockSource() {
       if (this.download) {
         state.lastDownloadName = this.download;
         state.lastDownloadHref = this.href;
+        if (state.failNextDownloadClick) {
+          state.failNextDownloadClick = false;
+          throw new Error('smoke download click failure');
+        }
         return undefined;
       }
       return originalAnchorClick.call(this);
     };
   } catch {
     // Download capture is best-effort for browser smoke coverage.
+  }
+  try {
+    const originalAnchorRemove = HTMLAnchorElement.prototype.remove;
+    HTMLAnchorElement.prototype.remove = function remove() {
+      if (this.download) {
+        state.lastRemovedDownloadName = this.download;
+        state.lastRemovedDownloadHref = this.href;
+      }
+      return originalAnchorRemove ? originalAnchorRemove.call(this) : undefined;
+    };
+  } catch {
+    // Download cleanup capture is best-effort for browser smoke coverage.
+  }
+  try {
+    const originalRevokeObjectURL = URL.revokeObjectURL?.bind(URL);
+    URL.revokeObjectURL = (objectUrl) => {
+      state.lastRevokedUrl = objectUrl;
+      return originalRevokeObjectURL ? originalRevokeObjectURL(objectUrl) : undefined;
+    };
+  } catch {
+    // Download cleanup capture is best-effort for browser smoke coverage.
   }
   try {
     const originalExecCommand = document.execCommand?.bind(document);
@@ -375,11 +429,20 @@ function smokeRuntimeMockSource() {
     switch (cmd) {
       case 'plugin:event|listen': return state.invokeLog.length;
       case 'plugin:event|unlisten': return null;
-      case 'get_next_alarm': return null;
+      case 'list_alarms': return clone(alarms);
+      case 'trigger_due_alarms': return [];
+      case 'get_next_alarm': {
+        const nextAlarm = alarms.find(
+          (alarm) => alarm.enabled && alarm.status === 'scheduled' && new Date(alarm.alarm_at).getTime() > Date.now(),
+        ) ?? null;
+        return clone(nextAlarm);
+      }
+      case 'has_active_alarm': return false;
       case 'get_app_settings': return clone(state.settings);
       case 'save_app_settings': Object.assign(state.settings, args.settings || {}); return clone(state.settings);
       case 'get_sync_device_id': return 'smoke-device';
-      case 'get_app_data_location': return { app_data_dir: 'smoke', database_path: 'smoke/kaoyan-focus.sqlite3' };
+      case 'get_app_data_location': return clone(appDataLocation);
+      case 'open_app_data_location': state.lastOpenedPath = appDataLocation.app_data_dir; return clone(appDataLocation);
       case 'get_runtime_health': return { status: 'ok', summary: 'Smoke runtime ready', checked_at: nowIso(), tasks: [] };
       case 'list_subjects': return clone(subjects);
       case 'get_study_mode_state': return clone(state.studyState);
@@ -560,6 +623,29 @@ try {
   await waitForCondition(client, 'desktop runtime mock', `document.body.innerText.includes('Windows 桌面') || document.body.innerText.includes('浏览器预览')`);
   await waitForCondition(client, 'focus hash/title synced', `location.hash === '#focus' && document.title === '考研专注'`);
   await waitForCondition(client, 'focus main content focused', `document.activeElement?.id === 'main-content'`);
+  await waitForCondition(client, 'next alarm pill rendered', `
+    document.querySelector('.next-alarm-pill.active')?.textContent?.includes(${JSON.stringify(smokeAlarmTitle)}) &&
+    document.querySelector('.next-alarm-pill')?.getAttribute('title')?.includes(${JSON.stringify(smokeAlarmTitle)})
+  `);
+  await clickByExpression(client, 'next alarm pill navigation', `
+    (() => {
+      const pill = document.querySelector('.next-alarm-pill.active');
+      if (!pill) return false;
+      pill.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'next alarm pill opened alarm page', `
+    location.hash === '#alarm' &&
+    Boolean(document.querySelector('.alarm-shell')) &&
+    document.body.innerText.includes(${JSON.stringify(smokeAlarmTitle)})
+  `);
+  await waitForCondition(client, 'target alarm row focused', `
+    document.querySelector('#alarm-row-1.is-targeted')?.textContent?.includes(${JSON.stringify(smokeAlarmTitle)}) &&
+    Boolean(document.activeElement?.closest?.('#alarm-row-1.is-targeted'))
+  `);
+  await client.evaluate(`window.history.back()`);
+  await waitForCondition(client, 'returned to focus after next alarm pill', `location.hash === '#focus' && document.body.innerText.includes('进入学习模式')`);
   const initialThemeState = await readThemeState(client);
   if (initialThemeState.activeTheme !== 'light' || initialThemeState.themeColor !== '#f8fbff') {
     throw new Error(`Unexpected initial theme state: ${JSON.stringify(initialThemeState)}`);
@@ -796,6 +882,197 @@ try {
   `);
   await waitForCondition(client, 'settings page', `document.body.innerText.includes('节奏与数据控制')`);
   await waitForCondition(client, 'settings main content focused', `document.activeElement?.id === 'main-content'`);
+  await clickByExpression(client, 'system settings tab', `
+    (() => {
+      const button = [...document.querySelectorAll('.settings-section-tabs button')].find((node) => node.textContent.includes('系统'));
+      if (!button) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await clickByExpression(client, 'privacy data toggle', `
+    (() => {
+      const panel = [...document.querySelectorAll('.settings-tab-panel .command-panel')].find((node) =>
+        node.textContent.includes('隐私与数据边界')
+      );
+      const button = panel?.querySelector('.settings-collapse-button');
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'system panel loaded', `
+    document.body.innerText.includes('复制路径信息') &&
+    document.body.innerText.includes('复制诊断摘要') &&
+    document.body.innerText.includes('打开数据目录')
+  `);
+  await waitForCondition(client, 'system data location ready', `
+    document.body.innerText.includes('smoke/kaoyan-focus.sqlite3') &&
+    document.body.innerText.includes('数据目录')
+  `);
+  await client.evaluate(`
+    (() => {
+      window.__SMOKE_STATE.lastCopiedText = null;
+      navigator.clipboard.writeText = async () => {
+        throw new Error('clipboard denied');
+      };
+      return true;
+    })()
+  `);
+  const systemDetailTopBefore = await client.evaluate(`
+    (() => {
+      const panel = [...document.querySelectorAll('.settings-tab-panel .command-panel')].find((node) =>
+        node.textContent.includes('隐私与数据边界')
+      );
+      const card = [...(panel?.querySelectorAll('.details-card.stacked') ?? [])].find((node) =>
+        node.textContent.includes('数据目录')
+      );
+      if (!panel || !card) return null;
+      const panelRect = panel.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      return cardRect.top - panelRect.top;
+    })()
+  `);
+  await clickByExpression(client, 'copy app data location', `
+    (() => {
+      const button = [...document.querySelectorAll('.settings-tab-panel .row-actions button')].find((node) => node.textContent.includes('复制路径信息'));
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'app data clipboard copied', `
+    Boolean(window.__SMOKE_STATE.lastCopiedText) &&
+    window.__SMOKE_STATE.lastCopiedText.includes('数据目录: smoke') &&
+    window.__SMOKE_STATE.lastCopiedText.includes('SQLite 文件: smoke/kaoyan-focus.sqlite3')
+  `);
+  await waitForCondition(client, 'system toast visible after path copy', `
+    document.querySelector('.settings-tab-panel .alert.success')?.style.opacity === '1'
+  `);
+  const systemDetailTopDuringCopy = await client.evaluate(`
+    (() => {
+      const panel = [...document.querySelectorAll('.settings-tab-panel .command-panel')].find((node) =>
+        node.textContent.includes('隐私与数据边界')
+      );
+      const card = [...(panel?.querySelectorAll('.details-card.stacked') ?? [])].find((node) =>
+        node.textContent.includes('数据目录')
+      );
+      if (!panel || !card) return null;
+      const panelRect = panel.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      return cardRect.top - panelRect.top;
+    })()
+  `);
+  if (
+    systemDetailTopBefore !== null &&
+    systemDetailTopDuringCopy !== null &&
+    Math.abs(systemDetailTopDuringCopy - systemDetailTopBefore) > 4
+  ) {
+    throw new Error(`System panel layout shifted during toast: before=${systemDetailTopBefore}, during=${systemDetailTopDuringCopy}`);
+  }
+  await sleep(2800);
+  await waitForCondition(client, 'system toast cleared after copy', `
+    document.querySelector('.settings-tab-panel .alert.success')?.style.opacity === '0'
+  `);
+  await clickByExpression(client, 'copy system diagnostic summary', `
+    (() => {
+      const button = [...document.querySelectorAll('.settings-tab-panel .row-actions button')].find((node) => node.textContent.includes('复制诊断摘要'));
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'system diagnostic copied', `
+    Boolean(window.__SMOKE_STATE.lastCopiedText) &&
+    window.__SMOKE_STATE.lastCopiedText.includes('考研专注系统诊断摘要') &&
+    window.__SMOKE_STATE.lastCopiedText.includes('数据目录')
+  `);
+  await clickByExpression(client, 'export system diagnostic summary', `
+    (() => {
+      const button = [...document.querySelectorAll('.settings-tab-panel .row-actions button')].find((node) => node.textContent.includes('导出诊断摘要'));
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'system diagnostic exported', `
+    Boolean(window.__SMOKE_STATE.lastDownloadName) &&
+    window.__SMOKE_STATE.lastDownloadName.startsWith('kaoyan-focus-diagnostic-')
+  `);
+  await waitForCondition(client, 'system diagnostic blob captured', `Boolean(window.__SMOKE_STATE.lastDownloadBlob)`);
+  const exportedDiagnostic = await client.evaluate(`window.__SMOKE_STATE.lastDownloadBlob ? window.__SMOKE_STATE.lastDownloadBlob.text() : null`);
+  if (!exportedDiagnostic || !String(exportedDiagnostic).includes('考研专注系统诊断摘要') || !String(exportedDiagnostic).includes('数据目录')) {
+    throw new Error(`Unexpected diagnostic export payload: ${exportedDiagnostic}`);
+  }
+  await clickByExpression(client, 'open app data location', `
+    (() => {
+      const button = [...document.querySelectorAll('.settings-tab-panel .row-actions button')].find((node) => node.textContent.includes('打开数据目录'));
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'app data location opened', `
+    window.__SMOKE_STATE.lastOpenedPath === 'smoke' &&
+    document.querySelector('.settings-tab-panel .alert.success')?.style.opacity === '1'
+  `);
+  await sleep(2800);
+  await waitForCondition(client, 'system toast cleared after open', `
+    document.querySelector('.settings-tab-panel .alert.success')?.style.opacity === '0'
+  `);
+  await client.evaluate(`
+    (() => {
+      window.__SMOKE_STATE.lastDownloadName = null;
+      window.__SMOKE_STATE.lastDownloadHref = null;
+      window.__SMOKE_STATE.lastDownloadBlob = null;
+      window.__SMOKE_STATE.lastRemovedDownloadName = null;
+      window.__SMOKE_STATE.lastRemovedDownloadHref = null;
+      window.__SMOKE_STATE.lastRevokedUrl = null;
+      window.__SMOKE_STATE.failNextDownloadClick = true;
+      return true;
+    })()
+  `);
+  await clickByExpression(client, 'export system diagnostic summary with cleanup failure', `
+    (() => {
+      const button = [...document.querySelectorAll('.settings-tab-panel .row-actions button')].find((node) => node.textContent.includes('导出诊断摘要'));
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    })()
+  `);
+  await waitForCondition(client, 'system diagnostic failure surfaced', `
+    document.querySelector('.alert.error')?.textContent?.includes('smoke download click failure')
+  `);
+  await waitForCondition(client, 'system diagnostic cleanup removed download link', `
+    Boolean(window.__SMOKE_STATE.lastRemovedDownloadName) &&
+    window.__SMOKE_STATE.lastRemovedDownloadName.startsWith('kaoyan-focus-diagnostic-') &&
+    Boolean(window.__SMOKE_STATE.lastRemovedDownloadHref)
+  `);
+  await waitForCondition(client, 'system diagnostic cleanup revoked object url', `
+    Boolean(window.__SMOKE_STATE.lastRevokedUrl) &&
+    window.__SMOKE_STATE.lastRevokedUrl === window.__SMOKE_STATE.lastDownloadHref
+  `);
+  const systemDetailTopAfter = await client.evaluate(`
+    (() => {
+      const panel = [...document.querySelectorAll('.settings-tab-panel .command-panel')].find((node) =>
+        node.textContent.includes('隐私与数据边界')
+      );
+      const card = [...(panel?.querySelectorAll('.details-card.stacked') ?? [])].find((node) =>
+        node.textContent.includes('数据目录')
+      );
+      if (!panel || !card) return null;
+      const panelRect = panel.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      return cardRect.top - panelRect.top;
+    })()
+  `);
+  if (
+    systemDetailTopBefore !== null &&
+    systemDetailTopAfter !== null &&
+    Math.abs(systemDetailTopAfter - systemDetailTopBefore) > 4
+  ) {
+    throw new Error(`System panel layout shifted after toast cleared: before=${systemDetailTopBefore}, after=${systemDetailTopAfter}`);
+  }
   await clickByExpression(client, 'sync settings tab', `
     (() => {
       const button = [...document.querySelectorAll('.settings-section-tabs button')].find((node) => node.textContent.includes('同步'));

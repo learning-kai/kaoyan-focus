@@ -11,6 +11,11 @@ export type SettingsPanelKey =
   | 'runtimeHealth'
   | 'privacyData';
 
+export type AppDataLocation = {
+  app_data_dir: string;
+  database_path: string;
+};
+
 export type WebDavBusyAction = 'save' | 'test' | 'upload' | 'download';
 
 export type ObjectStorageBusyAction =

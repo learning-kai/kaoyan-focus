@@ -1419,10 +1419,20 @@ html[data-theme='sakura'] {
   background: color-mix(in srgb, var(--blue-soft) 64%, var(--surface-strong));
 }
 
+:is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura']) .alarm-row.is-targeted {
+  border-color: color-mix(in srgb, var(--blue) 36%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 76%, var(--surface-strong));
+}
+
 :is(html[data-theme='dark'], html[data-theme='forest'])
   :is(.category-tab.active, .today-item-row.is-current, .checklist-board-panel.is-highlighted, .alarm-row.is-upcoming) {
   border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
   background: color-mix(in srgb, var(--blue) 10%, var(--surface-strong));
+}
+
+:is(html[data-theme='dark'], html[data-theme='forest']) .alarm-row.is-targeted {
+  border-color: color-mix(in srgb, var(--blue) 38%, var(--line));
+  background: color-mix(in srgb, var(--blue) 14%, var(--surface-strong));
 }
 
 :is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura']) .alarm-row.is-ringing {

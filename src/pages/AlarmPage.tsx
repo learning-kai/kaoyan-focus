@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { AlarmClock, BellRing, CheckCircle2, Plus, Power, RefreshCw, Save, Trash2 } from 'lucide-react';
 import {
   ALARM_STATE_CHANGED_EVENT,
@@ -16,6 +16,11 @@ import { formatDateKey } from '../utils/date';
 import type { Alarm, AlarmDraft } from '../types/alarm';
 
 const defaultAlarmTitle = '闹钟';
+
+type AlarmPageProps = {
+  focusAlarmId?: number | null;
+  onFocusAlarmHandled?: () => void;
+};
 
 function tomorrowString() {
   const date = new Date();
@@ -87,7 +92,7 @@ function isExpired(alarm: Alarm) {
   return alarm.status === 'scheduled' && !alarm.enabled && new Date(alarm.alarm_at).getTime() < Date.now();
 }
 
-export default function AlarmPage() {
+export default function AlarmPage({ focusAlarmId = null, onFocusAlarmHandled }: AlarmPageProps = {}) {
   const { confirm, confirmDialog } = useConfirmDialog();
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [draft, setDraft] = useState<AlarmDraft>(() => defaultDraft());
@@ -95,10 +100,11 @@ export default function AlarmPage() {
   const [editingDraft, setEditingDraft] = useState<AlarmDraft | null>(null);
   const [reschedulingAlarm, setReschedulingAlarm] = useState<Alarm | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState(() => tomorrowString());
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [targetedAlarmId, setTargetedAlarmId] = useState<number | null>(null);
 
   const ringingAlarms = useMemo(() => alarms.filter((alarm) => alarm.status === 'ringing'), [alarms]);
   const upcomingAlarms = useMemo(
@@ -114,6 +120,33 @@ export default function AlarmPage() {
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    if (focusAlarmId == null) {
+      return;
+    }
+
+    setTargetedAlarmId(focusAlarmId);
+  }, [focusAlarmId]);
+
+  useLayoutEffect(() => {
+    if (focusAlarmId == null) {
+      return;
+    }
+
+    if (loading || alarms.length === 0) {
+      return;
+    }
+
+    const target = document.getElementById(`alarm-row-${focusAlarmId}`);
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    target.scrollIntoView({ block: 'center', behavior: 'auto' });
+    target.focus({ preventScroll: true });
+    onFocusAlarmHandled?.();
+  }, [alarms, focusAlarmId, loading, onFocusAlarmHandled]);
 
   useEffect(() => {
     const refreshFromGlobal = () => {
@@ -254,15 +287,17 @@ export default function AlarmPage() {
   function renderAlarmRow(alarm: Alarm) {
     const isEditing = editingId === alarm.id && editingDraft;
     const isRescheduling = reschedulingAlarm?.id === alarm.id;
+    const isTargeted = targetedAlarmId === alarm.id;
     const rowClass = [
       'alarm-row',
       alarm.status === 'ringing' ? 'is-ringing' : '',
       alarm.enabled && alarm.status === 'scheduled' ? 'is-upcoming' : '',
+      isTargeted ? 'is-targeted' : '',
       isExpired(alarm) ? 'is-expired' : '',
     ].filter(Boolean).join(' ');
 
     return (
-      <article className={rowClass} key={alarm.id}>
+      <article className={rowClass} id={`alarm-row-${alarm.id}`} key={alarm.id} tabIndex={isTargeted ? 0 : -1}>
         {isEditing ? (
           <div className="alarm-inline-editor">
             <input

@@ -26,6 +26,8 @@ import { openStudyDashboard } from '../services/systemApi';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import type { FocusSession, FocusStatsSummary, FocusStatus, Subject } from '../types/focus';
 import type { InterruptionSummary } from '../types/monitor';
+import { copyTextToClipboard } from '../utils/clipboard';
+import { downloadTextFile } from '../utils/fileDownload';
 import { formatDateKey } from '../utils/date';
 
 const RECENT_SESSION_LIMIT = 100;
@@ -225,53 +227,6 @@ function buildStatsSummaryText(args: {
     '最近学习记录：',
     ...(recentHighlights.length > 0 ? recentHighlights : ['- 暂无记录']),
   ].join('\n');
-}
-
-async function copyTextToClipboard(text: string) {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  if (typeof document === 'undefined') {
-    throw new Error('当前环境不支持复制到剪贴板。');
-  }
-
-  const textArea = document.createElement('textarea');
-  textArea.value = text;
-  textArea.readOnly = true;
-  textArea.style.position = 'fixed';
-  textArea.style.top = '0';
-  textArea.style.left = '0';
-  textArea.style.width = '2px';
-  textArea.style.height = '2px';
-  textArea.style.opacity = '0';
-  document.body.appendChild(textArea);
-  textArea.focus();
-  textArea.select();
-  const copied = document.execCommand('copy');
-  textArea.remove();
-
-  if (!copied) {
-    throw new Error('复制到剪贴板失败。');
-  }
-}
-
-function downloadTextFile(filename: string, content: string) {
-  if (typeof document === 'undefined') {
-    throw new Error('当前环境不支持导出文件。');
-  }
-
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.rel = 'noopener';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export default function StatsPage() {

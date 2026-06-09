@@ -520,12 +520,15 @@ pub fn get_app_data_location(app: AppHandle) -> Result<AppDataLocation, String> 
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?;
-    let database_path = app_data_dir.join("kaoyan-focus.sqlite3");
+    Ok(app_data_location_from_dir(&app_data_dir))
+}
 
-    Ok(AppDataLocation {
-        app_data_dir: app_data_dir.to_string_lossy().to_string(),
-        database_path: database_path.to_string_lossy().to_string(),
-    })
+#[tauri::command]
+pub fn open_app_data_location(app: AppHandle) -> Result<AppDataLocation, String> {
+    let location = get_app_data_location(app.clone())?;
+    fs::create_dir_all(&location.app_data_dir).map_err(|error| error.to_string())?;
+    open_path_in_file_explorer(&location.app_data_dir)?;
+    Ok(location)
 }
 
 pub fn sync_launch_at_startup(app: &AppHandle, enabled: bool) -> Result<(), String> {
@@ -572,6 +575,56 @@ fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
         .app_data_dir()
         .map_err(|error| error.to_string())?
         .join("kaoyan-focus.sqlite3"))
+}
+
+fn app_data_location_from_dir(app_data_dir: &Path) -> AppDataLocation {
+    let database_path = app_data_dir.join("kaoyan-focus.sqlite3");
+
+    AppDataLocation {
+        app_data_dir: app_data_dir.to_string_lossy().to_string(),
+        database_path: database_path.to_string_lossy().to_string(),
+    }
+}
+
+fn open_path_in_file_explorer(path: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows::{
+            core::PCWSTR,
+            Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
+        };
+
+        let operation = wide_null("open");
+        let target = wide_null(path);
+        let result = unsafe {
+            ShellExecuteW(
+                None,
+                PCWSTR(operation.as_ptr()),
+                PCWSTR(target.as_ptr()),
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+
+        let result_code = result.0 as isize;
+        if result_code <= 32 {
+            return Err(format!("打开数据目录失败，系统错误码：{result_code}"));
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Err("当前平台暂不支持直接打开本地目录。".to_string())
+    }
+}
+
+#[cfg(windows)]
+fn wide_null(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 fn get_string_setting(
@@ -812,4 +865,25 @@ fn normalize_category_names(raw: &str) -> Result<String, String> {
     }
 
     serde_json::to_string(object).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn app_data_location_uses_expected_database_file_name() {
+        let app_data_dir = PathBuf::from(r"C:\Users\Lenovo\AppData\Roaming\kaoyan-focus");
+        let location = app_data_location_from_dir(&app_data_dir);
+
+        assert_eq!(
+            location.app_data_dir,
+            r"C:\Users\Lenovo\AppData\Roaming\kaoyan-focus"
+        );
+        assert_eq!(
+            location.database_path,
+            r"C:\Users\Lenovo\AppData\Roaming\kaoyan-focus\kaoyan-focus.sqlite3",
+        );
+    }
 }

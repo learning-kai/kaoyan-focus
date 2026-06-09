@@ -31,6 +31,15 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Download cleanup probe
+        run: npm run test:download-cleanup
+
+      - name: Clipboard cleanup probe
+        run: npm run test:clipboard-cleanup
+
+      - name: System diagnostic probe
+        run: npm run test:system-diagnostic
+
       - name: Build frontend
         run: npm run build
 

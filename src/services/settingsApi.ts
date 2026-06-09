@@ -3,12 +3,8 @@ import type {
   ReminderSoundData,
   ReminderSoundFile,
 } from '../types/settings';
+import type { AppDataLocation } from '../pages/settings/types';
 import { invokeCommand } from './tauriInvoke';
-
-export type AppDataLocation = {
-  app_data_dir: string;
-  database_path: string;
-};
 
 export function getAppSettings(): Promise<AppSettings> {
   return invokeCommand<AppSettings>('get_app_settings');
@@ -32,6 +28,10 @@ export function resetCustomReminderSound(): Promise<AppSettings> {
 
 export function getAppDataLocation(): Promise<AppDataLocation> {
   return invokeCommand<AppDataLocation>('get_app_data_location');
+}
+
+export function openAppDataLocation(): Promise<AppDataLocation> {
+  return invokeCommand<AppDataLocation>('open_app_data_location');
 }
 
 export function getSyncDeviceId(): Promise<string> {
