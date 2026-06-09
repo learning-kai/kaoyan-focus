@@ -25,7 +25,7 @@ const HOVER_EXPAND_DELAY_MS = 120;
 const HOVER_COLLAPSE_DELAY_MS = 180;
 const HOVER_COLLAPSE_RETRY_MS = 40;
 const HOVER_REENTRY_LOCK_MS = 220;
-const RETRACT_PREPARE_MS = 55;
+const RETRACT_PREPARE_MS = 48;
 
 const idleState: StudyModeState = {
   id: null,
