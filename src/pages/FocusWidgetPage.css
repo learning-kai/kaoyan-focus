@@ -107,11 +107,11 @@
   .focus-widget-panel,
   .focus-widget-time,
   .focus-widget-collapsed-tab {
-    will-change: transform, opacity, filter;
+    will-change: transform, opacity;
   }
 
-  .focus-widget-shell.is-peek .focus-widget-panel {
-    animation: focus-widget-glass-in 260ms var(--widget-spring-ease) both;
+  .focus-widget-shell.is-peek.is-expanding .focus-widget-panel {
+    animation: focus-widget-glass-in 150ms var(--widget-control-ease) both;
   }
 
   .focus-widget-shell.is-retracting .focus-widget-panel {
@@ -120,13 +120,13 @@
   }
 
   .focus-widget-shell.is-retracting .focus-widget-time {
-    animation: focus-widget-time-contract 120ms cubic-bezier(0.34, 0, 0.18, 1) both;
+    animation: focus-widget-time-contract 80ms cubic-bezier(0.22, 0, 0.16, 1) both;
   }
 
   .focus-widget-shell.is-retracting .focus-widget-topbar,
   .focus-widget-shell.is-retracting .focus-widget-subject,
   .focus-widget-shell.is-retracting .focus-widget-progress {
-    animation: focus-widget-detail-fade-out 120ms ease-out both;
+    animation: focus-widget-detail-fade-out 80ms ease-out both;
   }
 
   .focus-widget-shell.is-collapsed .focus-widget-collapsed-tab {
@@ -134,34 +134,26 @@
   }
 
   .edge-left .focus-widget-panel {
-    --widget-panel-enter-x: -8px;
+    --widget-panel-enter-x: -3px;
     --widget-panel-enter-y: 0px;
-    --widget-panel-enter-scale-x: 0.976;
-    --widget-panel-enter-scale-y: 0.988;
     transform-origin: left center;
   }
 
   .edge-right .focus-widget-panel {
-    --widget-panel-enter-x: 8px;
+    --widget-panel-enter-x: 3px;
     --widget-panel-enter-y: 0px;
-    --widget-panel-enter-scale-x: 0.976;
-    --widget-panel-enter-scale-y: 0.988;
     transform-origin: right center;
   }
 
   .edge-top .focus-widget-panel {
     --widget-panel-enter-x: 0px;
-    --widget-panel-enter-y: -7px;
-    --widget-panel-enter-scale-x: 0.988;
-    --widget-panel-enter-scale-y: 0.976;
+    --widget-panel-enter-y: -3px;
     transform-origin: center top;
   }
 
   .edge-bottom .focus-widget-panel {
     --widget-panel-enter-x: 0px;
-    --widget-panel-enter-y: 7px;
-    --widget-panel-enter-scale-x: 0.988;
-    --widget-panel-enter-scale-y: 0.976;
+    --widget-panel-enter-y: 3px;
     transform-origin: center bottom;
   }
 
@@ -188,22 +180,13 @@
 
 @keyframes focus-widget-glass-in {
   from {
-    opacity: 0.66;
-    transform:
-      translate3d(var(--widget-panel-enter-x), var(--widget-panel-enter-y), 0)
-      scale(var(--widget-panel-enter-scale-x), var(--widget-panel-enter-scale-y));
-    filter: blur(0.55px) saturate(0.96);
-  }
-
-  72% {
-    opacity: 1;
-    filter: blur(0) saturate(1);
+    opacity: 0.9;
+    transform: translate3d(var(--widget-panel-enter-x), var(--widget-panel-enter-y), 0);
   }
 
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1, 1);
-    filter: blur(0) saturate(1);
+    transform: translate3d(0, 0, 0);
   }
 }
 

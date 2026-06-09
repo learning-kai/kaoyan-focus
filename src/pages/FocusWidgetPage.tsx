@@ -25,7 +25,7 @@ const HOVER_EXPAND_DELAY_MS = 120;
 const HOVER_COLLAPSE_DELAY_MS = 180;
 const HOVER_COLLAPSE_RETRY_MS = 40;
 const HOVER_REENTRY_LOCK_MS = 220;
-const RETRACT_PREPARE_MS = 90;
+const RETRACT_PREPARE_MS = 55;
 
 const idleState: StudyModeState = {
   id: null,
@@ -79,6 +79,7 @@ export default function FocusWidgetPage() {
   const [dockState, setDockState] = useState(defaultFocusWidgetDockState);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [isAlwaysOnTopUpdating, setIsAlwaysOnTopUpdating] = useState(false);
+  const [isExpanding, setIsExpanding] = useState(false);
   const [isRetracting, setIsRetracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const shellRef = useRef<HTMLElement | null>(null);
@@ -203,6 +204,7 @@ export default function FocusWidgetPage() {
   useEffect(() => {
     dockModeRef.current = dockState.mode;
     if (dockState.mode !== 'peek') {
+      setIsExpanding(false);
       setIsRetracting(false);
     }
   }, [dockState.mode]);
@@ -296,6 +298,9 @@ export default function FocusWidgetPage() {
 
   const peekFromEdge = useCallback(async () => {
     if (!canInteract || dockModeRef.current !== 'collapsed') return;
+    const previousDockState = dockState;
+    const edge = previousDockState.edge;
+    if (!edge) return;
 
     if (expandTimerRef.current !== null) {
       window.clearTimeout(expandTimerRef.current);
@@ -306,14 +311,23 @@ export default function FocusWidgetPage() {
       collapseTimerRef.current = null;
     }
     hoverLockUntilRef.current = Date.now() + HOVER_REENTRY_LOCK_MS;
+    dockModeRef.current = 'peek';
+    setIsExpanding(true);
     setIsRetracting(false);
+    setDockState({ mode: 'peek', edge });
 
     try {
+      await waitForNextPaint();
       setDockState(await peekFocusWidgetFromEdge());
+      setError(null);
     } catch (reason) {
+      dockModeRef.current = previousDockState.mode;
+      setDockState(previousDockState);
       setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setIsExpanding(false);
     }
-  }, [canInteract]);
+  }, [canInteract, dockState]);
 
   const collapseToEdge = useCallback(async () => {
     if (!canInteract || dockModeRef.current !== 'peek') return;
@@ -436,7 +450,7 @@ export default function FocusWidgetPage() {
   return (
     <section
       ref={shellRef}
-      className={`focus-widget-shell is-${dockState.mode}${isRetracting ? ' is-retracting' : ''}${expandedEdgeClass}`}
+      className={`focus-widget-shell is-${dockState.mode}${isExpanding ? ' is-expanding' : ''}${isRetracting ? ' is-retracting' : ''}${expandedEdgeClass}`}
       onMouseEnter={handleExpandedMouseEnter}
       onMouseLeave={handleExpandedMouseLeave}
     >
