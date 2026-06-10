@@ -19,10 +19,11 @@ use windows::Win32::{
     },
     UI::WindowsAndMessaging::{
         CallWindowProcW, GetClientRect, GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos,
-        GWL_EXSTYLE, GWL_STYLE, GWL_WNDPROC, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
-        SWP_NOSIZE, SWP_NOZORDER, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCPAINT, WNDPROC, WS_CAPTION,
-        WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_STATICEDGE, WS_EX_WINDOWEDGE, WS_MAXIMIZEBOX,
-        WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME,
+        GWL_EXSTYLE, GWL_STYLE, GWL_WNDPROC, MA_NOACTIVATE, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+        SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WM_MOUSEACTIVATE, WM_NCACTIVATE, WM_NCCALCSIZE,
+        WM_NCPAINT, WNDPROC, WS_CAPTION, WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_NOACTIVATE,
+        WS_EX_STATICEDGE, WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+        WS_SYSMENU, WS_THICKFRAME,
     },
 };
 
@@ -1394,7 +1395,10 @@ unsafe extern "system" fn focus_widget_wndproc(
     lparam: LPARAM,
 ) -> LRESULT {
     match msg {
-        WM_NCCALCSIZE | WM_NCPAINT | WM_NCACTIVATE => return LRESULT(0),
+        WM_NCCALCSIZE | WM_NCPAINT => return LRESULT(0),
+        // Returning FALSE here can block Windows from activating the main window again.
+        WM_NCACTIVATE => return LRESULT(1),
+        WM_MOUSEACTIVATE => return LRESULT(MA_NOACTIVATE as isize),
         _ => {}
     }
 
@@ -1415,7 +1419,8 @@ fn enforce_focus_widget_chrome_less(hwnd: HWND) {
     let ex_style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
     let blocked_ex_style_bits =
         (WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE).0 as isize;
-    let next_ex_style = ex_style & !blocked_ex_style_bits;
+    let required_ex_style_bits = (WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW).0 as isize;
+    let next_ex_style = (ex_style & !blocked_ex_style_bits) | required_ex_style_bits;
 
     if next_style == style && next_ex_style == ex_style {
         return;

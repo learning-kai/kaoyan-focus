@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, Gauge, Leaf, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
@@ -12,6 +12,7 @@ import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { createScheduleBlock, createScheduleBlockFromTodayItem, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
 import { getAppSettings, getSyncDeviceId, saveAppSettings } from '../services/settingsApi';
+import { buildStudyReminder, markStudyReminderSeen, nextStudyBreakLabel, registerStudyReminderScope, resetStudyReminderScope, studyBreakKindLabel } from '../services/studyReminder';
 import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
 import { setStudyFullscreen } from '../services/systemApi';
@@ -83,8 +84,6 @@ const phaseLabel: Record<StudyModePhase, string> = {
   finished: '已完成',
   emergency_exited: '已退出',
 };
-
-const REMINDER_STORAGE_KEY = 'focus.notifiedPhaseKeys.v2';
 
 function formatSeconds(totalSeconds: number) {
   const safeSeconds = Math.max(Math.floor(totalSeconds), 0);
@@ -318,16 +317,15 @@ export default function FocusPage() {
       activeReminderScopeRef.current = null;
       return;
     }
-    registerReminderScope(studyState, activeReminderScopeRef);
+    registerStudyReminderScope(studyState, activeReminderScopeRef);
     if (suppressNextReminderRef.current) {
       suppressNextReminderRef.current = false;
-      markReminderSeen(studyState, syncDeviceId);
+      markStudyReminderSeen(studyState, syncDeviceId);
       return;
     }
-    if (hasReminderSeen(studyState, syncDeviceId)) return;
-    const reminder = buildReminder(studyState);
+    const reminder = buildStudyReminder(studyState);
     if (!reminder) return;
-    markReminderSeen(studyState, syncDeviceId);
+    if (!markStudyReminderSeen(studyState, syncDeviceId)) return;
     void notifyStudyReminder(reminder);
   }, [active, studyState, syncDeviceId]);
 
@@ -347,8 +345,8 @@ export default function FocusPage() {
       setSelectedSubjectId(null);
       const requestId = beginStudyStateRequest();
       applyStudyStateIfCurrent(stateData, requestId);
-      registerReminderScope(stateData, activeReminderScopeRef);
-      markReminderSeen(stateData, deviceId);
+      registerStudyReminderScope(stateData, activeReminderScopeRef);
+      markStudyReminderSeen(stateData, deviceId);
       await Promise.all([refreshDashboard(), refreshChecklistData(), refreshScheduleData()]);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
@@ -436,8 +434,8 @@ export default function FocusPage() {
       const nextState = await startStudyMode(studyMinutes * 60, focusMinutes * 60, breakMinutes * 60, longBreakMinutes * 60, longBreakInterval, mode, selectedSubjectId, mode === 'strict' ? true : normalWhitelistEnabled);
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setNotice(nextState.focus_enforcement_active ? '学习模式已开始。窗口关闭后会进入托盘，后台继续计时并执行白名单。' : '学习模式已开始。窗口关闭后会进入托盘，后台继续计时，白名单已关闭。');
-      resetReminderScope(nextState, activeReminderScopeRef);
-      markReminderSeen(nextState, syncDeviceId);
+      resetStudyReminderScope(nextState, activeReminderScopeRef);
+      markStudyReminderSeen(nextState, syncDeviceId);
       void notifyStudyReminder({ title: '学习模式已开始', body: '第 ' + nextState.cycle_index + ' 轮番茄钟开始，专注 ' + formatDuration(nextState.focus_seconds) + '。' });
       await refreshDashboard();
       queueConfiguredSync();
@@ -452,7 +450,7 @@ export default function FocusPage() {
       const nextState = await confirmStudyBreak();
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setNotice(breakKindLabel(nextState.break_kind) + '已开始。休息结束后会自动进入下一轮番茄钟。');
-      markReminderSeen(nextState, syncDeviceId);
+      markStudyReminderSeen(nextState, syncDeviceId);
       void notifyStudyReminder({ title: breakKindLabel(nextState.break_kind) + '开始', body: '休息 ' + formatDuration(nextState.effective_break_seconds) + '，到点后自动进入下一轮番茄钟。' });
       await refreshDashboard();
       queueConfiguredSync();
@@ -474,12 +472,12 @@ export default function FocusPage() {
       const nextState = studyState.is_paused ? await resumeStudyMode() : await pauseStudyMode();
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setNotice(nextState.is_paused ? (nextState.focus_enforcement_active ? '计时已暂停，白名单仍在执行。' : '计时已暂停，白名单已关闭。') : '已继续学习计时。');
-      markReminderSeen(nextState, syncDeviceId);
+      markStudyReminderSeen(nextState, syncDeviceId);
       if (!nextState.is_paused) {
         const refreshRequestId = beginStudyStateRequest();
         const refreshedState = await getStudyModeState();
         applyStudyStateIfCurrent(refreshedState, refreshRequestId);
-        markReminderSeen(refreshedState, syncDeviceId);
+        markStudyReminderSeen(refreshedState, syncDeviceId);
       }
       queueConfiguredSync();
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
@@ -510,7 +508,7 @@ export default function FocusPage() {
       const nextState = await resetStudyMode();
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setNotice('已结束本次学习。');
-      markReminderSeen(nextState, syncDeviceId);
+      markStudyReminderSeen(nextState, syncDeviceId);
       await refreshDashboard();
       queueConfiguredSync();
       setIsChecklistDrawerOpen(false);
@@ -961,8 +959,8 @@ export default function FocusPage() {
   );
 }
 
-function breakKindLabel(kind: StudyModeState['break_kind']) { return kind === 'long' ? '长休息' : '短休息'; }
-function nextBreakLabel(studyState: StudyModeState) { return breakKindLabel(studyState.break_kind) + ' ' + formatDuration(studyState.effective_break_seconds || studyState.break_seconds); }
+function breakKindLabel(kind: StudyModeState['break_kind']) { return studyBreakKindLabel(kind); }
+function nextBreakLabel(studyState: StudyModeState) { return nextStudyBreakLabel(studyState); }
 function buildPhaseMessage(studyState: StudyModeState) {
   if (studyState.is_paused) return studyState.focus_enforcement_active ? '计时暂停，白名单仍在强制执行' : '计时暂停，白名单已关闭';
   if (studyState.phase === 'focus') return '第 ' + studyState.cycle_index + ' 轮番茄钟进行中';
@@ -976,51 +974,6 @@ function buildActiveModeMessage(studyState: StudyModeState) {
   if (studyState.mode === 'strict') return '强制模式：白名单强制执行，不能从这里手动结束；关闭窗口会进入托盘，后台继续计时。';
   const whitelist = studyState.whitelist_enabled ? '本次执行白名单' : '本次不执行白名单';
   return '普通模式：' + whitelist + '，可手动结束；退出会按已学习时长记录，关闭窗口只会进入托盘并后台继续计时。';
-}
-function reminderScope(studyState: StudyModeState) { return String(studyState.id ?? 'idle'); }
-function reminderKey(studyState: StudyModeState, deviceId?: string | null) { return [deviceId ?? 'local', studyState.id ?? 'idle', studyState.phase, studyState.cycle_index, studyState.break_kind].join(':'); }
-function loadReminderKeys() {
-  try {
-    const raw = window.localStorage.getItem(REMINDER_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []);
-  } catch {
-    return new Set<string>();
-  }
-}
-function saveReminderKeys(keys: Set<string>) {
-  try { window.localStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(Array.from(keys).slice(-200))); } catch {}
-}
-function registerReminderScope(studyState: StudyModeState, scopeRef: MutableRefObject<string | null>) {
-  const scope = reminderScope(studyState);
-  if (scopeRef.current === scope) return;
-  scopeRef.current = scope;
-  if (scope === 'idle') return;
-  const keys = loadReminderKeys();
-  for (const key of Array.from(keys)) {
-    const parts = key.split(':');
-    if (parts[1] !== scope) keys.delete(key);
-  }
-  saveReminderKeys(keys);
-}
-function resetReminderScope(studyState: StudyModeState, scopeRef: MutableRefObject<string | null>) {
-  scopeRef.current = null;
-  registerReminderScope(studyState, scopeRef);
-}
-function hasReminderSeen(studyState: StudyModeState, deviceId?: string | null) { return loadReminderKeys().has(reminderKey(studyState, deviceId)); }
-function markReminderSeen(studyState: StudyModeState, deviceId?: string | null) {
-  const reminder = buildReminder(studyState);
-  if (!reminder) return;
-  const keys = loadReminderKeys();
-  keys.add(reminderKey(studyState, deviceId));
-  saveReminderKeys(keys);
-}
-function buildReminder(studyState: StudyModeState) {
-  if (studyState.status === 'active' && studyState.phase === 'focus') return { title: studyState.cycle_index > 1 ? '下一轮番茄钟开始' : '番茄钟开始', body: '第 ' + studyState.cycle_index + ' 轮开始，专注 ' + formatDuration(studyState.focus_seconds) + '。' };
-  if (studyState.status === 'active' && studyState.phase === 'awaiting_break') return { title: '番茄钟结束', body: '本轮已经到点。确认后进入 ' + nextBreakLabel(studyState) + '；未确认前学习时间继续累计。', wakeWindow: true };
-  if (studyState.status === 'active' && studyState.phase === 'break') return { title: breakKindLabel(studyState.break_kind) + '开始', body: formatDuration(studyState.effective_break_seconds) + ' 后自动进入下一轮番茄钟。' };
-  if (studyState.status === 'finished' || studyState.phase === 'finished') return { title: '学习模式完成', body: '本次学习已完成，共累计 ' + formatDuration(studyState.study_elapsed_seconds) + '。', wakeWindow: true };
-  return null;
 }
 function foregroundSummary(check: FocusAppCheck) {
   const mediaPath = check.match_result.potplayer_media_path || check.foreground_app.potplayer_media_path;

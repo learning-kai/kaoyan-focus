@@ -66,6 +66,10 @@ struct StudyDataRecord {
     tasks_done: i64,
     tasks_total: i64,
     start_hour: u32,
+    actual_seconds: i64,
+    started_at: String,
+    ended_at: Option<String>,
+    status: String,
 }
 
 #[derive(Debug, Clone)]
@@ -412,6 +416,7 @@ fn load_records(connection: &Connection) -> Result<Vec<StudyDataRecord>, String>
                    fs.planned_seconds,
                    fs.actual_seconds,
                    fs.started_at,
+                   fs.ended_at,
                    fs.status,
                    fs.end_reason,
                    fs.interruption_count,
@@ -447,11 +452,12 @@ fn map_focus_session(
     let planned_seconds: i64 = row.get(3)?;
     let actual_seconds: i64 = row.get(4)?;
     let started_at: String = row.get(5)?;
-    let status: String = row.get(6)?;
-    let end_reason: Option<String> = row.get(7)?;
-    let interruption_count: i64 = row.get(8)?;
-    let emergency_exit_count: i64 = row.get(9)?;
-    let paused_seconds: i64 = row.get(10)?;
+    let ended_at: Option<String> = row.get(6)?;
+    let status: String = row.get(7)?;
+    let end_reason: Option<String> = row.get(8)?;
+    let interruption_count: i64 = row.get(9)?;
+    let emergency_exit_count: i64 = row.get(10)?;
+    let paused_seconds: i64 = row.get(11)?;
 
     let started = parse_local_datetime(&started_at)
         .unwrap_or_else(|| Utc::now().with_timezone(&local_offset()));
@@ -483,6 +489,10 @@ fn map_focus_session(
         tasks_done,
         tasks_total,
         start_hour: started.time().hour(),
+        actual_seconds,
+        started_at,
+        ended_at,
+        status,
     })
 }
 

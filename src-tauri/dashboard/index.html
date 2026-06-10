@@ -98,6 +98,87 @@
         </article>
       </section>
 
+      <section class="focus-stat-grid" aria-label="专注统计">
+        <article class="panel chart-panel focus-stat-card focus-stat-card-wide">
+          <div class="panel-head focus-stat-head">
+            <div>
+              <p class="kicker">Focus timeline</p>
+              <h2>专注时间线</h2>
+            </div>
+            <div class="period-control" role="group" aria-label="专注时间线周期">
+              <button class="period-button" type="button" data-focus-period="week-prev" aria-label="上一周">‹</button>
+              <span id="week-timeline-label" class="period-label">本周</span>
+              <button class="period-button" type="button" data-focus-period="week-next" aria-label="下一周">›</button>
+            </div>
+          </div>
+          <p class="sample-warning" id="focus-sample-note" hidden>示例数据，仅供参考</p>
+          <svg
+            id="week-timeline-chart"
+            class="chart focus-timeline-chart"
+            viewBox="0 0 960 360"
+            role="img"
+            aria-label="本周专注时间线"
+          ></svg>
+          <div class="chart-legend">
+            <span><i class="legend-swatch legend-amber"></i>专注时段</span>
+            <span><i class="legend-swatch legend-muted"></i>低分或中断时段</span>
+            <span id="week-timeline-total">0 分钟</span>
+          </div>
+        </article>
+
+        <article class="panel chart-panel focus-stat-card">
+          <div class="panel-head focus-stat-head">
+            <div>
+              <p class="kicker">Best hours</p>
+              <h2>最佳专注时间</h2>
+            </div>
+            <div class="period-control" role="group" aria-label="最佳专注时间月份">
+              <button class="period-button" type="button" data-focus-period="month-prev" aria-label="上一月">‹</button>
+              <span id="best-hour-label" class="period-label">本月</span>
+              <button class="period-button" type="button" data-focus-period="month-next" aria-label="下一月">›</button>
+            </div>
+          </div>
+          <svg
+            id="best-hour-chart"
+            class="chart best-hour-chart"
+            viewBox="0 0 760 320"
+            role="img"
+            aria-label="本月最佳专注时间"
+          ></svg>
+          <div class="chart-legend">
+            <span><i class="legend-swatch legend-amber"></i>高效时段</span>
+            <span><i class="legend-swatch legend-track"></i>全天刻度</span>
+            <span id="best-hour-summary">暂无数据</span>
+          </div>
+        </article>
+
+        <article class="panel chart-panel focus-stat-card">
+          <div class="panel-head focus-stat-head">
+            <div>
+              <p class="kicker">Year heatmap</p>
+              <h2>年度热力图</h2>
+            </div>
+            <div class="period-control" role="group" aria-label="年度热力图年份">
+              <button class="period-button" type="button" data-focus-period="year-prev" aria-label="上一年">‹</button>
+              <span id="year-heatmap-label" class="period-label">今年</span>
+              <button class="period-button" type="button" data-focus-period="year-next" aria-label="下一年">›</button>
+            </div>
+          </div>
+          <svg
+            id="year-heatmap-chart"
+            class="chart year-heatmap-chart"
+            viewBox="0 0 760 240"
+            role="img"
+            aria-label="年度专注热力图"
+          ></svg>
+          <div class="chart-legend">
+            <span><i class="legend-swatch legend-track"></i>无记录</span>
+            <span><i class="legend-swatch legend-teal"></i>日专注强度</span>
+            <span id="year-heatmap-summary">暂无数据</span>
+          </div>
+        </article>
+      </section>
+
       <section class="diagnostic-grid" aria-label="学习诊断">
         <article class="diagnostic-card">
           <div class="diagnostic-head">

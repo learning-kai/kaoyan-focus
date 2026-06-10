@@ -732,6 +732,132 @@ body.study-dashboard[data-theme='focus'] .chip-button.is-active {
   --metric-tint: color-mix(in srgb, var(--ghost) 14%, transparent);
 }
 
+.focus-stat-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-top: 14px;
+}
+
+.focus-stat-card {
+  display: grid;
+  min-width: 0;
+}
+
+.focus-stat-card-wide {
+  grid-row: span 2;
+}
+
+.focus-stat-head {
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.period-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+
+.period-button {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--accent-2);
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.period-button:hover {
+  border-color: color-mix(in srgb, var(--accent-2) 38%, var(--line));
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+}
+
+.period-button:active {
+  transform: translateY(1px);
+}
+
+.period-label {
+  min-width: 86px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 760;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sample-warning {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 30px;
+  margin: -2px 0 12px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 32%, var(--line));
+  border-radius: var(--radius-sm);
+  color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 10%, transparent);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.focus-timeline-chart {
+  min-height: 320px;
+}
+
+.best-hour-chart,
+.year-heatmap-chart {
+  min-height: 230px;
+}
+
+.timeline-empty-label,
+.best-hour-empty-label,
+.year-heatmap-empty-label {
+  fill: var(--muted);
+  font-size: 18px;
+  text-anchor: middle;
+}
+
+.timeline-day-label,
+.timeline-time-label,
+.best-hour-axis-label,
+.year-heatmap-axis-label {
+  fill: var(--muted);
+  font-size: 12px;
+}
+
+.timeline-session-label,
+.best-hour-value-label {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.legend-muted {
+  background: var(--muted-2);
+}
+
+.legend-track {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
 .diagnostic-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1566,6 +1692,14 @@ body.study-dashboard .executive-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .focus-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-stat-card-wide {
+    grid-row: auto;
+  }
+
   .diagnostic-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1606,6 +1740,7 @@ body.study-dashboard .executive-summary {
   }
 
   .metric-grid,
+  .focus-stat-grid,
   .diagnostic-grid,
   .side-column,
   .chart-grid,
@@ -1632,6 +1767,15 @@ body.study-dashboard .executive-summary {
 
   .quality-chart {
     min-height: 230px;
+  }
+
+  .focus-timeline-chart {
+    min-height: 280px;
+  }
+
+  .best-hour-chart,
+  .year-heatmap-chart {
+    min-height: 210px;
   }
 }
 
@@ -1661,6 +1805,20 @@ body.study-dashboard .executive-summary {
 
   .summary-radar span {
     min-height: 70px;
+  }
+
+  .focus-stat-head {
+    display: grid;
+  }
+
+  .period-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .period-label {
+    min-width: 0;
+    flex: 1;
   }
 
   .metric-grid {

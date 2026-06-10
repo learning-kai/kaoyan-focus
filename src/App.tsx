@@ -8,6 +8,7 @@ import {
   useAutoUpdateCheck,
   useEmailReminders,
   useScheduleReminders,
+  useStudyCompletionReminder,
   useSyncTakeoverNavigation,
 } from './hooks/useAppBackgroundTasks';
 import { getAppSettings, saveAppSettings } from './services/settingsApi';
@@ -174,6 +175,7 @@ export default function App() {
 
   useAutoSync(setLastAutoSyncMessage);
   useSyncTakeoverNavigation(navigateToPage);
+  useStudyCompletionReminder();
   useAutoUpdateCheck(setLastAutoUpdateMessage);
   useScheduleReminders();
   useEmailReminders(setLastAutoSyncMessage);

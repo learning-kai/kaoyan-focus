@@ -17,7 +17,8 @@ import {
 } from '../services/feishuApi';
 import { getStudyModeState } from '../services/focusApi';
 import { getSchedulePageData } from '../services/scheduleApi';
-import { getAppSettings } from '../services/settingsApi';
+import { getAppSettings, getSyncDeviceId } from '../services/settingsApi';
+import { buildStudyReminder, isFinishedStudyMode, isStaleFinishedStudyReminder, markStudyReminderSeen } from '../services/studyReminder';
 import { listenTauriEvent } from '../services/tauriEvents';
 import { isTauriRuntime } from '../services/tauriInvoke';
 import { checkForAppUpdate } from '../services/updateApi';
@@ -41,6 +42,8 @@ const FEISHU_AUTO_SYNC_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_LOOKBACK_MINUTES = 1;
 const EMAIL_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
+const STUDY_COMPLETION_REMINDER_INTERVAL_MS = 3 * 1000;
+const STUDY_COMPLETION_SYNC_SUPPRESS_MS = 15 * 1000;
 const ALARM_CHECK_MIN_DELAY_MS = 1000;
 const ALARM_CHECK_MAX_DELAY_MS = 60 * 1000;
 const SILENT_AUTO_SYNC_SKIP_REASONS = new Set([
@@ -173,6 +176,110 @@ export function useSyncTakeoverNavigation(setActivePage: (page: AppPage) => void
       unlisten?.();
     };
   }, [setActivePage]);
+}
+
+export function useStudyCompletionReminder() {
+  const initializedRef = useRef(false);
+  const syncDeviceIdRef = useRef<string | null>(null);
+  const syncDeviceIdLoadedRef = useRef(false);
+  const suppressFinishedReminderUntilRef = useRef(0);
+
+  useEffect(() => {
+    let disposed = false;
+    let checkInFlight = false;
+    let unlisten: (() => void) | undefined;
+
+    async function resolveSyncDeviceId() {
+      if (syncDeviceIdLoadedRef.current) {
+        return syncDeviceIdRef.current;
+      }
+
+      try {
+        syncDeviceIdRef.current = await getSyncDeviceId();
+      } catch {
+        syncDeviceIdRef.current = null;
+      }
+      syncDeviceIdLoadedRef.current = true;
+      return syncDeviceIdRef.current;
+    }
+
+    async function checkStudyCompletion() {
+      if (checkInFlight) {
+        return;
+      }
+
+      checkInFlight = true;
+      try {
+        const [studyState, syncDeviceId] = await Promise.all([getStudyModeState(), resolveSyncDeviceId()]);
+        if (disposed) {
+          return;
+        }
+
+        const finished = isFinishedStudyMode(studyState);
+        if (!initializedRef.current) {
+          initializedRef.current = true;
+          if (finished && isStaleFinishedStudyReminder(studyState)) {
+            markStudyReminderSeen(studyState, syncDeviceId);
+            return;
+          }
+        }
+
+        if (!finished) {
+          return;
+        }
+
+        if (isStaleFinishedStudyReminder(studyState)) {
+          markStudyReminderSeen(studyState, syncDeviceId);
+          return;
+        }
+
+        if (Date.now() <= suppressFinishedReminderUntilRef.current) {
+          markStudyReminderSeen(studyState, syncDeviceId);
+          return;
+        }
+
+        const reminder = buildStudyReminder(studyState);
+        if (!reminder || !markStudyReminderSeen(studyState, syncDeviceId)) {
+          return;
+        }
+
+        void notifyStudyReminder(reminder);
+      } catch {
+        // Completion reminders are best-effort; the Focus page still shows the final state.
+      } finally {
+        checkInFlight = false;
+      }
+    }
+
+    void listenTauriEvent<{ took_over_active_mode?: boolean }>(STUDY_SYNC_STATE_CHANGED_EVENT, (event) => {
+      if (event.payload?.took_over_active_mode) {
+        suppressFinishedReminderUntilRef.current = Date.now() + STUDY_COMPLETION_SYNC_SUPPRESS_MS;
+      }
+      void checkStudyCompletion();
+    })
+      .then((dispose) => {
+        if (disposed) {
+          dispose();
+          return;
+        }
+
+        unlisten = dispose;
+      })
+      .catch(() => {
+        // Browser previews and partial desktop runtimes may not expose this event.
+      });
+
+    void checkStudyCompletion();
+    const intervalId = window.setInterval(() => {
+      void checkStudyCompletion();
+    }, STUDY_COMPLETION_REMINDER_INTERVAL_MS);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+      unlisten?.();
+    };
+  }, []);
 }
 
 export function useAutoUpdateCheck(setLastAutoUpdateMessage: (message: string | null) => void) {
