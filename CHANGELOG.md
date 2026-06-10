@@ -191,4 +191,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Prevent focus widget from blocking main window input (e241184)
 
+## v1.12.5 - 2026-06-10
+
+### Desktop
+#### Changed
+- Restore global alarm watcher (cc9fde1)
+
 
