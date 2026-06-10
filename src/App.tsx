@@ -6,6 +6,7 @@ import { APP_NAVIGATE_EVENT } from './navigationEvents';
 import {
   useAutoSync,
   useAutoUpdateCheck,
+  useAlarmWatcher,
   useEmailReminders,
   useScheduleReminders,
   useStudyCompletionReminder,
@@ -14,6 +15,7 @@ import {
 import { getAppSettings, saveAppSettings } from './services/settingsApi';
 import type { AppPage } from './types/navigation';
 import { applyTheme, bootstrapTheme, storeTheme } from './theme';
+import type { Alarm } from './types/alarm';
 import type { AppTheme } from './types/settings';
 
 const APP_TITLE = '考研专注';
@@ -73,6 +75,7 @@ export default function App() {
   const [activePage, setActivePage] = useState<AppPage>(() => getInitialPage());
   const [lastAutoSyncMessage, setLastAutoSyncMessage] = useState<string | null>(null);
   const [lastAutoUpdateMessage, setLastAutoUpdateMessage] = useState<string | null>(null);
+  const [, setNextAlarm] = useState<Alarm | null>(null);
   const [alarmFocusId, setAlarmFocusId] = useState<number | null>(null);
   const [theme, setTheme] = useState<AppTheme>(() => bootstrapTheme());
   const hasSyncedPageRef = useRef(false);
@@ -178,6 +181,7 @@ export default function App() {
   useStudyCompletionReminder();
   useAutoUpdateCheck(setLastAutoUpdateMessage);
   useScheduleReminders();
+  useAlarmWatcher(setNextAlarm);
   useEmailReminders(setLastAutoSyncMessage);
 
   function handleThemeChange(nextTheme: AppTheme) {
