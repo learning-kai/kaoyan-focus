@@ -182,4 +182,13 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Prevent focus widget collapse from blocking clicks (d0f13ab)
 
+## v1.12.4 - 2026-06-10
+
+### Desktop
+#### Added
+- Add completion reminders for finished study sessions (18549b6)
+
+#### Changed
+- Prevent focus widget from blocking main window input (e241184)
+
 
