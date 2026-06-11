@@ -34,6 +34,7 @@ import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import type { StudyModeState, Subject } from '../types/focus';
 import type { PotPlayerMediaInfo, RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
 
+type WhitelistTab = 'rules' | 'add';
 type WhitelistEntryType = 'app' | 'website' | 'potplayer';
 type PotPlayerRuleType = 'file' | 'directory';
 
@@ -86,6 +87,7 @@ export default function WhitelistPage() {
   const [blockedLoading, setBlockedLoading] = useState(false);
   const [potPlayerLoading, setPotPlayerLoading] = useState(false);
   const [studyState, setStudyState] = useState<StudyModeState | null>(null);
+  const [activeTab, setActiveTab] = useState<WhitelistTab>('rules');
 
   const enabledCount = apps.filter((app) => app.enabled).length;
   const websiteCount = apps.filter(isWebsiteRule).length;
