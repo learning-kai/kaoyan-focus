@@ -454,6 +454,7 @@ export default function WhitelistPage() {
       )}
       {confirmDialog}
 
+      {activeTab === 'add' && (
       <div className="whitelist-workbench">
         <section className="command-panel add-rule-panel">
           <div className="panel-title">
@@ -684,11 +685,12 @@ export default function WhitelistPage() {
                 {blockedLoading ? '读取中' : '查看记录'}
               </button>
             </article>
-          </div>
+           </div>
         </section>
       </div>
+      )}
 
-      {processPickerOpen && (
+      {activeTab === 'add' && processPickerOpen && (
         <section className="command-panel picker-panel">
           <div className="panel-title">
             <div>
@@ -720,7 +722,7 @@ export default function WhitelistPage() {
         </section>
       )}
 
-      {blockedPickerOpen && (
+      {activeTab === 'add' && blockedPickerOpen && (
         <section className="command-panel picker-panel">
           <div className="panel-title">
             <div>
@@ -760,6 +762,7 @@ export default function WhitelistPage() {
         </section>
       )}
 
+      {activeTab === 'rules' && (
       <section className="command-panel">
         <div className="panel-title">
           <div>
@@ -848,6 +851,7 @@ export default function WhitelistPage() {
           </div>
         )}
       </section>
+      )}
     </section>
   );
 }
