@@ -118,11 +118,13 @@ svg {
   display: grid;
   grid-template-rows: auto 1fr auto;
   height: 100vh;
-  padding: 16px 12px;
+  padding: 20px 16px;
   color: var(--ink);
-  background: var(--bg-elevated);
-  border-right: 0.5px solid var(--line);
-  box-shadow: none;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(239, 244, 250, 0.92)),
+    #f8fafc;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.86), 12px 0 34px rgba(82, 101, 129, 0.08);
+  border-right: none;
 }
 
 .brand {
@@ -215,26 +217,34 @@ svg {
   gap: 10px;
   align-items: center;
   width: 100%;
-  min-height: 32px;
+  position: relative;
+  overflow: hidden;
+  min-height: 50px;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 6px 10px;
   text-align: left;
   color: var(--muted);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.74);
   transition:
-    background 150ms cubic-bezier(0.25, 0.1, 0.25, 1),
-    color 150ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    background var(--motion-base, 180ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+    border-color var(--motion-base, 180ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+    color var(--motion-base, 180ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+    box-shadow var(--motion-base, 180ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+    transform var(--motion-base, 180ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1));
 }
 
 .nav-item:hover {
   color: var(--ink);
-  background: rgba(120, 120, 128, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 20px rgba(82, 101, 129, 0.07);
+  transform: translateY(-1px);
 }
 
 .nav-item[aria-current='page'] {
   color: var(--ink);
-  background: rgba(120, 120, 128, 0.12);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 20px rgba(82, 101, 129, 0.07);
 }
 
 .nav-item span {
