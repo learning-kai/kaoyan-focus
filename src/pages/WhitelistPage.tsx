@@ -422,6 +422,23 @@ export default function WhitelistPage() {
         </div>
       </header>
 
+      <div className="whitelist-tabs">
+        <button
+          className={`whitelist-tab ${activeTab === 'rules' ? 'active' : ''}`}
+          onClick={() => setActiveTab('rules')}
+          type="button"
+        >
+          查看规则
+        </button>
+        <button
+          className={`whitelist-tab ${activeTab === 'add' ? 'active' : ''}`}
+          onClick={() => setActiveTab('add')}
+          type="button"
+        >
+          添加规则
+        </button>
+      </div>
+
       {error && (
         <p className="alert error" role="alert">
           {error}
