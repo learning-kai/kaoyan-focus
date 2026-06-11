@@ -565,13 +565,14 @@ html[data-study-fullscreen='true'] body {
 .primary-action,
 .start-ritual-button {
   color: #ffffff;
-  background: var(--blue);
-  box-shadow: none;
+  background: var(--blue-warm);
+  border: 1px solid rgba(74, 144, 226, 0.26);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.26);
 }
 
 .primary-action:hover,
 .start-ritual-button:hover {
-  background: #0066d6;
+  background: #3d7fd9;
 }
 
 .danger-action {
@@ -587,7 +588,12 @@ html[data-study-fullscreen='true'] body {
 
 .secondary-action,
 .ghost-action,
-.small-action,
+.small-action {
+  color: var(--ink-warm);
+  border-color: rgba(82, 101, 129, 0.2);
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .process-option,
 .chip,
 .sound-option-card,
@@ -600,7 +606,11 @@ html[data-study-fullscreen='true'] body {
 
 .secondary-action:hover,
 .ghost-action:hover,
-.small-action:hover,
+.small-action:hover {
+  border-color: rgba(82, 101, 129, 0.32);
+  background: rgba(255, 255, 255, 0.92);
+}
+
 .chip:hover,
 .process-option:hover,
 .sound-option-card:hover,
