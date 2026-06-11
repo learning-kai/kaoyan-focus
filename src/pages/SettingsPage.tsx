@@ -79,7 +79,7 @@ const defaultSettings: AppSettings = {
   long_break_minutes: 15,
   long_break_interval: 4,
   default_focus_mode: 'normal',
-  ui_theme: 'dark',
+  ui_theme: 'light',
   launch_at_startup: false,
   auto_start_break_after_focus: false,
   schedule_reminder_enabled: true,
@@ -961,14 +961,14 @@ export default function SettingsPage({
     <section className="page-shell settings-shell">
       <header className="page-header">
         <div>
-          <p className="eyebrow">System Console</p>
-          <h2>节奏与数据控制</h2>
-          <p>默认参数会用于下一次学习模式；学习运行时所有配置入口保持锁定。</p>
+          <h2>设置</h2>
         </div>
-      <button className="secondary-action" onClick={() => void initializeSettingsPage()} type="button">
-        <RefreshCw size={17} />
-        刷新
-      </button>
+        <div className="page-header-actions">
+          <button className="secondary-action" onClick={() => void initializeSettingsPage()} type="button">
+            <RefreshCw size={16} />
+            刷新
+          </button>
+        </div>
       </header>
 
       {error && <p className="alert error" role="alert">{error}</p>}
@@ -978,42 +978,41 @@ export default function SettingsPage({
       )}
       {confirmDialog}
 
-      <nav className="settings-section-tabs" role="tablist" aria-label="设置分区">
-        {settingsSections.map((section) => {
-          const Icon = section.icon;
-          const selected = activeSection === section.key;
+      <div className="settings-layout">
+        <nav className="settings-sidebar" role="tablist" aria-label="设置分区">
+          {settingsSections.map((section) => {
+            const Icon = section.icon;
+            const selected = activeSection === section.key;
 
-          return (
-            <button
-              aria-controls="settings-panel"
-              aria-selected={selected}
-              disabled={isPageLoading}
-              id={`settings-tab-${section.key}`}
-              key={section.key}
-              tabIndex={selected ? 0 : -1}
-              onClick={() => setActiveSection(section.key)}
-              onKeyDown={(event) => handleSettingsTabKeyDown(event, section.key)}
-              role="tab"
-              type="button"
-            >
-              <Icon size={16} />
-              <span>
-                <strong>{section.label}</strong>
-                <small>{section.description}</small>
-              </span>
-            </button>
-          );
-        })}
-      </nav>
+            return (
+              <button
+                aria-controls="settings-panel"
+                aria-selected={selected}
+                disabled={isPageLoading}
+                id={`settings-tab-${section.key}`}
+                key={section.key}
+                className={selected ? 'settings-nav-item active' : 'settings-nav-item'}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setActiveSection(section.key)}
+                onKeyDown={(event) => handleSettingsTabKeyDown(event, section.key)}
+                role="tab"
+                type="button"
+              >
+                <Icon size={18} />
+                <span>{section.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-      <div
-        aria-busy={isPageLoading}
-        aria-labelledby={`settings-tab-${activeSection}`}
-        className="settings-tab-panel"
-        id="settings-panel"
-        role="tabpanel"
-        tabIndex={-1}
-      >
+        <div
+          aria-busy={isPageLoading}
+          aria-labelledby={`settings-tab-${activeSection}`}
+          className="settings-tab-panel"
+          id="settings-panel"
+          role="tabpanel"
+          tabIndex={-1}
+        >
       {isPageLoading ? (
         <div className="settings-loading-state">
           <p className="eyebrow">Loading</p>
@@ -1140,6 +1139,7 @@ export default function SettingsPage({
           webDavSettings={webDavSettings}
         />
       )}
+        </div>
       </div>
     </section>
   );

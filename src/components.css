@@ -3,14 +3,14 @@
   top: 12px;
   left: 12px;
   z-index: 120;
-  padding: 9px 12px;
-  border: 1px solid rgba(121, 167, 255, 0.42);
-  border-radius: 10px;
-  color: var(--ink);
-  background: rgba(13, 23, 38, 0.96);
-  box-shadow: var(--shadow);
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  background: var(--blue);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.24);
   transform: translateY(-160%);
-  transition: transform 160ms ease;
+  transition: transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .skip-link:focus {
@@ -24,9 +24,9 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(2, 6, 17, 0.58);
-  backdrop-filter: blur(12px) saturate(130%);
-  -webkit-backdrop-filter: blur(12px) saturate(130%);
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .confirm-dialog {
@@ -34,13 +34,13 @@
   gap: 16px;
   width: min(440px, calc(100vw - 32px));
   max-height: calc(100dvh - 48px);
-  padding: 18px;
+  padding: 20px;
   overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border: 0.5px solid var(--line);
+  border-radius: 16px;
   color: var(--ink);
-  background: linear-gradient(180deg, rgba(22, 34, 54, 0.98), rgba(12, 20, 33, 0.98));
-  box-shadow: 0 28px 80px rgba(1, 6, 15, 0.52);
+  background: var(--bg-elevated);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
 }
 
 .confirm-dialog-head {
@@ -58,6 +58,7 @@
 .confirm-dialog-head h3 {
   color: var(--ink);
   font-size: 17px;
+  font-weight: 600;
   line-height: 1.25;
 }
 
@@ -72,16 +73,15 @@
   width: 40px;
   height: 40px;
   place-items: center;
-  border: 1px solid rgba(121, 167, 255, 0.22);
-  border-radius: 12px;
-  color: #cfe0ff;
-  background: rgba(121, 167, 255, 0.12);
+  border: none;
+  border-radius: 10px;
+  color: var(--blue);
+  background: var(--blue-soft);
 }
 
 .confirm-dialog.tone-danger .confirm-dialog-icon {
-  color: #ffd9d7;
-  border-color: rgba(255, 125, 115, 0.28);
-  background: rgba(255, 125, 115, 0.12);
+  color: var(--red);
+  background: var(--red-soft);
 }
 
 .confirm-dialog-body {
@@ -89,7 +89,7 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--muted);
-  background: rgba(9, 15, 25, 0.52);
+  background: var(--bg);
 }
 
 .confirm-dialog-actions {

@@ -12,18 +12,18 @@ export type AppThemeOption = {
 
 export const APP_THEME_OPTIONS: AppThemeOption[] = [
   {
-    id: 'dark',
-    label: '黑色',
-    shortLabel: '黑色',
-    description: '深色控制台，高对比专注感。',
-    swatch: ['#08111d', '#79a7ff', '#4fd0a1'],
+    id: 'light',
+    label: '浅色',
+    shortLabel: '浅色',
+    description: '干净明亮，Apple 风格。',
+    swatch: ['#ffffff', '#007aff', '#34c759'],
   },
   {
-    id: 'light',
-    label: '白色磨砂',
-    shortLabel: '白色',
-    description: '清爽明亮，带轻量玻璃质感。',
-    swatch: ['#f8fbff', '#3869d4', '#239a75'],
+    id: 'dark',
+    label: '深色',
+    shortLabel: '深色',
+    description: '纯黑背景，高对比专注感。',
+    swatch: ['#000000', '#0a84ff', '#30d158'],
   },
   {
     id: 'mono',

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MouseEvent, type PropsWithChildren } from 'react';
-import { BookOpenCheck } from 'lucide-react';
+import { BookOpenCheck, Play } from 'lucide-react';
 import type { PageMeta } from '../navigation';
 import type { AppPage } from '../types/navigation';
 
@@ -49,14 +49,14 @@ export default function Layout({
         title={`${meta.title} · ${meta.description} · ${meta.shortcut}`}
         type="button"
       >
-        <Icon size={19} />
+        <Icon size={17} />
         <span>
           <strong>
             <span className="nav-title-full">{meta.title}</span>
             <span className="nav-title-short">{meta.shortTitle ?? meta.title}</span>
           </strong>
-          <small>{meta.description}</small>
         </span>
+        <kbd className="nav-shortcut">{meta.shortcut.replace('Alt+', '')}</kbd>
       </button>
     );
   }
@@ -67,13 +67,22 @@ export default function Layout({
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
-            <BookOpenCheck size={24} />
+            <BookOpenCheck size={20} />
           </span>
           <div>
             <h1>考研专注</h1>
-            <p>本地学习控制台</p>
           </div>
         </div>
+
+        <button
+          className="quick-start-btn"
+          onClick={() => onNavigate('focus')}
+          title="快速开始专注"
+          type="button"
+        >
+          <Play size={16} />
+          开始专注
+        </button>
 
         <nav className="nav-list" aria-label="主导航">
           <div className="nav-group">
