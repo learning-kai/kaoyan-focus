@@ -4,12 +4,14 @@
   --motion-base: 180ms;
   --motion-slow: 260ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --surface-glass: rgba(13, 21, 34, 0.8);
-  --surface-glass-strong: rgba(16, 26, 41, 0.94);
-  --surface-panel: rgba(14, 23, 36, 0.9);
-  --shadow-panel: 0 20px 48px rgba(1, 6, 15, 0.32);
-  --shadow-hover: 0 18px 38px rgba(31, 85, 168, 0.16);
-  --shadow-control: 0 12px 24px rgba(1, 6, 15, 0.16);
+  /* Warm glass surfaces */
+  --surface-glass: rgba(255, 255, 255, 0.8);
+  --surface-glass-strong: rgba(255, 255, 255, 0.94);
+  --surface-panel: rgba(255, 255, 255, 0.9);
+  /* Warm shadows */
+  --shadow-panel: 0 20px 48px rgba(0, 0, 0, 0.06);
+  --shadow-hover: 0 18px 38px rgba(74, 144, 226, 0.12);
+  --shadow-control: 0 12px 24px rgba(0, 0, 0, 0.08);
   --z-sticky: 30;
   --z-nav: 70;
 }
@@ -320,13 +322,15 @@ button {
 
 .primary-action,
 .start-ritual-button {
-  border-color: rgba(141, 184, 255, 0.26);
-  box-shadow: 0 16px 34px rgba(57, 120, 194, 0.26);
+  color: #ffffff;
+  background: var(--blue-warm);
+  border: 1px solid rgba(74, 144, 226, 0.26);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.26);
 }
 
 .primary-action:hover,
 .start-ritual-button:hover {
-  box-shadow: 0 20px 42px rgba(57, 120, 194, 0.32);
+  box-shadow: 0 8px 24px rgba(74, 144, 226, 0.32);
 }
 
 .primary-action:active,
@@ -692,5 +696,7 @@ button {
 :is(html[data-theme='light'], html:not([data-theme])) .segmented-control button,
 :is(html[data-theme='light'], html:not([data-theme])) .stepper-control button,
 :is(html[data-theme='light'], html:not([data-theme])) .icon-button {
+  color: var(--ink-warm);
+  border-color: rgba(82, 101, 129, 0.2);
   background: rgba(255, 255, 255, 0.72);
 }
