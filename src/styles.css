@@ -470,8 +470,18 @@ html[data-study-fullscreen='true'] body {
 .core-fact,
 .details-card {
   min-height: 86px;
-  border-radius: 14px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  background: #ffffff;
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(82, 101, 129, 0.08);
+  border-radius: var(--radius-warm-lg);
+  transition: box-shadow var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard);
+}
+
+.metric-card:hover,
+.core-fact:hover,
+.details-card:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
 }
 
 .panel-title {
