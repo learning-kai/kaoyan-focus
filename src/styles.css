@@ -2264,7 +2264,7 @@ html[data-study-fullscreen='true'] body {
   font-weight: 500;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, border-bottom-color 0.2s ease;
 }
 
 .whitelist-tab:hover {
