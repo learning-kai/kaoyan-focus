@@ -1,12 +1,13 @@
 :root {
-  --motion-enter: 200ms;
-  --motion-panel: 180ms;
-  --motion-drawer: 200ms;
-  --motion-list: 120ms;
-  --motion-fast: 80ms;
-  --motion-base: 120ms;
+  --motion-enter: 280ms;
+  --motion-panel: 240ms;
+  --motion-drawer: 280ms;
+  --motion-list: 160ms;
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
   --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
   --ease-emphasized: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-apple: cubic-bezier(0.4, 0, 0.2, 1);
   --motion-sheen: color-mix(in srgb, var(--ink) 8%, transparent);
   --motion-sheen-strong: color-mix(in srgb, var(--blue) 14%, transparent);
 }
@@ -14,7 +15,7 @@
 @keyframes page-settle {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.992);
+    transform: translateY(8px) scale(0.998);
   }
   to {
     opacity: 1;
@@ -186,7 +187,7 @@
 .page-transition {
   display: grid;
   min-width: 0;
-  animation: page-settle var(--motion-enter) var(--ease-emphasized) backwards;
+  animation: page-settle var(--motion-enter) var(--ease-apple) backwards;
 }
 
 .sidebar .brand {
@@ -335,6 +336,24 @@
   border-color: var(--line-strong);
   box-shadow: var(--shadow-hover, var(--shadow));
   transform: translateY(-0.5px);
+}
+
+.metric-card,
+.core-fact,
+.details-card {
+  transition:
+    transform var(--motion-base) var(--ease-apple),
+    border-color var(--motion-base) var(--ease-apple),
+    background var(--motion-base) var(--ease-apple),
+    box-shadow var(--motion-base) var(--ease-apple),
+    opacity var(--motion-base) var(--ease-apple);
+}
+
+.metric-card:hover,
+.core-fact:hover,
+.details-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
 }
 
 :is(.today-item-row.is-dragging, .category-task-row.is-dragging, .schedule-block.is-dragging):hover {
