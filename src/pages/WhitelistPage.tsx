@@ -88,6 +88,7 @@ export default function WhitelistPage() {
   const [potPlayerLoading, setPotPlayerLoading] = useState(false);
   const [studyState, setStudyState] = useState<StudyModeState | null>(null);
   const [activeTab, setActiveTab] = useState<WhitelistTab>('rules');
+  const [activeSubjectTab, setActiveSubjectTab] = useState<number | null>(null);
 
   const enabledCount = apps.filter((app) => app.enabled).length;
   const websiteCount = apps.filter(isWebsiteRule).length;
@@ -118,6 +119,13 @@ export default function WhitelistPage() {
     }
     return groups.filter((group) => group.items.length > 0);
   }, [apps, subjects]);
+
+  const filteredGroupedApps = useMemo(() => {
+    if (activeSubjectTab === null) {
+      return groupedApps;
+    }
+    return groupedApps.filter((group) => group.id === activeSubjectTab);
+  }, [groupedApps, activeSubjectTab]);
 
   useEffect(() => {
     void initializeWhitelistPage();
@@ -778,77 +786,99 @@ export default function WhitelistPage() {
             <p>先添加常用学习软件、必要学习网站，或者把当前 PotPlayer 正在播放的视频直接加入白名单。</p>
           </div>
         ) : (
-          <div className="rule-list">
-            {groupedApps.map((group) => (
-              <div className="whitelist-subject-group" key={group.id ?? 'none'}>
-                <div className="whitelist-subject-heading">
-                  <strong>{group.name}</strong>
-                  <span>{group.items.length} 条</span>
-                </div>
-                {group.items.map((app) => (
-                  <article className="list-row whitelist-row" key={app.id}>
-                    <div className="row-main">
-                      <span className={app.enabled ? 'row-icon enabled' : 'row-icon'}>
-                        {app.match_type === 'website_domain' ? (
-                          <Globe2 size={18} />
-                        ) : isPotPlayerRule(app) ? (
-                          <Video size={18} />
-                        ) : (
-                          <ShieldCheck size={18} />
-                        )}
-                      </span>
-                      <div>
-                        <strong>{app.name}</strong>
-                        <p>{renderRuleSummary(app)}</p>
-                        <p>自动切科：{subjectNameFor(app.subject_id)}</p>
-                        {app.note && <p>{app.note}</p>}
+          <>
+            <div className="whitelist-subject-tabs">
+              <button
+                className={`whitelist-subject-tab ${activeSubjectTab === null ? 'active' : ''}`}
+                onClick={() => setActiveSubjectTab(null)}
+                type="button"
+              >
+                全部
+              </button>
+              {groupedApps.map((group) => (
+                <button
+                  key={group.id ?? 'none'}
+                  className={`whitelist-subject-tab ${activeSubjectTab === group.id ? 'active' : ''}`}
+                  onClick={() => setActiveSubjectTab(group.id)}
+                  type="button"
+                >
+                  {group.name}
+                  <span className="whitelist-subject-tab-count">{group.items.length}</span>
+                </button>
+              ))}
+            </div>
+            <div className="rule-list">
+              {filteredGroupedApps.map((group) => (
+                <div className="whitelist-subject-group" key={group.id ?? 'none'}>
+                  <div className="whitelist-subject-heading">
+                    <strong>{group.name}</strong>
+                    <span>{group.items.length} 条</span>
+                  </div>
+                  {group.items.map((app) => (
+                    <article className="list-row whitelist-row" key={app.id}>
+                      <div className="row-main">
+                        <span className={app.enabled ? 'row-icon enabled' : 'row-icon'}>
+                          {app.match_type === 'website_domain' ? (
+                            <Globe2 size={18} />
+                          ) : isPotPlayerRule(app) ? (
+                            <Video size={18} />
+                          ) : (
+                            <ShieldCheck size={18} />
+                          )}
+                        </span>
+                        <div>
+                          <strong>{app.name}</strong>
+                          <p>{renderRuleSummary(app)}</p>
+                          <p>自动切科：{subjectNameFor(app.subject_id)}</p>
+                          {app.note && <p>{app.note}</p>}
+                        </div>
                       </div>
-                    </div>
-                    <div className="row-actions">
-                      <select
-                        aria-label="白名单科目"
-                        className="select-input whitelist-subject-select"
-                        disabled={whitelistLocked}
-                        onChange={(event) => void handleSubjectChange(app, event.target.value)}
-                        value={app.subject_id ?? ''}
-                      >
-                        <option value="">不自动切科</option>
-                        {subjects.map((subject) => (
-                          <option key={subject.id} value={subject.id}>
-                            {subject.name}
-                          </option>
-                        ))}
-                      </select>
-                      {app.match_type === 'website_domain' && (
-                        <button className="small-action" onClick={() => void handleOpenWebsite(app)} type="button">
-                          <ExternalLink size={15} />
-                          打开
+                      <div className="row-actions">
+                        <select
+                          aria-label="白名单科目"
+                          className="select-input whitelist-subject-select"
+                          disabled={whitelistLocked}
+                          onChange={(event) => void handleSubjectChange(app, event.target.value)}
+                          value={app.subject_id ?? ''}
+                        >
+                          <option value="">不自动切科</option>
+                          {subjects.map((subject) => (
+                            <option key={subject.id} value={subject.id}>
+                              {subject.name}
+                            </option>
+                          ))}
+                        </select>
+                        {app.match_type === 'website_domain' && (
+                          <button className="small-action" onClick={() => void handleOpenWebsite(app)} type="button">
+                            <ExternalLink size={15} />
+                            打开
+                          </button>
+                        )}
+                        <button
+                          className={app.enabled ? 'small-action enabled' : 'small-action'}
+                          disabled={whitelistLocked}
+                          onClick={() => void handleToggle(app)}
+                          type="button"
+                        >
+                          {app.enabled ? <Power size={15} /> : <PowerOff size={15} />}
+                          {app.enabled ? '启用中' : '已停用'}
                         </button>
-                      )}
-                      <button
-                        className={app.enabled ? 'small-action enabled' : 'small-action'}
-                        disabled={whitelistLocked}
-                        onClick={() => void handleToggle(app)}
-                        type="button"
-                      >
-                        {app.enabled ? <Power size={15} /> : <PowerOff size={15} />}
-                        {app.enabled ? '启用中' : '已停用'}
-                      </button>
-                      <button
-                        className="small-action danger"
-                        disabled={whitelistLocked || deletingAppId === app.id}
-                        onClick={() => void handleDelete(app)}
-                        type="button"
-                      >
-                        <Trash2 size={15} />
-                        {deletingAppId === app.id ? '删除中' : '删除'}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ))}
-          </div>
+                        <button
+                          className="small-action danger"
+                          disabled={whitelistLocked || deletingAppId === app.id}
+                          onClick={() => void handleDelete(app)}
+                          type="button"
+                        >
+                          <Trash2 size={15} />
+                          {deletingAppId === app.id ? '删除中' : '删除'}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </section>
       )}

@@ -2276,6 +2276,53 @@ html[data-study-fullscreen='true'] body {
   border-bottom-color: var(--ink);
 }
 
+.whitelist-subject-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.whitelist-subject-tab {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.whitelist-subject-tab:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.whitelist-subject-tab.active {
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--surface);
+}
+
+.whitelist-subject-tab-count {
+  background: var(--line);
+  color: var(--muted);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.whitelist-subject-tab.active .whitelist-subject-tab-count {
+  background: var(--ink);
+  color: var(--surface);
+}
+
 .count-pill {
   padding: 8px 10px;
   min-width: 76px;
@@ -6316,6 +6363,18 @@ html[data-theme='light'] .subject-dot {
     border-bottom-color: var(--ink);
     background: var(--surface);
     transition: all 0.2s ease;
+  }
+
+  .whitelist-subject-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .whitelist-subject-tab {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 }
 
