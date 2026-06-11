@@ -203,4 +203,24 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Remove sample note and disable reminder sound timeout (a5fb836)
 
+## v1.12.7 - 2026-06-11
+
+### Desktop
+#### Added
+- feat: separate whitelist page content into tabs (204a12c)
+- feat: add tab switcher component to whitelist page (e4793d7)
+- feat: add tab state management for whitelist page (783082d)
+
+#### Fixed
+- fix: improve responsive tab styles - remove double border, add transition (d56a60a)
+- fix: narrow transition properties for whitelist tabs (a41b08c)
+- fix: correct indentation at line 688 in WhitelistPage.tsx (ded874d)
+
+#### Changed
+- chore: commit unrelated changes from other work (0645557)
+- docs: add final report for whitelist tab layout optimization (cd31ea5)
+- docs: update whitelist page optimization in FEATURES.md (5ce0e2a)
+- style: add responsive styles for whitelist tabs (68383be)
+- style: add whitelist tab switcher styles (16a0e6a)
+
 

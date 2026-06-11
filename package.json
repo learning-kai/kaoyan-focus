@@ -1,7 +1,7 @@
 {
   "name": "kaoyan-focus",
   "private": false,
-  "version": "1.12.6",
+  "version": "1.12.7",
   "description": "Windows local-first study focus app for exam preparation, built with Tauri, React, TypeScript and Rust.",
   "license": "MIT",
   "type": "module",
