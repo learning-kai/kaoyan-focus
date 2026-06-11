@@ -17,6 +17,7 @@ type ReminderSoundSettings = Pick<
   | 'reminder_sound_file_name'
   | 'reminder_sound_updated_at'
   | 'reminder_sound_volume'
+  | 'reminder_sound_duration_seconds'
   | 'reminder_quiet_hours_enabled'
   | 'reminder_quiet_hours_start'
   | 'reminder_quiet_hours_end'
@@ -41,6 +42,7 @@ const defaultReminderSoundSettings: ReminderSoundSettings = {
   reminder_sound_file_name: null,
   reminder_sound_updated_at: null,
   reminder_sound_volume: 100,
+  reminder_sound_duration_seconds: 30,
   reminder_quiet_hours_enabled: false,
   reminder_quiet_hours_start: '22:30',
   reminder_quiet_hours_end: '07:00',
@@ -91,7 +93,6 @@ const builtInSoundPresets: Record<ReminderSoundId, BuiltInPreset> = {
 };
 
 const REMINDER_NOTIFICATION_CLOSED_EVENT = 'study-reminder-notification-closed';
-const SINGLE_NOTIFICATION_SOUND_MAX_MS: number | null = null;
 
 let audioContext: AudioContext | null = null;
 let customSoundCache: { key: string; url: string } | null = null;
@@ -108,7 +109,8 @@ export async function notifyStudyReminder(payload: ReminderPayload) {
   const notificationId = createNotificationId('reminder');
   const stopSound = isQuietHoursActive(settings) ? null : await playReminderSound(settings);
   if (stopSound) {
-    registerNotificationSound(notificationId, stopSound, SINGLE_NOTIFICATION_SOUND_MAX_MS);
+    const durationMs = settings.reminder_sound_duration_seconds * 1000;
+    registerNotificationSound(notificationId, stopSound, durationMs);
   }
   await showDesktopNotification(payload, settings, notificationId);
 }
@@ -120,7 +122,8 @@ export async function notifyPersistentAlarm(key: string, payload: ReminderPayloa
   }
 
   if (persistentAlarmSounds.has(key)) {
-    registerNotificationSound(key, () => stopPersistentAlarmAudio(key), null);
+    const durationMs = settings.reminder_sound_duration_seconds * 1000;
+    registerNotificationSound(key, () => stopPersistentAlarmAudio(key), durationMs);
   }
   await showDesktopNotification(payload, settings, key);
 }
@@ -151,7 +154,8 @@ export async function previewReminderSound(settings?: Partial<ReminderSoundSetti
   const notificationId = createNotificationId('preview');
   previewSoundStop = stopSound;
   previewNotificationId = notificationId;
-  registerNotificationSound(notificationId, () => stopPreviewAudio(), SINGLE_NOTIFICATION_SOUND_MAX_MS);
+  const durationMs = normalizedSettings.reminder_sound_duration_seconds * 1000;
+  registerNotificationSound(notificationId, () => stopPreviewAudio(), durationMs);
   await showDesktopNotification(
     {
       title: '正在试听提醒铃声',
@@ -469,6 +473,7 @@ function normalizeReminderSoundSettings(settings?: Partial<ReminderSoundSettings
     reminder_sound_file_name: settings?.reminder_sound_file_name ?? null,
     reminder_sound_updated_at: settings?.reminder_sound_updated_at ?? null,
     reminder_sound_volume: normalizeReminderSoundVolume(settings?.reminder_sound_volume),
+    reminder_sound_duration_seconds: normalizeReminderSoundDuration(settings?.reminder_sound_duration_seconds),
     reminder_quiet_hours_enabled: settings?.reminder_quiet_hours_enabled ?? false,
     reminder_quiet_hours_start: normalizeTimeOfDay(settings?.reminder_quiet_hours_start, '22:30'),
     reminder_quiet_hours_end: normalizeTimeOfDay(settings?.reminder_quiet_hours_end, '07:00'),
@@ -488,6 +493,13 @@ function normalizeReminderSoundVolume(value?: number) {
     return 100;
   }
   return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function normalizeReminderSoundDuration(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 30;
+  }
+  return Math.min(300, Math.max(5, Math.round(value)));
 }
 
 function volumeToRatio(volume: number) {

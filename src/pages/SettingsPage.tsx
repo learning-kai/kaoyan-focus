@@ -102,6 +102,7 @@ const defaultSettings: AppSettings = {
   reminder_sound_file_name: null,
   reminder_sound_updated_at: null,
   reminder_sound_volume: 100,
+  reminder_sound_duration_seconds: 30,
   reminder_quiet_hours_enabled: false,
   reminder_quiet_hours_start: '22:30',
   reminder_quiet_hours_end: '07:00',
@@ -696,7 +697,7 @@ export default function SettingsPage({
   }
 
   function updateReminderSoundSettings(
-    patch: Partial<Pick<AppSettings, 'reminder_sound_source' | 'reminder_sound_id' | 'reminder_sound_volume'>>,
+    patch: Partial<Pick<AppSettings, 'reminder_sound_source' | 'reminder_sound_id' | 'reminder_sound_volume' | 'reminder_sound_duration_seconds'>>,
   ) {
     setReminderSoundMessage(null);
     updateSettings(patch);

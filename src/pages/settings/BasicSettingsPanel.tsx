@@ -38,7 +38,7 @@ type BasicSettingsPanelProps = {
   settings: AppSettings;
   settingsLocked: boolean;
   theme: AppTheme;
-  updateReminderSoundSettings: (patch: Partial<Pick<AppSettings, 'reminder_sound_source' | 'reminder_sound_id' | 'reminder_sound_volume'>>) => void;
+  updateReminderSoundSettings: (patch: Partial<Pick<AppSettings, 'reminder_sound_source' | 'reminder_sound_id' | 'reminder_sound_volume' | 'reminder_sound_duration_seconds'>>) => void;
   updateSettings: (patch: Partial<AppSettings>) => void;
 };
 
@@ -363,6 +363,17 @@ export function BasicSettingsPanel({
               value={settings.reminder_sound_volume}
             />
           </div>
+
+          <SettingNumber
+            disabled={settingsLocked}
+            label="持续时间"
+            max={300}
+            min={5}
+            onChange={(value) => updateReminderSoundSettings({ reminder_sound_duration_seconds: value })}
+            text="提醒音效播放多久后自动停止。"
+            unit="秒"
+            value={settings.reminder_sound_duration_seconds}
+          />
 
           {reminderSoundMessage && <p className="alert success">{reminderSoundMessage}</p>}
           <div className="row-actions">

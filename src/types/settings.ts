@@ -36,6 +36,7 @@ export type AppSettings = {
   reminder_sound_file_name: string | null;
   reminder_sound_updated_at: number | null;
   reminder_sound_volume: number;
+  reminder_sound_duration_seconds: number;
   reminder_quiet_hours_enabled: boolean;
   reminder_quiet_hours_start: string;
   reminder_quiet_hours_end: string;

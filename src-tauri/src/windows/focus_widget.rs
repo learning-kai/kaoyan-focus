@@ -472,7 +472,10 @@ fn configure_focus_widget_window(
     install_focus_widget_chrome_guard(window);
     apply_size_constraints(window, dock_state.mode == FocusWidgetDockMode::Collapsed)?;
 
-    if let Some(edge) = dock_state.edge.filter(|_| dock_state.mode == FocusWidgetDockMode::Collapsed) {
+    if let Some(edge) = dock_state
+        .edge
+        .filter(|_| dock_state.mode == FocusWidgetDockMode::Collapsed)
+    {
         let area = current_work_area(window)?;
         let size = collapsed_size(edge);
         let current_geometry = logical_geometry_from_window(window)?;
