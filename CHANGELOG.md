@@ -239,4 +239,20 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Remove alarm sound auto-stop limit (8520fff)
 
+## v1.12.10 - 2026-06-11
+
+### Desktop
+#### Added
+- feat: complete UI redesign with Arc and Apple styles (31ed482)
+- feat: implement Arc-style typography system (451f5d7)
+- feat: implement Apple-style micro-interactions (ccb77b1)
+- feat: implement Apple-style smooth animations (b742c18)
+- feat: update --shadow variable to warm tones (51a5260)
+- feat: implement warm shadow system with depth (e4d1373)
+- feat: implement Arc-style warm color system (b26ec82)
+- feat: implement Arc-style warm color system (d3c7eb7)
+- feat: restructure main content with Arc-style layout (57e94f8)
+- feat: restructure main content with Arc-style layout (ac74e11)
+- feat: restructure sidebar with Arc-style warm design (a15ffc1)
+
 
