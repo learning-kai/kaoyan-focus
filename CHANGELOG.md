@@ -223,4 +223,14 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - style: add responsive styles for whitelist tabs (68383be)
 - style: add whitelist tab switcher styles (16a0e6a)
 
+## v1.12.8 - 2026-06-11
+
+### Desktop
+#### Added
+- Add focus widget pause toggle (3efc48a)
+- feat: add subject tabs inside whitelist rules view (e54cd5d)
+
+#### Changed
+- docs: update final report with subject tabs feature (d768d96)
+
 
