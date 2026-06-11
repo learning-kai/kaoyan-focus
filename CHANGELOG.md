@@ -262,4 +262,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - feat: 添加立即开始休息功能，更新相关UI和API调用 (ebd3bc5)
 - feat: 移除侧边栏快速开始按钮，简化布局并清理未使用样式 (e889e00)
 
+## v1.12.12 - 2026-06-11
+
+### Desktop
+#### Added
+- feat: add update notification features and settings management (32bdf0c)
+
 
