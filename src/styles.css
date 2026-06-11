@@ -4,6 +4,19 @@
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  --font-ui: "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 32px;
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.6;
+  --letter-spacing-tight: -0.02em;
+  --letter-spacing-normal: -0.01em;
   --bg: #ffffff;
   --bg-elevated: #f5f5f7;
   --surface: rgba(255, 255, 255, 0.82);
@@ -372,17 +385,19 @@ html[data-study-fullscreen='true'] body {
 }
 
 .page-header h2 {
-  font-size: 32px;
+  font-size: var(--font-size-3xl);
   font-weight: 760;
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-tight);
   text-wrap: balance;
-  letter-spacing: -0.02em;
-  color: #1a1a2e;
+  color: var(--ink-warm);
 }
 
 .page-header p:not(.eyebrow) {
   max-width: 68ch;
-  line-height: 1.6;
-  color: #4a5568;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-relaxed);
+  color: var(--muted-warm);
 }
 
 .page-header-actions {
