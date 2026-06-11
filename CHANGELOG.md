@@ -268,4 +268,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Added
 - feat: add update notification features and settings management (32bdf0c)
 
+## v1.13.1 - 2026-06-11
+
+### Desktop
+#### Added
+- feat: 移除立即开始休息功能及相关代码 (3f6eaf0)
+
 
