@@ -685,7 +685,7 @@ export default function WhitelistPage() {
                 {blockedLoading ? '读取中' : '查看记录'}
               </button>
             </article>
-           </div>
+            </div>
         </section>
       </div>
       )}
