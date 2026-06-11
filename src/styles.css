@@ -302,17 +302,20 @@ svg {
 }
 
 .main-panel {
-  min-width: 0;
-  padding: 12px 16px;
+  display: grid;
+  align-content: start;
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(239, 244, 250, 0.92));
 }
 
 .page-shell {
-  display: grid;
-  gap: 14px;
-  max-width: 980px;
-  margin: 0 auto;
-  min-height: calc(100vh - 48px);
-  padding: 12px 0;
+  width: min(100%, 1280px);
+  margin-inline: auto;
+  gap: 24px;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(82, 101, 129, 0.12);
+  padding: 32px;
 }
 
 html[data-study-fullscreen='true'],

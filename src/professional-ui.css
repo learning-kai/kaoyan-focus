@@ -127,17 +127,18 @@ button {
 .main-panel {
   display: grid;
   align-content: start;
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(239, 244, 250, 0.92));
 }
 
 .page-shell {
   width: min(100%, 1280px);
   margin-inline: auto;
-  gap: 18px;
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(12, 20, 33, 0.86), rgba(9, 15, 24, 0.82)),
-    var(--surface-panel);
-  box-shadow: var(--shadow-panel);
+  gap: 24px;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(82, 101, 129, 0.12);
+  padding: 32px;
 }
 
 .page-header {
@@ -146,14 +147,17 @@ button {
 }
 
 .page-header h2 {
-  font-size: 29px;
+  font-size: 32px;
   font-weight: 760;
   text-wrap: balance;
+  letter-spacing: -0.02em;
+  color: #1a1a2e;
 }
 
 .page-header p:not(.eyebrow) {
   max-width: 68ch;
-  line-height: 1.58;
+  line-height: 1.6;
+  color: #4a5568;
 }
 
 .command-panel,
