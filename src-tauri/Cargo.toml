@@ -48,4 +48,4 @@ tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.7.2"
-winreg = "0.55"
+winreg = "0.56"
