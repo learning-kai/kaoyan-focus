@@ -38,6 +38,9 @@ const REMINDER_SOUND_VOLUME_KEY: &str = "reminder_sound_volume";
 const REMINDER_QUIET_HOURS_ENABLED_KEY: &str = "reminder_quiet_hours_enabled";
 const REMINDER_QUIET_HOURS_START_KEY: &str = "reminder_quiet_hours_start";
 const REMINDER_QUIET_HOURS_END_KEY: &str = "reminder_quiet_hours_end";
+const AUTO_DOWNLOAD_UPDATE_KEY: &str = "auto_download_update";
+const SKIP_UPDATE_VERSION_KEY: &str = "skip_update_version";
+const UPDATE_REMINDER_SNOOZE_UNTIL_KEY: &str = "update_reminder_snooze_until";
 const DEFAULT_REMINDER_SOUND_SOURCE: &str = "builtin";
 const DEFAULT_REMINDER_SOUND_ID: &str = "classic";
 const CUSTOM_REMINDER_SOUND_FILE: &str = "custom-reminder-sound";
@@ -76,6 +79,9 @@ pub struct AppSettings {
     pub reminder_quiet_hours_enabled: bool,
     pub reminder_quiet_hours_start: String,
     pub reminder_quiet_hours_end: String,
+    pub auto_download_update: bool,
+    pub skip_update_version: Option<String>,
+    pub update_reminder_snooze_until: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -135,6 +141,9 @@ impl Default for AppSettings {
             reminder_quiet_hours_enabled: false,
             reminder_quiet_hours_start: "22:30".to_string(),
             reminder_quiet_hours_end: "07:00".to_string(),
+            auto_download_update: false,
+            skip_update_version: None,
+            update_reminder_snooze_until: None,
         }
     }
 }
@@ -303,6 +312,19 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             REMINDER_QUIET_HOURS_END_KEY,
             &defaults.reminder_quiet_hours_end,
         )?),
+        auto_download_update: get_bool_setting(
+            &connection,
+            AUTO_DOWNLOAD_UPDATE_KEY,
+            defaults.auto_download_update,
+        )?,
+        skip_update_version: get_optional_string_setting(
+            &connection,
+            SKIP_UPDATE_VERSION_KEY,
+        )?,
+        update_reminder_snooze_until: get_optional_i64_setting(
+            &connection,
+            UPDATE_REMINDER_SNOOZE_UNTIL_KEY,
+        )?,
     })
 }
 
@@ -356,6 +378,12 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         reminder_quiet_hours_enabled: settings.reminder_quiet_hours_enabled,
         reminder_quiet_hours_start: normalize_time_of_day(&settings.reminder_quiet_hours_start),
         reminder_quiet_hours_end: normalize_time_of_day(&settings.reminder_quiet_hours_end),
+        auto_download_update: settings.auto_download_update,
+        skip_update_version: settings
+            .skip_update_version
+            .as_deref()
+            .and_then(normalize_optional_string),
+        update_reminder_snooze_until: settings.update_reminder_snooze_until,
     };
     let now = Utc::now().to_rfc3339();
 
@@ -585,6 +613,31 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         REMINDER_QUIET_HOURS_END_KEY,
         &normalized.reminder_quiet_hours_end,
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        AUTO_DOWNLOAD_UPDATE_KEY,
+        if normalized.auto_download_update {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        SKIP_UPDATE_VERSION_KEY,
+        normalized.skip_update_version.as_deref().unwrap_or(""),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        UPDATE_REMINDER_SNOOZE_UNTIL_KEY,
+        &normalized
+            .update_reminder_snooze_until
+            .unwrap_or(0)
+            .to_string(),
         &now,
     )?;
     sync_launch_at_startup(&app, normalized.launch_at_startup)?;
@@ -857,6 +910,19 @@ fn get_optional_i64_setting(
 ) -> Result<Option<i64>, String> {
     let raw = get_string_setting(connection, key, "")?;
     Ok(raw.trim().parse::<i64>().ok().filter(|value| *value > 0))
+}
+
+fn get_optional_string_setting(
+    connection: &rusqlite::Connection,
+    key: &str,
+) -> Result<Option<String>, String> {
+    let raw = get_string_setting(connection, key, "")?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(trimmed.to_string()))
+    }
 }
 
 fn get_optional_i64_setting_allow_zero(

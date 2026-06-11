@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import Layout from './components/Layout';
+import UpdateNotification, { type UpdateInfo } from './components/UpdateNotification';
 import { getPageFromKeyboardShortcut, pages } from './navigation';
 import { APP_NAVIGATE_EVENT } from './navigationEvents';
 import {
@@ -75,6 +76,7 @@ export default function App() {
   const [activePage, setActivePage] = useState<AppPage>(() => getInitialPage());
   const [lastAutoSyncMessage, setLastAutoSyncMessage] = useState<string | null>(null);
   const [lastAutoUpdateMessage, setLastAutoUpdateMessage] = useState<string | null>(null);
+  const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
   const [, setNextAlarm] = useState<Alarm | null>(null);
   const [alarmFocusId, setAlarmFocusId] = useState<number | null>(null);
   const [theme, setTheme] = useState<AppTheme>(() => bootstrapTheme());
@@ -179,7 +181,9 @@ export default function App() {
   useAutoSync(setLastAutoSyncMessage);
   useSyncTakeoverNavigation(navigateToPage);
   useStudyCompletionReminder();
-  useAutoUpdateCheck(setLastAutoUpdateMessage);
+  useAutoUpdateCheck(setLastAutoUpdateMessage, useCallback((update: UpdateInfo) => {
+    setPendingUpdate(update);
+  }, []));
   useScheduleReminders();
   useAlarmWatcher(setNextAlarm);
   useEmailReminders(setLastAutoSyncMessage);
@@ -231,6 +235,11 @@ export default function App() {
       >
         {renderActivePage()}
       </Layout>
+      <UpdateNotification
+        update={pendingUpdate}
+        onDismiss={() => setPendingUpdate(null)}
+        onUpdateInstalled={() => setPendingUpdate(null)}
+      />
     </AppErrorBoundary>
   );
 }

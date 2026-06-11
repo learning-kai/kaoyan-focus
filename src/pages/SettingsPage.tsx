@@ -106,6 +106,9 @@ const defaultSettings: AppSettings = {
   reminder_quiet_hours_enabled: false,
   reminder_quiet_hours_start: '22:30',
   reminder_quiet_hours_end: '07:00',
+  auto_download_update: false,
+  skip_update_version: null,
+  update_reminder_snooze_until: null,
 };
 
 const defaultWebDavSettings: WebDavSettings = {
@@ -525,15 +528,18 @@ export default function SettingsPage({
     }
   }
 
-  async function handleSaveSettings() {
+  async function handleSaveSettings(updatedSettings?: AppSettings) {
     try {
       setSaving(true);
       setError(null);
       setSavedMessage(null);
-      const saved = await saveAppSettings({ ...settings, ui_theme: theme });
+      const settingsToSave = updatedSettings ?? { ...settings, ui_theme: theme };
+      const saved = await saveAppSettings(settingsToSave);
       setSettings(saved);
       onThemeChange(saved.ui_theme);
-      setSavedMessage('设置已保存，下一次进入专注页会自动使用。');
+      if (!updatedSettings) {
+        setSavedMessage('设置已保存，下一次进入专注页会自动使用。');
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -1122,6 +1128,7 @@ export default function SettingsPage({
           handleDownloadSystemDiagnosticSummary={handleDownloadSystemDiagnosticSummary}
           handleOpenAppDataLocation={handleOpenAppDataLocation}
           handleRefreshRuntimeHealth={refreshRuntimeHealth}
+          handleSaveSettings={handleSaveSettings}
           installingUpdate={installingUpdate}
           loading={loading}
           emailSettings={emailSettings}

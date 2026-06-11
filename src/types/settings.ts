@@ -40,6 +40,9 @@ export type AppSettings = {
   reminder_quiet_hours_enabled: boolean;
   reminder_quiet_hours_start: string;
   reminder_quiet_hours_end: string;
+  auto_download_update: boolean;
+  skip_update_version: string | null;
+  update_reminder_snooze_until: number | null;
 };
 
 export type ReminderSoundFile = {

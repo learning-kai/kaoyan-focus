@@ -11,6 +11,7 @@ import {
   MonitorDot,
   RefreshCw,
   ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import type { AppUpdate } from '../../services/updateApi';
 import type { ForegroundApp } from '../../types/monitor';
@@ -41,6 +42,7 @@ type SystemPanelProps = {
   handleDownloadSystemDiagnosticSummary: () => Promise<void>;
   handleOpenAppDataLocation: () => Promise<void>;
   handleRefreshRuntimeHealth: () => Promise<void>;
+  handleSaveSettings: (settings: AppSettings) => Promise<void>;
   installingUpdate: boolean;
   loading: boolean;
   emailSettings: EmailReminderSettings;
@@ -135,6 +137,7 @@ export function SystemPanel({
   handleDownloadSystemDiagnosticSummary,
   handleOpenAppDataLocation,
   handleRefreshRuntimeHealth,
+  handleSaveSettings,
   installingUpdate,
   loading,
   emailSettings,
@@ -219,6 +222,33 @@ export function SystemPanel({
               {autoUpdateMessage && <p className="alert neutral">自动检查：{autoUpdateMessage}</p>}
               {updateMessage && <p className="alert neutral">{updateMessage}</p>}
               {updateProgress !== null && <p className="alert neutral">下载进度 {updateProgress}%</p>}
+              {availableUpdate?.body && (
+                <div className="update-release-notes-preview">
+                  <p className="update-notes-label">更新内容：</p>
+                  <div className="update-notes-content">
+                    {availableUpdate.body.split('\n').slice(0, 5).map((line, index) => (
+                      <p key={index}>{line}</p>
+                    ))}
+                    {availableUpdate.body.split('\n').length > 5 && (
+                      <p className="update-notes-more">...</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              <label className="capability-row">
+                <Zap size={17} />
+                <input
+                  checked={settings.auto_download_update}
+                  disabled={settingsLocked}
+                  onChange={() => void handleSaveSettings({
+                    ...settings,
+                    auto_download_update: !settings.auto_download_update,
+                  })}
+                  type="checkbox"
+                />
+                <span>自动下载更新</span>
+              </label>
+              <p className="capability-hint">发现新版本后自动下载，下载完成后提示安装</p>
               <div className="row-actions">
                 <button
                   className="secondary-action"
@@ -239,6 +269,20 @@ export function SystemPanel({
                   {installingUpdate ? '安装中' : '下载并安装'}
                 </button>
               </div>
+              {(settings.skip_update_version || settings.update_reminder_snooze_until) && (
+                <div className="update-snooze-status">
+                  {settings.skip_update_version && (
+                    <p className="alert neutral">
+                      已跳过版本 {settings.skip_update_version}
+                    </p>
+                  )}
+                  {settings.update_reminder_snooze_until && Date.now() < settings.update_reminder_snooze_until * 1000 && (
+                    <p className="alert neutral">
+                      提醒已暂时关闭，将在 {new Date(settings.update_reminder_snooze_until * 1000).toLocaleString('zh-CN')} 后恢复
+                    </p>
+                  )}
+                </div>
+              )}
             </>
           )}
         </section>

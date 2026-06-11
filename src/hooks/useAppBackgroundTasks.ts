@@ -282,7 +282,10 @@ export function useStudyCompletionReminder() {
   }, []);
 }
 
-export function useAutoUpdateCheck(setLastAutoUpdateMessage: (message: string | null) => void) {
+export function useAutoUpdateCheck(
+  setLastAutoUpdateMessage: (message: string | null) => void,
+  onUpdateAvailable?: (update: { version: string; body: string | null }) => void,
+) {
   useEffect(() => {
     if (!isTauriRuntime()) {
       return;
@@ -308,20 +311,63 @@ export function useAutoUpdateCheck(setLastAutoUpdateMessage: (message: string | 
           return;
         }
 
-        const message = `自动检查更新：发现新版本 ${update.version}，可在这里下载并安装。`;
-        setLastAutoUpdateMessage(message);
+        // 检查是否跳过此版本
+        try {
+          const settings = await getAppSettings();
+          if (disposed) {
+            return;
+          }
 
-        const lastNotifiedVersion = window.localStorage.getItem(AUTO_UPDATE_NOTICE_STORAGE_KEY);
-        if (lastNotifiedVersion !== update.version) {
-          window.localStorage.setItem(AUTO_UPDATE_NOTICE_STORAGE_KEY, update.version);
-          void showStudyReminder(
-            '发现新版本',
-            `考研专注 ${update.version} 可更新，打开设置页下载并安装。`,
-            'silent',
-            `update:${update.version}`,
-          ).catch(() => {
-            // Settings page also shows the automatic check result; notification is best-effort.
-          });
+          if (settings.skip_update_version === update.version) {
+            setLastAutoUpdateMessage(`自动检查更新：版本 ${update.version} 已被跳过。`);
+            return;
+          }
+
+          // 检查是否在稍后提醒期间
+          if (settings.update_reminder_snooze_until) {
+            const snoozeUntil = settings.update_reminder_snooze_until * 1000; // 转换为毫秒
+            if (Date.now() < snoozeUntil) {
+              setLastAutoUpdateMessage(`自动检查更新：发现新版本 ${update.version}，提醒已暂时关闭。`);
+              return;
+            }
+          }
+
+          const message = `自动检查更新：发现新版本 ${update.version}，可在这里下载并安装。`;
+          setLastAutoUpdateMessage(message);
+
+          // 通知应用内弹窗
+          if (onUpdateAvailable) {
+            onUpdateAvailable({ version: update.version, body: update.body ?? null });
+          }
+
+          // 系统通知（每个版本只通知一次）
+          const lastNotifiedVersion = window.localStorage.getItem(AUTO_UPDATE_NOTICE_STORAGE_KEY);
+          if (lastNotifiedVersion !== update.version) {
+            window.localStorage.setItem(AUTO_UPDATE_NOTICE_STORAGE_KEY, update.version);
+            void showStudyReminder(
+              '发现新版本',
+              `考研专注 ${update.version} 可更新，打开设置页下载并安装。`,
+              'silent',
+              `update:${update.version}`,
+            ).catch(() => {
+              // Settings page also shows the automatic check result; notification is best-effort.
+            });
+          }
+        } catch {
+          // 获取设置失败时，使用默认行为
+          const message = `自动检查更新：发现新版本 ${update.version}，可在这里下载并安装。`;
+          setLastAutoUpdateMessage(message);
+
+          const lastNotifiedVersion = window.localStorage.getItem(AUTO_UPDATE_NOTICE_STORAGE_KEY);
+          if (lastNotifiedVersion !== update.version) {
+            window.localStorage.setItem(AUTO_UPDATE_NOTICE_STORAGE_KEY, update.version);
+            void showStudyReminder(
+              '发现新版本',
+              `考研专注 ${update.version} 可更新，打开设置页下载并安装。`,
+              'silent',
+              `update:${update.version}`,
+            ).catch(() => {});
+          }
         }
       } catch (reason) {
         if (!disposed) {
@@ -344,7 +390,7 @@ export function useAutoUpdateCheck(setLastAutoUpdateMessage: (message: string | 
       window.clearTimeout(startupTimerId);
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [onUpdateAvailable]);
 }
 
 export function useScheduleReminders() {

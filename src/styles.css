@@ -6582,3 +6582,58 @@ html[data-theme='light'] .subject-dot {
     justify-items: start;
   }
 }
+
+/* 更新日志预览样式 */
+.update-release-notes-preview {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface-secondary, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+
+.update-notes-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.5));
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.update-notes-content {
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+.update-notes-content p {
+  margin: 0 0 4px;
+}
+
+.update-notes-content p:last-child {
+  margin-bottom: 0;
+}
+
+.update-notes-more {
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.4));
+  font-style: italic;
+}
+
+.update-snooze-status {
+  margin-top: 8px;
+}
+
+.update-snooze-status .alert {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.capability-hint {
+  margin: -4px 0 8px 36px;
+  font-size: 12px;
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.5));
+  line-height: 1.4;
+}
