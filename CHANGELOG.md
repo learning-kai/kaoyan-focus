@@ -233,4 +233,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - docs: update final report with subject tabs feature (d768d96)
 
+## v1.12.9 - 2026-06-11
+
+### Desktop
+#### Changed
+- Remove alarm sound auto-stop limit (8520fff)
+
 
