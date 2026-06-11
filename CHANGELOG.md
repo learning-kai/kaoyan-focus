@@ -197,4 +197,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Restore global alarm watcher (cc9fde1)
 
+## v1.12.6 - 2026-06-11
+
+### Desktop
+#### Changed
+- Remove sample note and disable reminder sound timeout (a5fb836)
+
 
