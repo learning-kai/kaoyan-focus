@@ -255,4 +255,11 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - feat: restructure main content with Arc-style layout (ac74e11)
 - feat: restructure sidebar with Arc-style warm design (a15ffc1)
 
+## v1.12.11 - 2026-06-11
+
+### Desktop
+#### Added
+- feat: 添加立即开始休息功能，更新相关UI和API调用 (ebd3bc5)
+- feat: 移除侧边栏快速开始按钮，简化布局并清理未使用样式 (e889e00)
+
 
