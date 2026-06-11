@@ -202,31 +202,7 @@ svg {
   font-size: 11px;
 }
 
-.quick-start-btn {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 36px;
-  margin: 0 0 12px;
-  border: none;
-  border-radius: 10px;
-  background: var(--blue);
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 150ms, transform 100ms;
-}
 
-.quick-start-btn:hover {
-  background: #0066d6;
-}
-
-.quick-start-btn:active {
-  transform: scale(0.98);
-}
 
 .nav-list {
   display: grid;

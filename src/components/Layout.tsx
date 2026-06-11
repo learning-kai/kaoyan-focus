@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MouseEvent, type PropsWithChildren } from 'react';
-import { BookOpenCheck, Play } from 'lucide-react';
+import { BookOpenCheck } from 'lucide-react';
 import type { PageMeta } from '../navigation';
 import type { AppPage } from '../types/navigation';
 
@@ -74,15 +74,7 @@ export default function Layout({
           </div>
         </div>
 
-        <button
-          className="quick-start-btn"
-          onClick={() => onNavigate('focus')}
-          title="快速开始专注"
-          type="button"
-        >
-          <Play size={16} />
-          开始专注
-        </button>
+
 
         <nav className="nav-list" aria-label="主导航">
           <div className="nav-group">
