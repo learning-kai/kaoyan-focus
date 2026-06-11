@@ -39,6 +39,10 @@ export function confirmStudyBreak(): Promise<StudyModeState> {
   return invokeCommand<StudyModeState>('confirm_study_break');
 }
 
+export function startBreakNow(): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('start_break_now');
+}
+
 export function pauseStudyMode(): Promise<StudyModeState> {
   return invokeCommand<StudyModeState>('pause_study_mode');
 }

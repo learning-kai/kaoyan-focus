@@ -606,6 +606,85 @@ pub fn reset_study_mode(
     Ok(next_state)
 }
 
+#[tauri::command]
+pub fn start_break_now(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StudyModeState, String> {
+    let current_state = advance_study_mode(&app, state.inner())?;
+    if current_state.status != "active" {
+        sync_focus_widget_for_state(&app, &current_state);
+        return Ok(current_state);
+    }
+
+    if !matches!(current_state.phase.as_str(), "focus" | "awaiting_break") {
+        return Err("当前阶段不能开始休息".to_string());
+    }
+
+    let connection = open_database(&database_path(&app)?)?;
+    let Some(record) = get_active_study_mode_record(&connection)? else {
+        set_runtime_state(state.inner(), false, None)?;
+        let next_state = idle_study_mode_state();
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
+    };
+
+    if record.paused_at.is_some() {
+        return Err("学习模式暂停中，请先继续再开始休息".to_string());
+    }
+
+    let now = Utc::now();
+    let device_id = load_or_create_device_id(&connection)?;
+
+    if let Some(session_id) = record.current_session_id {
+        let actual_seconds = focus_session_actual_seconds(&record, now)?;
+        finish_running_focus_session(
+            &connection,
+            session_id,
+            actual_seconds,
+            now,
+            "manual_break",
+        )?;
+    }
+
+    let next_accumulated = study_elapsed_seconds(&record, now)?;
+
+    connection
+        .execute(
+            "
+            UPDATE study_modes
+            SET phase = 'break',
+                state_revision = state_revision + 1,
+                phase_started_at = ?1,
+                phase_paused_seconds = 0,
+                paused_stage_elapsed_seconds = 0,
+                paused_at = NULL,
+                accumulated_study_seconds = ?2,
+                current_session_id = NULL,
+                last_control_device_id = ?4,
+                last_control_action = ?5,
+                last_control_at = ?6,
+                updated_at = ?1
+            WHERE id = ?3 AND status = 'active'
+            ",
+            params![
+                now.to_rfc3339(),
+                next_accumulated,
+                record.id,
+                device_id,
+                CONTROL_CONFIRM_BREAK,
+                now.timestamp_millis()
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    set_runtime_state(state.inner(), true, None)?;
+    let next_state = load_current_study_mode_state(&connection, now)?;
+    sync_focus_widget_for_state(&app, &next_state);
+    trigger_shared_sync(&app, "focus_state_change");
+    Ok(next_state)
+}
+
 pub fn tick_background_study_mode(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
     let before_marker = current_study_runtime_marker(app).ok().flatten();

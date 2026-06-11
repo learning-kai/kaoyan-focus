@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftToLine, EyeOff, Pause, Pin, PinOff, Play } from 'lucide-react';
-import { getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode } from '../services/focusApi';
+import { ArrowLeftToLine, Coffee, EyeOff, Pause, Pin, PinOff, Play, Timer } from 'lucide-react';
+import { confirmStudyBreak, getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode, startBreakNow } from '../services/focusApi';
 import {
   collapseFocusWidgetToEdge,
   defaultFocusWidgetDockState,
@@ -311,6 +311,28 @@ export default function FocusWidgetPage() {
     }
   }, [canInteract, studyState.is_paused]);
 
+  const handleConfirmBreak = useCallback(async () => {
+    if (!canInteract) return;
+
+    try {
+      setStudyState(await confirmStudyBreak());
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [canInteract]);
+
+  const handleStartBreakNow = useCallback(async () => {
+    if (!canInteract) return;
+
+    try {
+      setStudyState(await startBreakNow());
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [canInteract]);
+
   const peekFromEdge = useCallback(async () => {
     if (!canInteract || dockModeRef.current !== 'collapsed') return;
     const previousDockState = dockState;
@@ -522,6 +544,26 @@ export default function FocusWidgetPage() {
               type="button"
             >
               {studyState.is_paused ? <Play size={15} /> : <Pause size={15} />}
+            </button>
+            <button
+              aria-label={`确认开始${studyState.break_kind === 'long' ? '长' : '短'}休息`}
+              className="focus-widget-icon-button"
+              disabled={!canInteract || studyState.phase !== 'awaiting_break' || studyState.is_paused}
+              onClick={() => void handleConfirmBreak()}
+              title={`确认开始${studyState.break_kind === 'long' ? '长' : '短'}休息`}
+              type="button"
+            >
+              <Coffee size={15} />
+            </button>
+            <button
+              aria-label="开始休息"
+              className="focus-widget-icon-button"
+              disabled={!canInteract || studyState.phase !== 'focus' || studyState.is_paused}
+              onClick={() => void handleStartBreakNow()}
+              title="跳过剩余专注时间，立即开始休息"
+              type="button"
+            >
+              <Timer size={15} />
             </button>
           </div>
         </header>
