@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftToLine, Coffee, EyeOff, Pause, Pin, PinOff, Play, Timer } from 'lucide-react';
-import { confirmStudyBreak, getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode, startBreakNow } from '../services/focusApi';
+import { ArrowLeftToLine, Coffee, EyeOff, Pause, Pin, PinOff, Play } from 'lucide-react';
+import { confirmStudyBreak, getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode } from '../services/focusApi';
 import {
   collapseFocusWidgetToEdge,
   defaultFocusWidgetDockState,
@@ -322,17 +322,6 @@ export default function FocusWidgetPage() {
     }
   }, [canInteract]);
 
-  const handleStartBreakNow = useCallback(async () => {
-    if (!canInteract) return;
-
-    try {
-      setStudyState(await startBreakNow());
-      setError(null);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    }
-  }, [canInteract]);
-
   const peekFromEdge = useCallback(async () => {
     if (!canInteract || dockModeRef.current !== 'collapsed') return;
     const previousDockState = dockState;
@@ -554,16 +543,6 @@ export default function FocusWidgetPage() {
               type="button"
             >
               <Coffee size={15} />
-            </button>
-            <button
-              aria-label="开始休息"
-              className="focus-widget-icon-button"
-              disabled={!canInteract || studyState.phase !== 'focus' || studyState.is_paused}
-              onClick={() => void handleStartBreakNow()}
-              title="跳过剩余专注时间，立即开始休息"
-              type="button"
-            >
-              <Timer size={15} />
             </button>
           </div>
         </header>
