@@ -124,7 +124,8 @@ select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.5);
+  transition: box-shadow var(--motion-fast) var(--ease-apple);
 }
 
 svg {
@@ -535,12 +536,21 @@ html[data-study-fullscreen='true'] body {
 .primary-action,
 .secondary-action,
 .ghost-action,
+.small-action,
+.start-ritual-button {
+  transition:
+    background var(--motion-base) var(--ease-apple),
+    border-color var(--motion-base) var(--ease-apple),
+    color var(--motion-base) var(--ease-apple),
+    box-shadow var(--motion-base) var(--ease-apple),
+    transform var(--motion-base) var(--ease-apple),
+    opacity var(--motion-base) var(--ease-apple);
+}
+
 .danger-action,
 .schedule-page .primary-button,
 .schedule-page .ghost-button,
 .icon-button,
-.small-action,
-.start-ritual-button,
 .chip,
 .nav-item,
 .process-option,
@@ -583,6 +593,13 @@ html[data-study-fullscreen='true'] body {
 .primary-action:hover,
 .start-ritual-button:hover {
   background: #3d7fd9;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(74, 144, 226, 0.32);
+}
+
+.primary-action:active,
+.start-ritual-button:active {
+  transform: scale(0.98);
 }
 
 .danger-action {
