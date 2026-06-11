@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftToLine, EyeOff, Pin, PinOff } from 'lucide-react';
-import { getStudyModeState, listSubjects } from '../services/focusApi';
+import { ArrowLeftToLine, EyeOff, Pause, Pin, PinOff, Play } from 'lucide-react';
+import { getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode } from '../services/focusApi';
 import {
   collapseFocusWidgetToEdge,
   defaultFocusWidgetDockState,
@@ -296,6 +296,21 @@ export default function FocusWidgetPage() {
     }
   }, [canInteract, isAlwaysOnTopUpdating]);
 
+  const togglePause = useCallback(async () => {
+    if (!canInteract) return;
+
+    try {
+      if (studyState.is_paused) {
+        setStudyState(await resumeStudyMode());
+      } else {
+        setStudyState(await pauseStudyMode());
+      }
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [canInteract, studyState.is_paused]);
+
   const peekFromEdge = useCallback(async () => {
     if (!canInteract || dockModeRef.current !== 'collapsed') return;
     const previousDockState = dockState;
@@ -497,6 +512,16 @@ export default function FocusWidgetPage() {
               type="button"
             >
               <EyeOff size={15} />
+            </button>
+            <button
+              aria-label={studyState.is_paused ? '继续' : '暂停'}
+              className={`focus-widget-icon-button${studyState.is_paused ? ' is-active' : ''}`}
+              disabled={!canInteract || studyState.phase === 'idle' || studyState.phase === 'finished' || studyState.phase === 'emergency_exited'}
+              onClick={() => void togglePause()}
+              title={studyState.is_paused ? '继续' : '暂停'}
+              type="button"
+            >
+              {studyState.is_paused ? <Play size={15} /> : <Pause size={15} />}
             </button>
           </div>
         </header>
