@@ -91,7 +91,7 @@ const builtInSoundPresets: Record<ReminderSoundId, BuiltInPreset> = {
 };
 
 const REMINDER_NOTIFICATION_CLOSED_EVENT = 'study-reminder-notification-closed';
-const SINGLE_NOTIFICATION_SOUND_MAX_MS = 30_000;
+const SINGLE_NOTIFICATION_SOUND_MAX_MS: number | null = null;
 
 let audioContext: AudioContext | null = null;
 let customSoundCache: { key: string; url: string } | null = null;

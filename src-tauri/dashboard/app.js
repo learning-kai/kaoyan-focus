@@ -63,7 +63,6 @@ const els = {
   metricWindowNote: document.getElementById('metric-window-note'),
   metricDays: document.getElementById('metric-days'),
   metricDaysNote: document.getElementById('metric-days-note'),
-  focusSampleNote: document.getElementById('focus-sample-note'),
   weekTimelineChart: document.getElementById('week-timeline-chart'),
   weekTimelineLabel: document.getElementById('week-timeline-label'),
   weekTimelineTotal: document.getElementById('week-timeline-total'),
@@ -105,7 +104,6 @@ let state = {
   sessionRowsExpanded: false,
   source: null,
   readOnly: true,
-  usesSampleData: false,
   weekOffset: 0,
   monthOffset: 0,
   yearOffset: 0,
@@ -199,14 +197,12 @@ async function loadProjectData() {
     state.records = records;
     state.source = payload.source || null;
     state.readOnly = payload.readOnly !== false;
-    state.usesSampleData = false;
     datasetMessage = `已只读读取项目数据：${records.length} 条专注记录`;
     render(datasetMessage);
   } catch (error) {
     state.records = generateSampleData();
     state.source = null;
     state.readOnly = true;
-    state.usesSampleData = true;
     datasetMessage = `未连接只读项目数据，正在展示示例：${getErrorMessage(error)}`;
     render(datasetMessage);
   } finally {
@@ -308,7 +304,6 @@ function render(message = datasetMessage) {
   els.datasetStatus.textContent = message;
   els.datasetMeta.textContent = `${records.length} 条记录 · ${countSubjects(records)} 个科目`;
   els.rangeLabel.textContent = RANGE_LABELS[state.activeRange] || '自定义范围';
-  els.focusSampleNote.hidden = !state.usesSampleData;
   els.statusLine.textContent = buildFooterStatus(overview, anchorDate, filtered.length, comparison);
   renderDataSourcePanel();
 }
@@ -595,8 +590,6 @@ function renderWeekTimeline(series) {
   const columnFill = cssVar('--chart-track', 'rgba(255,255,255,0.04)');
   const strongFill = cssVar('--chart-focus', '#efb35b');
   const softFill = cssVar('--chart-minutes', 'rgba(70, 211, 178, 0.78)');
-  const riskFill = cssVar('--danger', '#f07a6d');
-  const mutedFill = cssVar('--muted-2', '#63766c');
 
   setSvgViewBox(els.weekTimelineChart, width, height);
   els.weekTimelineLabel.textContent = series.label;
@@ -649,8 +642,7 @@ function renderWeekTimeline(series) {
     const yStart = scale(segment.startMinute, 0, 1440, margin.top, height - margin.bottom);
     const yEnd = scale(segment.endMinute, 0, 1440, margin.top, height - margin.bottom);
     const rectHeight = Math.max(3, yEnd - yStart);
-    const isRisk = segment.status === 'interrupted' || segment.status === 'emergency_exited';
-    const fill = isRisk ? riskFill : segment.focusScore >= 78 ? strongFill : segment.focusScore >= 62 ? softFill : mutedFill;
+    const fill = segment.focusScore >= 78 ? strongFill : softFill;
     addRect(
       els.weekTimelineChart,
       x,
@@ -1343,6 +1335,7 @@ function buildWeekTimelineSeries(records, weekOffset) {
   const segments = [];
 
   for (const record of records) {
+    if (!isRenderableTimelineRecord(record)) continue;
     for (const segment of splitRecordByClock(record)) {
       if (segment.end <= start || segment.start >= end) continue;
       const clippedStart = maxDate(segment.start, start);
@@ -1379,6 +1372,10 @@ function buildWeekTimelineSeries(records, weekOffset) {
     totalMinutes: sum(segments, (segment) => segment.minutes),
     segments,
   };
+}
+
+function isRenderableTimelineRecord(record) {
+  return record.focusScore >= 62 && record.status !== 'interrupted' && record.status !== 'emergency_exited';
 }
 
 function buildMonthlyBestHours(records, monthOffset) {
