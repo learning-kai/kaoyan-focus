@@ -274,4 +274,9 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Added
 - feat: 移除立即开始休息功能及相关代码 (3f6eaf0)
 
+## v1.13.2 - 2026-06-11
+
+### Desktop
+- No commits found.
+
 
