@@ -2248,6 +2248,34 @@ html[data-study-fullscreen='true'] body {
   font-size: 12px;
 }
 
+.whitelist-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.whitelist-tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.whitelist-tab:hover {
+  color: var(--ink);
+}
+
+.whitelist-tab.active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
 .count-pill {
   padding: 8px 10px;
   min-width: 76px;
