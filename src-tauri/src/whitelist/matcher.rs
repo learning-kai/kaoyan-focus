@@ -46,6 +46,8 @@ pub struct PotPlayerWhitelistRule {
 struct BrowserUrlParts {
     domain: String,
     path: String,
+    /// 原始完整网址（含 scheme 与 query），用于「包含模式」子串匹配。
+    full: String,
 }
 
 pub fn is_foreground_app_allowed(
@@ -330,6 +332,7 @@ fn parse_browser_url(value: &str) -> Option<BrowserUrlParts> {
         } else {
             path.to_string()
         },
+        full: trimmed.to_string(),
     })
 }
 
@@ -338,24 +341,45 @@ fn website_rule_matches(
     browser_url: Option<&BrowserUrlParts>,
     rule: &WebsiteWhitelistRule,
 ) -> bool {
-    let allowed_domain = normalize_domain(&rule.domain);
-    if !domain_matches(detected_domain, &allowed_domain) {
-        return false;
+    // 「包含模式」：当规则配置了具体网址/关键词时，要求当前网址同时包含全部片段。
+    let patterns = rule_url_patterns(rule.launch_url.as_deref());
+    if !patterns.is_empty() {
+        let Some(browser_url) = browser_url else {
+            // 无法读取完整网址时，退回到仅按域名放行，避免误拦合法访问。
+            return domain_matches(detected_domain, &normalize_domain(&rule.domain));
+        };
+        let haystack = browser_url.full.to_ascii_lowercase();
+        return patterns
+            .iter()
+            .all(|pattern| haystack.contains(&pattern.to_ascii_lowercase()));
     }
 
-    let Some(rule_url) = rule.launch_url.as_deref().and_then(parse_browser_url) else {
-        return true;
+    // 未配置具体片段时，沿用原有的纯域名匹配。
+    domain_matches(detected_domain, &normalize_domain(&rule.domain))
+}
+
+/// 把规则里存储的网址拆成需要「同时命中」的子串片段：
+/// 以空白（空格 / 换行 / 制表符）分隔，纯域名（无路径、无 query）不视为片段。
+fn rule_url_patterns(launch_url: Option<&str>) -> Vec<String> {
+    let Some(launch_url) = launch_url else {
+        return Vec::new();
     };
 
-    if !is_specific_url_path(&rule_url.path) {
+    launch_url
+        .split_whitespace()
+        .map(|token| token.trim())
+        .filter(|token| !token.is_empty())
+        .filter(|token| pattern_is_specific(token))
+        .map(|token| token.to_string())
+        .collect()
+}
+
+/// 判断单个片段是否「足够具体」——带路径 / query / 等号关键词才算，纯 `bilibili.com` 不算。
+fn pattern_is_specific(token: &str) -> bool {
+    if token.contains('=') {
         return true;
     }
-
-    let Some(browser_url) = browser_url else {
-        return false;
-    };
-
-    domain_matches(&browser_url.domain, &allowed_domain) && browser_url.path == rule_url.path
+    parse_browser_url(token).is_some_and(|parts| is_specific_url_path(&parts.path))
 }
 
 fn is_specific_url_path(path: &str) -> bool {
@@ -366,8 +390,8 @@ fn is_specific_url_path(path: &str) -> bool {
 fn rule_label(rule: &WebsiteWhitelistRule) -> String {
     rule.launch_url
         .as_ref()
-        .filter(|url| parse_browser_url(url).is_some_and(|parts| is_specific_url_path(&parts.path)))
-        .cloned()
+        .filter(|url| !rule_url_patterns(Some(url)).is_empty())
+        .map(|url| url.split_whitespace().collect::<Vec<_>>().join(" "))
         .unwrap_or_else(|| normalize_domain(&rule.domain))
 }
 
@@ -540,5 +564,45 @@ mod tests {
 
         assert!(result.allowed);
         assert_eq!(result.matched_subject_id, Some(1));
+    }
+
+    #[test]
+    fn pattern_rule_requires_all_fragments() {
+        let rule = WebsiteWhitelistRule {
+            domain: "bilibili.com".to_string(),
+            launch_url: Some(
+                "https://www.bilibili.com/video vd_source=cdb62f207df23b5659fe0577a320ce87"
+                    .to_string(),
+            ),
+            subject_id: Some(7),
+        };
+
+        // 同时包含两个片段 → 放行。
+        let hit = ForegroundApp::for_test(
+            3,
+            "chrome.exe".to_string(),
+            None,
+            "哔哩哔哩".to_string(),
+            Some(
+                "https://www.bilibili.com/video/BV1ufLu6UEEM/?vd_source=cdb62f207df23b5659fe0577a320ce87&spm_id_from=333.788"
+                    .to_string(),
+            ),
+            None,
+        );
+        let result = is_foreground_app_allowed(&hit, &[], &[rule.clone()], &[]);
+        assert!(result.allowed);
+        assert_eq!(result.matched_subject_id, Some(7));
+
+        // 同域名但缺少 vd_source 片段 → 拦截。
+        let miss = ForegroundApp::for_test(
+            3,
+            "chrome.exe".to_string(),
+            None,
+            "哔哩哔哩".to_string(),
+            Some("https://www.bilibili.com/video/BV1other/?vd_source=somethingelse".to_string()),
+            None,
+        );
+        let result = is_foreground_app_allowed(&miss, &[], &[rule], &[]);
+        assert!(!result.allowed);
     }
 }

@@ -40,11 +40,15 @@ type PotPlayerRuleType = 'file' | 'directory';
 
 function websiteUrlFromRule(rule: string) {
   const trimmed = rule.trim();
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
+  // 多片段「包含模式」：打开第一个像网址的片段；找不到则退回首个片段。
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  const urlToken = tokens.find((token) => /^https?:\/\//i.test(token) || token.includes('/')) ?? tokens[0] ?? trimmed;
+
+  if (/^https?:\/\//i.test(urlToken)) {
+    return urlToken;
   }
 
-  return `https://${trimmed.replace(/^\*+\./, '').replace(/^\/+/, '')}`;
+  return `https://${urlToken.replace(/^\*+\./, '').replace(/^\/+/, '')}`;
 }
 
 function isPotPlayerRule(app: WhitelistApp) {
@@ -555,14 +559,18 @@ export default function WhitelistPage() {
             </label>
             {entryType === 'website' ? (
               <label className="field-block">
-                <span>网址或域名</span>
-                <input
+                <span>网址、域名或关键词</span>
+                <textarea
                   className="text-input"
                   disabled={whitelistLocked}
                   onChange={(event) => setDomain(event.target.value)}
-                  placeholder="例如：https://www.bilibili.com/video/BV..."
+                  placeholder={'例如：https://www.bilibili.com/video vd_source=cdb62f...\n（用空格或换行分隔多个片段，需全部命中才放行）'}
+                  rows={3}
                   value={domain}
                 />
+                <small className="path-hint">
+                  只填域名（如 bilibili.com）= 整站放行；填多个片段时，只有当前网址同时包含全部片段才会放行。
+                </small>
               </label>
             ) : entryType === 'potplayer' ? (
               <label className="field-block">

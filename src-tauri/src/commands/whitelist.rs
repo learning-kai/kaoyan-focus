@@ -117,14 +117,14 @@ pub fn create_whitelist_website(
 ) -> Result<WhitelistApp, String> {
     let name = name.trim();
     let launch_url = website_launch_url(&domain);
-    let domain = normalize_domain(&domain);
+    let domain = website_primary_domain(&domain);
 
     if name.is_empty() {
         return Err("网站名称不能为空".to_string());
     }
 
     if domain.is_empty() || !domain.contains('.') {
-        return Err("网站域名不正确，例如 baidu.com".to_string());
+        return Err("网站域名不正确，例如 baidu.com，或填写完整网址 https://www.bilibili.com/video".to_string());
     }
 
     let now = Utc::now().to_rfc3339();
@@ -372,6 +372,11 @@ fn website_launch_url(value: &str) -> Option<String> {
         return None;
     }
 
+    // 多片段「包含模式」（含空白分隔）原样保留，交由匹配器逐一子串命中。
+    if trimmed.split_whitespace().count() > 1 {
+        return Some(normalize_whitespace(trimmed));
+    }
+
     if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
         Some(trimmed.to_string())
     } else {
@@ -379,8 +384,28 @@ fn website_launch_url(value: &str) -> Option<String> {
     }
 }
 
+/// 把任意空白（换行 / 制表符 / 连续空格）折叠成单个空格，便于存储与展示。
+fn normalize_whitespace(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// 从用户输入中提取用于域名匹配的主域名：取第一个能解析出 host 的片段。
+fn website_primary_domain(value: &str) -> String {
+    value
+        .split_whitespace()
+        .map(normalize_domain)
+        .find(|domain| domain.contains('.'))
+        .unwrap_or_default()
+}
+
 fn website_url_has_specific_path(value: &str) -> bool {
     let trimmed = value.trim();
+
+    // 多片段「包含模式」或带 query 关键词，视为具体规则，按完整字符串去重。
+    if trimmed.split_whitespace().count() > 1 || trimmed.contains('=') {
+        return true;
+    }
+
     let lower = trimmed.to_ascii_lowercase();
     let scheme_length = if lower.starts_with("http://") {
         "http://".len()
