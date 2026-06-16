@@ -279,4 +279,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ### Desktop
 - No commits found.
 
+## v1.13.3 - 2026-06-16
+
+### Desktop
+#### Changed
+- 支持多片段网址白名单匹配 (b2ce781)
+
 
