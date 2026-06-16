@@ -344,18 +344,34 @@ fn website_rule_matches(
     // 「包含模式」：当规则配置了具体网址/关键词时，要求当前网址同时包含全部片段。
     let patterns = rule_url_patterns(rule.launch_url.as_deref());
     if !patterns.is_empty() {
+        // 用户明确要求按片段过滤；读不到完整网址时一律拦截，避免被整站放行绕过。
         let Some(browser_url) = browser_url else {
-            // 无法读取完整网址时，退回到仅按域名放行，避免误拦合法访问。
-            return domain_matches(detected_domain, &normalize_domain(&rule.domain));
+            return false;
         };
-        let haystack = browser_url.full.to_ascii_lowercase();
+        // 地址栏常隐藏 scheme（如 chrome 显示 www.bilibili.com/...），
+        // 因此对网址与片段都做归一化（去掉 http(s):// 与 www.）后再做子串匹配。
+        let haystack = normalize_for_contains(&browser_url.full);
         return patterns
             .iter()
-            .all(|pattern| haystack.contains(&pattern.to_ascii_lowercase()));
+            .all(|pattern| haystack.contains(&normalize_for_contains(pattern)));
     }
 
     // 未配置具体片段时，沿用原有的纯域名匹配。
     domain_matches(detected_domain, &normalize_domain(&rule.domain))
+}
+
+/// 把网址 / 片段归一化为便于子串比较的形式：转小写、去掉 scheme 和 `www.`。
+/// 这样 `https://www.bilibili.com/video` 与地址栏里的 `www.bilibili.com/video` 等价。
+fn normalize_for_contains(value: &str) -> String {
+    let lower = value.trim().to_ascii_lowercase();
+    let without_scheme = lower
+        .strip_prefix("https://")
+        .or_else(|| lower.strip_prefix("http://"))
+        .unwrap_or(&lower);
+    without_scheme
+        .strip_prefix("www.")
+        .unwrap_or(without_scheme)
+        .to_string()
 }
 
 /// 把规则里存储的网址拆成需要「同时命中」的子串片段：
@@ -602,7 +618,22 @@ mod tests {
             Some("https://www.bilibili.com/video/BV1other/?vd_source=somethingelse".to_string()),
             None,
         );
-        let result = is_foreground_app_allowed(&miss, &[], &[rule], &[]);
+        let result = is_foreground_app_allowed(&miss, &[], &[rule.clone()], &[]);
         assert!(!result.allowed);
+
+        // 地址栏隐藏了 scheme（chrome 实际表现）→ 仍应正确命中。
+        let no_scheme = ForegroundApp::for_test(
+            3,
+            "chrome.exe".to_string(),
+            None,
+            "哔哩哔哩".to_string(),
+            Some(
+                "www.bilibili.com/video/BV1ufLu6UEEM/?vd_source=cdb62f207df23b5659fe0577a320ce87"
+                    .to_string(),
+            ),
+            None,
+        );
+        let result = is_foreground_app_allowed(&no_scheme, &[], &[rule], &[]);
+        assert!(result.allowed);
     }
 }
