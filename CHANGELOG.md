@@ -313,4 +313,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Guard calendar sync against false remote deletions (74df496)
 
+## v1.13.7 - 2026-06-18
+
+### Desktop
+#### Fixed
+- 修复飞书日程和任务重复同步 (02cd9d4)
+
 
