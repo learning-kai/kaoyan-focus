@@ -14,6 +14,25 @@ mod live_tests {
     }
 
     #[test]
+    fn treats_only_deleted_or_missing_events_as_remote_gone() {
+        // 真删除（193003）与 404 Not Found 才算“远端确实不存在”，可同步删本地。
+        assert!(is_feishu_event_missing_error(
+            "飞书返回状态 403 / code 193003：event is deleted"
+        ));
+        assert!(is_feishu_event_missing_error(
+            "飞书返回状态 404 / code 0：not found"
+        ));
+        // 权限、限流、网络等错误一律不算删除，保守保留本地课表。
+        assert!(!is_feishu_event_missing_error(
+            "飞书返回状态 403 / code 193004：permission denied"
+        ));
+        assert!(!is_feishu_event_missing_error(
+            "飞书返回状态 429 / code 99991400：rate limited"
+        ));
+        assert!(!is_feishu_event_missing_error("飞书 GET 失败：connection reset"));
+    }
+
+    #[test]
     fn skips_untitled_remote_calendar_imports() {
         let event = parse_remote_event(&json!({
             "event_id": "remote-blank-title",

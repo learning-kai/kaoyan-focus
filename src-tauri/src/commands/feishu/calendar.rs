@@ -49,9 +49,17 @@
                     counters,
                 )?;
             } else if block.deleted_at.is_none() && date_in_sync_range(&block.schedule_date) {
-                delete_local_schedule_block(connection, block.id)?;
-                mark_link_deleted(connection, link.id)?;
-                counters.deleted_count += 1;
+                // 本地 block 有 link，但它的 remote_id 不在本次批量快照里。
+                // 不能据此就认为“远端已删除”——空/不完整的快照（calendar_id 指向
+                // 了新建的空日历、分页边界、接口临时返回不全等）会让范围内的本地
+                // 课表被整体清空。删本地前先单独 GET 确认该事件是否真的不存在：
+                //   - 真的被删（193003 / 404）→ 同步删除本地，符合预期；
+                //   - 仍然存在或遇到网络/权限错误 → 一律保留本地，绝不清空课表。
+                if remote_calendar_event_deleted(feishu, calendar_id, &link.remote_id)? {
+                    delete_local_schedule_block(connection, block.id)?;
+                    mark_link_deleted(connection, link.id)?;
+                    counters.deleted_count += 1;
+                }
             } else if block.deleted_at.is_some() {
                 mark_link_deleted(connection, link.id)?;
             }
@@ -455,6 +463,32 @@ fn delete_remote_calendar_event_if_present(
         Err(error) if is_feishu_deleted_event_error(&error) => Ok(()),
         Err(error) => Err(error),
     }
+}
+
+/// 单独 GET 一个日历事件，判断它在飞书侧是否“确实已被删除”。
+///
+/// 只有飞书明确返回事件已删除（193003）或不存在（404）时才返回 `true`；
+/// 事件仍存在返回 `false`；遇到网络、权限或其它不确定错误时也返回 `false`，
+/// 保守保留本地数据，绝不因为一次异常响应就清空本地课表。
+fn remote_calendar_event_deleted(
+    feishu: &FeishuClient,
+    calendar_id: &str,
+    remote_id: &str,
+) -> Result<bool, String> {
+    match feishu.get(&format!(
+        "/open-apis/calendar/v4/calendars/{}/events/{}",
+        encode_path_segment(calendar_id),
+        encode_path_segment(remote_id)
+    )) {
+        Ok(_) => Ok(false),
+        Err(error) if is_feishu_event_missing_error(&error) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
+/// 判断错误是否表示“事件在飞书侧不存在”——已删除（193003）或 404 Not Found。
+fn is_feishu_event_missing_error(error: &str) -> bool {
+    is_feishu_deleted_event_error(error) || error.contains("状态 404")
 }
 
 fn feishu_task_body(task: &LocalTask, tasklist_guid: &str) -> Value {

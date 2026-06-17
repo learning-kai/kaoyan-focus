@@ -42,6 +42,15 @@ impl FeishuClient {
         Ok(items)
     }
 
+    fn get(&self, path: &str) -> Result<Value, String> {
+        self.client
+            .get(feishu_url(path))
+            .headers(self.auth_headers()?)
+            .send()
+            .map_err(|error| format!("飞书 GET 失败：{error}"))
+            .and_then(parse_feishu_response)
+    }
+
     fn post(&self, path: &str, body: Value) -> Result<Value, String> {
         self.client
             .post(feishu_url(path))
