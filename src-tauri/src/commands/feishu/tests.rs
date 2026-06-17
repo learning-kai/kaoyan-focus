@@ -121,6 +121,32 @@ mod live_tests {
     }
 
     #[test]
+    fn local_calendar_change_is_not_overwritten_by_newer_remote_timestamp() {
+        // 复现“本地改完被飞书端覆盖”的场景：只有本地改了内容（指纹判定），
+        // 但远端 updated_time 更新（时钟漂移或飞书回写）。必须推本地，
+        // 不能因为远端时间戳更晚就拉远端把本地修改盖掉。
+        assert_eq!(
+            linked_calendar_action(1_000, Some(9_000), true, false, false),
+            LinkedCalendarAction::PushLocal
+        );
+        // 对称情况：只有远端改了，但本地 updated_at 更新，仍应拉远端。
+        assert_eq!(
+            linked_calendar_action(9_000, Some(1_000), false, true, false),
+            LinkedCalendarAction::PullRemote
+        );
+        // 双方都改才是真冲突：时间戳决胜，远端更新则拉远端。
+        assert_eq!(
+            linked_calendar_action(1_000, Some(9_000), true, true, false),
+            LinkedCalendarAction::PullRemote
+        );
+        // 真冲突且时间戳接近时，回退到 prefer_local_changes。
+        assert_eq!(
+            linked_calendar_action(5_000, Some(5_000), true, true, true),
+            LinkedCalendarAction::PushLocal
+        );
+    }
+
+    #[test]
     fn calendar_fingerprint_tracks_block_time_changes() {
         let local = LocalScheduleBlock {
             id: 1,

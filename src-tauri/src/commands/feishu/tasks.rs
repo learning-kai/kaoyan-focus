@@ -356,15 +356,25 @@ fn fetch_remote_tasks_for_tasklist(
     tasklist_guid: &str,
     remote_tasks: &mut Vec<RemoteTask>,
 ) -> Result<(), String> {
-    let remote_values = feishu.get_paged(&format!(
+    let base = format!(
         "/open-apis/task/v2/tasklists/{}/tasks?page_size=100&user_id_type=open_id",
         encode_path_segment(tasklist_guid)
-    ))?;
-    remote_tasks.extend(
-        remote_values
-            .iter()
-            .filter_map(|value| parse_remote_task(value, tasklist_key, tasklist_guid)),
     );
+    // 飞书任务列表接口在部分账号下默认只返回未完成任务。如果只拉一次，
+    // 已在飞书侧勾选完成的任务会从快照里消失，进而被误判为“远端已删除”，
+    // 导致本地任务被删（丢数据）或被重新推送（重复）。这里显式分别拉取
+    // 未完成与已完成两种状态，再按 guid 去重，确保快照完整且幂等。
+    let mut seen = std::collections::HashSet::new();
+    for completed_filter in ["&completed=false", "&completed=true"] {
+        let remote_values = feishu.get_paged(&format!("{base}{completed_filter}"))?;
+        for value in &remote_values {
+            if let Some(task) = parse_remote_task(value, tasklist_key, tasklist_guid) {
+                if seen.insert(task.id.clone()) {
+                    remote_tasks.push(task);
+                }
+            }
+        }
+    }
     Ok(())
 }
 

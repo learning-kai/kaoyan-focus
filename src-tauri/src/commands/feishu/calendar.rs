@@ -209,27 +209,34 @@ fn linked_calendar_action(
     prefer_local_changes: bool,
 ) -> LinkedCalendarAction {
     const SKEW_MILLIS: i64 = 1_000;
-    if let Some(remote_updated) = remote_updated {
-        if local_updated > remote_updated + SKEW_MILLIS {
-            return LinkedCalendarAction::PushLocal;
-        }
-        if remote_updated > local_updated + SKEW_MILLIS {
-            return LinkedCalendarAction::PullRemote;
-        }
-        return LinkedCalendarAction::RefreshLink;
-    }
 
-    if !local_changed_since_sync && !remote_changed_since_sync {
-        return LinkedCalendarAction::RefreshLink;
-    }
-    if local_changed_since_sync && !remote_changed_since_sync {
-        LinkedCalendarAction::PushLocal
-    } else if remote_changed_since_sync && !local_changed_since_sync {
-        LinkedCalendarAction::PullRemote
-    } else if prefer_local_changes {
-        LinkedCalendarAction::PushLocal
-    } else {
-        LinkedCalendarAction::PullRemote
+    // 先用指纹判断“自上次同步以来谁真正改了内容”。指纹基线（link.remote_etag /
+    // remote_change_key）与两端时钟无关，比 updated_time 时间戳可靠：时间戳跨设备
+    // 容易因时钟漂移或飞书回写而误判方向，把一方未改动的内容覆盖掉。
+    match (local_changed_since_sync, remote_changed_since_sync) {
+        // 只有本地改了 → 推本地，绝不被远端时间戳盖掉。
+        (true, false) => LinkedCalendarAction::PushLocal,
+        // 只有远端改了 → 拉远端。
+        (false, true) => LinkedCalendarAction::PullRemote,
+        // 双方都没改 → 内容一致，只刷新 link。
+        (false, false) => LinkedCalendarAction::RefreshLink,
+        // 双方都改了，才是真正的冲突：用时间戳决胜，缺失或接近时回退到
+        // prefer_local_changes（本地触发的同步默认偏向保留本地修改）。
+        (true, true) => {
+            if let Some(remote_updated) = remote_updated {
+                if local_updated > remote_updated + SKEW_MILLIS {
+                    return LinkedCalendarAction::PushLocal;
+                }
+                if remote_updated > local_updated + SKEW_MILLIS {
+                    return LinkedCalendarAction::PullRemote;
+                }
+            }
+            if prefer_local_changes {
+                LinkedCalendarAction::PushLocal
+            } else {
+                LinkedCalendarAction::PullRemote
+            }
+        }
     }
 }
 
