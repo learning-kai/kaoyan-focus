@@ -18,10 +18,25 @@
         .iter()
         .filter_map(parse_remote_event)
         .collect::<Vec<_>>();
+    // 按 marker 折叠同一来源的重复事件，只保留一个 canonical，删除多余副本。
+    // 这会清掉历史遗留的重复，且只触碰携带本应用 marker 的事件，绝不动用户自己的日程。
+    let remote_events =
+        dedup_remote_calendar_events(connection, feishu, calendar_id, remote_events, counters)?;
     counters.calendar_count = remote_events.len() as i64;
     let remote_by_id = remote_events
         .iter()
         .map(|event| (event.id.clone(), event.clone()))
+        .collect::<HashMap<_, _>>();
+    // marker → canonical 远端事件，供 push 分支在“本地无 link”时认领既有远端副本，
+    // 避免重新 POST 制造新的重复。
+    let remote_by_marker = remote_events
+        .iter()
+        .filter_map(|event| {
+            event
+                .marker_sync_id
+                .clone()
+                .map(|sync_id| (sync_id, event.clone()))
+        })
         .collect::<HashMap<_, _>>();
 
     for block in load_local_schedule_blocks(connection)? {
@@ -64,6 +79,44 @@
                 mark_link_deleted(connection, link.id)?;
             }
         } else if block.deleted_at.is_none() && date_in_sync_range(&block.schedule_date) {
+            // 本地 block 没有 link。先看远端是否已有携带本 block marker 的事件
+            // （link 在历史 bug 中被误删，但远端副本仍在）。若有就认领、重建 link，
+            // 绝不再 POST 一个新副本——这正是飞书侧重复堆积的根源。
+            if let Some(remote) = remote_by_marker.get(&block.sync_id) {
+                upsert_link(
+                    connection,
+                    ENTITY_SCHEDULE_BLOCK,
+                    Some(block.id),
+                    &block.sync_id,
+                    REMOTE_FEISHU_EVENT,
+                    &remote.id,
+                    Some(calendar_id),
+                    Some(&local_schedule_block_fingerprint(&block)),
+                    Some(&remote_event_fingerprint(remote)),
+                    remote
+                        .updated_millis
+                        .map(|value| value.to_string())
+                        .as_deref(),
+                )?;
+                let link = get_link_by_sync_id(
+                    connection,
+                    ENTITY_SCHEDULE_BLOCK,
+                    &block.sync_id,
+                    REMOTE_FEISHU_EVENT,
+                )?
+                .ok_or_else(|| "飞书日程链接写入后读取失败。".to_string())?;
+                sync_linked_event(
+                    connection,
+                    feishu,
+                    calendar_id,
+                    &block,
+                    remote,
+                    &link,
+                    prefer_local_changes,
+                    counters,
+                )?;
+                continue;
+            }
             let data = feishu.post(
                 &format!(
                     "/open-apis/calendar/v4/calendars/{}/events",
@@ -489,6 +542,74 @@ fn remote_calendar_event_deleted(
 /// 判断错误是否表示“事件在飞书侧不存在”——已删除（193003）或 404 Not Found。
 fn is_feishu_event_missing_error(error: &str) -> bool {
     is_feishu_deleted_event_error(error) || error.contains("状态 404")
+}
+
+/// 按 marker（entity_type:sync_id）折叠同一来源的重复远端事件。
+///
+/// 历史 bug 期间，本地 link 被误删后每次同步都重新 POST，导致飞书侧同一来源
+/// 堆积出多份副本。这里把携带相同 marker 的事件分组，每组只保留一个 canonical，
+/// 删除其余副本，并返回去重后的事件列表。
+///
+/// canonical 选择：优先保留“当前已有活跃 link 指向”的那一个（避免破坏既有链接）；
+/// 否则按 event_id 字典序取最小，保证确定性。没有 marker 的事件（用户自己的日程）
+/// 原样保留，绝不触碰。
+fn dedup_remote_calendar_events(
+    connection: &Connection,
+    feishu: &FeishuClient,
+    calendar_id: &str,
+    events: Vec<RemoteEvent>,
+    counters: &mut SyncCounters,
+) -> Result<Vec<RemoteEvent>, String> {
+    // 先按 marker 分组；无 marker 的直接进入结果。
+    let mut groups: HashMap<String, Vec<RemoteEvent>> = HashMap::new();
+    let mut kept = Vec::new();
+    for event in events {
+        match event.marker_sync_id.clone() {
+            Some(sync_id) => groups.entry(sync_id).or_default().push(event),
+            None => kept.push(event),
+        }
+    }
+
+    for (sync_id, mut group) in groups {
+        if group.len() == 1 {
+            kept.push(group.pop().expect("group has one element"));
+            continue;
+        }
+        // 选 canonical：优先当前 link 指向的 remote_id，否则按 id 字典序最小。
+        let linked_remote_id = get_link_by_sync_id(
+            connection,
+            ENTITY_SCHEDULE_BLOCK,
+            &sync_id,
+            REMOTE_FEISHU_EVENT,
+        )?
+        .map(|link| link.remote_id);
+        let canonical_index = group
+            .iter()
+            .position(|event| Some(&event.id) == linked_remote_id.as_ref())
+            .unwrap_or_else(|| {
+                group
+                    .iter()
+                    .enumerate()
+                    .min_by(|(_, a), (_, b)| a.id.cmp(&b.id))
+                    .map(|(index, _)| index)
+                    .unwrap_or(0)
+            });
+        let canonical = group.swap_remove(canonical_index);
+        // 删除其余副本（携带本应用 marker，确为重复）。
+        for duplicate in group {
+            delete_remote_calendar_event_if_present(feishu, calendar_id, &duplicate.id)?;
+            // 顺手清掉可能残留的、指向被删副本的 link。
+            if let Some(link) =
+                get_link_by_remote_id(connection, REMOTE_FEISHU_EVENT, &duplicate.id)?
+            {
+                mark_link_deleted(connection, link.id)?;
+            }
+            counters.deleted_count += 1;
+        }
+        kept.push(canonical);
+    }
+
+    Ok(kept)
 }
 
 fn feishu_task_body(task: &LocalTask, tasklist_guid: &str) -> Value {

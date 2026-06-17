@@ -173,10 +173,29 @@ fn sync_tasks(
     for (key, tasklist_guid) in tasklists {
         fetch_remote_tasks_for_tasklist(feishu, key, tasklist_guid, &mut remote_tasks)?;
     }
+    // 按 marker（entity_type:sync_id）折叠同一来源的重复任务，只保留一个 canonical、
+    // 删除多余副本。清理历史遗留重复，且只触碰携带本应用 marker 的任务。
+    let remote_tasks = dedup_remote_tasks(connection, feishu, remote_tasks, counters)?;
     counters.task_count = remote_tasks.len() as i64;
     let remote_by_id = remote_tasks
         .iter()
         .map(|task| (task.id.clone(), task.clone()))
+        .collect::<HashMap<_, _>>();
+    // marker 复合键 → canonical 远端任务，供 push 分支在“本地无 link”时认领既有远端
+    // 副本，避免重新 POST 制造新的重复（飞书侧重复堆积的根源）。
+    let remote_by_marker = remote_tasks
+        .iter()
+        .filter_map(|task| {
+            match (
+                task.marker_entity_type.as_deref(),
+                task.marker_sync_id.as_deref(),
+            ) {
+                (Some(entity_type), Some(sync_id)) => {
+                    Some((task_marker_key(entity_type, sync_id), task.clone()))
+                }
+                _ => None,
+            }
+        })
         .collect::<HashMap<_, _>>();
     let today_date = today_date_string();
     let stale_today_remote_ids =
@@ -246,9 +265,23 @@ fn sync_tasks(
                 }
             } else if task.deleted_at.is_none() {
                 if link_points_to_current_tasklist(&link, tasklists) {
-                    delete_local_task(connection, task.entity_type, task.id)?;
-                    mark_link_deleted(connection, link.id)?;
-                    counters.deleted_count += 1;
+                    // 本地任务有 link，但 remote_id 不在本次快照里。与日历同理：
+                    // 不能据此就删本地（快照不完整会误删）。先单独 GET 确认远端
+                    // 真的不存在，才删本地；仍存在或遇到不确定错误则改为重新认领/推送。
+                    if remote_task_deleted(feishu, &link.remote_id)? {
+                        delete_local_task(connection, task.entity_type, task.id)?;
+                        mark_link_deleted(connection, link.id)?;
+                        counters.deleted_count += 1;
+                    } else {
+                        replace_remote_task_in_tasklist(
+                            connection,
+                            feishu,
+                            tasklist_guid,
+                            &task,
+                            Some(link.remote_id.as_str()),
+                            counters,
+                        )?;
+                    }
                 } else {
                     replace_remote_task_in_tasklist(
                         connection,
@@ -268,14 +301,71 @@ fn sync_tasks(
                 counters.deleted_count += 1;
             }
         } else if task.deleted_at.is_none() {
-            replace_remote_task_in_tasklist(
-                connection,
-                feishu,
-                tasklist_guid,
-                &task,
-                None,
-                counters,
-            )?;
+            // 本地任务没有 link。先看远端是否已有携带本任务 marker 的副本
+            // （link 被历史 bug 误删，远端副本仍在）。有就认领、重建 link，
+            // 不再 POST 新副本——这是飞书侧任务重复堆积的根源。
+            if let Some(remote) = remote_by_marker.get(&task_marker_key(task.entity_type, &task.sync_id))
+            {
+                upsert_link(
+                    connection,
+                    task.entity_type,
+                    Some(task.id),
+                    &task.sync_id,
+                    REMOTE_FEISHU_TASK,
+                    &remote.id,
+                    Some(&remote.tasklist_guid),
+                    None,
+                    None,
+                    remote
+                        .updated_millis
+                        .map(|value| value.to_string())
+                        .as_deref(),
+                )?;
+                let link = get_link_by_sync_id(
+                    connection,
+                    task.entity_type,
+                    &task.sync_id,
+                    REMOTE_FEISHU_TASK,
+                )?
+                .ok_or_else(|| "飞书任务链接写入后读取失败。".to_string())?;
+                sync_linked_task(
+                    connection,
+                    feishu,
+                    &remote.tasklist_guid,
+                    &task,
+                    remote,
+                    &link,
+                    tasklists.values().any(|guid| guid == &remote.tasklist_guid),
+                    counters,
+                )?;
+                // 认领后，若所在清单与期望不一致，按既有逻辑迁移到正确清单。
+                let desired_tasklist_guid = tasklists
+                    .get(task.tasklist_key)
+                    .or_else(|| tasklists.get(TASKLIST_KEY_GENERAL))
+                    .ok_or_else(|| "飞书任务清单未初始化。".to_string())?;
+                if remote.tasklist_guid != *desired_tasklist_guid {
+                    let local_after_sync =
+                        load_local_task_by_id(connection, task.entity_type, task.id)
+                            .unwrap_or_else(|_| task.clone());
+                    replace_remote_task_in_tasklist(
+                        connection,
+                        feishu,
+                        desired_tasklist_guid,
+                        &local_after_sync,
+                        Some(remote.id.as_str()),
+                        counters,
+                    )?;
+                }
+            } else {
+                replace_remote_task_in_tasklist(
+                    connection,
+                    feishu,
+                    tasklist_guid,
+                    &task,
+                    None,
+                    counters,
+                )?;
+            }
         }
     }
 
@@ -445,6 +535,110 @@ fn delete_remote_task_if_present(feishu: &FeishuClient, remote_id: &str) -> Resu
         "/open-apis/task/v2/tasks/{}",
         encode_path_segment(remote_id)
     ))
+}
+
+/// marker 复合键：任务的身份是 (entity_type, sync_id) 二元组，拼成单字符串便于做
+/// HashMap 键。用单元分隔符避免值里出现冒号造成歧义。
+fn task_marker_key(entity_type: &str, sync_id: &str) -> String {
+    format!("{entity_type}\u{1f}{sync_id}")
+}
+
+/// 单独 GET 一个任务，判断它在飞书侧是否“确实已被删除”。
+///
+/// 只有飞书明确返回不存在（404）时才返回 `true`；任务仍存在返回 `false`；
+/// 遇到网络、权限或其它不确定错误时也返回 `false`，保守保留本地任务，绝不因为
+/// 一次异常响应或不完整快照就删掉本地数据。
+fn remote_task_deleted(feishu: &FeishuClient, remote_id: &str) -> Result<bool, String> {
+    match feishu.get(&format!(
+        "/open-apis/task/v2/tasks/{}?user_id_type=open_id",
+        encode_path_segment(remote_id)
+    )) {
+        Ok(_) => Ok(false),
+        Err(error) if error.contains("状态 404") => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
+/// 按 marker（entity_type:sync_id）折叠同一来源的重复远端任务。
+///
+/// 历史 bug 期间 link 被误删后每次同步都重新 POST，导致飞书侧同一来源堆积出多份
+/// 副本。这里把携带相同 marker 的任务分组，每组只保留一个 canonical、删除其余副本，
+/// 返回去重后的任务列表。
+///
+/// canonical 选择：优先保留当前已有活跃 link 指向的那一个；否则按 task guid 字典序
+/// 取最小，保证确定性。没有 marker 的任务（用户自己在飞书清单里建的）原样保留。
+fn dedup_remote_tasks(
+    connection: &Connection,
+    feishu: &FeishuClient,
+    tasks: Vec<RemoteTask>,
+    counters: &mut SyncCounters,
+) -> Result<Vec<RemoteTask>, String> {
+    let mut groups: HashMap<String, Vec<RemoteTask>> = HashMap::new();
+    let mut kept = Vec::new();
+    for task in tasks {
+        match (
+            task.marker_entity_type.as_deref(),
+            task.marker_sync_id.as_deref(),
+        ) {
+            (Some(entity_type), Some(sync_id)) => groups
+                .entry(task_marker_key(entity_type, sync_id))
+                .or_default()
+                .push(task),
+            _ => kept.push(task),
+        }
+    }
+
+    for (_, mut group) in groups {
+        if group.len() == 1 {
+            kept.push(group.pop().expect("group has one element"));
+            continue;
+        }
+        // canonical：优先当前 link 指向的 remote_id（用任意一个成员的 marker 反查
+        // 对应的本地 link），否则按 guid 字典序最小。
+        let linked_remote_id = group
+            .iter()
+            .find_map(|task| {
+                match (
+                    task.marker_entity_type.as_deref(),
+                    task.marker_sync_id.as_deref(),
+                ) {
+                    (Some(entity_type), Some(sync_id)) => get_link_by_sync_id(
+                        connection,
+                        entity_type,
+                        sync_id,
+                        REMOTE_FEISHU_TASK,
+                    )
+                    .ok()
+                    .flatten()
+                    .map(|link| link.remote_id),
+                    _ => None,
+                }
+            });
+        let canonical_index = group
+            .iter()
+            .position(|task| Some(&task.id) == linked_remote_id.as_ref())
+            .unwrap_or_else(|| {
+                group
+                    .iter()
+                    .enumerate()
+                    .min_by(|(_, a), (_, b)| a.id.cmp(&b.id))
+                    .map(|(index, _)| index)
+                    .unwrap_or(0)
+            });
+        let canonical = group.swap_remove(canonical_index);
+        for duplicate in group {
+            delete_remote_task_if_present(feishu, &duplicate.id)?;
+            if let Some(link) =
+                get_link_by_remote_id(connection, REMOTE_FEISHU_TASK, &duplicate.id)?
+            {
+                mark_link_deleted(connection, link.id)?;
+            }
+            counters.deleted_count += 1;
+        }
+        kept.push(canonical);
+    }
+
+    Ok(kept)
 }
 
 fn link_points_to_current_tasklist(link: &FeishuLink, tasklists: &HashMap<String, String>) -> bool {
