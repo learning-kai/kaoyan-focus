@@ -160,11 +160,40 @@ async function updateCargoLock(version) {
   }
 
   const content = await readFile(cargoLockPath, 'utf8');
-  const next = content.replace(/(\[\[package\]\]\r?\nname = "kaoyan-focus"\r?\nversion = ")[^"]+(")/, `$1${version}$2`);
-  if (next === content) {
-    throw new Error(`Unable to find kaoyan-focus package version in ${cargoLockPath}`);
+  const packageName = await readCargoPackageName();
+  const result = replacePackageVersionInCargoLock(content, packageName, version);
+  if (!result.found) {
+    throw new Error(`Unable to find ${packageName} package version in ${cargoLockPath}`);
   }
-  await writeFile(cargoLockPath, next, 'utf8');
+  if (result.content !== content) {
+    await writeFile(cargoLockPath, result.content, 'utf8');
+  }
+}
+
+async function readCargoPackageName() {
+  const content = await readFile(cargoTomlPath, 'utf8');
+  const packageSection = content.match(/(?:^|\r?\n)\[package\][\s\S]*?(?=\r?\n\[|$)/);
+  const name = packageSection?.[0].match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1];
+  if (!name) {
+    throw new Error(`Unable to find package name in ${cargoTomlPath}`);
+  }
+  return name;
+}
+
+function replacePackageVersionInCargoLock(content, packageName, version) {
+  let found = false;
+  const next = content.replace(/(^|\r?\n)(\[\[package\]\][\s\S]*?)(?=\r?\n\[\[package\]\]|$)/g, (match, prefix, block) => {
+    if (!new RegExp(`^name = "${escapeRegExp(packageName)}"$`, 'm').test(block)) {
+      return match;
+    }
+    found = true;
+    if (!/^version = "[^"]+"/m.test(block)) {
+      throw new Error(`Unable to find ${packageName} package version in ${cargoLockPath}`);
+    }
+    const nextBlock = block.replace(/^version = "[^"]+"/m, `version = "${version}"`);
+    return `${prefix}${nextBlock}`;
+  });
+  return { content: next, found };
 }
 
 async function updateTauriConfig(version) {
