@@ -307,4 +307,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - chore: release v1.13.4 (2d27536)
 - Generalize Cargo lock version अपडेट for package name (9aa2a33)
 
+## v1.13.6 - 2026-06-17
+
+### Desktop
+#### Changed
+- Guard calendar sync against false remote deletions (74df496)
+
 
