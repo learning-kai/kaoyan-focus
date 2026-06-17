@@ -35,6 +35,7 @@ const REMINDER_SOUND_ID_KEY: &str = "reminder_sound_id";
 const REMINDER_SOUND_FILE_NAME_KEY: &str = "reminder_sound_file_name";
 const REMINDER_SOUND_UPDATED_AT_KEY: &str = "reminder_sound_updated_at";
 const REMINDER_SOUND_VOLUME_KEY: &str = "reminder_sound_volume";
+const REMINDER_SOUND_DURATION_SECONDS_KEY: &str = "reminder_sound_duration_seconds";
 const REMINDER_QUIET_HOURS_ENABLED_KEY: &str = "reminder_quiet_hours_enabled";
 const REMINDER_QUIET_HOURS_START_KEY: &str = "reminder_quiet_hours_start";
 const REMINDER_QUIET_HOURS_END_KEY: &str = "reminder_quiet_hours_end";
@@ -76,6 +77,7 @@ pub struct AppSettings {
     pub reminder_sound_file_name: Option<String>,
     pub reminder_sound_updated_at: Option<i64>,
     pub reminder_sound_volume: i64,
+    pub reminder_sound_duration_seconds: i64,
     pub reminder_quiet_hours_enabled: bool,
     pub reminder_quiet_hours_start: String,
     pub reminder_quiet_hours_end: String,
@@ -138,6 +140,7 @@ impl Default for AppSettings {
             reminder_sound_file_name: None,
             reminder_sound_updated_at: None,
             reminder_sound_volume: 100,
+            reminder_sound_duration_seconds: 30,
             reminder_quiet_hours_enabled: false,
             reminder_quiet_hours_start: "22:30".to_string(),
             reminder_quiet_hours_end: "07:00".to_string(),
@@ -297,6 +300,12 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             defaults.reminder_sound_volume,
         )?
         .clamp(0, 100),
+        reminder_sound_duration_seconds: get_i64_setting(
+            &connection,
+            REMINDER_SOUND_DURATION_SECONDS_KEY,
+            defaults.reminder_sound_duration_seconds,
+        )?
+        .clamp(5, 300),
         reminder_quiet_hours_enabled: get_bool_setting(
             &connection,
             REMINDER_QUIET_HOURS_ENABLED_KEY,
@@ -317,10 +326,7 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             AUTO_DOWNLOAD_UPDATE_KEY,
             defaults.auto_download_update,
         )?,
-        skip_update_version: get_optional_string_setting(
-            &connection,
-            SKIP_UPDATE_VERSION_KEY,
-        )?,
+        skip_update_version: get_optional_string_setting(&connection, SKIP_UPDATE_VERSION_KEY)?,
         update_reminder_snooze_until: get_optional_i64_setting(
             &connection,
             UPDATE_REMINDER_SNOOZE_UNTIL_KEY,
@@ -375,6 +381,7 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
             .and_then(normalize_optional_string),
         reminder_sound_updated_at: settings.reminder_sound_updated_at,
         reminder_sound_volume: settings.reminder_sound_volume.clamp(0, 100),
+        reminder_sound_duration_seconds: settings.reminder_sound_duration_seconds.clamp(5, 300),
         reminder_quiet_hours_enabled: settings.reminder_quiet_hours_enabled,
         reminder_quiet_hours_start: normalize_time_of_day(&settings.reminder_quiet_hours_start),
         reminder_quiet_hours_end: normalize_time_of_day(&settings.reminder_quiet_hours_end),
@@ -591,6 +598,12 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         REMINDER_SOUND_VOLUME_KEY,
         &normalized.reminder_sound_volume.to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        REMINDER_SOUND_DURATION_SECONDS_KEY,
+        &normalized.reminder_sound_duration_seconds.to_string(),
         &now,
     )?;
     set_setting(

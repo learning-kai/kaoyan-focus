@@ -10,7 +10,7 @@ import {
   useAlarmWatcher,
   useEmailReminders,
   useScheduleReminders,
-  useStudyCompletionReminder,
+  useStudyModeReminders,
   useSyncTakeoverNavigation,
 } from './hooks/useAppBackgroundTasks';
 import { getAppSettings, saveAppSettings } from './services/settingsApi';
@@ -180,7 +180,7 @@ export default function App() {
 
   useAutoSync(setLastAutoSyncMessage);
   useSyncTakeoverNavigation(navigateToPage);
-  useStudyCompletionReminder();
+  useStudyModeReminders();
   useAutoUpdateCheck(setLastAutoUpdateMessage, useCallback((update: UpdateInfo) => {
     setPendingUpdate(update);
   }, []));

@@ -124,7 +124,10 @@ pub fn create_whitelist_website(
     }
 
     if domain.is_empty() || !domain.contains('.') {
-        return Err("网站域名不正确，例如 baidu.com，或填写完整网址 https://www.bilibili.com/video".to_string());
+        return Err(
+            "网站域名不正确，例如 baidu.com，或填写完整网址 https://www.bilibili.com/video"
+                .to_string(),
+        );
     }
 
     let now = Utc::now().to_rfc3339();

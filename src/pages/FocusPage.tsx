@@ -12,7 +12,7 @@ import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { createScheduleBlock, createScheduleBlockFromTodayItem, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
 import { getAppSettings, getSyncDeviceId, saveAppSettings } from '../services/settingsApi';
-import { buildStudyReminder, markStudyReminderSeen, nextStudyBreakLabel, registerStudyReminderScope, resetStudyReminderScope, studyBreakKindLabel } from '../services/studyReminder';
+import { buildStudyReminder, isFinishedStudyMode, isStaleFinishedStudyReminder, markStudyReminderSeen, nextStudyBreakLabel, registerStudyReminderScope, resetStudyReminderScope, studyBreakKindLabel } from '../services/studyReminder';
 import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
 import { setStudyFullscreen } from '../services/systemApi';
@@ -194,6 +194,16 @@ function sessionStatusLabel(status: string) {
   return labels[status] ?? status;
 }
 
+function shouldSilentlyMarkInitialReminderSeen(studyState: StudyModeState) {
+  if (studyState.status === 'active' && studyState.phase === 'awaiting_break') {
+    return false;
+  }
+  if (isFinishedStudyMode(studyState)) {
+    return isStaleFinishedStudyReminder(studyState);
+  }
+  return true;
+}
+
 export default function FocusPage() {
   const [studyMinutes, setStudyMinutes] = useState(120);
   const [focusMinutes, setFocusMinutes] = useState(25);
@@ -346,7 +356,9 @@ export default function FocusPage() {
       const requestId = beginStudyStateRequest();
       applyStudyStateIfCurrent(stateData, requestId);
       registerStudyReminderScope(stateData, activeReminderScopeRef);
-      markStudyReminderSeen(stateData, deviceId);
+      if (shouldSilentlyMarkInitialReminderSeen(stateData)) {
+        markStudyReminderSeen(stateData, deviceId);
+      }
       await Promise.all([refreshDashboard(), refreshChecklistData(), refreshScheduleData()]);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }

@@ -178,7 +178,7 @@ export function useSyncTakeoverNavigation(setActivePage: (page: AppPage) => void
   }, [setActivePage]);
 }
 
-export function useStudyCompletionReminder() {
+export function useStudyModeReminders() {
   const initializedRef = useRef(false);
   const syncDeviceIdRef = useRef<string | null>(null);
   const syncDeviceIdLoadedRef = useRef(false);
@@ -203,7 +203,7 @@ export function useStudyCompletionReminder() {
       return syncDeviceIdRef.current;
     }
 
-    async function checkStudyCompletion() {
+    async function checkStudyReminders() {
       if (checkInFlight) {
         return;
       }
@@ -215,31 +215,31 @@ export function useStudyCompletionReminder() {
           return;
         }
 
-        const finished = isFinishedStudyMode(studyState);
         if (!initializedRef.current) {
           initializedRef.current = true;
-          if (finished && isStaleFinishedStudyReminder(studyState)) {
+          const finished = isFinishedStudyMode(studyState);
+          if (!finished) {
+            return;
+          }
+          if (isStaleFinishedStudyReminder(studyState)) {
             markStudyReminderSeen(studyState, syncDeviceId);
             return;
           }
         }
 
-        if (!finished) {
-          return;
-        }
-
-        if (isStaleFinishedStudyReminder(studyState)) {
-          markStudyReminderSeen(studyState, syncDeviceId);
-          return;
-        }
-
-        if (Date.now() <= suppressFinishedReminderUntilRef.current) {
-          markStudyReminderSeen(studyState, syncDeviceId);
-          return;
-        }
-
         const reminder = buildStudyReminder(studyState);
-        if (!reminder || !markStudyReminderSeen(studyState, syncDeviceId)) {
+        if (!reminder) {
+          return;
+        }
+
+        if (isFinishedStudyMode(studyState)) {
+          if (isStaleFinishedStudyReminder(studyState) || Date.now() <= suppressFinishedReminderUntilRef.current) {
+            markStudyReminderSeen(studyState, syncDeviceId);
+            return;
+          }
+        }
+
+        if (!markStudyReminderSeen(studyState, syncDeviceId)) {
           return;
         }
 
@@ -255,7 +255,7 @@ export function useStudyCompletionReminder() {
       if (event.payload?.took_over_active_mode) {
         suppressFinishedReminderUntilRef.current = Date.now() + STUDY_COMPLETION_SYNC_SUPPRESS_MS;
       }
-      void checkStudyCompletion();
+      void checkStudyReminders();
     })
       .then((dispose) => {
         if (disposed) {
@@ -269,9 +269,9 @@ export function useStudyCompletionReminder() {
         // Browser previews and partial desktop runtimes may not expose this event.
       });
 
-    void checkStudyCompletion();
+    void checkStudyReminders();
     const intervalId = window.setInterval(() => {
-      void checkStudyCompletion();
+      void checkStudyReminders();
     }, STUDY_COMPLETION_REMINDER_INTERVAL_MS);
 
     return () => {

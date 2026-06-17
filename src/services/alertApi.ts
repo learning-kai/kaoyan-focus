@@ -538,8 +538,13 @@ function timeOfDayToMinutes(value: string) {
   return hour * 60 + minute;
 }
 
-function toastSoundId(_settings: ReminderSoundSettings) {
-  return 'silent';
+function toastSoundId(settings: ReminderSoundSettings) {
+  if (isQuietHoursActive(settings) || settings.reminder_sound_volume <= 0) {
+    return 'silent';
+  }
+  return settings.reminder_sound_source === 'builtin'
+    ? normalizeReminderSoundId(settings.reminder_sound_id)
+    : 'classic';
 }
 
 function silentNotificationSettings(settings: ReminderSoundSettings): ReminderSoundSettings {

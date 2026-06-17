@@ -605,7 +605,7 @@ mod tests {
             ),
             None,
         );
-        let result = is_foreground_app_allowed(&hit, &[], &[rule.clone()], &[]);
+        let result = is_foreground_app_allowed(&hit, &[], std::slice::from_ref(&rule), &[]);
         assert!(result.allowed);
         assert_eq!(result.matched_subject_id, Some(7));
 
@@ -618,7 +618,7 @@ mod tests {
             Some("https://www.bilibili.com/video/BV1other/?vd_source=somethingelse".to_string()),
             None,
         );
-        let result = is_foreground_app_allowed(&miss, &[], &[rule.clone()], &[]);
+        let result = is_foreground_app_allowed(&miss, &[], std::slice::from_ref(&rule), &[]);
         assert!(!result.allowed);
 
         // 地址栏隐藏了 scheme（chrome 实际表现）→ 仍应正确命中。
