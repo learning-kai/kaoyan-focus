@@ -294,4 +294,17 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Generalize Cargo lock version अपडेट for package name (9aa2a33)
 
+## v1.13.5 - 2026-06-17
+
+### Desktop
+#### Added
+- Add study reminder timing and sound settings (dc1b0a7)
+
+#### Fixed
+- Fix Feishu sync conflict handling (7a503e9)
+
+#### Changed
+- chore: release v1.13.4 (2d27536)
+- Generalize Cargo lock version अपडेट for package name (9aa2a33)
+
 
