@@ -327,4 +327,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Refine Feishu sync conflicts and add foreground rule mode (0a3a4ee)
 
+## v1.14.1 - 2026-06-18
+
+### Desktop
+#### Added
+- Add CalDAV sync and rename schedule UI to calendar (abfef73)
+
 
