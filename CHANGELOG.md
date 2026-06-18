@@ -321,3 +321,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - 修复飞书日程和任务重复同步 (02cd9d4)
 
+## v1.14.0 - 2026-06-18
+
+### Desktop
+#### Changed
+- Refine Feishu sync conflicts and add foreground rule mode (0a3a4ee)
+
+
