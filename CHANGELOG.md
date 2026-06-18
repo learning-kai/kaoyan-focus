@@ -345,4 +345,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Preserve CalDAV UIDs during sync and add auto polling (b4a995e)
 
+## v1.14.5 - 2026-06-18
+
+### Desktop
+#### Changed
+- Separate allowlist and blocklist rule entries (562c4d9)
+
 
