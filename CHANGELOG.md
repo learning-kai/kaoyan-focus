@@ -333,4 +333,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Added
 - Add CalDAV sync and rename schedule UI to calendar (abfef73)
 
+## v1.14.3 - 2026-06-18
+
+### Desktop
+#### Changed
+- Accept common CalDAV writable privileges in discovery (f32b061)
+
 
