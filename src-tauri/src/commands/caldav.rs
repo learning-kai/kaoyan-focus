@@ -13,7 +13,10 @@ use reqwest::{
 };
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, thread};
+use std::{
+    collections::{HashMap, HashSet},
+    thread,
+};
 use tauri::{AppHandle, Manager};
 
 const ENTITY_SCHEDULE_BLOCK: &str = "schedule_block";
@@ -82,7 +85,7 @@ struct LocalCalendarBlock {
 
 #[derive(Debug, Clone)]
 struct ImportedCalendarBlock {
-    id: i64,
+    sync_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +99,7 @@ struct RemoteCalendarEvent {
     end_minute: i64,
     updated_millis: Option<i64>,
     marker_sync_id: Option<String>,
+    raw_ics: String,
 }
 
 #[derive(Debug, Clone)]
@@ -389,12 +393,14 @@ fn sync_calendar_events(
         if is_importable_remote_event(&remote) {
             let block = create_local_schedule_block_from_remote(connection, &remote)?;
             if remote.marker_sync_id.is_none() {
-                if let Ok(local) = load_local_calendar_block_by_id(connection, block.id) {
-                    let _ = put_remote_event(
+                if let Ok(updated_ics) =
+                    mark_remote_ics_with_sync_marker(&remote.raw_ics, &block.sync_id)
+                {
+                    let _ = put_remote_ics(
                         client,
                         settings,
                         &remote.id,
-                        &local,
+                        updated_ics,
                         remote.etag.as_deref(),
                     );
                 }
@@ -449,7 +455,7 @@ fn sync_linked_event(
         prefer_local_changes,
     ) {
         LinkedCalendarAction::PushLocal => {
-            put_remote_event(client, settings, &remote.id, local, remote.etag.as_deref())?;
+            put_existing_remote_event(client, settings, remote, local)?;
             upsert_calendar_link(
                 connection,
                 Some(local.id),
@@ -643,6 +649,26 @@ fn put_remote_event(
     etag: Option<&str>,
 ) -> Result<(), String> {
     let ics = build_ics_event(block, TIME_ZONE)?;
+    put_remote_ics(client, settings, event_url, ics, etag)
+}
+
+fn put_existing_remote_event(
+    client: &Client,
+    settings: &CalDavSettings,
+    remote: &RemoteCalendarEvent,
+    block: &LocalCalendarBlock,
+) -> Result<(), String> {
+    let ics = build_ics_event_from_existing_remote(&remote.raw_ics, block, TIME_ZONE)?;
+    put_remote_ics(client, settings, &remote.id, ics, remote.etag.as_deref())
+}
+
+fn put_remote_ics(
+    client: &Client,
+    settings: &CalDavSettings,
+    event_url: &str,
+    ics: String,
+    etag: Option<&str>,
+) -> Result<(), String> {
     let mut request = caldav_request(client, Method::PUT, event_url, settings)
         .header(CONTENT_TYPE, "text/calendar; charset=utf-8")
         .body(ics);
@@ -848,6 +874,7 @@ fn parse_ics_event(
         end_minute,
         updated_millis,
         marker_sync_id,
+        raw_ics: ics.to_string(),
     }))
 }
 
@@ -882,6 +909,107 @@ fn build_ics_event(block: &LocalCalendarBlock, _timezone: &str) -> Result<String
         String::new(),
     ]
     .join("\r\n"))
+}
+
+fn build_ics_event_from_existing_remote(
+    raw_ics: &str,
+    block: &LocalCalendarBlock,
+    _timezone: &str,
+) -> Result<String, String> {
+    let start = local_date_minute_to_ics(&block.schedule_date, block.start_minute)?;
+    let end = local_date_minute_to_ics(&block.schedule_date, block.end_minute)?;
+    let dtstamp = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+    let description = body_with_marker(block.note.as_deref(), &block.sync_id);
+    rewrite_first_vevent_properties(
+        raw_ics,
+        &[
+            ("DTSTAMP", dtstamp),
+            ("DTSTART", start),
+            ("DTEND", end),
+            ("SUMMARY", escape_ics_text(&block.title)),
+            ("DESCRIPTION", escape_ics_text(&description)),
+            ("X-KAOYAN-FOCUS-SYNC-ID", escape_ics_text(&block.sync_id)),
+            (
+                "STATUS",
+                if block.status == "completed" {
+                    "CONFIRMED".to_string()
+                } else {
+                    "TENTATIVE".to_string()
+                },
+            ),
+        ],
+    )
+}
+
+fn mark_remote_ics_with_sync_marker(raw_ics: &str, sync_id: &str) -> Result<String, String> {
+    rewrite_first_vevent_properties(
+        raw_ics,
+        &[("X-KAOYAN-FOCUS-SYNC-ID", escape_ics_text(sync_id))],
+    )
+}
+
+fn rewrite_first_vevent_properties(
+    raw_ics: &str,
+    properties: &[(&str, String)],
+) -> Result<String, String> {
+    let lines = split_ics_lines(raw_ics);
+    let replace_names = properties
+        .iter()
+        .map(|(name, _)| name.to_ascii_uppercase())
+        .collect::<HashSet<_>>();
+    let mut result = Vec::<String>::new();
+    let mut in_event = false;
+    let mut event_done = false;
+    let mut skipping_replaced_property = false;
+    let mut saw_uid = false;
+    let mut inserted = false;
+
+    for line in lines {
+        if skipping_replaced_property && is_ics_continuation_line(&line) {
+            continue;
+        }
+        skipping_replaced_property = false;
+
+        if !event_done && line.trim_end_matches('\r') == "BEGIN:VEVENT" {
+            in_event = true;
+            result.push(line);
+            continue;
+        }
+
+        if in_event && line.trim_end_matches('\r') == "END:VEVENT" {
+            for (name, value) in properties {
+                result.push(format!("{}:{}", name.to_ascii_uppercase(), value));
+            }
+            inserted = true;
+            in_event = false;
+            event_done = true;
+            result.push(line);
+            continue;
+        }
+
+        if in_event {
+            if let Some(name) = ics_property_name(&line) {
+                if name == "UID" {
+                    saw_uid = true;
+                }
+                if replace_names.contains(&name) {
+                    skipping_replaced_property = true;
+                    continue;
+                }
+            }
+        }
+
+        result.push(line);
+    }
+
+    if !inserted {
+        return Err("VEVENT 缺少 END:VEVENT，无法安全写入 CalDAV 同步标记。".to_string());
+    }
+    if !saw_uid {
+        return Err("VEVENT 缺少 UID，拒绝覆盖远端事件以避免产生重复日程。".to_string());
+    }
+
+    Ok(normalize_ics_lines(result))
 }
 
 fn create_local_schedule_block_from_remote(
@@ -936,7 +1064,7 @@ fn create_local_schedule_block_from_remote(
             .map(|value| value.to_string())
             .as_deref(),
     )?;
-    Ok(ImportedCalendarBlock { id: local_id })
+    Ok(ImportedCalendarBlock { sync_id })
 }
 
 fn update_local_schedule_block_from_remote(
@@ -1033,41 +1161,6 @@ fn load_local_calendar_blocks(connection: &Connection) -> Result<Vec<LocalCalend
     }
     blocks.extend(load_tombstone_blocks(connection)?);
     Ok(blocks)
-}
-
-fn load_local_calendar_block_by_id(
-    connection: &Connection,
-    local_id: i64,
-) -> Result<LocalCalendarBlock, String> {
-    connection
-        .query_row(
-            "
-            SELECT b.id, b.schedule_date, b.title, b.note, b.start_minute, b.end_minute,
-                   b.status, b.updated_at, m.sync_id, m.deleted_at
-            FROM schedule_blocks b
-            LEFT JOIN sync_meta m ON m.entity_type = 'schedule_block' AND m.local_id = b.id
-            WHERE b.id = ?1
-            ",
-            params![local_id],
-            |row| {
-                let id: i64 = row.get(0)?;
-                Ok(LocalCalendarBlock {
-                    id,
-                    schedule_date: row.get(1)?,
-                    title: row.get(2)?,
-                    note: row.get(3)?,
-                    start_minute: row.get(4)?,
-                    end_minute: row.get(5)?,
-                    status: row.get(6)?,
-                    updated_at: row.get(7)?,
-                    sync_id: row
-                        .get::<_, Option<String>>(8)?
-                        .unwrap_or_else(|| format!("{ENTITY_SCHEDULE_BLOCK}-{id}")),
-                    deleted_at: row.get(9)?,
-                })
-            },
-        )
-        .map_err(|error| error.to_string())
 }
 
 fn load_tombstone_blocks(connection: &Connection) -> Result<Vec<LocalCalendarBlock>, String> {
@@ -1730,6 +1823,38 @@ fn xml_local_name(bytes: &[u8]) -> String {
         .unwrap_or_else(|| name.to_string())
 }
 
+fn split_ics_lines(ics: &str) -> Vec<String> {
+    ics.replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .split('\n')
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn is_ics_continuation_line(line: &str) -> bool {
+    line.starts_with(' ') || line.starts_with('\t')
+}
+
+fn ics_property_name(line: &str) -> Option<String> {
+    if is_ics_continuation_line(line) {
+        return None;
+    }
+    let (name, _) = line.split_once(':')?;
+    Some(
+        name.split(';')
+            .next()
+            .unwrap_or(name)
+            .trim()
+            .to_ascii_uppercase(),
+    )
+}
+
+fn normalize_ics_lines(mut lines: Vec<String>) -> String {
+    lines.push(String::new());
+    lines.join("\r\n")
+}
+
 fn start_has_case_insensitive_attribute(
     start: &BytesStart<'_>,
     name: &str,
@@ -1979,6 +2104,78 @@ mod tests {
     }
 
     #[test]
+    fn marker_writeback_preserves_remote_uid_for_imported_event() {
+        let remote_ics = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//Example//Calendar//EN",
+            "BEGIN:VEVENT",
+            "UID:iphone-event-1",
+            "DTSTAMP:20260618T000000Z",
+            "DTSTART:20260618T083000",
+            "DTEND:20260618T093000",
+            "SUMMARY:iPhone 修改的日程",
+            "DESCRIPTION:从手机创建",
+            "END:VEVENT",
+            "END:VCALENDAR",
+            "",
+        ]
+        .join("\r\n");
+
+        let marked =
+            mark_remote_ics_with_sync_marker(&remote_ics, "schedule_block-42").expect("mark ics");
+
+        assert!(marked.contains("UID:iphone-event-1"));
+        assert!(!marked.contains("UID:schedule_block-42@kaoyan-focus"));
+        assert!(marked.contains("X-KAOYAN-FOCUS-SYNC-ID:schedule_block-42"));
+
+        let parsed = parse_ics_event("https://cal.example/cal/plain.ics", None, &marked)
+            .expect("parse marked event")
+            .expect("has event");
+        assert_eq!(parsed.marker_sync_id.as_deref(), Some("schedule_block-42"));
+        assert_eq!(parsed.note.as_deref(), Some("从手机创建"));
+    }
+
+    #[test]
+    fn local_push_to_imported_event_preserves_remote_uid() {
+        let remote_ics = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//Example//Calendar//EN",
+            "BEGIN:VEVENT",
+            "UID:iphone-event-1",
+            "DTSTAMP:20260618T000000Z",
+            "DTSTART:20260618T083000",
+            "DTEND:20260618T093000",
+            "SUMMARY:旧标题",
+            "DESCRIPTION:旧备注",
+            "END:VEVENT",
+            "END:VCALENDAR",
+            "",
+        ]
+        .join("\r\n");
+        let block = sample_block();
+
+        let updated = build_ics_event_from_existing_remote(&remote_ics, &block, "Asia/Shanghai")
+            .expect("build existing event update");
+
+        assert!(updated.contains("UID:iphone-event-1"));
+        assert!(!updated.contains("UID:schedule_block-7@kaoyan-focus"));
+        assert!(updated.contains("SUMMARY:数学真题"));
+        assert!(updated.contains("X-KAOYAN-FOCUS-SYNC-ID:schedule_block-7"));
+
+        let parsed = parse_ics_event("https://cal.example/cal/plain.ics", None, &updated)
+            .expect("parse updated event")
+            .expect("has event");
+        assert_eq!(parsed.marker_sync_id.as_deref(), Some("schedule_block-7"));
+        assert_eq!(parsed.title, "数学真题");
+        assert_eq!(parsed.note.as_deref(), Some("2008 第一套"));
+        assert_eq!(parsed.schedule_date, "2026-06-18");
+        assert_eq!(parsed.start_minute, 510);
+        assert_eq!(parsed.end_minute, 600);
+    }
+
+    #[test]
     fn parses_caldav_calendar_discovery_multistatus() {
         let xml = r#"<?xml version="1.0" encoding="utf-8"?>
         <d:multistatus xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/" xmlns:cal="urn:ietf:params:xml:ns:caldav">
@@ -2203,6 +2400,20 @@ END:VCALENDAR&#13;
             end_minute: 20 * 60,
             updated_millis: Some(1_777_000_000_000),
             marker_sync_id: None,
+            raw_ics: [
+                "BEGIN:VCALENDAR",
+                "VERSION:2.0",
+                "BEGIN:VEVENT",
+                "UID:plain",
+                "DTSTART:20260619T190000",
+                "DTEND:20260619T200000",
+                "SUMMARY:政治背诵",
+                "DESCRIPTION:第 3 章",
+                "END:VEVENT",
+                "END:VCALENDAR",
+                "",
+            ]
+            .join("\r\n"),
         };
 
         let block =
@@ -2213,9 +2424,10 @@ END:VCALENDAR&#13;
                 SELECT b.title, b.category_key, b.subject_id, m.sync_id
                 FROM schedule_blocks b
                 JOIN sync_meta m ON m.entity_type = 'schedule_block' AND m.local_id = b.id
-                WHERE b.id = ?1
+                ORDER BY b.id DESC
+                LIMIT 1
                 ",
-                params![block.id],
+                [],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )
             .expect("imported block");
@@ -2223,6 +2435,7 @@ END:VCALENDAR&#13;
         assert_eq!(imported.1, "general");
         assert_eq!(imported.2, None);
         assert!(imported.3.starts_with("schedule_block-"));
+        assert_eq!(block.sync_id, imported.3);
 
         let link_count: i64 = connection
             .query_row("SELECT COUNT(*) FROM calendar_sync_links", [], |row| {

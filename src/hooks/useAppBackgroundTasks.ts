@@ -12,6 +12,10 @@ import {
 } from '../services/alarmApi';
 import { checkDueTaskEmailReminders } from '../services/emailApi';
 import {
+  CALDAV_SYNC_REFRESH_EVENT,
+  syncCalDavCalendar,
+} from '../services/caldavApi';
+import {
   FEISHU_SYNC_REFRESH_EVENT,
   syncFeishuBridge,
 } from '../services/feishuApi';
@@ -39,6 +43,7 @@ const AUTO_UPDATE_CHECK_STARTUP_DELAY_MS = 12 * 1000;
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const AUTO_UPDATE_NOTICE_STORAGE_KEY = 'kaoyan-focus:last-auto-update-notice-version';
 const FEISHU_AUTO_SYNC_INTERVAL_MS = 30 * 1000;
+const CALDAV_AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const SCHEDULE_REMINDER_INTERVAL_MS = 30 * 1000;
 const SCHEDULE_REMINDER_LOOKBACK_MINUTES = 1;
 const EMAIL_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
@@ -60,8 +65,10 @@ export function useAutoSync(setLastAutoSyncMessage: (message: string | null) => 
     let disposed = false;
     let syncInFlight = false;
     let feishuSyncInFlight = false;
+    let calDavSyncInFlight = false;
     let lastAutoSyncAt = 0;
     let lastFeishuAutoSyncAt = 0;
+    let lastCalDavAutoSyncAt = 0;
 
     async function runFeishuSync(trigger = 'auto') {
       if (feishuSyncInFlight) {
@@ -82,6 +89,28 @@ export function useAutoSync(setLastAutoSyncMessage: (message: string | null) => 
         })
         .finally(() => {
           feishuSyncInFlight = false;
+        });
+    }
+
+    async function runCalDavSync(trigger = 'auto') {
+      if (calDavSyncInFlight) {
+        return;
+      }
+
+      lastCalDavAutoSyncAt = Date.now();
+      calDavSyncInFlight = true;
+      await syncCalDavCalendar(trigger)
+        .then((result) => {
+          if (result.status === 'synced' && (result.pulled_count > 0 || result.deleted_count > 0)) {
+            window.dispatchEvent(new CustomEvent(CALDAV_SYNC_REFRESH_EVENT, { detail: result }));
+            void syncConfiguredStateChange('caldav_calendar_in').catch(() => undefined);
+          }
+        })
+        .catch(() => {
+          // CalDAV status is visible in Settings; automatic polling stays quiet.
+        })
+        .finally(() => {
+          calDavSyncInFlight = false;
         });
     }
 
@@ -112,6 +141,7 @@ export function useAutoSync(setLastAutoSyncMessage: (message: string | null) => 
         });
 
       void runFeishuSync('auto');
+      void runCalDavSync('auto');
     }
 
     async function getRequiredInterval() {
@@ -136,6 +166,9 @@ export function useAutoSync(setLastAutoSyncMessage: (message: string | null) => 
         }
         if (Date.now() - lastFeishuAutoSyncAt >= FEISHU_AUTO_SYNC_INTERVAL_MS) {
           await runFeishuSync('auto_poll');
+        }
+        if (Date.now() - lastCalDavAutoSyncAt >= CALDAV_AUTO_SYNC_INTERVAL_MS) {
+          await runCalDavSync('auto_poll');
         }
       })();
     }, ACTIVE_AUTO_SYNC_INTERVAL_MS);
