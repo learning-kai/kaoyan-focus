@@ -339,4 +339,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Accept common CalDAV writable privileges in discovery (f32b061)
 
+## v1.14.4 - 2026-06-18
+
+### Desktop
+#### Changed
+- Preserve CalDAV UIDs during sync and add auto polling (b4a995e)
+
 
