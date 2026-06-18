@@ -730,7 +730,7 @@ fn parse_calendar_discovery_response(
         if !response.has_tag("calendar") {
             continue;
         }
-        if !response.has_vevent_support {
+        if !response.supports_vevent() {
             continue;
         }
         let Some(href) = response.first_text("href") else {
@@ -741,7 +741,7 @@ fn parse_calendar_discovery_response(
             .first_text("displayname")
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| url.clone());
-        let writable = response.has_tag("write") || response.has_tag("write-content");
+        let writable = response.is_writable_calendar();
         if !writable {
             continue;
         }
@@ -1593,6 +1593,21 @@ impl CalDavXmlResponse {
                     .any(|part| matches!(part, "200" | "201" | "204" | "207"))
             })
     }
+
+    fn supports_vevent(&self) -> bool {
+        !self.has_tag("supported-calendar-component-set") || self.has_vevent_support
+    }
+
+    fn is_writable_calendar(&self) -> bool {
+        if !self.has_tag("current-user-privilege-set") {
+            return true;
+        }
+
+        self.has_tag("write")
+            || self.has_tag("write-content")
+            || self.has_tag("bind")
+            || self.has_tag("all")
+    }
 }
 
 fn parse_multistatus_responses(xml: &str) -> Result<Vec<CalDavXmlResponse>, String> {
@@ -2020,6 +2035,49 @@ mod tests {
             "https://cal.example/calendars/user/study/"
         );
         assert!(calendars[0].writable);
+    }
+
+    #[test]
+    fn discovery_accepts_common_caldav_writable_privileges_and_missing_component_set() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+        <d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+          <d:response>
+            <d:href>/calendars/user/icloud-style/</d:href>
+            <d:propstat>
+              <d:prop>
+                <d:displayname>iCloud Style</d:displayname>
+                <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
+                <d:current-user-privilege-set>
+                  <d:privilege><d:read/></d:privilege>
+                  <d:privilege><d:all/></d:privilege>
+                </d:current-user-privilege-set>
+              </d:prop>
+              <d:status>HTTP/1.1 200 OK</d:status>
+            </d:propstat>
+          </d:response>
+          <d:response>
+            <d:href>/calendars/user/bind-style/</d:href>
+            <d:propstat>
+              <d:prop>
+                <d:displayname>Bind Style</d:displayname>
+                <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
+                <cal:supported-calendar-component-set><cal:comp name="VEVENT"/></cal:supported-calendar-component-set>
+                <d:current-user-privilege-set>
+                  <d:privilege><d:read/></d:privilege>
+                  <d:privilege><d:bind/></d:privilege>
+                </d:current-user-privilege-set>
+              </d:prop>
+              <d:status>HTTP/1.1 200 OK</d:status>
+            </d:propstat>
+          </d:response>
+        </d:multistatus>"#;
+
+        let calendars =
+            parse_calendar_discovery_response("https://cal.example", xml).expect("parse calendars");
+        assert_eq!(calendars.len(), 2);
+        assert_eq!(calendars[0].name, "iCloud Style");
+        assert_eq!(calendars[1].name, "Bind Style");
+        assert!(calendars.iter().all(|calendar| calendar.writable));
     }
 
     #[test]
