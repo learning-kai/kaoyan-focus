@@ -44,8 +44,8 @@ export const pages: Record<AppPage, PageMeta> = {
     component: lazy(() => import('./pages/ChecklistPage')),
   },
   schedule: {
-    title: '课表',
-    description: '把任务落到时间',
+    title: '日历',
+    description: '安排学习日程',
     shortcut: 'Alt+3',
     icon: CalendarDays,
     component: lazy(() => import('./pages/SchedulePage')),

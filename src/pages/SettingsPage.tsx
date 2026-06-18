@@ -5,7 +5,13 @@ import { IntegrationsPanel } from './settings/IntegrationsPanel';
 import { SyncSettingsPanel } from './settings/SyncSettingsPanel';
 import { SystemPanel } from './settings/SystemPanel';
 import { formatBytes } from './settings/SettingsPrimitives';
-import type { AppDataLocation, ObjectStorageBusyAction, SettingsPanelKey, WebDavBusyAction } from './settings/types';
+import type {
+  AppDataLocation,
+  CalDavBusyAction,
+  ObjectStorageBusyAction,
+  SettingsPanelKey,
+  WebDavBusyAction,
+} from './settings/types';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { getRuntimeHealth } from '../services/healthApi';
 import { getStudyModeState } from '../services/focusApi';
@@ -51,6 +57,14 @@ import {
   startFeishuOAuthLogin,
   syncFeishuBridge,
 } from '../services/feishuApi';
+import {
+  CALDAV_SYNC_REFRESH_EVENT,
+  discoverCalDavCalendars,
+  getCalDavSettings,
+  saveCalDavSettings,
+  syncCalDavCalendar,
+  testCalDavConnection,
+} from '../services/caldavApi';
 import { getEmailReminderSettings, saveEmailReminderSettings, testEmailReminder } from '../services/emailApi';
 import { openExternalUrl } from '../services/systemApi';
 import { checkForAppUpdate, installAppUpdate, type AppUpdate } from '../services/updateApi';
@@ -59,6 +73,8 @@ import type { ForegroundApp } from '../types/monitor';
 import type {
   AppSettings,
   AppTheme,
+  CalDavCalendar,
+  CalDavSettings,
   EmailReminderSettings,
   FeishuSyncSettings,
   FeishuSyncStatus,
@@ -148,6 +164,15 @@ const defaultFeishuSettings: FeishuSyncSettings = {
   redirect_uri: 'http://127.0.0.1:39781/feishu/callback',
 };
 
+const defaultCalDavSettings: CalDavSettings = {
+  enabled: false,
+  server_url: '',
+  username: '',
+  password: '',
+  selected_calendar_url: '',
+  selected_calendar_name: '',
+};
+
 const reminderSoundSourceOptions: Array<{ value: ReminderSoundSource; label: string; description: string }> = [
   {
     value: 'builtin',
@@ -223,6 +248,8 @@ export default function SettingsPage({
   const [emailSettings, setEmailSettings] = useState<EmailReminderSettings>(defaultEmailReminderSettings);
   const [feishuSettings, setFeishuSettings] = useState<FeishuSyncSettings>(defaultFeishuSettings);
   const [feishuStatus, setFeishuStatus] = useState<FeishuSyncStatus | null>(null);
+  const [calDavSettings, setCalDavSettings] = useState<CalDavSettings>(defaultCalDavSettings);
+  const [calDavCalendars, setCalDavCalendars] = useState<CalDavCalendar[]>([]);
   const [dataLocation, setDataLocation] = useState<AppDataLocation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -231,6 +258,7 @@ export default function SettingsPage({
   const [objectStorageMessage, setObjectStorageMessage] = useState<string | null>(null);
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [feishuMessage, setFeishuMessage] = useState<string | null>(null);
+  const [calDavMessage, setCalDavMessage] = useState<string | null>(null);
   const [reminderSoundMessage, setReminderSoundMessage] = useState<string | null>(null);
   const [syncRuns, setSyncRuns] = useState<SyncRunSummary[]>([]);
   const [syncBackups, setSyncBackups] = useState<SyncBackupEntry[]>([]);
@@ -248,6 +276,8 @@ export default function SettingsPage({
   const [objectStorageBusyAction, setObjectStorageBusyAction] = useState<ObjectStorageBusyAction | null>(null);
   const [emailBusy, setEmailBusy] = useState(false);
   const [feishuBusy, setFeishuBusy] = useState(false);
+  const [calDavBusy, setCalDavBusy] = useState(false);
+  const [calDavBusyAction, setCalDavBusyAction] = useState<CalDavBusyAction | null>(null);
   const [reminderSoundBusy, setReminderSoundBusy] = useState(false);
   const [customReminderSoundFile, setCustomReminderSoundFile] = useState<File | null>(null);
   const [customReminderSoundInputKey, setCustomReminderSoundInputKey] = useState(0);
@@ -258,6 +288,7 @@ export default function SettingsPage({
   const [expandedPanels, setExpandedPanels] = useState<Record<SettingsPanelKey, boolean>>({
     webdav: false,
     feishu: false,
+    caldav: false,
     email: false,
     syncJournal: false,
     backups: false,
@@ -324,10 +355,12 @@ export default function SettingsPage({
       objectStorage:
         current.objectStorage || settings.sync_backend === 'object_storage' || objectStorageSettings.enabled,
       feishu: current.feishu || feishuSettings.enabled,
+      caldav: current.caldav || calDavSettings.enabled,
       email: current.email || emailSettings.enabled,
     }));
   }, [
     settingsLoaded,
+    calDavSettings.enabled,
     objectStorageSettings.enabled,
     settings.sync_backend,
     feishuSettings.enabled,
@@ -371,6 +404,7 @@ export default function SettingsPage({
         refreshObjectStorageSettings(),
         refreshEmailSettings(),
         refreshFeishuSettings(),
+        refreshCalDavSettings(),
         refreshSyncDetails(),
         refreshRuntimeHealth(),
       ]);
@@ -425,6 +459,31 @@ export default function SettingsPage({
       const [settings, status] = await Promise.all([getFeishuSyncSettings(), getFeishuSyncStatus()]);
       setFeishuSettings(settings);
       setFeishuStatus(status);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function refreshCalDavSettings() {
+    try {
+      const settings = await getCalDavSettings();
+      setCalDavSettings(settings);
+      setCalDavCalendars((current) => {
+        if (!settings.selected_calendar_url) {
+          return current;
+        }
+        if (current.some((calendar) => calendar.url === settings.selected_calendar_url)) {
+          return current;
+        }
+        return [
+          {
+            url: settings.selected_calendar_url,
+            name: settings.selected_calendar_name || settings.selected_calendar_url,
+            writable: true,
+          },
+          ...current,
+        ];
+      });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -498,6 +557,7 @@ export default function SettingsPage({
       emailSettings,
       feishuSettings,
       feishuStatus,
+      calDavSettings,
       foregroundApp,
       lastAutoSyncMessage,
       objectStorageSettings,
@@ -703,6 +763,19 @@ export default function SettingsPage({
     setFeishuSettings((current) => ({ ...current, ...patch }));
   }
 
+  function updateCalDavSettings(patch: Partial<CalDavSettings>) {
+    setCalDavMessage(null);
+    setCalDavSettings((current) => ({ ...current, ...patch }));
+  }
+
+  function updateSelectedCalDavCalendar(url: string) {
+    const calendar = calDavCalendars.find((item) => item.url === url);
+    updateCalDavSettings({
+      selected_calendar_url: url,
+      selected_calendar_name: calendar?.name ?? '',
+    });
+  }
+
   function updateReminderSoundSettings(
     patch: Partial<Pick<AppSettings, 'reminder_sound_source' | 'reminder_sound_id' | 'reminder_sound_volume' | 'reminder_sound_duration_seconds'>>,
   ) {
@@ -741,6 +814,7 @@ export default function SettingsPage({
   const objectStorageActionDisabled = objectStorageBusy || settingsLocked || !objectStorageSettings.enabled;
   const emailActionDisabled = emailBusy || settingsLocked || !emailSettings.enabled;
   const feishuActionDisabled = feishuBusy || settingsLocked || !feishuSettings.enabled;
+  const calDavActionDisabled = calDavBusy || settingsLocked || !calDavSettings.enabled;
   const reminderSoundActionDisabled = reminderSoundBusy || settingsLocked;
   const currentReminderSoundOption =
     reminderSoundOptions.find((option) => option.id === settings.reminder_sound_id) ?? reminderSoundOptions[0];
@@ -964,6 +1038,71 @@ export default function SettingsPage({
     }
   }
 
+  async function runCalDavAction(actionName: CalDavBusyAction, action: () => Promise<string>) {
+    try {
+      setCalDavBusy(true);
+      setCalDavBusyAction(actionName);
+      setError(null);
+      setCalDavMessage(null);
+      setCalDavMessage(await action());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setCalDavBusy(false);
+      setCalDavBusyAction(null);
+    }
+  }
+
+  async function handleSaveCalDavSettings() {
+    await runCalDavAction('save', async () => {
+      const saved = await saveCalDavSettings(calDavSettings);
+      setCalDavSettings(saved);
+      return 'CalDAV 日历配置已保存。';
+    });
+  }
+
+  async function handleDiscoverCalDavCalendars() {
+    await runCalDavAction('discover', async () => {
+      const calendars = await discoverCalDavCalendars(calDavSettings);
+      setCalDavCalendars(calendars);
+      if (calendars.length === 0) {
+        return '未发现可写且支持日程事件的 CalDAV 日历。';
+      }
+      const currentSelected = calendars.find((calendar) => calendar.url === calDavSettings.selected_calendar_url);
+      const selected = currentSelected ?? calendars.find((calendar) => calendar.writable) ?? calendars[0];
+      setCalDavSettings((current) => ({
+        ...current,
+        selected_calendar_url: selected.url,
+        selected_calendar_name: selected.name,
+      }));
+      return `发现 ${calendars.length} 个可用日历，已选择「${selected.name}」。`;
+    });
+  }
+
+  async function handleTestCalDavConnection() {
+    await runCalDavAction('test', async () => {
+      const status = await testCalDavConnection(calDavSettings);
+      return status.message;
+    });
+  }
+
+  async function handleSyncCalDavCalendar() {
+    await runCalDavAction('sync', async () => {
+      const result = await syncCalDavCalendar('manual');
+      if (result.status === 'synced' && (result.pulled_count > 0 || result.deleted_count > 0)) {
+        window.dispatchEvent(new CustomEvent(CALDAV_SYNC_REFRESH_EVENT, { detail: result }));
+        try {
+          await syncConfiguredStateChange('caldav_calendar_in');
+        } catch (reason) {
+          throw new Error(
+            `${result.message}，但本地同步状态更新失败：${reason instanceof Error ? reason.message : String(reason)}`,
+          );
+        }
+      }
+      return `${result.message} 推送 ${result.pushed_count}，拉取 ${result.pulled_count}，删除 ${result.deleted_count}，冲突 ${result.conflict_count}。`;
+    });
+  }
+
   return (
     <section className="page-shell settings-shell">
       <header className="page-header">
@@ -1089,6 +1228,12 @@ export default function SettingsPage({
         />
       ) : activeSection === 'integrations' ? (
         <IntegrationsPanel
+          calDavActionDisabled={calDavActionDisabled}
+          calDavBusy={calDavBusy}
+          calDavBusyAction={calDavBusyAction}
+          calDavCalendars={calDavCalendars}
+          calDavMessage={calDavMessage}
+          calDavSettings={calDavSettings}
           emailActionDisabled={emailActionDisabled}
           emailBusy={emailBusy}
           emailMessage={emailMessage}
@@ -1103,15 +1248,21 @@ export default function SettingsPage({
           handleOpenFeishuLogin={handleOpenFeishuLogin}
           handlePollFeishuLogin={handlePollFeishuLogin}
           handleRebuildFeishuTasklists={handleRebuildFeishuTasklists}
+          handleDiscoverCalDavCalendars={handleDiscoverCalDavCalendars}
+          handleSaveCalDavSettings={handleSaveCalDavSettings}
           handleSaveEmailSettings={handleSaveEmailSettings}
           handleSaveFeishuSettings={handleSaveFeishuSettings}
           handleStartFeishuLogin={handleStartFeishuLogin}
+          handleSyncCalDavCalendar={handleSyncCalDavCalendar}
           handleSyncFeishu={handleSyncFeishu}
+          handleTestCalDavConnection={handleTestCalDavConnection}
           handleTestEmail={handleTestEmail}
           settingsLocked={settingsLocked}
           togglePanel={togglePanel}
+          updateCalDavSettings={updateCalDavSettings}
           updateEmailSettings={updateEmailSettings}
           updateFeishuSettings={updateFeishuSettings}
+          updateSelectedCalDavCalendar={updateSelectedCalDavCalendar}
         />
       ) : (
         <SystemPanel

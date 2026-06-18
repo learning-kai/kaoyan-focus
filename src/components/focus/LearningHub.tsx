@@ -50,10 +50,10 @@ export default function LearningHub({
           {nextScheduleBlock
             ? scheduleBlockMeta
             : nextTask
-              ? `今天还有 ${pendingTodayCount} 项未完成。先排进课表，再开始专注。`
+              ? `今天还有 ${pendingTodayCount} 项未完成。先排进日历，再开始专注。`
               : pendingTodayCount === 0 && todayTaskCount > 0
-                ? '今天的任务已经完成，可以直接开始下一轮专注，或者补一个新的时间块。'
-                : '添加一条今日任务，应用会把它接进课表和专注流程里。'}
+                ? '今天的任务已经完成，可以直接开始下一轮专注，或者补一个新的日程。'
+                : '添加一条今日任务，应用会把它接进日历和专注流程里。'}
         </p>
       </div>
 
@@ -64,7 +64,7 @@ export default function LearningHub({
         </span>
         <span>
           <strong>{scheduledBlockCount}</strong>
-          <small>课表块</small>
+          <small>日程</small>
         </span>
         <span>
           <strong>{completedTodayItems}</strong>
@@ -85,7 +85,7 @@ export default function LearningHub({
             </span>
             <span className="learning-hub-card-copy">
               <span>{isSchedulingTask ? '安排中' : '安排下一任务'}</span>
-              <strong>接入今日课表</strong>
+              <strong>接入今日日历</strong>
             </span>
           </button>
         )}
@@ -103,7 +103,7 @@ export default function LearningHub({
             <CalendarClock size={16} />
           </span>
           <span className="learning-hub-card-copy">
-            <span>今日课表</span>
+            <span>今日日历</span>
             <strong>查看时间轴</strong>
           </span>
         </button>

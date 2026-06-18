@@ -297,6 +297,40 @@ export type FeishuRebuildResult = {
   synced_at: string;
 };
 
+export type CalDavSettings = {
+  enabled: boolean;
+  server_url: string;
+  username: string;
+  password: string;
+  password_configured?: boolean;
+  selected_calendar_url: string;
+  selected_calendar_name: string;
+};
+
+export type CalDavCalendar = {
+  url: string;
+  name: string;
+  writable: boolean;
+};
+
+export type CalDavStatus = {
+  configured: boolean;
+  calendar_url: string;
+  calendar_name: string;
+  message: string;
+};
+
+export type CalDavSyncResult = {
+  status: 'synced' | 'skipped' | 'failed' | string;
+  message: string;
+  pushed_count: number;
+  pulled_count: number;
+  deleted_count: number;
+  conflict_count: number;
+  event_count: number;
+  synced_at: string;
+};
+
 export type RuntimeHealthCheck = {
   key?: string;
   label?: string;

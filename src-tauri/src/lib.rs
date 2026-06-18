@@ -21,6 +21,7 @@ use tauri_winrt_notification::{Duration as ToastDuration, LoopableSound, Scenari
 
 mod commands {
     pub mod alarm;
+    pub mod caldav;
     pub mod checklist;
     pub mod email;
     pub mod feishu;
@@ -486,6 +487,11 @@ pub fn run() {
             commands::schedule::update_schedule_template,
             commands::schedule::delete_schedule_template,
             commands::schedule::start_study_mode_from_schedule_block,
+            commands::caldav::get_caldav_settings,
+            commands::caldav::save_caldav_settings,
+            commands::caldav::discover_caldav_calendars,
+            commands::caldav::test_caldav_connection,
+            commands::caldav::sync_caldav_calendar,
             commands::review::get_daily_review_page_data,
             commands::review::save_daily_review,
             commands::review::delete_daily_review,

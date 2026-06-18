@@ -284,6 +284,23 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               UNIQUE(remote_kind, remote_id)
             );
 
+            CREATE TABLE IF NOT EXISTS calendar_sync_links (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              entity_type TEXT NOT NULL,
+              local_id INTEGER,
+              local_sync_id TEXT NOT NULL,
+              provider TEXT NOT NULL,
+              remote_id TEXT NOT NULL,
+              remote_parent_id TEXT,
+              remote_etag TEXT,
+              remote_fingerprint TEXT,
+              remote_last_modified TEXT,
+              last_synced_at TEXT NOT NULL,
+              deleted_at TEXT,
+              UNIQUE(entity_type, local_sync_id, provider),
+              UNIQUE(provider, remote_id)
+            );
+
             CREATE TABLE IF NOT EXISTS feishu_sync_runs (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               run_id TEXT NOT NULL,
@@ -331,6 +348,12 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               ON feishu_sync_links (entity_type, local_id);
             CREATE INDEX IF NOT EXISTS idx_feishu_sync_links_sync_id
               ON feishu_sync_links (local_sync_id);
+            CREATE INDEX IF NOT EXISTS idx_calendar_sync_links_local
+              ON calendar_sync_links (entity_type, local_id);
+            CREATE INDEX IF NOT EXISTS idx_calendar_sync_links_sync_id
+              ON calendar_sync_links (local_sync_id);
+            CREATE INDEX IF NOT EXISTS idx_calendar_sync_links_provider_remote
+              ON calendar_sync_links (provider, remote_id);
             CREATE INDEX IF NOT EXISTS idx_feishu_sync_runs_finished
               ON feishu_sync_runs (finished_at DESC);
             ",

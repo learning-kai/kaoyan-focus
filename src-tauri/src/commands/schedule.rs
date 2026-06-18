@@ -20,6 +20,7 @@ fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
         let _ = crate::commands::sync::sync_object_storage_after_external_change(sync_app, trigger);
     });
     crate::commands::feishu::sync_feishu_bridge_after_local_change(app.clone(), trigger);
+    crate::commands::caldav::sync_caldav_calendar_after_local_change(app.clone(), trigger);
 }
 
 #[derive(Debug, Clone, Serialize)]

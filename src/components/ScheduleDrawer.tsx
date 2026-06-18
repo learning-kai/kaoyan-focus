@@ -69,13 +69,13 @@ export default function ScheduleDrawer({
       <div className="panel-title schedule-drawer-head">
         <div>
           <p className="eyebrow">今日安排</p>
-          <h3>今日课表</h3>
+          <h3>今日日历</h3>
         </div>
         <div className="today-drawer-tools">
-          <button className="focus-hud-card today-drawer-tool-card today-drawer-tool-icon" disabled={saving} onClick={onRefresh} title="刷新课表" type="button">
+          <button className="focus-hud-card today-drawer-tool-card today-drawer-tool-icon" disabled={saving} onClick={onRefresh} title="刷新日历" type="button">
             <RefreshCw size={15} />
           </button>
-          <button aria-label="关闭课表" className="focus-hud-card today-drawer-tool-card today-drawer-tool-icon" onClick={onClose} title="关闭课表" type="button">
+          <button aria-label="关闭日历" className="focus-hud-card today-drawer-tool-card today-drawer-tool-icon" onClick={onClose} title="关闭日历" type="button">
             <X size={15} />
           </button>
         </div>
@@ -83,7 +83,7 @@ export default function ScheduleDrawer({
 
       <div className="today-plan-meta">
         <span>{data?.selected_date ?? ''}</span>
-        <span>{data?.day_blocks.length ?? 0} 个时间块</span>
+        <span>{data?.day_blocks.length ?? 0} 个日程</span>
         <span>{data?.day_blocks.filter((block) => block.status === 'completed').length ?? 0} 已完成</span>
       </div>
 
@@ -94,7 +94,7 @@ export default function ScheduleDrawer({
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.nativeEvent.isComposing && canCreate) onCreate();
           }}
-          placeholder="新增时间块"
+          placeholder="新增日程"
           value={draft.title}
         />
         <input className="text-input" type="time" value={formatMinute(draft.startMinute)} onChange={(event) => onDraftChange({ startMinute: parseTime(event.target.value) })} />
@@ -115,13 +115,13 @@ export default function ScheduleDrawer({
             </div>
             <div className="schedule-drawer-actions">
               {canStart && <button aria-label="开始专注" disabled={saving} type="button" onClick={() => onStart(block)}><Play size={13} /></button>}
-              <button aria-label="删除时间块" disabled={saving} type="button" onClick={() => onDelete(block.id)}><Trash2 size={13} /></button>
+              <button aria-label="删除日程" disabled={saving} type="button" onClick={() => onDelete(block.id)}><Trash2 size={13} /></button>
             </div>
           </article>
         )) : (
           <div className="empty-state compact">
             <CalendarClock size={24} />
-            <strong>今天还没有课表安排</strong>
+            <strong>今天还没有日程安排</strong>
             <p>可以在这里临时补一块时间。</p>
           </div>
         )}

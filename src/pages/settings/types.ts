@@ -1,6 +1,7 @@
 export type SettingsPanelKey =
   | 'webdav'
   | 'feishu'
+  | 'caldav'
   | 'email'
   | 'syncJournal'
   | 'backups'
@@ -25,3 +26,5 @@ export type ObjectStorageBusyAction =
   | 'download'
   | 'previewBackup'
   | 'restoreBackup';
+
+export type CalDavBusyAction = 'save' | 'discover' | 'test' | 'sync';

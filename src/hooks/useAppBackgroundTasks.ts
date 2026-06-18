@@ -424,8 +424,8 @@ export function useScheduleReminders() {
           remindedKeys.add(key);
 
           void notifyStudyReminder({
-            title: '课表时间到了',
-            body: `${block.title} 已到开始时间，可以回到课表一键开始专注。`,
+            title: '日程时间到了',
+            body: `${block.title} 已到开始时间，可以回到日历一键开始专注。`,
           });
         }
 

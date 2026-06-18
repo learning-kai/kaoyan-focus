@@ -2,6 +2,7 @@ import type { AppUpdate } from '../services/updateApi';
 import type { ForegroundApp } from '../types/monitor';
 import type {
   AppSettings,
+  CalDavSettings,
   EmailReminderSettings,
   FeishuSyncSettings,
   FeishuSyncStatus,
@@ -50,6 +51,7 @@ export function buildSystemDiagnosticSummary(args: {
   availableUpdate: AppUpdate | null;
   autoUpdateMessage: string | null;
   dataLocation: AppDataLocation | null;
+  calDavSettings: CalDavSettings;
   emailSettings: EmailReminderSettings;
   feishuSettings: FeishuSyncSettings;
   feishuStatus: FeishuSyncStatus | null;
@@ -66,6 +68,7 @@ export function buildSystemDiagnosticSummary(args: {
     availableUpdate,
     autoUpdateMessage,
     dataLocation,
+    calDavSettings,
     emailSettings,
     feishuSettings,
     feishuStatus,
@@ -117,6 +120,7 @@ export function buildSystemDiagnosticSummary(args: {
     `- 对象存储：${describeOnOff(objectStorageSettings.enabled)} / 密钥${describeConfigured(objectStorageSettings.secret_access_key_configured || Boolean(objectStorageSettings.secret_access_key))}`,
     `- 邮件提醒：${describeOnOff(emailSettings.enabled)} / SMTP ${emailSettings.smtp_host || '未配置'} / 密码${describeConfigured(emailSettings.password_configured || Boolean(emailSettings.password))}`,
     `- 飞书：${describeOnOff(feishuSettings.enabled)} / 认证${feishuStatus?.authenticated ? '已完成' : '未完成'} / App Secret${describeConfigured(feishuSettings.app_secret_configured || Boolean(feishuSettings.app_secret))}`,
+    `- CalDAV 日历：${describeOnOff(calDavSettings.enabled)} / ${calDavSettings.selected_calendar_name || calDavSettings.selected_calendar_url || '未选择日历'} / 密码${describeConfigured(calDavSettings.password_configured || Boolean(calDavSettings.password))}`,
     `- 最近同步：${lastAutoSyncMessage ?? '暂无'}`,
     `- 主题：${settings.ui_theme}`,
     `- 学习模式：${settings.default_focus_mode}`,

@@ -15,6 +15,7 @@ import { getAppSettings, getSyncDeviceId, saveAppSettings } from '../services/se
 import { buildStudyReminder, isFinishedStudyMode, isStaleFinishedStudyReminder, markStudyReminderSeen, nextStudyBreakLabel, registerStudyReminderScope, resetStudyReminderScope, studyBreakKindLabel } from '../services/studyReminder';
 import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
+import { CALDAV_SYNC_REFRESH_EVENT } from '../services/caldavApi';
 import { setStudyFullscreen } from '../services/systemApi';
 import { listenTauriEvent } from '../services/tauriEvents';
 import { isTauriRuntime } from '../services/tauriInvoke';
@@ -151,7 +152,7 @@ function describeScheduleRecommendation(
   const block = recommendation.block;
   const subjectLabel = block.subject_id ? subjectNameMap.get(block.subject_id) ?? '未指定科目' : '未指定科目';
 
-  return `${kindLabel}课表块 ${formatMinuteOfDay(block.start_minute)}-${formatMinuteOfDay(block.end_minute)} · ${block.title} / ${subjectLabel}`;
+  return `${kindLabel}日程 ${formatMinuteOfDay(block.start_minute)}-${formatMinuteOfDay(block.end_minute)} · ${block.title} / ${subjectLabel}`;
 }
 
 function secondsSince(value: string | null, now: number) {
@@ -299,13 +300,17 @@ export default function FocusPage() {
   }, []);
 
   useEffect(() => {
-    const handleFeishuRefresh = () => {
+    const handleCalendarRefresh = () => {
       void refreshDashboard();
       void refreshChecklistData();
       void refreshScheduleData();
     };
-    window.addEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
-    return () => window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
+    window.addEventListener(FEISHU_SYNC_REFRESH_EVENT, handleCalendarRefresh);
+    window.addEventListener(CALDAV_SYNC_REFRESH_EVENT, handleCalendarRefresh);
+    return () => {
+      window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleCalendarRefresh);
+      window.removeEventListener(CALDAV_SYNC_REFRESH_EVENT, handleCalendarRefresh);
+    };
   }, []);
 
   useEffect(() => {
@@ -655,12 +660,12 @@ export default function FocusPage() {
   async function handleCreateScheduleBlock() {
     if (!scheduleDraft.title.trim()) {
       setNotice(null);
-      setError('课表时间块需要先填写标题。');
+      setError('日程需要先填写标题。');
       return;
     }
     if (scheduleDraft.endMinute <= scheduleDraft.startMinute) {
       setNotice(null);
-      setError('课表时间块的结束时间必须晚于开始时间。');
+      setError('日程的结束时间必须晚于开始时间。');
       return;
     }
     const subjectId = studyState.subject_id ?? scheduleDraft.subjectId ?? null;
@@ -672,7 +677,7 @@ export default function FocusPage() {
       });
       setScheduleDraft(emptyScheduleDraft(formatDateKey()));
       await refreshScheduleData();
-    }, '课表时间块已添加。');
+    }, '日程已添加。');
   }
 
   async function handleQuickScheduleNextTask() {
@@ -691,7 +696,7 @@ export default function FocusPage() {
       );
 
       if (!slot) {
-        setError(`今天没有足够的 ${formatDuration(focusMinutes * 60)} 空档，请打开今日课表手动调整。`);
+        setError(`今天没有足够的 ${formatDuration(focusMinutes * 60)} 空档，请打开今日日历手动调整。`);
         setIsChecklistDrawerOpen(false);
         setIsScheduleDrawerOpen(true);
         return;
@@ -715,7 +720,7 @@ export default function FocusPage() {
     await withChecklistRefresh(async () => {
       await deleteScheduleBlock(blockId);
       await refreshScheduleData();
-    }, '课表时间块已删除。');
+    }, '日程已删除。');
   }
 
   async function handleStartScheduleBlock(block: ScheduleBlock) {
@@ -735,7 +740,7 @@ export default function FocusPage() {
         settings.default_focus_mode,
       );
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
-      setNotice('已从课表开始专注。');
+      setNotice('已从日程开始专注。');
       setIsScheduleDrawerOpen(false);
       await refreshDashboard();
       queueConfiguredSync();
@@ -846,10 +851,10 @@ export default function FocusPage() {
                     <strong>{todayTaskCount} 项</strong>
                   </span>
                 </button>
-                <button aria-expanded={isScheduleDrawerOpen} aria-label="打开今日课表" className={'focus-hud-card focus-hud-task' + (isScheduleDrawerOpen ? ' is-active' : '')} onClick={handleToggleScheduleDrawer} title="今日课表" type="button">
+                <button aria-expanded={isScheduleDrawerOpen} aria-label="打开今日日历" className={'focus-hud-card focus-hud-task' + (isScheduleDrawerOpen ? ' is-active' : '')} onClick={handleToggleScheduleDrawer} title="今日日历" type="button">
                   <span className="focus-hud-icon"><CalendarClock size={15} /></span>
                   <span className="focus-hud-copy">
-                    <span>今日课表</span>
+                    <span>今日日历</span>
                     <strong>{scheduleData?.day_blocks.length ?? 0} 块</strong>
                   </span>
                 </button>

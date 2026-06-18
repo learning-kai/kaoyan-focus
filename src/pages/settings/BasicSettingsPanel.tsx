@@ -176,7 +176,7 @@ export function BasicSettingsPanel({
               <div>
                 <span>Automation</span>
                 <h4>自动化与提醒策略</h4>
-                <p className="panel-copy">把高频动作交给应用处理：休息确认、课表提前提醒、夜间静音都可以在这里统一控制。</p>
+                <p className="panel-copy">把高频动作交给应用处理：休息确认、日程提前提醒、夜间静音都可以在这里统一控制。</p>
               </div>
               <BellRing size={20} />
             </div>
@@ -195,8 +195,8 @@ export function BasicSettingsPanel({
 
               <div className="setting-row mode-setting">
                 <div>
-                  <strong>课表提前提醒</strong>
-                  <p>今日课表开始前提前通知，关闭后只保留闹钟和专注阶段提醒。</p>
+                  <strong>日程提前提醒</strong>
+                  <p>今日日历开始前提前通知，关闭后只保留闹钟和专注阶段提醒。</p>
                 </div>
                 <div className="segmented-control">
                   <button className={settings.schedule_reminder_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ schedule_reminder_enabled: true })} type="button"><BellRing size={15} />开启</button>
@@ -206,7 +206,7 @@ export function BasicSettingsPanel({
 
               <SettingNumber
                 disabled={settingsLocked || !settings.schedule_reminder_enabled}
-                label="课表提醒提前量"
+                label="日程提醒提前量"
                 max={60}
                 min={0}
                 onChange={(value) => updateSettings({ schedule_reminder_lead_minutes: value })}

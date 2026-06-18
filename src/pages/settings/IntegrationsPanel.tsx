@@ -1,9 +1,21 @@
-import { ChevronDown, ExternalLink, Mail, RefreshCw, Save } from 'lucide-react';
-import type { EmailReminderSettings, FeishuSyncSettings, FeishuSyncStatus } from '../../types/settings';
+import { CalendarDays, ChevronDown, ExternalLink, Mail, RefreshCw, Save, Search } from 'lucide-react';
+import type {
+  CalDavCalendar,
+  CalDavSettings,
+  EmailReminderSettings,
+  FeishuSyncSettings,
+  FeishuSyncStatus,
+} from '../../types/settings';
 import { Detail } from './SettingsPrimitives';
-import type { SettingsPanelKey } from './types';
+import type { CalDavBusyAction, SettingsPanelKey } from './types';
 
 type IntegrationsPanelProps = {
+  calDavActionDisabled: boolean;
+  calDavBusy: boolean;
+  calDavBusyAction: CalDavBusyAction | null;
+  calDavCalendars: CalDavCalendar[];
+  calDavMessage: string | null;
+  calDavSettings: CalDavSettings;
   emailActionDisabled: boolean;
   emailBusy: boolean;
   emailMessage: string | null;
@@ -18,18 +30,30 @@ type IntegrationsPanelProps = {
   handleOpenFeishuLogin: () => Promise<void>;
   handlePollFeishuLogin: () => Promise<void>;
   handleRebuildFeishuTasklists: () => Promise<void>;
+  handleDiscoverCalDavCalendars: () => Promise<void>;
+  handleSaveCalDavSettings: () => Promise<void>;
   handleSaveEmailSettings: () => Promise<void>;
   handleSaveFeishuSettings: () => Promise<void>;
   handleStartFeishuLogin: () => Promise<void>;
+  handleSyncCalDavCalendar: () => Promise<void>;
   handleSyncFeishu: () => Promise<void>;
+  handleTestCalDavConnection: () => Promise<void>;
   handleTestEmail: () => Promise<void>;
   settingsLocked: boolean;
   togglePanel: (panel: SettingsPanelKey) => void;
+  updateCalDavSettings: (patch: Partial<CalDavSettings>) => void;
   updateEmailSettings: (patch: Partial<EmailReminderSettings>) => void;
   updateFeishuSettings: (patch: Partial<FeishuSyncSettings>) => void;
+  updateSelectedCalDavCalendar: (url: string) => void;
 };
 
 export function IntegrationsPanel({
+  calDavActionDisabled,
+  calDavBusy,
+  calDavBusyAction,
+  calDavCalendars,
+  calDavMessage,
+  calDavSettings,
   emailActionDisabled,
   emailBusy,
   emailMessage,
@@ -44,16 +68,28 @@ export function IntegrationsPanel({
   handleOpenFeishuLogin,
   handlePollFeishuLogin,
   handleRebuildFeishuTasklists,
+  handleDiscoverCalDavCalendars,
+  handleSaveCalDavSettings,
   handleSaveEmailSettings,
   handleSaveFeishuSettings,
   handleStartFeishuLogin,
+  handleSyncCalDavCalendar,
   handleSyncFeishu,
+  handleTestCalDavConnection,
   handleTestEmail,
   settingsLocked,
   togglePanel,
+  updateCalDavSettings,
   updateEmailSettings,
   updateFeishuSettings,
+  updateSelectedCalDavCalendar,
 }: IntegrationsPanelProps) {
+  const selectedCalendarLabel =
+    calDavSettings.selected_calendar_name || calDavSettings.selected_calendar_url || '未选择';
+  const calDavPasswordPlaceholder = calDavSettings.password_configured
+    ? '已保存，留空表示不修改'
+    : 'Apple ID 应用专用密码或 CalDAV 密码';
+
   return (
     <div
       aria-labelledby="settings-tab-integrations"
@@ -81,7 +117,7 @@ export function IntegrationsPanel({
           </div>
           {expandedPanels.feishu && (
             <>
-              <p className="panel-copy">电脑端连接飞书开放平台，把清单同步到飞书任务，把课表同步到飞书日历。iPhone 可直接用飞书官方 App 查看和编辑。</p>
+              <p className="panel-copy">电脑端连接飞书开放平台，把清单同步到飞书任务，把日历日程同步到飞书日历。iPhone 可直接用飞书官方 App 查看和编辑。</p>
 
               <label className="capability-row sync-toggle-row">
                 <ExternalLink size={17} />
@@ -166,6 +202,110 @@ export function IntegrationsPanel({
                 <button className="secondary-action danger-action" disabled={feishuActionDisabled || !feishuStatus?.authenticated} onClick={() => void handleRebuildFeishuTasklists()} type="button"><RefreshCw size={17} />重建任务清单</button>
                 <button className="secondary-action" disabled={feishuBusy || settingsLocked || !feishuStatus?.authenticated} onClick={() => void handleLogoutFeishu()} type="button">退出登录</button>
               </div>
+            </>
+          )}
+        </section>
+
+        <section className="command-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">CalDAV 日历</p>
+              <h3>标准日历双向同步</h3>
+            </div>
+            <CalendarDays size={20} />
+            <button
+              aria-expanded={expandedPanels.caldav}
+              className="settings-collapse-button"
+              onClick={() => togglePanel('caldav')}
+              type="button"
+            >
+              <span>{calDavSettings.enabled ? '已启用' : '已关闭'}</span>
+              <ChevronDown size={17} />
+            </button>
+          </div>
+          {expandedPanels.caldav && (
+            <>
+              <p className="panel-copy">把本地日历日程同步到 iCloud、Apple 日历或其他标准 CalDAV 服务。iCloud 请使用 Apple ID 和应用专用密码，不要把 Apple ID 主密码硬怼进来。</p>
+
+              <label className="capability-row sync-toggle-row">
+                <CalendarDays size={17} />
+                <input
+                  checked={calDavSettings.enabled}
+                  disabled={settingsLocked}
+                  onChange={(event) => updateCalDavSettings({ enabled: event.target.checked })}
+                  type="checkbox"
+                />
+                <span>启用 CalDAV 日历同步</span>
+              </label>
+
+              <div className="form-stack">
+                <label className="field-block">
+                  <span>服务器地址</span>
+                  <input
+                    className="text-input"
+                    disabled={settingsLocked}
+                    onChange={(event) => updateCalDavSettings({ server_url: event.target.value })}
+                    placeholder="https://caldav.icloud.com 或服务商 CalDAV 地址"
+                    value={calDavSettings.server_url}
+                  />
+                </label>
+                <div className="inline-fields">
+                  <label className="field-block">
+                    <span>账号</span>
+                    <input
+                      className="text-input"
+                      disabled={settingsLocked}
+                      onChange={(event) => updateCalDavSettings({ username: event.target.value })}
+                      placeholder="Apple ID / CalDAV 用户名"
+                      value={calDavSettings.username}
+                    />
+                  </label>
+                  <label className="field-block">
+                    <span>密码</span>
+                    <input
+                      className="text-input"
+                      disabled={settingsLocked}
+                      onChange={(event) => updateCalDavSettings({ password: event.target.value })}
+                      placeholder={calDavPasswordPlaceholder}
+                      type="password"
+                      value={calDavSettings.password}
+                    />
+                  </label>
+                </div>
+                <label className="field-block">
+                  <span>目标日历</span>
+                  <select
+                    className="text-input"
+                    disabled={settingsLocked || calDavCalendars.length === 0}
+                    onChange={(event) => updateSelectedCalDavCalendar(event.target.value)}
+                    value={calDavSettings.selected_calendar_url}
+                  >
+                    <option value="">
+                      {calDavCalendars.length === 0 ? '先发现日历' : '选择一个日历'}
+                    </option>
+                    {calDavCalendars.map((calendar) => (
+                      <option disabled={!calendar.writable} key={calendar.url} value={calendar.url}>
+                        {calendar.name}{calendar.writable ? '' : '（只读）'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="details-card stacked">
+                  <Detail label="当前日历" value={selectedCalendarLabel} />
+                  <Detail label="密码状态" value={calDavSettings.password_configured || calDavSettings.password ? '已配置' : '未配置'} />
+                  <Detail label="同步范围" value="今天前 30 天到今天后 180 天" />
+                </div>
+              </div>
+
+              {calDavMessage && <p className="alert success">{calDavMessage}</p>}
+              {!calDavSettings.enabled && <p className="alert neutral">CalDAV 日历同步已关闭，本地日程变更不会推送到远端日历。</p>}
+              <div className="row-actions">
+                <button className="secondary-action" disabled={calDavBusy || settingsLocked} onClick={() => void handleSaveCalDavSettings()} type="button"><Save size={17} />保存配置</button>
+                <button className="secondary-action" disabled={calDavBusy || settingsLocked || !calDavSettings.server_url || !calDavSettings.username} onClick={() => void handleDiscoverCalDavCalendars()} type="button"><Search size={17} />发现日历</button>
+                <button className="secondary-action" disabled={calDavActionDisabled || !calDavSettings.selected_calendar_url} onClick={() => void handleTestCalDavConnection()} type="button"><CalendarDays size={17} />测试连接</button>
+                <button className="primary-action" disabled={calDavActionDisabled || !calDavSettings.selected_calendar_url} onClick={() => void handleSyncCalDavCalendar()} type="button"><RefreshCw size={17} />立即同步</button>
+              </div>
+              {calDavBusyAction && <p className="alert neutral">CalDAV 正在执行：{calDavBusyAction}</p>}
             </>
           )}
         </section>

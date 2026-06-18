@@ -19,6 +19,7 @@ import {
 import { getAppSettings } from '../services/settingsApi';
 import { syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT, syncFeishuBridge } from '../services/feishuApi';
+import { CALDAV_SYNC_REFRESH_EVENT } from '../services/caldavApi';
 import {
   createScheduleBlock,
   createScheduleBlockFromTodayItem,
@@ -269,11 +270,15 @@ export default function SchedulePage() {
   }, [selectedDate]);
 
   useEffect(() => {
-    const handleFeishuRefresh = () => {
+    const handleCalendarRefresh = () => {
       void refresh(selectedDate);
     };
-    window.addEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
-    return () => window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
+    window.addEventListener(FEISHU_SYNC_REFRESH_EVENT, handleCalendarRefresh);
+    window.addEventListener(CALDAV_SYNC_REFRESH_EVENT, handleCalendarRefresh);
+    return () => {
+      window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleCalendarRefresh);
+      window.removeEventListener(CALDAV_SYNC_REFRESH_EVENT, handleCalendarRefresh);
+    };
   }, [selectedDate]);
 
   function setCalendarDragState(next: CalendarDragState | null) {
@@ -380,7 +385,7 @@ export default function SchedulePage() {
         setError(feishuResult.message || '飞书日历同步失败。');
         return;
       }
-      setMessage(feishuResult.status === 'synced' ? '课表已同步到飞书日历。' : '课表已刷新，本地修改已自动保存。');
+      setMessage(feishuResult.status === 'synced' ? '日历已同步到飞书日历。' : '日历已刷新，本地修改已自动保存。');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -559,7 +564,7 @@ export default function SchedulePage() {
       } else if (typeof state.blockId === 'number') {
         await moveScheduleBlock(state.blockId, selectedDate, state.startMinute, state.endMinute);
       }
-    }, state.mode === 'create' ? '今日任务已安排到课表。' : '课表时间已更新。');
+    }, state.mode === 'create' ? '今日任务已生成日程。' : '日程时间已更新。');
   }
 
   function isInteractiveElement(target: EventTarget | null) {
@@ -683,7 +688,7 @@ export default function SchedulePage() {
     if (event.key === 'Delete') {
       event.preventDefault();
       event.stopPropagation();
-      void withSave(() => deleteScheduleBlock(block.id), '课表块已删除。');
+      void withSave(() => deleteScheduleBlock(block.id), '日程已删除。');
       return;
     }
 
@@ -697,7 +702,7 @@ export default function SchedulePage() {
       async () => {
         await moveScheduleBlock(block.id, selectedDate, nextTime.startMinute, nextTime.endMinute);
       },
-      '课表时间已更新。',
+      '日程时间已更新。',
     );
   }
 
@@ -806,29 +811,29 @@ export default function SchedulePage() {
   function validateTemplateDraft(draft: ScheduleTemplateDraft) {
     if (!draft.title.trim()) {
       setMessage(null);
-      setError('周模板需要先填写标题。');
+      setError('周重复需要先填写标题。');
       return false;
     }
     if (draft.endMinute <= draft.startMinute) {
       setMessage(null);
-      setError('周模板的结束时间必须晚于开始时间。');
+      setError('周重复的结束时间必须晚于开始时间。');
       return false;
     }
     if (draft.weekdays.length === 0) {
       setMessage(null);
-      setError('周模板至少需要选择一个生效日期。');
+      setError('周重复至少需要选择一个生效日期。');
       return false;
     }
     return true;
   }
 
   async function handleCreateBlock() {
-    if (!validateBlockDraft(blockDraft, '课表块')) return;
+    if (!validateBlockDraft(blockDraft, '日程')) return;
     await withSave(async () => {
       await createScheduleBlock(blockDraft);
       setBlockDraft(emptyBlockDraft(selectedDate));
       setShowBlockComposer(false);
-    }, '课表块已添加。');
+    }, '日程已添加。');
   }
 
   async function handleAddTodayItem(itemId: number) {
@@ -843,7 +848,7 @@ export default function SchedulePage() {
     await withSave(async () => {
       await createScheduleBlockFromTodayItem(itemId, selectedDate, startMinute, scheduleSlotEnd(startMinute));
       setPendingTodayItemId(null);
-    }, '今日任务已安排到课表。');
+    }, '今日任务已生成日程。');
   }
 
   async function handleQuickAddSave() {
@@ -868,7 +873,7 @@ export default function SchedulePage() {
       setQuickAddDraft(null);
       setQuickAddSourceTodayItemId(null);
       setPendingTodayItemId(null);
-    }, quickAddSourceTodayItemId !== null ? '今日任务已安排到课表。' : '课表块已添加。');
+    }, quickAddSourceTodayItemId !== null ? '今日任务已生成日程。' : '日程已添加。');
   }
 
   function cancelTemplateEdit() {
@@ -902,7 +907,7 @@ export default function SchedulePage() {
       }
       resetTemplateEditor();
       setShowTemplateComposer(false);
-    }, editingTemplateId !== null ? '周模板已更新。' : '周模板已保存。');
+    }, editingTemplateId !== null ? '周重复已更新。' : '周重复已保存。');
   }
 
   async function handleDeleteTemplate(templateId: number) {
@@ -930,12 +935,12 @@ export default function SchedulePage() {
 
   async function handleUpdateBlock() {
     if (!editingBlockId || !editingBlockDraft) return;
-    if (!validateBlockDraft(editingBlockDraft, '课表块')) return;
+    if (!validateBlockDraft(editingBlockDraft, '日程')) return;
     await withSave(async () => {
       await updateScheduleBlock(editingBlockId, editingBlockDraft);
       setEditingBlockId(null);
       setEditingBlockDraft(null);
-    }, '课表块已更新。');
+    }, '日程已更新。');
   }
 
   async function handleStart(block: ScheduleBlock) {
@@ -951,15 +956,15 @@ export default function SchedulePage() {
         appSettings.default_focus_mode,
       );
       requestAppNavigation('focus');
-    }, '已从课表开始专注。', 'focus_state_change');
+    }, '已从日程开始专注。', 'focus_state_change');
   }
 
   return (
     loadingSchedule && data === null ? (
       <section className="page-shell schedule-page">
         <div className="empty-state">
-          <strong>正在载入课表</strong>
-          <p>正在读取今日安排、周模板和同步状态。</p>
+          <strong>正在载入日历</strong>
+          <p>正在读取今日安排、周重复和同步状态。</p>
         </div>
       </section>
     ) : (
@@ -967,18 +972,18 @@ export default function SchedulePage() {
       <section className="schedule-hero">
         <div>
           <p className="eyebrow">日程安排</p>
-          <h2>今日课表</h2>
-          <p>把今日任务和手动安排放进一天的时间轴。新增、拖拽、删除会自动保存；需要时可手动同步飞书/云端。</p>
+          <h2>今日日历</h2>
+          <p>把今日任务和手动安排放进一天的时间轴。新增、拖拽、删除会自动保存；需要时可手动同步日历/云端。</p>
         </div>
         <div className="schedule-actions">
           <button className="primary-button" disabled={saving || loadingSchedule} type="button" onClick={() => void handleSyncSchedule()}>
-            <RefreshCw size={16} /> 同步课表
+            <RefreshCw size={16} /> 同步日历
           </button>
           <button className="ghost-button" type="button" onClick={() => void refresh()}>
             <RefreshCw size={16} /> 刷新
           </button>
           <button className="primary-button" type="button" onClick={() => setShowBlockComposer((value) => !value)}>
-            <Plus size={16} /> 时间块
+            <Plus size={16} /> 日程
           </button>
         </div>
       </section>
@@ -995,8 +1000,8 @@ export default function SchedulePage() {
 
       <section className="schedule-toolbar soft-panel">
         <div className="segmented-control">
-          <button className={view === 'day' ? 'active' : ''} type="button" onClick={() => setView('day')}>今日课表</button>
-          <button className={view === 'week' ? 'active' : ''} type="button" onClick={() => setView('week')}>本周视图</button>
+          <button className={view === 'day' ? 'active' : ''} type="button" onClick={() => setView('day')}>今日日历</button>
+          <button className={view === 'week' ? 'active' : ''} type="button" onClick={() => setView('week')}>本周</button>
         </div>
         <div className="date-stepper">
           <button type="button" aria-label="前一天" onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}>
@@ -1019,11 +1024,11 @@ export default function SchedulePage() {
           </button>
         </div>
         <button className="ghost-button" type="button" onClick={handleToggleTemplateComposer}>
-          <CopyPlus size={16} /> 周模板
+          <CopyPlus size={16} /> 周重复
         </button>
       </section>
 
-      {loadingSchedule && <div className="schedule-loading-hint">正在更新课表...</div>}
+      {loadingSchedule && <div className="schedule-loading-hint">正在更新日历...</div>}
 
       {showBlockComposer && (
         <section className="schedule-composer soft-panel">
@@ -1221,7 +1226,7 @@ export default function SchedulePage() {
                         >
                           <PencilLine size={14} /> 编辑
                         </button>
-                        <button aria-label="删除" type="button" onClick={() => void withSave(() => deleteScheduleBlock(block.id), '课表块已删除。')}><Trash2 size={14} /></button>
+                        <button aria-label="删除" type="button" onClick={() => void withSave(() => deleteScheduleBlock(block.id), '日程已删除。')}><Trash2 size={14} /></button>
                       </div>
                       <button
                         aria-label={`调整 ${block.title} 的结束时间`}
@@ -1282,7 +1287,7 @@ export default function SchedulePage() {
                     {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
                   </select>
                   <button className="primary-button" disabled={saving || (quickAddSourceTodayItemId === null && !quickAddDraft.title.trim())} type="button" onClick={() => void handleQuickAddSave()}>
-                    保存到课表
+                    保存到日历
                   </button>
                 </div>
               )}
@@ -1310,7 +1315,7 @@ export default function SchedulePage() {
           <div className="panel-title compact-title">
             <div>
               <p className="eyebrow">Template</p>
-              <h3>周模板</h3>
+              <h3>周重复</h3>
             </div>
             <Clock3 size={18} />
           </div>
@@ -1325,7 +1330,7 @@ export default function SchedulePage() {
                 <button aria-label="删除模板" type="button" onClick={() => void handleDeleteTemplate(template.id)}><Trash2 size={14} /></button>
               </div>
             </article>
-          )) : <div className="empty-state compact">还没有周模板。</div>}
+          )) : <div className="empty-state compact">还没有周重复。</div>}
         </aside>
       </div>
     </div>

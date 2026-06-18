@@ -2837,6 +2837,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "lettre",
+ "quick-xml 0.39.4",
  "reqwest",
  "rusqlite",
  "serde",
