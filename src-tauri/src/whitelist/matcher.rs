@@ -50,12 +50,38 @@ struct BrowserUrlParts {
     full: String,
 }
 
+#[allow(dead_code)]
 pub fn is_foreground_app_allowed(
     app: &ForegroundApp,
     whitelist_processes: &[ProcessWhitelistRule],
     whitelist_websites: &[WebsiteWhitelistRule],
     whitelist_potplayer_media: &[PotPlayerWhitelistRule],
 ) -> WhitelistMatchResult {
+    is_foreground_app_allowed_with_mode(
+        app,
+        "allowlist",
+        whitelist_processes,
+        whitelist_websites,
+        whitelist_potplayer_media,
+    )
+}
+
+pub fn is_foreground_app_allowed_with_mode(
+    app: &ForegroundApp,
+    whitelist_mode: &str,
+    whitelist_processes: &[ProcessWhitelistRule],
+    whitelist_websites: &[WebsiteWhitelistRule],
+    whitelist_potplayer_media: &[PotPlayerWhitelistRule],
+) -> WhitelistMatchResult {
+    if whitelist_mode == "blocklist" || whitelist_mode == "blacklist" {
+        return is_foreground_app_blocklist_allowed(
+            app,
+            whitelist_processes,
+            whitelist_websites,
+            whitelist_potplayer_media,
+        );
+    }
+
     let process_name = app.process_name.to_ascii_lowercase();
     let supported_browser = is_supported_browser(&process_name);
 
@@ -168,6 +194,100 @@ pub fn is_foreground_app_allowed(
         reason: "不在白名单".to_string(),
         matched_process_name: None,
         detected_domain: None,
+        matched_subject_id: None,
+        potplayer_media_path: app.potplayer_media_path.clone(),
+    }
+}
+
+fn is_foreground_app_blocklist_allowed(
+    app: &ForegroundApp,
+    blocked_processes: &[ProcessWhitelistRule],
+    blocked_websites: &[WebsiteWhitelistRule],
+    blocked_potplayer_media: &[PotPlayerWhitelistRule],
+) -> WhitelistMatchResult {
+    let process_name = app.process_name.to_ascii_lowercase();
+    let supported_browser = is_supported_browser(&process_name);
+
+    if DEFAULT_ALLOWED_PROCESS_NAMES
+        .iter()
+        .any(|allowed_name| process_name == allowed_name.to_ascii_lowercase())
+    {
+        return WhitelistMatchResult {
+            allowed: true,
+            reason: "默认系统放行".to_string(),
+            matched_process_name: Some(app.process_name.clone()),
+            detected_domain: None,
+            matched_subject_id: None,
+            potplayer_media_path: app.potplayer_media_path.clone(),
+        };
+    }
+
+    if supported_browser && !blocked_websites.is_empty() {
+        let browser_url = detect_browser_url_parts(app);
+        let detected_domain = browser_url
+            .as_ref()
+            .map(|parts| parts.domain.clone())
+            .or_else(|| extract_domain_from_text(&app.window_title));
+        if let Some(domain) = detected_domain.as_deref() {
+            if let Some(matched_rule) = blocked_websites
+                .iter()
+                .find(|rule| website_rule_matches(domain, browser_url.as_ref(), rule))
+            {
+                return WhitelistMatchResult {
+                    allowed: false,
+                    reason: format!("命中网站黑名单：{}", rule_label(matched_rule)),
+                    matched_process_name: Some(rule_label(matched_rule)),
+                    detected_domain,
+                    matched_subject_id: matched_rule.subject_id,
+                    potplayer_media_path: None,
+                };
+            }
+        }
+    }
+
+    if is_supported_potplayer(&process_name) {
+        if let Some(media_path) = app.potplayer_media_path.as_deref() {
+            if let Some(matched_rule) = blocked_potplayer_media.iter().find(|rule| {
+                rule.process_name.eq_ignore_ascii_case(&app.process_name)
+                    && potplayer_rule_matches(media_path, rule)
+            }) {
+                return WhitelistMatchResult {
+                    allowed: false,
+                    reason: format!("命中 PotPlayer 视频黑名单：{media_path}"),
+                    matched_process_name: Some(matched_rule.media_path.clone()),
+                    detected_domain: None,
+                    matched_subject_id: matched_rule.subject_id,
+                    potplayer_media_path: Some(media_path.to_string()),
+                };
+            }
+        }
+    }
+
+    if let Some(matched_rule) = blocked_processes
+        .iter()
+        .find(|candidate| process_name == candidate.process_name.to_ascii_lowercase())
+    {
+        return WhitelistMatchResult {
+            allowed: false,
+            reason: "命中软件黑名单".to_string(),
+            matched_process_name: Some(matched_rule.process_name.clone()),
+            detected_domain: None,
+            matched_subject_id: matched_rule.subject_id,
+            potplayer_media_path: app.potplayer_media_path.clone(),
+        };
+    }
+
+    WhitelistMatchResult {
+        allowed: true,
+        reason: "未命中黑名单".to_string(),
+        matched_process_name: Some(app.process_name.clone()),
+        detected_domain: if supported_browser {
+            detect_browser_url_parts(app)
+                .map(|parts| parts.domain)
+                .or_else(|| extract_domain_from_text(&app.window_title))
+        } else {
+            None
+        },
         matched_subject_id: None,
         potplayer_media_path: app.potplayer_media_path.clone(),
     }
@@ -458,8 +578,8 @@ fn domain_matches(detected_domain: &str, allowed_domain: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_foreground_app_allowed, path_is_within_directory, PotPlayerWhitelistRule,
-        ProcessWhitelistRule, WebsiteWhitelistRule,
+        is_foreground_app_allowed, is_foreground_app_allowed_with_mode, path_is_within_directory,
+        PotPlayerWhitelistRule, ProcessWhitelistRule, WebsiteWhitelistRule,
     };
     use crate::windows::foreground::ForegroundApp;
 
@@ -580,6 +700,37 @@ mod tests {
 
         assert!(result.allowed);
         assert_eq!(result.matched_subject_id, Some(1));
+    }
+
+    #[test]
+    fn blacklist_mode_allows_unlisted_apps_and_blocks_matching_process() {
+        let allowed_app = foreground_app("Code.exe", None);
+        let result = is_foreground_app_allowed_with_mode(
+            &allowed_app,
+            "blacklist",
+            &[ProcessWhitelistRule {
+                process_name: "steam.exe".to_string(),
+                subject_id: None,
+            }],
+            &[],
+            &[],
+        );
+        assert!(result.allowed);
+        assert!(result.reason.contains("未命中黑名单"));
+
+        let blocked_app = foreground_app("Steam.exe", None);
+        let result = is_foreground_app_allowed_with_mode(
+            &blocked_app,
+            "blacklist",
+            &[ProcessWhitelistRule {
+                process_name: "steam.exe".to_string(),
+                subject_id: None,
+            }],
+            &[],
+            &[],
+        );
+        assert!(!result.allowed);
+        assert!(result.reason.contains("命中软件黑名单"));
     }
 
     #[test]

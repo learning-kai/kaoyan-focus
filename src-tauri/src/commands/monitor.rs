@@ -7,7 +7,7 @@ use crate::{
     storage::db::open_database,
     sync_package::load_or_create_device_id,
     whitelist::matcher::{
-        is_foreground_app_allowed, PotPlayerWhitelistRule, ProcessWhitelistRule,
+        is_foreground_app_allowed_with_mode, PotPlayerWhitelistRule, ProcessWhitelistRule,
         WebsiteWhitelistRule, WhitelistMatchResult,
     },
     windows::{
@@ -18,6 +18,7 @@ use crate::{
 };
 
 const CONTROL_SWITCH_SUBJECT: &str = "switch_subject";
+const WHITELIST_MODE_KEY: &str = "whitelist_mode";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FocusAppCheck {
@@ -198,8 +199,10 @@ fn check_focus_foreground_app_internal(
     let whitelist_processes = enabled_whitelist_processes(&connection)?;
     let whitelist_websites = enabled_whitelist_websites(&connection)?;
     let whitelist_potplayer_media = enabled_whitelist_potplayer_media(&connection)?;
-    let match_result = is_foreground_app_allowed(
+    let whitelist_mode = whitelist_mode(&connection)?;
+    let match_result = is_foreground_app_allowed_with_mode(
         &foreground_app,
+        &whitelist_mode,
         &whitelist_processes,
         &whitelist_websites,
         &whitelist_potplayer_media,
@@ -383,6 +386,23 @@ fn enabled_whitelist_processes(
         .map_err(|error| error.to_string())?;
 
     Ok(processes)
+}
+
+fn whitelist_mode(connection: &rusqlite::Connection) -> Result<String, String> {
+    let raw = connection
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![WHITELIST_MODE_KEY],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .unwrap_or_else(|| "allowlist".to_string());
+    Ok(if raw == "blocklist" || raw == "blacklist" {
+        "blocklist".to_string()
+    } else {
+        "allowlist".to_string()
+    })
 }
 
 fn enabled_whitelist_websites(

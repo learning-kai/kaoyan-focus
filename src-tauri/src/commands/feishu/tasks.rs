@@ -167,6 +167,7 @@ fn sync_tasks(
     connection: &mut Connection,
     feishu: &FeishuClient,
     tasklists: &HashMap<String, String>,
+    prefer_local_changes: bool,
     counters: &mut SyncCounters,
 ) -> Result<(), String> {
     let mut remote_tasks = Vec::new();
@@ -245,6 +246,7 @@ fn sync_tasks(
                     remote,
                     &link,
                     remote_in_current_tasklists,
+                    prefer_local_changes,
                     counters,
                 )?;
                 let local_after_sync =
@@ -314,8 +316,8 @@ fn sync_tasks(
                     REMOTE_FEISHU_TASK,
                     &remote.id,
                     Some(&remote.tasklist_guid),
-                    None,
-                    None,
+                    Some(&local_task_fingerprint(&task)),
+                    Some(&remote_task_fingerprint(remote)),
                     remote
                         .updated_millis
                         .map(|value| value.to_string())
@@ -336,6 +338,7 @@ fn sync_tasks(
                     remote,
                     &link,
                     tasklists.values().any(|guid| guid == &remote.tasklist_guid),
+                    prefer_local_changes,
                     counters,
                 )?;
                 // 认领后，若所在清单与期望不一致，按既有逻辑迁移到正确清单。
@@ -397,6 +400,11 @@ fn sync_tasks(
                         counters.deleted_count += 1;
                         continue;
                     }
+                    let local_fingerprint =
+                        load_local_task_by_id(connection, entity_type, local_id)
+                            .map(|task| local_task_fingerprint(&task))
+                            .unwrap_or_else(|_| remote_task_fingerprint(&remote));
+                    let remote_fingerprint = remote_task_fingerprint(&remote);
                     upsert_link(
                         connection,
                         entity_type,
@@ -405,8 +413,8 @@ fn sync_tasks(
                         REMOTE_FEISHU_TASK,
                         &remote.id,
                         Some(&remote.tasklist_guid),
-                        None,
-                        None,
+                        Some(&local_fingerprint),
+                        Some(&remote_fingerprint),
                         remote
                             .updated_millis
                             .map(|value| value.to_string())
@@ -427,6 +435,7 @@ fn sync_tasks(
                             )?
                             .ok_or_else(|| "飞书任务链接写入后读取失败。".to_string())?,
                             tasklists.values().any(|guid| guid == &remote.tasklist_guid),
+                            prefer_local_changes,
                             counters,
                         )?;
                     }
@@ -673,8 +682,8 @@ fn replace_remote_task_in_tasklist(
         REMOTE_FEISHU_TASK,
         &remote.id,
         Some(tasklist_guid),
-        None,
-        None,
+        Some(&local_task_fingerprint(task)),
+        Some(&remote_task_fingerprint(&remote)),
         remote
             .updated_millis
             .map(|value| value.to_string())
@@ -691,6 +700,118 @@ fn replace_remote_task_in_tasklist(
     Ok(remote)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinkedTaskAction {
+    PushLocal,
+    PullRemote,
+    RefreshLink,
+}
+
+fn linked_task_action(
+    local_updated: i64,
+    remote_updated: Option<i64>,
+    local_changed_since_sync: bool,
+    remote_changed_since_sync: bool,
+    prefer_local_changes: bool,
+) -> LinkedTaskAction {
+    const SKEW_MILLIS: i64 = 1_000;
+
+    match (local_changed_since_sync, remote_changed_since_sync) {
+        (true, false) => LinkedTaskAction::PushLocal,
+        (false, true) => LinkedTaskAction::PullRemote,
+        (false, false) => LinkedTaskAction::RefreshLink,
+        (true, true) => {
+            if let Some(remote_updated) = remote_updated {
+                if local_updated > remote_updated + SKEW_MILLIS {
+                    return LinkedTaskAction::PushLocal;
+                }
+                if remote_updated > local_updated + SKEW_MILLIS {
+                    return LinkedTaskAction::PullRemote;
+                }
+            }
+            if prefer_local_changes {
+                LinkedTaskAction::PushLocal
+            } else {
+                LinkedTaskAction::PullRemote
+            }
+        }
+    }
+}
+
+fn local_task_fingerprint(task: &LocalTask) -> String {
+    task_fingerprint(
+        &task.title,
+        task.note.as_deref(),
+        task.due_date.as_deref(),
+        task.completed,
+        task.tasklist_key,
+    )
+}
+
+fn remote_task_fingerprint(remote: &RemoteTask) -> String {
+    task_fingerprint(
+        &remote.title,
+        remote.note.as_deref(),
+        remote.due_date.as_deref(),
+        remote.completed,
+        &remote.tasklist_key,
+    )
+}
+
+fn task_fingerprint(
+    title: &str,
+    note: Option<&str>,
+    due_date: Option<&str>,
+    completed: bool,
+    tasklist_key: &str,
+) -> String {
+    [
+        title.trim().to_string(),
+        normalize_note(note),
+        due_date.unwrap_or("").trim().to_string(),
+        completed.to_string(),
+        tasklist_key.trim().to_string(),
+    ]
+    .join("\u{1f}")
+}
+
+fn legacy_link_local_task_changed(
+    local_fingerprint: &str,
+    remote_fingerprint: &str,
+    local_updated: i64,
+    link: &FeishuLink,
+) -> bool {
+    if local_fingerprint == remote_fingerprint {
+        return false;
+    }
+    link.last_synced_at
+        .as_deref()
+        .and_then(parse_link_millis)
+        .map(|last_synced| local_updated > last_synced + 1_000)
+        .unwrap_or(true)
+}
+
+fn legacy_link_remote_task_changed(
+    remote_fingerprint: &str,
+    remote_updated: Option<i64>,
+    link: &FeishuLink,
+) -> bool {
+    if link
+        .remote_etag
+        .as_deref()
+        .is_some_and(|fingerprint| fingerprint == remote_fingerprint)
+    {
+        return false;
+    }
+    match (
+        remote_updated,
+        link.last_synced_at.as_deref().and_then(parse_link_millis),
+    ) {
+        (Some(remote_updated), Some(last_synced)) => remote_updated > last_synced + 1_000,
+        _ => false,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn sync_linked_task(
     connection: &Connection,
@@ -700,79 +821,109 @@ fn sync_linked_task(
     remote: &RemoteTask,
     link: &FeishuLink,
     apply_remote_tasklist: bool,
+    prefer_local_changes: bool,
     counters: &mut SyncCounters,
 ) -> Result<(), String> {
     let local_updated = parse_rfc3339_millis(&local.updated_at)?;
-    let remote_updated = remote.updated_millis.unwrap_or(local_updated);
-    if local_updated > remote_updated + 1_000 {
-        let data = feishu.patch(
-            &format!(
-                "/open-apis/task/v2/tasks/{}?user_id_type=open_id",
-                encode_path_segment(&remote.id)
-            ),
-            feishu_task_patch_body(local),
-        )?;
-        let next_remote = data
-            .get("task")
-            .and_then(|value| parse_remote_task(value, local.tasklist_key, tasklist_guid))
-            .or_else(|| parse_remote_task(&data, local.tasklist_key, tasklist_guid))
-            .unwrap_or_else(|| remote.clone());
-        upsert_link(
-            connection,
-            local.entity_type,
-            Some(local.id),
-            &local.sync_id,
-            REMOTE_FEISHU_TASK,
-            &remote.id,
-            Some(tasklist_guid),
-            None,
-            None,
-            next_remote
-                .updated_millis
-                .map(|value| value.to_string())
-                .as_deref(),
-        )?;
-        counters.pushed_count += 1;
-    } else if remote_updated > local_updated + 1_000 {
-        update_local_task_from_remote(
-            connection,
-            local.entity_type,
-            local.id,
-            remote,
-            apply_remote_tasklist,
-        )?;
-        upsert_link(
-            connection,
-            local.entity_type,
-            Some(local.id),
-            &local.sync_id,
-            REMOTE_FEISHU_TASK,
-            &remote.id,
-            Some(tasklist_guid),
-            None,
-            None,
-            remote
-                .updated_millis
-                .map(|value| value.to_string())
-                .as_deref(),
-        )?;
-        counters.pulled_count += 1;
-    } else {
-        upsert_link(
-            connection,
-            local.entity_type,
-            Some(local.id),
-            &local.sync_id,
-            &link.remote_kind,
-            &remote.id,
-            Some(tasklist_guid),
-            None,
-            None,
-            remote
-                .updated_millis
-                .map(|value| value.to_string())
-                .as_deref(),
-        )?;
+    let remote_updated = remote.updated_millis.or_else(|| {
+        link.remote_last_modified
+            .as_deref()
+            .and_then(parse_link_millis)
+    });
+    let local_fingerprint = local_task_fingerprint(local);
+    let remote_fingerprint = remote_task_fingerprint(remote);
+    let local_changed_since_sync = link
+        .remote_etag
+        .as_deref()
+        .map(|fingerprint| fingerprint != local_fingerprint)
+        .unwrap_or_else(|| {
+            legacy_link_local_task_changed(&local_fingerprint, &remote_fingerprint, local_updated, link)
+        });
+    let remote_changed_since_sync = link
+        .remote_change_key
+        .as_deref()
+        .map(|fingerprint| fingerprint != remote_fingerprint)
+        .unwrap_or_else(|| legacy_link_remote_task_changed(&remote_fingerprint, remote_updated, link));
+
+    match linked_task_action(
+        local_updated,
+        remote_updated,
+        local_changed_since_sync,
+        remote_changed_since_sync,
+        prefer_local_changes,
+    ) {
+        LinkedTaskAction::PushLocal => {
+            let data = feishu.patch(
+                &format!(
+                    "/open-apis/task/v2/tasks/{}?user_id_type=open_id",
+                    encode_path_segment(&remote.id)
+                ),
+                feishu_task_patch_body(local),
+            )?;
+            let next_remote = data
+                .get("task")
+                .and_then(|value| parse_remote_task(value, local.tasklist_key, tasklist_guid))
+                .or_else(|| parse_remote_task(&data, local.tasklist_key, tasklist_guid))
+                .unwrap_or_else(|| remote.clone());
+            upsert_link(
+                connection,
+                local.entity_type,
+                Some(local.id),
+                &local.sync_id,
+                REMOTE_FEISHU_TASK,
+                &remote.id,
+                Some(tasklist_guid),
+                Some(&local_task_fingerprint(local)),
+                Some(&remote_task_fingerprint(&next_remote)),
+                next_remote
+                    .updated_millis
+                    .map(|value| value.to_string())
+                    .as_deref(),
+            )?;
+            counters.pushed_count += 1;
+        }
+        LinkedTaskAction::PullRemote => {
+            update_local_task_from_remote(
+                connection,
+                local.entity_type,
+                local.id,
+                remote,
+                apply_remote_tasklist,
+            )?;
+            upsert_link(
+                connection,
+                local.entity_type,
+                Some(local.id),
+                &local.sync_id,
+                REMOTE_FEISHU_TASK,
+                &remote.id,
+                Some(tasklist_guid),
+                Some(&remote_task_fingerprint(remote)),
+                Some(&remote_task_fingerprint(remote)),
+                remote
+                    .updated_millis
+                    .map(|value| value.to_string())
+                    .as_deref(),
+            )?;
+            counters.pulled_count += 1;
+        }
+        LinkedTaskAction::RefreshLink => {
+            upsert_link(
+                connection,
+                local.entity_type,
+                Some(local.id),
+                &local.sync_id,
+                &link.remote_kind,
+                &remote.id,
+                Some(tasklist_guid),
+                Some(&local_task_fingerprint(local)),
+                Some(&remote_task_fingerprint(remote)),
+                remote
+                    .updated_millis
+                    .map(|value| value.to_string())
+                    .as_deref(),
+            )?;
+        }
     }
     Ok(())
 }

@@ -17,6 +17,7 @@ import {
 import { getStudyModeState, listSubjects } from '../services/focusApi';
 import { isStudyModeLocked } from '../services/studyModeLock';
 import { openExternalUrl } from '../services/systemApi';
+import { getAppSettings } from '../services/settingsApi';
 import {
   createPotPlayerVideoWhitelistDirectory,
   createPotPlayerVideoWhitelistFile,
@@ -32,6 +33,7 @@ import {
 } from '../services/whitelistApi';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import type { StudyModeState, Subject } from '../types/focus';
+import type { AppSettings } from '../types/settings';
 import type { PotPlayerMediaInfo, RecentBlockedApp, RunningProcess, WhitelistApp } from '../types/whitelist';
 
 type WhitelistTab = 'rules' | 'add';
@@ -69,6 +71,7 @@ export default function WhitelistPage() {
   const { confirm, confirmDialog } = useConfirmDialog();
   const [apps, setApps] = useState<WhitelistApp[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [whitelistMode, setWhitelistMode] = useState<AppSettings['whitelist_mode']>('allowlist');
   const [entryType, setEntryType] = useState<WhitelistEntryType>('app');
   const [potPlayerRuleType, setPotPlayerRuleType] = useState<PotPlayerRuleType>('file');
   const [name, setName] = useState('');
@@ -99,6 +102,9 @@ export default function WhitelistPage() {
   const potPlayerCount = apps.filter(isPotPlayerRule).length;
   const appCount = apps.length - websiteCount - potPlayerCount;
   const whitelistLocked = isStudyModeLocked(studyState);
+  const modeNoun = whitelistMode === 'blocklist' ? '黑名单' : '白名单';
+  const modeVerb = whitelistMode === 'blocklist' ? '拦截' : '放行';
+  const modeVerbPast = whitelistMode === 'blocklist' ? '已拦截' : '已放行';
   const canCreate =
     !whitelistLocked &&
     name.trim().length > 0 &&
@@ -148,7 +154,16 @@ export default function WhitelistPage() {
   }, [whitelistLocked]);
 
   async function initializeWhitelistPage() {
-    await Promise.all([refreshApps(), refreshSubjects(), refreshStudyState()]);
+    await Promise.all([refreshApps(), refreshSubjects(), refreshStudyState(), refreshSettings()]);
+  }
+
+  async function refreshSettings() {
+    try {
+      const settings = await getAppSettings();
+      setWhitelistMode(settings.whitelist_mode);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
   }
 
   async function refreshStudyState() {
@@ -309,7 +324,7 @@ export default function WhitelistPage() {
       await createWhitelistApp(
         displayName,
         blockedApp.process_name,
-        '从最近拦截记录加入',
+        whitelistMode === 'blocklist' ? '从最近拦截记录加入黑名单' : '从最近拦截记录加入白名单',
         blockedApp.process_path,
         subjectId,
       );
@@ -357,8 +372,8 @@ export default function WhitelistPage() {
 
     const confirmed = await confirm({
       confirmLabel: '删除规则',
-      message: `删除后学习阶段不会再放行「${app.name}」。这条规则无法从白名单页恢复。`,
-      title: '删除白名单规则？',
+      message: `删除后该规则将不再${modeVerb}「${app.name}」。这条规则无法从${modeNoun}页恢复。`,
+      title: `删除${modeNoun}规则？`,
       tone: 'danger',
     });
     if (!confirmed) {
@@ -371,7 +386,7 @@ export default function WhitelistPage() {
       setMessage(null);
       await deleteWhitelistApp(app.id);
       await refreshApps();
-      setMessage('白名单规则已删除。');
+      setMessage(`${modeNoun}规则已删除。`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -410,9 +425,9 @@ export default function WhitelistPage() {
     <section className="page-shell whitelist-shell">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Allowlist Control</p>
-          <h2>软件、网站与 PotPlayer 白名单</h2>
-          <p>学习阶段只放行必要工具。PotPlayer 会优先按当前视频白名单判断，网站和软件规则保持原有逻辑。</p>
+          <p className="eyebrow">Rule Control</p>
+          <h2>软件、网站与 PotPlayer {modeNoun}</h2>
+          <p>{whitelistMode === 'blocklist' ? '默认放行，命中规则才拦截。PotPlayer、网站和软件规则共用同一套条目。' : '学习阶段只放行必要工具。PotPlayer 会优先按当前视频规则判断，网站和软件规则保持原有逻辑。'}</p>
         </div>
         <div className="header-metrics">
           <article>
@@ -462,7 +477,7 @@ export default function WhitelistPage() {
         </p>
       )}
       {whitelistLocked && (
-        <p className="alert neutral">学习模式正在运行，白名单配置已锁定；当前页面只允许查看规则和记录。</p>
+        <p className="alert neutral">学习模式正在运行，规则配置已锁定；当前页面只允许查看规则和记录。</p>
       )}
       {confirmDialog}
 
@@ -472,7 +487,7 @@ export default function WhitelistPage() {
           <div className="panel-title">
             <div>
               <p className="eyebrow">Add Rule</p>
-              <h3>加入白名单</h3>
+              <h3>加入{modeNoun}</h3>
             </div>
             <ListPlus size={20} />
           </div>
@@ -564,12 +579,12 @@ export default function WhitelistPage() {
                   className="text-input"
                   disabled={whitelistLocked}
                   onChange={(event) => setDomain(event.target.value)}
-                  placeholder={'例如：https://www.bilibili.com/video vd_source=cdb62f...\n（用空格或换行分隔多个片段，需全部命中才放行）'}
+                  placeholder={`例如：https://www.bilibili.com/video vd_source=cdb62f...\n（用空格或换行分隔多个片段，需全部命中才${modeVerb}）`}
                   rows={3}
                   value={domain}
                 />
                 <small className="path-hint">
-                  只填域名（如 bilibili.com）= 整站放行；填多个片段时，只有当前网址同时包含全部片段才会放行。
+                  只填域名（如 bilibili.com）= 整站{modeVerb}；填多个片段时，只有当前网址同时包含全部片段才会{modeVerb}。
                 </small>
               </label>
             ) : entryType === 'potplayer' ? (
@@ -630,7 +645,7 @@ export default function WhitelistPage() {
               type="button"
             >
               <ListPlus size={18} />
-              {loading ? '添加中' : '加入白名单'}
+              {loading ? '添加中' : `加入${modeNoun}`}
             </button>
           </div>
           {processPath && entryType === 'app' && <p className="path-hint">已选择路径：{processPath}</p>}
@@ -657,7 +672,7 @@ export default function WhitelistPage() {
             <article className="tool-row">
               <div>
                 <h4>从运行进程选择</h4>
-                <p>适合把当前打开的阅读器、词典、笔记软件快速加入白名单。</p>
+                <p>适合把当前打开的阅读器、词典、笔记软件快速加入{modeNoun}。</p>
               </div>
               <button
                 className="secondary-action"
@@ -673,7 +688,7 @@ export default function WhitelistPage() {
             <article className="tool-row">
               <div>
                 <h4>读取当前 PotPlayer</h4>
-                <p>自动识别当前正在播放的视频或所在目录，适合一键加入 PotPlayer 视频白名单。</p>
+                <p>自动识别当前正在播放的视频或所在目录，适合一键加入 PotPlayer 视频{modeNoun}。</p>
               </div>
               <button
                 className="secondary-action"
@@ -689,7 +704,7 @@ export default function WhitelistPage() {
             <article className="tool-row">
               <div>
                 <h4>最近拦截记录</h4>
-                <p>把误判或临时需要的软件从拦截记录中一键放行。</p>
+                <p>{whitelistMode === 'blocklist' ? '把高频干扰项从拦截记录中一键加入黑名单。' : '把误判或临时需要的软件从记录中一键加入白名单。'}</p>
               </div>
               <button
                 className="secondary-action"
@@ -780,18 +795,18 @@ export default function WhitelistPage() {
 
       {activeTab === 'rules' && (
       <section className="command-panel">
-        <div className="panel-title">
-          <div>
-            <p className="eyebrow">Rules</p>
-            <h3>当前白名单</h3>
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Rules</p>
+              <h3>当前{modeNoun}</h3>
+            </div>
+            <ShieldCheck size={20} />
           </div>
-          <ShieldCheck size={20} />
-        </div>
 
         {apps.length === 0 ? (
           <div className="empty-state">
-            <strong>还没有白名单条目</strong>
-            <p>先添加常用学习软件、必要学习网站，或者把当前 PotPlayer 正在播放的视频直接加入白名单。</p>
+            <strong>还没有{modeNoun}条目</strong>
+            <p>{whitelistMode === 'blocklist' ? '先添加需要拦截的软件、网站，或者把不想被打扰的 PotPlayer 视频直接加入黑名单。' : '先添加常用学习软件、必要学习网站，或者把当前 PotPlayer 正在播放的视频直接加入白名单。'}</p>
           </div>
         ) : (
           <>
@@ -869,7 +884,7 @@ export default function WhitelistPage() {
                           type="button"
                         >
                           {app.enabled ? <Power size={15} /> : <PowerOff size={15} />}
-                          {app.enabled ? '启用中' : '已停用'}
+                          {app.enabled ? `${modeVerbPast}` : '已停用'}
                         </button>
                         <button
                           className="small-action danger"

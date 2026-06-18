@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager};
 const DEFAULT_FOCUS_MINUTES_KEY: &str = "default_focus_minutes";
 const DEFAULT_STUDY_MINUTES_KEY: &str = "default_study_minutes";
 const DEFAULT_FOCUS_MODE_KEY: &str = "default_focus_mode";
+const WHITELIST_MODE_KEY: &str = "whitelist_mode";
 const UI_THEME_KEY: &str = "ui_theme";
 const LAUNCH_AT_STARTUP_KEY: &str = "launch_at_startup";
 const AUTO_START_BREAK_AFTER_FOCUS_KEY: &str = "auto_start_break_after_focus";
@@ -54,6 +55,7 @@ pub struct AppSettings {
     pub long_break_minutes: i64,
     pub long_break_interval: i64,
     pub default_focus_mode: String,
+    pub whitelist_mode: String,
     pub ui_theme: String,
     pub launch_at_startup: bool,
     pub auto_start_break_after_focus: bool,
@@ -115,6 +117,7 @@ impl Default for AppSettings {
             long_break_minutes: 15,
             long_break_interval: 4,
             default_focus_mode: "normal".to_string(),
+            whitelist_mode: "allowlist".to_string(),
             ui_theme: "dark".to_string(),
             launch_at_startup: false,
             auto_start_break_after_focus: false,
@@ -187,6 +190,11 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             &connection,
             DEFAULT_FOCUS_MODE_KEY,
             &defaults.default_focus_mode,
+        )?),
+        whitelist_mode: normalize_whitelist_mode(&get_string_setting(
+            &connection,
+            WHITELIST_MODE_KEY,
+            &defaults.whitelist_mode,
         )?),
         ui_theme: normalize_theme(&get_string_setting(
             &connection,
@@ -344,6 +352,7 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         long_break_minutes: settings.long_break_minutes.clamp(1, 120),
         long_break_interval: settings.long_break_interval.clamp(1, 12),
         default_focus_mode: normalize_mode(&settings.default_focus_mode),
+        whitelist_mode: normalize_whitelist_mode(&settings.whitelist_mode),
         ui_theme: normalize_theme(&settings.ui_theme),
         launch_at_startup: settings.launch_at_startup,
         auto_start_break_after_focus: settings.auto_start_break_after_focus,
@@ -428,6 +437,12 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         DEFAULT_FOCUS_MODE_KEY,
         &normalized.default_focus_mode,
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        WHITELIST_MODE_KEY,
+        &normalized.whitelist_mode,
         &now,
     )?;
     set_setting(&connection, UI_THEME_KEY, &normalized.ui_theme, &now)?;
@@ -973,6 +988,13 @@ fn normalize_mode(mode: &str) -> String {
         "strict".to_string()
     } else {
         "normal".to_string()
+    }
+}
+
+fn normalize_whitelist_mode(mode: &str) -> String {
+    match mode {
+        "blocklist" | "blacklist" => "blocklist".to_string(),
+        _ => "allowlist".to_string(),
     }
 }
 

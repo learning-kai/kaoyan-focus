@@ -79,6 +79,7 @@ const defaultSettings: AppSettings = {
   long_break_minutes: 15,
   long_break_interval: 4,
   default_focus_mode: 'normal',
+  whitelist_mode: 'allowlist',
   ui_theme: 'light',
   launch_at_startup: false,
   auto_start_break_after_focus: false,

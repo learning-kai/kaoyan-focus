@@ -120,6 +120,7 @@ export function buildSystemDiagnosticSummary(args: {
     `- 最近同步：${lastAutoSyncMessage ?? '暂无'}`,
     `- 主题：${settings.ui_theme}`,
     `- 学习模式：${settings.default_focus_mode}`,
+    `- 前台规则：${settings.whitelist_mode === 'blocklist' ? '黑名单' : '白名单'}`,
     '',
     '前台应用',
     foregroundApp

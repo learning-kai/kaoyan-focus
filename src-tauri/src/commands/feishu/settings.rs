@@ -178,6 +178,7 @@ struct FeishuLink {
     remote_etag: Option<String>,
     remote_change_key: Option<String>,
     remote_last_modified: Option<String>,
+    last_synced_at: Option<String>,
 }
 
 #[derive(Debug, Clone)]

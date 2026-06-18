@@ -107,6 +107,7 @@ fn sync_feishu_bridge_blocking_locked(
             &mut connection,
             &feishu,
             &containers.tasklists,
+            is_local_change_trigger(&trigger),
             &mut counters,
         )?;
         sync_calendar_events(

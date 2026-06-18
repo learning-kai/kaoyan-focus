@@ -231,7 +231,7 @@ fn load_orphan_calendar_event_links(connection: &Connection) -> Result<Vec<Feish
             "
             SELECT l.id, l.entity_type, l.local_id, l.local_sync_id, l.remote_kind, l.remote_id,
                    l.remote_parent_id, l.remote_etag, l.remote_change_key,
-                   l.remote_last_modified
+                   l.remote_last_modified, l.last_synced_at
             FROM feishu_sync_links l
             LEFT JOIN schedule_blocks b ON b.id = l.local_id
             LEFT JOIN sync_meta m ON m.entity_type = 'schedule_block' AND m.local_id = l.local_id
@@ -301,8 +301,41 @@ fn linked_calendar_action(
     }
 }
 
-fn calendar_event_content_differs(local: &LocalScheduleBlock, remote: &RemoteEvent) -> bool {
-    local_schedule_block_fingerprint(local) != remote_event_fingerprint(remote)
+fn legacy_link_local_calendar_changed(
+    local_fingerprint: &str,
+    remote_fingerprint: &str,
+    local_updated: i64,
+    link: &FeishuLink,
+) -> bool {
+    if local_fingerprint == remote_fingerprint {
+        return false;
+    }
+    link.last_synced_at
+        .as_deref()
+        .and_then(parse_link_millis)
+        .map(|last_synced| local_updated > last_synced + 1_000)
+        .unwrap_or(true)
+}
+
+fn legacy_link_remote_calendar_changed(
+    remote_fingerprint: &str,
+    remote_updated: Option<i64>,
+    link: &FeishuLink,
+) -> bool {
+    if link
+        .remote_etag
+        .as_deref()
+        .is_some_and(|fingerprint| fingerprint == remote_fingerprint)
+    {
+        return false;
+    }
+    match (
+        remote_updated,
+        link.last_synced_at.as_deref().and_then(parse_link_millis),
+    ) {
+        (Some(remote_updated), Some(last_synced)) => remote_updated > last_synced + 1_000,
+        _ => false,
+    }
 }
 
 fn local_schedule_block_fingerprint(block: &LocalScheduleBlock) -> String {
@@ -369,12 +402,21 @@ fn sync_linked_event(
         .remote_etag
         .as_deref()
         .map(|fingerprint| fingerprint != local_fingerprint)
-        .unwrap_or_else(|| calendar_event_content_differs(local, remote));
+        .unwrap_or_else(|| {
+            legacy_link_local_calendar_changed(
+                &local_fingerprint,
+                &remote_fingerprint,
+                local_updated,
+                link,
+            )
+        });
     let remote_changed_since_sync = link
         .remote_change_key
         .as_deref()
         .map(|fingerprint| fingerprint != remote_fingerprint)
-        .unwrap_or(false);
+        .unwrap_or_else(|| {
+            legacy_link_remote_calendar_changed(&remote_fingerprint, remote_updated, link)
+        });
 
     match linked_calendar_action(
         local_updated,

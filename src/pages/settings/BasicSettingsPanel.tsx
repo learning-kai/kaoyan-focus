@@ -115,6 +115,17 @@ export function BasicSettingsPanel({
                 </div>
               </div>
 
+              <div className="setting-row mode-setting">
+                <div>
+                  <strong>前台规则模式</strong>
+                  <p>{settings.whitelist_mode === 'blocklist' ? '黑名单模式：默认放行，命中规则才拦截。' : '白名单模式：只放行命中规则的应用、网站或视频。'}</p>
+                </div>
+                <div className="segmented-control">
+                  <button className={settings.whitelist_mode === 'allowlist' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ whitelist_mode: 'allowlist' })} type="button">白名单</button>
+                  <button className={settings.whitelist_mode === 'blocklist' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ whitelist_mode: 'blocklist' })} type="button">黑名单</button>
+                </div>
+              </div>
+
               <div className="setting-row mode-setting theme-setting-row">
                 <div>
                   <strong>界面配色</strong>

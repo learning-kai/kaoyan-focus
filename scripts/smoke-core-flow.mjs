@@ -246,6 +246,7 @@ function smokeRuntimeMockSource() {
   const settings = {
     default_study_minutes: 120, default_focus_minutes: 25, break_minutes: 5,
     long_break_minutes: 15, long_break_interval: 4, default_focus_mode: 'normal',
+    whitelist_mode: 'allowlist',
     ui_theme: 'light', launch_at_startup: false, auto_start_break_after_focus: false,
     schedule_reminder_enabled: true, schedule_reminder_lead_minutes: 10,
     sync_backend: 'webdav', primary_owner_device_id: 'smoke-device',

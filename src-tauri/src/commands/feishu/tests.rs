@@ -166,6 +166,116 @@ mod live_tests {
     }
 
     #[test]
+    fn local_task_change_is_not_overwritten_by_newer_remote_timestamp() {
+        assert_eq!(
+            linked_task_action(1_000, Some(9_000), true, false, false),
+            LinkedTaskAction::PushLocal
+        );
+        assert_eq!(
+            linked_task_action(9_000, Some(1_000), false, true, false),
+            LinkedTaskAction::PullRemote
+        );
+        assert_eq!(
+            linked_task_action(1_000, Some(9_000), true, true, false),
+            LinkedTaskAction::PullRemote
+        );
+        assert_eq!(
+            linked_task_action(5_000, Some(5_000), true, true, true),
+            LinkedTaskAction::PushLocal
+        );
+    }
+
+    #[test]
+    fn legacy_task_link_detects_remote_change_after_last_sync() {
+        let link = FeishuLink {
+            id: 1,
+            remote_kind: REMOTE_FEISHU_TASK.to_string(),
+            remote_id: "task-1".to_string(),
+            remote_parent_id: None,
+            remote_etag: None,
+            remote_change_key: None,
+            remote_last_modified: Some("9000".to_string()),
+            last_synced_at: Some("1970-01-01T00:00:05Z".to_string()),
+        };
+
+        assert!(!legacy_link_local_task_changed(
+            "local-title",
+            "remote-title",
+            4_000,
+            &link
+        ));
+        assert!(legacy_link_remote_task_changed(
+            "remote-title",
+            Some(9_000),
+            &link
+        ));
+        assert_eq!(
+            linked_task_action(4_000, Some(9_000), false, true, false),
+            LinkedTaskAction::PullRemote
+        );
+    }
+
+    #[test]
+    fn legacy_calendar_link_detects_remote_change_after_last_sync() {
+        let link = FeishuLink {
+            id: 1,
+            remote_kind: REMOTE_FEISHU_EVENT.to_string(),
+            remote_id: "event-1".to_string(),
+            remote_parent_id: None,
+            remote_etag: None,
+            remote_change_key: None,
+            remote_last_modified: Some("9000".to_string()),
+            last_synced_at: Some("1970-01-01T00:00:05Z".to_string()),
+        };
+
+        assert!(!legacy_link_local_calendar_changed(
+            "local-block",
+            "remote-block",
+            4_000,
+            &link
+        ));
+        assert!(legacy_link_remote_calendar_changed(
+            "remote-block",
+            Some(9_000),
+            &link
+        ));
+        assert_eq!(
+            linked_calendar_action(4_000, Some(9_000), false, true, false),
+            LinkedCalendarAction::PullRemote
+        );
+    }
+
+    #[test]
+    fn task_fingerprint_tracks_completion_and_due_date_changes() {
+        let local = LocalTask {
+            entity_type: ENTITY_CHECKLIST_TASK,
+            id: 1,
+            sync_id: "checklist_task-1".to_string(),
+            tasklist_key: TASKLIST_KEY_GENERAL,
+            title: "背单词".to_string(),
+            note: Some("list 3".to_string()),
+            due_date: Some("2026-06-20".to_string()),
+            completed: false,
+            updated_at: "2026-06-18T00:00:00Z".to_string(),
+            deleted_at: None,
+        };
+        let remote = RemoteTask {
+            id: "task-1".to_string(),
+            tasklist_key: TASKLIST_KEY_GENERAL.to_string(),
+            tasklist_guid: "tasklist-1".to_string(),
+            title: "背单词".to_string(),
+            note: Some("list 3".to_string()),
+            due_date: Some("2026-06-20".to_string()),
+            completed: true,
+            updated_millis: None,
+            marker_entity_type: Some(ENTITY_CHECKLIST_TASK.to_string()),
+            marker_sync_id: Some("checklist_task-1".to_string()),
+        };
+
+        assert_ne!(local_task_fingerprint(&local), remote_task_fingerprint(&remote));
+    }
+
+    #[test]
     fn calendar_fingerprint_tracks_block_time_changes() {
         let local = LocalScheduleBlock {
             id: 1,

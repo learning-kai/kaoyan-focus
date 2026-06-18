@@ -13,6 +13,7 @@ export type AppSettings = {
   long_break_minutes: number;
   long_break_interval: number;
   default_focus_mode: FocusMode;
+  whitelist_mode: 'allowlist' | 'blocklist';
   ui_theme: AppTheme;
   launch_at_startup: boolean;
   auto_start_break_after_focus: boolean;

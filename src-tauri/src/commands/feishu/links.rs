@@ -443,8 +443,8 @@ fn create_local_today_plan_item_from_remote(
         REMOTE_FEISHU_TASK,
         &remote.id,
         Some(&remote.tasklist_guid),
-        None,
-        None,
+        Some(&remote_task_fingerprint(remote)),
+        Some(&remote_task_fingerprint(remote)),
         remote
             .updated_millis
             .map(|value| value.to_string())
@@ -506,8 +506,8 @@ fn create_local_checklist_task_from_remote(
         REMOTE_FEISHU_TASK,
         &remote.id,
         Some(&remote.tasklist_guid),
-        None,
-        None,
+        Some(&remote_task_fingerprint(remote)),
+        Some(&remote_task_fingerprint(remote)),
         remote
             .updated_millis
             .map(|value| value.to_string())
@@ -649,7 +649,8 @@ fn get_link_by_sync_id(
         .query_row(
             "
             SELECT id, entity_type, local_id, local_sync_id, remote_kind, remote_id,
-                   remote_parent_id, remote_etag, remote_change_key, remote_last_modified
+                   remote_parent_id, remote_etag, remote_change_key, remote_last_modified,
+                   last_synced_at
             FROM feishu_sync_links
             WHERE entity_type = ?1 AND local_sync_id = ?2 AND remote_kind = ?3 AND deleted_at IS NULL
             ",
@@ -669,7 +670,8 @@ fn get_link_by_remote_id(
         .query_row(
             "
             SELECT id, entity_type, local_id, local_sync_id, remote_kind, remote_id,
-                   remote_parent_id, remote_etag, remote_change_key, remote_last_modified
+                   remote_parent_id, remote_etag, remote_change_key, remote_last_modified,
+                   last_synced_at
             FROM feishu_sync_links
             WHERE remote_kind = ?1 AND remote_id = ?2 AND deleted_at IS NULL
             ",
@@ -794,6 +796,7 @@ fn row_to_link(row: &rusqlite::Row<'_>) -> rusqlite::Result<FeishuLink> {
         remote_etag: row.get(7)?,
         remote_change_key: row.get(8)?,
         remote_last_modified: row.get(9)?,
+        last_synced_at: row.get(10)?,
     })
 }
 

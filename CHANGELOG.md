@@ -6,6 +6,7 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ### Added
 
+- Added a foreground rule mode setting with allowlist and blocklist semantics, reusing existing software, website and PotPlayer rules.
 - Added hash-aware main navigation with `Alt+1` through `Alt+8` shortcuts and smoke coverage for keyboard routing.
 - Added GitHub Actions CI for frontend type checking, frontend builds, Rust formatting, Clippy and Rust tests.
 - Added repository hygiene files for editor defaults, dependency updates, toolchain hints, support, conduct, ownership and asset attribution.
@@ -13,6 +14,7 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ### Changed
 
+- Changed Feishu task conflict resolution to use local and remote content fingerprints before timestamp arbitration, so local edits are not overwritten just because Feishu reports a newer remote timestamp.
 - Standardized local check scripts so contributors can use cross-shell npm commands instead of Windows-only `npm.cmd` inside package scripts.
 - Clarified that desktop releases are the default public path and Android release syncing is opt-in for maintainers.
 
@@ -318,5 +320,4 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ### Desktop
 #### Fixed
 - 修复飞书日程和任务重复同步 (02cd9d4)
-
 
