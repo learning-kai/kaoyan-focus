@@ -7,6 +7,7 @@ pub struct WhitelistApp {
     pub process_name: String,
     pub path: Option<String>,
     pub match_type: String,
+    pub list_kind: String,
     pub subject_id: Option<i64>,
     pub note: Option<String>,
     pub enabled: bool,

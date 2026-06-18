@@ -196,10 +196,12 @@ fn check_focus_foreground_app_internal(
 ) -> Result<FocusAppCheck, String> {
     let foreground_app = get_foreground_app()?;
     let connection = open_database(&database_path(app)?)?;
-    let whitelist_processes = enabled_whitelist_processes(&connection)?;
-    let whitelist_websites = enabled_whitelist_websites(&connection)?;
-    let whitelist_potplayer_media = enabled_whitelist_potplayer_media(&connection)?;
+    // 当前模式即规则条目所属名单：白名单模式只读 allowlist 条目，黑名单模式只读 blocklist 条目。
     let whitelist_mode = whitelist_mode(&connection)?;
+    let whitelist_processes = enabled_whitelist_processes(&connection, &whitelist_mode)?;
+    let whitelist_websites = enabled_whitelist_websites(&connection, &whitelist_mode)?;
+    let whitelist_potplayer_media =
+        enabled_whitelist_potplayer_media(&connection, &whitelist_mode)?;
     let match_result = is_foreground_app_allowed_with_mode(
         &foreground_app,
         &whitelist_mode,
@@ -369,13 +371,14 @@ fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 
 fn enabled_whitelist_processes(
     connection: &rusqlite::Connection,
+    list_kind: &str,
 ) -> Result<Vec<ProcessWhitelistRule>, String> {
     let mut statement = connection
-        .prepare("SELECT process_name, subject_id FROM whitelist_apps WHERE enabled = 1 AND match_type = 'process_name'")
+        .prepare("SELECT process_name, subject_id FROM whitelist_apps WHERE enabled = 1 AND match_type = 'process_name' AND list_kind = ?1")
         .map_err(|error| error.to_string())?;
 
     let processes = statement
-        .query_map([], |row| {
+        .query_map(params![list_kind], |row| {
             Ok(ProcessWhitelistRule {
                 process_name: row.get(0)?,
                 subject_id: row.get(1)?,
@@ -407,13 +410,14 @@ fn whitelist_mode(connection: &rusqlite::Connection) -> Result<String, String> {
 
 fn enabled_whitelist_websites(
     connection: &rusqlite::Connection,
+    list_kind: &str,
 ) -> Result<Vec<WebsiteWhitelistRule>, String> {
     let mut statement = connection
-        .prepare("SELECT process_name, path, subject_id FROM whitelist_apps WHERE enabled = 1 AND match_type = 'website_domain'")
+        .prepare("SELECT process_name, path, subject_id FROM whitelist_apps WHERE enabled = 1 AND match_type = 'website_domain' AND list_kind = ?1")
         .map_err(|error| error.to_string())?;
 
     let websites = statement
-        .query_map([], |row| {
+        .query_map(params![list_kind], |row| {
             let domain = row.get::<_, String>(0)?;
             let launch_url = row.get::<_, Option<String>>(1)?;
             let subject_id = row.get::<_, Option<i64>>(2)?;
@@ -433,6 +437,7 @@ fn enabled_whitelist_websites(
 
 fn enabled_whitelist_potplayer_media(
     connection: &rusqlite::Connection,
+    list_kind: &str,
 ) -> Result<Vec<PotPlayerWhitelistRule>, String> {
     let mut statement = connection
         .prepare(
@@ -441,12 +446,13 @@ fn enabled_whitelist_potplayer_media(
             FROM whitelist_apps
             WHERE enabled = 1
               AND match_type IN ('potplayer_video_file', 'potplayer_video_directory')
+              AND list_kind = ?1
             ",
         )
         .map_err(|error| error.to_string())?;
 
     let rules = statement
-        .query_map([], |row| {
+        .query_map(params![list_kind], |row| {
             Ok(PotPlayerWhitelistRule {
                 process_name: row.get(0)?,
                 media_path: row.get(1)?,

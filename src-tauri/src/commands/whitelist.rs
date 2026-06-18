@@ -14,6 +14,28 @@ use rusqlite::{params, OptionalExtension};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
+const WHITELIST_MODE_KEY: &str = "whitelist_mode";
+
+/// 读取当前前台规则模式，映射为规则条目所属名单：
+/// `blocklist`/`blacklist` → `blocklist`，其余 → `allowlist`。
+/// 白名单与黑名单各自维护独立条目，靠该字段隔离。
+fn current_list_kind(connection: &rusqlite::Connection) -> Result<String, String> {
+    let raw = connection
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![WHITELIST_MODE_KEY],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .unwrap_or_else(|| "allowlist".to_string());
+    Ok(if raw == "blocklist" || raw == "blacklist" {
+        "blocklist".to_string()
+    } else {
+        "allowlist".to_string()
+    })
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RecentBlockedApp {
     pub process_name: String,
@@ -50,16 +72,18 @@ pub fn create_whitelist_app(
     let now = Utc::now().to_rfc3339();
     let connection = open_database(&database_path(&app)?)?;
     validate_subject_id(&connection, subject_id)?;
+    let list_kind = current_list_kind(&connection)?;
     let existing_id = connection
         .query_row(
             "
             SELECT id
             FROM whitelist_apps
             WHERE lower(process_name) = lower(?1)
+              AND list_kind = ?2
             ORDER BY id DESC
             LIMIT 1
             ",
-            params![process_name],
+            params![process_name, list_kind],
             |row| row.get::<_, i64>(0),
         )
         .optional()
@@ -93,14 +117,15 @@ pub fn create_whitelist_app(
               process_name,
               path,
               match_type,
+              list_kind,
               subject_id,
               note,
               enabled,
               created_at,
               updated_at
-            ) VALUES (?1, ?2, ?3, 'process_name', ?4, ?5, 1, ?6, ?6)
+            ) VALUES (?1, ?2, ?3, 'process_name', ?4, ?5, ?6, 1, ?7, ?7)
             ",
-            params![name, process_name, path, subject_id, note, now],
+            params![name, process_name, path, list_kind, subject_id, note, now],
         )
         .map_err(|error| error.to_string())?;
 
@@ -133,6 +158,7 @@ pub fn create_whitelist_website(
     let now = Utc::now().to_rfc3339();
     let connection = open_database(&database_path(&app)?)?;
     validate_subject_id(&connection, subject_id)?;
+    let list_kind = current_list_kind(&connection)?;
     let is_specific_url = launch_url
         .as_deref()
         .is_some_and(website_url_has_specific_path);
@@ -143,11 +169,12 @@ pub fn create_whitelist_website(
                 SELECT id
                 FROM whitelist_apps
                 WHERE match_type = 'website_domain'
+                  AND list_kind = ?2
                   AND path = ?1
                 ORDER BY id DESC
                 LIMIT 1
                 ",
-                params![launch_url.as_deref()],
+                params![launch_url.as_deref(), list_kind],
                 |row| row.get::<_, i64>(0),
             )
             .optional()
@@ -158,6 +185,7 @@ pub fn create_whitelist_website(
                 SELECT id
                 FROM whitelist_apps
                 WHERE match_type = 'website_domain'
+                  AND list_kind = ?3
                   AND lower(process_name) = lower(?1)
                   AND (
                     path IS NULL
@@ -167,7 +195,7 @@ pub fn create_whitelist_website(
                 ORDER BY id DESC
                 LIMIT 1
                 ",
-                params![domain, launch_url.as_deref()],
+                params![domain, launch_url.as_deref(), list_kind],
                 |row| row.get::<_, i64>(0),
             )
             .optional()
@@ -202,14 +230,15 @@ pub fn create_whitelist_website(
               process_name,
               path,
               match_type,
+              list_kind,
               subject_id,
               note,
               enabled,
               created_at,
               updated_at
-            ) VALUES (?1, ?2, ?3, 'website_domain', ?4, ?5, 1, ?6, ?6)
+            ) VALUES (?1, ?2, ?3, 'website_domain', ?4, ?5, ?6, 1, ?7, ?7)
             ",
-            params![name, domain, launch_url, subject_id, note, now],
+            params![name, domain, launch_url, list_kind, subject_id, note, now],
         )
         .map_err(|error| error.to_string())?;
 
@@ -265,18 +294,20 @@ pub fn list_running_processes() -> Result<Vec<RunningProcess>, String> {
 #[tauri::command]
 pub fn list_whitelist_apps(app: AppHandle) -> Result<Vec<WhitelistApp>, String> {
     let connection = open_database(&database_path(&app)?)?;
+    let list_kind = current_list_kind(&connection)?;
     let mut statement = connection
         .prepare(
             "
-            SELECT id, name, process_name, path, match_type, subject_id, note, enabled, created_at, updated_at
+            SELECT id, name, process_name, path, match_type, subject_id, note, enabled, created_at, updated_at, list_kind
             FROM whitelist_apps
+            WHERE list_kind = ?1
             ORDER BY enabled DESC, COALESCE(subject_id, 0), id DESC
             ",
         )
         .map_err(|error| error.to_string())?;
 
     let apps = statement
-        .query_map([], row_to_whitelist_app)
+        .query_map(params![list_kind], row_to_whitelist_app)
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
@@ -287,6 +318,7 @@ pub fn list_whitelist_apps(app: AppHandle) -> Result<Vec<WhitelistApp>, String> 
 #[tauri::command]
 pub fn list_recent_blocked_apps(app: AppHandle) -> Result<Vec<RecentBlockedApp>, String> {
     let connection = open_database(&database_path(&app)?)?;
+    let list_kind = current_list_kind(&connection)?;
     let mut statement = connection
         .prepare(
             "
@@ -305,6 +337,7 @@ pub fn list_recent_blocked_apps(app: AppHandle) -> Result<Vec<RecentBlockedApp>,
               ON lower(w.process_name) = lower(latest.process_name)
              AND w.enabled = 1
              AND w.match_type = 'process_name'
+             AND w.list_kind = ?1
             WHERE latest.event_type = 'blocked_foreground_detected'
               AND w.id IS NULL
               AND latest.id = (
@@ -320,7 +353,7 @@ pub fn list_recent_blocked_apps(app: AppHandle) -> Result<Vec<RecentBlockedApp>,
         .map_err(|error| error.to_string())?;
 
     let apps = statement
-        .query_map([], |row| {
+        .query_map(params![list_kind], |row| {
             Ok(RecentBlockedApp {
                 process_name: row.get(0)?,
                 process_path: row.get(1)?,
@@ -452,18 +485,20 @@ fn create_potplayer_video_whitelist(
     let now = Utc::now().to_rfc3339();
     let connection = open_database(&database_path(&app)?)?;
     validate_subject_id(&connection, subject_id)?;
+    let list_kind = current_list_kind(&connection)?;
     let existing_id = connection
         .query_row(
             "
             SELECT id
             FROM whitelist_apps
             WHERE match_type = ?1
+              AND list_kind = ?4
               AND lower(process_name) = lower(?2)
               AND lower(path) = lower(?3)
             ORDER BY id DESC
             LIMIT 1
             ",
-            params![match_type, POTPLAYER_DEFAULT_PROCESS_NAME, media_path],
+            params![match_type, POTPLAYER_DEFAULT_PROCESS_NAME, media_path, list_kind],
             |row| row.get::<_, i64>(0),
         )
         .optional()
@@ -496,18 +531,20 @@ fn create_potplayer_video_whitelist(
               process_name,
               path,
               match_type,
+              list_kind,
               subject_id,
               note,
               enabled,
               created_at,
               updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?8)
             ",
             params![
                 name,
                 POTPLAYER_DEFAULT_PROCESS_NAME,
                 media_path,
                 match_type,
+                list_kind,
                 subject_id,
                 note,
                 now
@@ -595,7 +632,7 @@ fn get_whitelist_app_by_id(
     connection
         .query_row(
             "
-            SELECT id, name, process_name, path, match_type, subject_id, note, enabled, created_at, updated_at
+            SELECT id, name, process_name, path, match_type, subject_id, note, enabled, created_at, updated_at, list_kind
             FROM whitelist_apps
             WHERE id = ?1
             ",
@@ -621,6 +658,7 @@ fn row_to_whitelist_app(row: &rusqlite::Row<'_>) -> rusqlite::Result<WhitelistAp
         enabled: enabled != 0,
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
+        list_kind: row.get(10)?,
     })
 }
 

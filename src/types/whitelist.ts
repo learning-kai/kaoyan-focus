@@ -4,6 +4,7 @@ export type WhitelistApp = {
   process_name: string;
   path: string | null;
   match_type: 'process_name' | 'website_domain' | 'potplayer_video_file' | 'potplayer_video_directory' | string;
+  list_kind: 'allowlist' | 'blocklist' | string;
   subject_id: number | null;
   note: string | null;
   enabled: boolean;

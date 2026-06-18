@@ -100,6 +100,7 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               process_name TEXT NOT NULL,
               path TEXT,
               match_type TEXT NOT NULL DEFAULT 'process_name',
+              list_kind TEXT NOT NULL DEFAULT 'allowlist',
               subject_id INTEGER,
               note TEXT,
               enabled INTEGER NOT NULL DEFAULT 1,
@@ -437,6 +438,12 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
     add_column_if_missing(connection, "whitelist_apps", "subject_id", "INTEGER")?;
     add_column_if_missing(
         connection,
+        "whitelist_apps",
+        "list_kind",
+        "TEXT NOT NULL DEFAULT 'allowlist'",
+    )?;
+    add_column_if_missing(
+        connection,
         "feishu_sync_runs",
         "task_count",
         "INTEGER NOT NULL DEFAULT 0",
@@ -589,7 +596,7 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
     migrate_sync_meta_non_unique_sync_id(connection)?;
     connection
         .execute(
-            "CREATE INDEX IF NOT EXISTS idx_whitelist_apps_subject ON whitelist_apps (subject_id, enabled)",
+            "CREATE INDEX IF NOT EXISTS idx_whitelist_apps_subject ON whitelist_apps (list_kind, subject_id, enabled)",
             [],
         )
         .map_err(|error| error.to_string())?;
