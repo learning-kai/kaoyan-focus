@@ -351,4 +351,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Separate allowlist and blocklist rule entries (562c4d9)
 
+## v1.15.0 - 2026-06-20
+
+### Desktop
+#### Changed
+- Improve dashboard analytics readability (d3ccb80)
+
 
