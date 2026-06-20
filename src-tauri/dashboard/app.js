@@ -1408,7 +1408,7 @@ function buildWeekTimelineSeries(records, weekOffset) {
   const segments = [];
   const dayBuckets = Array.from({ length: 7 }, () => new Map());
 
-  for (const record of records) {
+  for (const record of DASHBOARD_ANALYTICS.filterFocusTimelineRecords(records)) {
     for (const segment of splitRecordByClock(record)) {
       if (segment.end <= start || segment.start >= end) continue;
       const clippedStart = maxDate(segment.start, start);

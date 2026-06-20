@@ -145,13 +145,29 @@
     };
   }
 
+  function shouldExcludeFromFocusTimeline(record) {
+    if (!record) return false;
+    const status = String(record.status ?? '').trim().toLowerCase();
+    const endReason = String(record.endReason ?? record.end_reason ?? '')
+      .trim()
+      .toLowerCase();
+    const emergencyExitCount = Number(record.emergencyExitCount ?? record.emergency_exit_count ?? 0);
+    return status === 'emergency_exited' || endReason === 'emergency_exit' || emergencyExitCount > 0;
+  }
+
+  function filterFocusTimelineRecords(records) {
+    return (Array.isArray(records) ? records : []).filter((record) => !shouldExcludeFromFocusTimeline(record));
+  }
+
   global.DashboardAnalytics = {
     EFFECTIVE_DAY_MINUTES,
     EFFECTIVE_DAY_SCORE,
     buildAnnualHeatmapCalendar,
     buildEffectiveDayProgress,
     calculateDailyFocusScore,
+    filterFocusTimelineRecords,
     getAnnualHeatLevel,
     isEffectiveDay,
+    shouldExcludeFromFocusTimeline,
   };
 })(typeof window === 'undefined' ? globalThis : window);

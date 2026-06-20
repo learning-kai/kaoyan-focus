@@ -101,4 +101,61 @@ assert.equal(emptyYearCalendar.effectiveDays, 0);
 assert.equal(emptyYearCalendar.totalMinutes, 0);
 assert.ok(emptyYearCalendar.days.every((day) => day.heatLevel === 0));
 
+assert.equal(
+  analytics.shouldExcludeFromFocusTimeline({
+    status: 'emergency_exited',
+    endReason: 'emergency_exit',
+    emergencyExitCount: 1,
+  }),
+  true,
+);
+assert.equal(
+  analytics.shouldExcludeFromFocusTimeline({
+    status: 'interrupted',
+    endReason: 'user_marked_interrupted',
+    emergencyExitCount: 0,
+  }),
+  false,
+);
+assert.equal(
+  analytics.shouldExcludeFromFocusTimeline({
+    status: 'finished',
+    endReason: 'completed',
+    emergencyExitCount: 0,
+  }),
+  false,
+);
+
+const timelineCandidates = analytics.filterFocusTimelineRecords([
+  {
+    id: 'normal-session',
+    subject: '数学',
+    minutes: 60,
+    emergencyExitCount: 0,
+    endReason: 'completed',
+    status: 'finished',
+  },
+  {
+    id: 'forgotten-overnight-emergency',
+    subject: '英语',
+    minutes: 720,
+    emergencyExitCount: 1,
+    endReason: 'emergency_exit',
+    status: 'emergency_exited',
+  },
+  {
+    id: 'paused-but-not-emergency',
+    subject: '政治',
+    minutes: 45,
+    emergencyExitCount: 0,
+    endReason: 'paused_timeout',
+    status: 'interrupted',
+  },
+]);
+
+assert.deepEqual(
+  timelineCandidates.map((record) => record.id),
+  ['normal-session', 'paused-but-not-emergency'],
+);
+
 console.log('dashboard analytics probe passed');
