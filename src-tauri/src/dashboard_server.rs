@@ -14,6 +14,7 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 const INDEX_HTML: &str = include_str!("../dashboard/index.html");
+const ANALYTICS_JS: &str = include_str!("../dashboard/analytics.js");
 const APP_JS: &str = include_str!("../dashboard/app.js");
 const STYLES_CSS: &str = include_str!("../dashboard/styles.css");
 const DATABASE_NAME: &str = "kaoyan-focus.sqlite3";
@@ -67,8 +68,13 @@ struct StudyDataRecord {
     tasks_total: i64,
     start_hour: u32,
     actual_seconds: i64,
+    planned_seconds: i64,
+    paused_seconds: i64,
+    interruption_count: i64,
+    emergency_exit_count: i64,
     started_at: String,
     ended_at: Option<String>,
+    end_reason: Option<String>,
     status: String,
 }
 
@@ -204,6 +210,14 @@ fn handle_get(
             "OK",
             "application/javascript; charset=utf-8",
             APP_JS,
+            head_only,
+        ),
+        "/analytics.js" => send_plain_response(
+            stream,
+            200,
+            "OK",
+            "application/javascript; charset=utf-8",
+            ANALYTICS_JS,
             head_only,
         ),
         "/styles.css" => send_plain_response(
@@ -424,8 +438,12 @@ fn load_records(connection: &Connection) -> Result<Vec<StudyDataRecord>, String>
                    fs.paused_seconds
             FROM focus_sessions fs
             LEFT JOIN subjects s ON s.id = fs.subject_id
-            WHERE COALESCE(fs.actual_seconds, 0) > 0
-              AND fs.started_at IS NOT NULL
+            WHERE fs.started_at IS NOT NULL
+              AND (
+                COALESCE(fs.actual_seconds, 0) > 0
+                OR fs.status = 'running'
+                OR fs.ended_at IS NOT NULL
+              )
             ORDER BY fs.started_at ASC, fs.id ASC
             ",
         )
@@ -437,7 +455,10 @@ fn load_records(connection: &Connection) -> Result<Vec<StudyDataRecord>, String>
 
     let mut records = Vec::new();
     for row in rows {
-        records.push(row.map_err(|error| error.to_string())?);
+        let record = row.map_err(|error| error.to_string())?;
+        if record.actual_seconds > 0 {
+            records.push(record);
+        }
     }
     Ok(records)
 }
@@ -450,7 +471,7 @@ fn map_focus_session(
     let subject_id: Option<i64> = row.get(1)?;
     let subject: String = row.get(2)?;
     let planned_seconds: i64 = row.get(3)?;
-    let actual_seconds: i64 = row.get(4)?;
+    let recorded_actual_seconds: i64 = row.get(4)?;
     let started_at: String = row.get(5)?;
     let ended_at: Option<String> = row.get(6)?;
     let status: String = row.get(7)?;
@@ -461,6 +482,15 @@ fn map_focus_session(
 
     let started = parse_local_datetime(&started_at)
         .unwrap_or_else(|| Utc::now().with_timezone(&local_offset()));
+    let ended = ended_at.as_deref().and_then(parse_local_datetime);
+    let actual_seconds = effective_focus_seconds(
+        recorded_actual_seconds,
+        planned_seconds,
+        &status,
+        started,
+        ended,
+        Utc::now().with_timezone(&local_offset()),
+    );
     let minutes = (actual_seconds.max(0) + 30) / 60;
     let minutes = if actual_seconds > 0 && minutes == 0 {
         1
@@ -490,10 +520,43 @@ fn map_focus_session(
         tasks_total,
         start_hour: started.time().hour(),
         actual_seconds,
+        planned_seconds,
+        paused_seconds,
+        interruption_count,
+        emergency_exit_count,
         started_at,
         ended_at,
+        end_reason,
         status,
     })
+}
+
+fn effective_focus_seconds(
+    recorded_actual_seconds: i64,
+    planned_seconds: i64,
+    status: &str,
+    started_at: DateTime<FixedOffset>,
+    ended_at: Option<DateTime<FixedOffset>>,
+    now: DateTime<FixedOffset>,
+) -> i64 {
+    if recorded_actual_seconds > 0 {
+        return recorded_actual_seconds;
+    }
+
+    let wall_seconds = if status == "running" {
+        (now - started_at).num_seconds()
+    } else if let Some(ended_at) = ended_at {
+        (ended_at - started_at).num_seconds()
+    } else {
+        0
+    }
+    .max(0);
+
+    if planned_seconds > 0 {
+        wall_seconds.min(planned_seconds).max(0)
+    } else {
+        wall_seconds
+    }
 }
 
 fn resolve_task_bucket(
@@ -606,7 +669,113 @@ fn local_offset() -> FixedOffset {
 
 #[cfg(test)]
 mod tests {
-    use super::focus_score;
+    use super::{focus_score, load_records};
+    use rusqlite::{params, Connection};
+
+    fn setup_dashboard_test_database() -> Connection {
+        let connection = Connection::open_in_memory().expect("create in-memory database");
+        connection
+            .execute_batch(
+                "
+                CREATE TABLE subjects (
+                  id INTEGER PRIMARY KEY,
+                  name TEXT NOT NULL
+                );
+
+                CREATE TABLE today_plan_items (
+                  id INTEGER PRIMARY KEY,
+                  today_date TEXT NOT NULL,
+                  subject_id INTEGER,
+                  completed INTEGER NOT NULL DEFAULT 0
+                );
+
+                CREATE TABLE focus_sessions (
+                  id INTEGER PRIMARY KEY,
+                  mode TEXT NOT NULL DEFAULT 'normal',
+                  subject_id INTEGER,
+                  planned_seconds INTEGER NOT NULL,
+                  actual_seconds INTEGER NOT NULL DEFAULT 0,
+                  paused_seconds INTEGER NOT NULL DEFAULT 0,
+                  started_at TEXT NOT NULL,
+                  ended_at TEXT,
+                  status TEXT NOT NULL,
+                  end_reason TEXT,
+                  interruption_count INTEGER NOT NULL DEFAULT 0,
+                  emergency_exit_count INTEGER NOT NULL DEFAULT 0
+                );
+                ",
+            )
+            .expect("create dashboard test schema");
+        connection
+    }
+
+    #[test]
+    fn load_records_includes_started_running_session_without_persisted_actual_seconds() {
+        let connection = setup_dashboard_test_database();
+        connection
+            .execute("INSERT INTO subjects (id, name) VALUES (1, '数学')", [])
+            .expect("insert subject");
+        connection
+            .execute(
+                "
+                INSERT INTO focus_sessions (
+                  id, mode, subject_id, planned_seconds, actual_seconds,
+                  started_at, ended_at, status, end_reason,
+                  interruption_count, emergency_exit_count, paused_seconds
+                )
+                VALUES (1, 'strict', 1, ?1, 0, ?2, NULL, 'running', NULL, 0, 0, 0)
+                ",
+                params![45 * 60, "2020-01-01T08:00:00+08:00"],
+            )
+            .expect("insert running focus session");
+
+        let records = load_records(&connection).expect("load dashboard records");
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].id, "focus-session:1");
+        assert_eq!(records[0].subject, "数学");
+        assert_eq!(records[0].actual_seconds, 45 * 60);
+        assert_eq!(records[0].minutes, 45);
+    }
+
+    #[test]
+    fn load_records_exports_raw_focus_evidence_for_dashboard_scoring() {
+        let connection = setup_dashboard_test_database();
+        connection
+            .execute("INSERT INTO subjects (id, name) VALUES (1, '英语')", [])
+            .expect("insert subject");
+        connection
+            .execute(
+                "
+                INSERT INTO focus_sessions (
+                  id, mode, subject_id, planned_seconds, actual_seconds,
+                  started_at, ended_at, status, end_reason,
+                  interruption_count, emergency_exit_count, paused_seconds
+                )
+                VALUES (2, 'strict', 1, ?1, ?2, ?3, ?4, 'interrupted', 'user_marked_interrupted', 3, 1, ?5)
+                ",
+                params![
+                    50 * 60,
+                    42 * 60,
+                    "2026-06-20T09:00:00+08:00",
+                    "2026-06-20T09:42:00+08:00",
+                    8 * 60
+                ],
+            )
+            .expect("insert interrupted focus session");
+
+        let records = load_records(&connection).expect("load dashboard records");
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].planned_seconds, 50 * 60);
+        assert_eq!(records[0].paused_seconds, 8 * 60);
+        assert_eq!(records[0].interruption_count, 3);
+        assert_eq!(records[0].emergency_exit_count, 1);
+        assert_eq!(
+            records[0].end_reason.as_deref(),
+            Some("user_marked_interrupted")
+        );
+    }
 
     #[test]
     fn completed_planned_session_scores_high_but_not_magic() {

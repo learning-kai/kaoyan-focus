@@ -498,7 +498,12 @@ fn create_potplayer_video_whitelist(
             ORDER BY id DESC
             LIMIT 1
             ",
-            params![match_type, POTPLAYER_DEFAULT_PROCESS_NAME, media_path, list_kind],
+            params![
+                match_type,
+                POTPLAYER_DEFAULT_PROCESS_NAME,
+                media_path,
+                list_kind
+            ],
             |row| row.get::<_, i64>(0),
         )
         .optional()

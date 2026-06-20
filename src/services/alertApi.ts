@@ -112,7 +112,7 @@ export async function notifyStudyReminder(payload: ReminderPayload) {
     const durationMs = settings.reminder_sound_duration_seconds * 1000;
     registerNotificationSound(notificationId, stopSound, durationMs);
   }
-  await showDesktopNotification(payload, settings, notificationId);
+  await showDesktopNotification(payload, settings, notificationId, { localSoundPlaying: Boolean(stopSound) });
 }
 
 export async function notifyPersistentAlarm(key: string, payload: ReminderPayload) {
@@ -125,7 +125,7 @@ export async function notifyPersistentAlarm(key: string, payload: ReminderPayloa
     const durationMs = settings.reminder_sound_duration_seconds * 1000;
     registerNotificationSound(key, () => stopPersistentAlarmAudio(key), durationMs);
   }
-  await showDesktopNotification(payload, settings, key);
+  await showDesktopNotification(payload, settings, key, { localSoundPlaying: persistentAlarmSounds.has(key) });
 }
 
 export function stopPersistentAlarmSound(key?: string) {
@@ -354,9 +354,20 @@ function stopPreviewAudio() {
   }
 }
 
-async function showDesktopNotification(payload: ReminderPayload, settings: ReminderSoundSettings, notificationId: string) {
+async function showDesktopNotification(
+  payload: ReminderPayload,
+  settings: ReminderSoundSettings,
+  notificationId: string,
+  soundState: DesktopNotificationSoundState = {},
+) {
   try {
-    await showStudyReminder(payload.title, payload.body, toastSoundId(settings), notificationId, payload.wakeWindow ?? false);
+    await showStudyReminder(
+      payload.title,
+      payload.body,
+      resolveDesktopNotificationSoundId(settings, soundState),
+      notificationId,
+      payload.wakeWindow ?? false,
+    );
     return;
   } catch {
     // Continue to plugin/browser notification fallback.
@@ -538,8 +549,16 @@ function timeOfDayToMinutes(value: string) {
   return hour * 60 + minute;
 }
 
-function toastSoundId(settings: ReminderSoundSettings) {
-  if (isQuietHoursActive(settings) || settings.reminder_sound_volume <= 0) {
+type DesktopNotificationSoundState = {
+  localSoundPlaying?: boolean;
+  now?: Date;
+};
+
+export function resolveDesktopNotificationSoundId(
+  settings: ReminderSoundSettings,
+  soundState: DesktopNotificationSoundState = {},
+) {
+  if (soundState.localSoundPlaying || isQuietHoursActive(settings, soundState.now) || settings.reminder_sound_volume <= 0) {
     return 'silent';
   }
   return settings.reminder_sound_source === 'builtin'

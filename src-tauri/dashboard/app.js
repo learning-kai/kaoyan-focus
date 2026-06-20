@@ -10,7 +10,7 @@ const RANGE_LABELS = {
 };
 const RECORD_FILTER_LABELS = {
   all: '全部',
-  'low-focus': '低专注',
+  'low-focus': '低会话分',
   'task-debt': '有欠账',
   'long-session': '长时段',
 };
@@ -24,6 +24,8 @@ const SESSION_PREVIEW_LIMIT = 8;
 const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
 const WEEKDAY_FULL_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const MONTH_LABELS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+const HEAT_LEVEL_LABELS = ['无记录', '低效', '未达标', '达标', '高效', '峰值'];
+const DASHBOARD_ANALYTICS = window.DashboardAnalytics;
 
 const SUBJECTS = ['数学', '英语', '政治', '专业课', '复盘'];
 
@@ -228,7 +230,7 @@ function render(message = datasetMessage) {
   const weekTimeline = buildWeekTimelineSeries(records, state.weekOffset);
   const bestHours = buildMonthlyBestHours(records, state.monthOffset);
   const yearHeatmap = buildYearHeatmapSeries(records, state.yearOffset);
-  const overview = buildOverview(filtered, records, anchorDate);
+  const overview = buildOverview(filtered, records, anchorDate, dailySeries);
   const comparison = buildComparison(records, anchorDate, rangeDays);
   const timeWindowSeries = buildTimeWindowSeries(filtered);
   const taskFulfillment = buildTaskFulfillment(filtered, dailySeries, subjectSeries);
@@ -237,7 +239,7 @@ function render(message = datasetMessage) {
   const rhythm = buildRhythmAdvice(dailySeries, rangeDays);
   const quality = buildQualityQuadrants(dailySeries);
   const dailySnapshot = buildDailySnapshot(dailySeries);
-  const target = buildTargetProgress(overview, rangeDays, filtered.length);
+  const target = buildTargetProgress(dailySeries);
   const risks = buildRiskItems(subjectGaps, taskFulfillment, lowEfficiencyDays, rhythm);
   const dataQuality = buildDataQuality(filtered, dailySeries, subjectSeries, taskFulfillment, rhythm);
   const prescription = buildPrescription({
@@ -335,13 +337,13 @@ function renderMetrics(overview, anchorDate, filteredCount) {
   els.metricHours.textContent = formatHours(totalMinutes);
   els.metricHoursNote.textContent = `${filteredCount} 条记录，截止 ${formatDateLabel(anchorDate)}`;
   els.metricFocus.textContent = formatNumber(avgFocus, 1);
-  els.metricFocusNote.textContent = '0 - 100 分';
+  els.metricFocusNote.textContent = '按天综合：质量、时长、任务、打断';
   els.metricTaskRate.textContent = `${formatNumber(taskRate * 100, 0)}%`;
   els.metricTaskNote.textContent = `${overview.tasksDone} / ${overview.tasksTotal}`;
   els.metricStreak.textContent = String(streak);
   els.metricStreakNote.textContent = '连续有学习记录的天数';
   els.metricWindow.textContent = bestWindow || '--';
-  els.metricWindowNote.textContent = overview.bestWindowNote || '根据专注分和学习时长综合判断';
+  els.metricWindowNote.textContent = overview.bestWindowNote || '根据会话质量和学习时长综合判断';
   els.metricDays.textContent = String(activeDays);
   els.metricDaysNote.textContent = '有学习记录的日期数';
 }
@@ -389,7 +391,8 @@ function renderTrendChart(dailySeries) {
   for (const [index, item] of dailySeries.entries()) {
     const x = margin.left + index * step;
     const minuteY = scale(item.minutes, 0, maxMinutes, height - margin.bottom, margin.top);
-    const focusY = item.avgFocus == null ? null : scale(item.avgFocus, 0, 100, height - margin.bottom, margin.top);
+    const focusY =
+      item.dailyFocusScore == null ? null : scale(item.dailyFocusScore, 0, 100, height - margin.bottom, margin.top);
     minutesPoints.push({ x, y: minuteY, item });
     focusPoints.push({ x, y: focusY, item });
 
@@ -408,7 +411,7 @@ function renderTrendChart(dailySeries) {
       `${formatDateLabel(item.date)}：${item.minutes} 分钟`,
     );
 
-    if (item.avgFocus != null) {
+    if (item.dailyFocusScore != null) {
       addCircle(
         els.trendChart,
         x,
@@ -419,7 +422,7 @@ function renderTrendChart(dailySeries) {
           stroke: pointStroke,
           'stroke-width': 1,
         },
-        `${formatDateLabel(item.date)}：平均专注 ${formatNumber(item.avgFocus, 1)}`,
+        `${formatDateLabel(item.date)}：日有效度 ${formatNumber(item.dailyFocusScore, 1)}`,
       );
     }
   }
@@ -487,7 +490,7 @@ function renderSubjectChart(subjectSeries) {
         fill: color,
         stroke: barStroke,
       },
-      `${item.subject}：${item.minutes} 分钟，平均专注 ${formatNumber(item.avgFocus, 1)}`,
+      `${item.subject}：${item.minutes} 分钟，平均会话质量 ${formatNumber(item.avgFocus, 1)}`,
     );
 
     addText(
@@ -514,10 +517,9 @@ function renderHeatmapChart(heatmapSeries) {
   const gap = 2;
   const startX = margin.left;
   const startY = margin.top;
-  const maxMinutes = Math.max(1, ...heatmapSeries.cells.map((cell) => cell.minutes));
-  const heatHigh = cssVar('--heat-high-rgb', '166, 223, 113');
-  const heatMid = cssVar('--heat-mid-rgb', '70, 211, 178');
-  const heatLow = cssVar('--heat-low-rgb', '116, 167, 255');
+  const maxHeatValue = Math.max(1, ...heatmapSeries.cells.map((cell) => heatValue(cell.minutes, cell.avgFocus)));
+  const heatColors = heatPalette();
+  const heatEmpty = cssVar('--heat-empty', 'rgba(255,255,255,0.05)');
   const heatStroke = cssVar('--heat-stroke', 'rgba(255,255,255,0.06)');
 
   setSvgViewBox(els.heatmapChart, width, height);
@@ -552,9 +554,9 @@ function renderHeatmapChart(heatmapSeries) {
   for (const cell of heatmapSeries.cells) {
     const x = startX + cell.hour * (cellW + gap);
     const y = startY + cell.row * (cellH + gap);
-    const intensity = cell.minutes / maxMinutes;
-    const alpha = 0.08 + intensity * 0.78;
-    const hue = cell.avgFocus >= 80 ? heatHigh : cell.avgFocus >= 65 ? heatMid : heatLow;
+    const value = heatValue(cell.minutes, cell.avgFocus);
+    const level = heatIntensityLevel(value, maxHeatValue);
+    const fill = level > 0 ? heatColors[level] : heatEmpty;
     addRect(
       els.heatmapChart,
       x,
@@ -563,10 +565,11 @@ function renderHeatmapChart(heatmapSeries) {
       cellH,
       {
         rx: 6,
-        fill: `rgba(${hue}, ${alpha.toFixed(3)})`,
+        fill,
         stroke: heatStroke,
+        'data-heat-level': level,
       },
-      `${cell.rowLabel} ${String(cell.hour).padStart(2, '0')}:00 - ${cell.minutes} 分钟，平均专注 ${cell.avgFocus == null ? '暂无' : formatNumber(cell.avgFocus, 1)}`,
+      `${cell.rowLabel} ${String(cell.hour).padStart(2, '0')}:00 - ${cell.minutes} 分钟，会话质量 ${cell.avgFocus == null ? '暂无' : formatNumber(cell.avgFocus, 1)}，强度 ${HEAT_LEVEL_LABELS[level]}`,
     );
   }
 
@@ -581,15 +584,22 @@ function renderWeekTimeline(series) {
   clearSvg(els.weekTimelineChart);
   const width = 960;
   const height = 360;
-  const margin = { top: 28, right: 22, bottom: 46, left: 62 };
+  const margin = { top: 48, right: 22, bottom: 46, left: 62 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
   const dayWidth = plotWidth / 7;
+  const timeStart = series.timeStart ?? 0;
+  const timeEnd = series.timeEnd ?? 1440;
   const gridLine = cssVar('--grid-line', 'rgba(255,255,255,0.06)');
   const axisLine = cssVar('--axis-line', 'rgba(255,255,255,0.18)');
   const columnFill = cssVar('--chart-track', 'rgba(255,255,255,0.04)');
   const strongFill = cssVar('--chart-focus', '#efb35b');
   const softFill = cssVar('--chart-minutes', 'rgba(70, 211, 178, 0.78)');
+  const shallowFill = cssVar('--info', '#78a7ff');
+  const weakFill = 'color-mix(in srgb, var(--danger) 56%, var(--surface))';
+  const exitFill = cssVar('--danger', '#f07a6d');
+  const activeFill = cssVar('--success', '#a8df70');
+  const mutedFill = cssVar('--muted-2', '#63766c');
 
   setSvgViewBox(els.weekTimelineChart, width, height);
   els.weekTimelineLabel.textContent = series.label;
@@ -610,6 +620,16 @@ function renderWeekTimeline(series) {
       class: 'timeline-day-label',
       'text-anchor': 'middle',
     });
+    const daySummary = series.days?.[dayIndex];
+    const summaryText = daySummary?.active
+      ? `${formatCompactMinutes(daySummary.minutes)} · ${formatNumber(daySummary.dailyFocusScore, 0)} · ${
+          daySummary.effective ? '达标' : '未达'
+        }`
+      : '无记录';
+    addText(els.weekTimelineChart, x + dayWidth / 2, 24, summaryText, {
+      class: daySummary?.effective ? 'timeline-summary-label is-effective' : 'timeline-summary-label',
+      'text-anchor': 'middle',
+    });
   }
 
   addLine(els.weekTimelineChart, width - margin.right, margin.top, width - margin.right, height - margin.bottom, {
@@ -617,10 +637,10 @@ function renderWeekTimeline(series) {
     'stroke-width': 1,
   });
 
-  for (const minute of [0, 360, 720, 1080, 1440]) {
-    const y = scale(minute, 0, 1440, margin.top, height - margin.bottom);
+  for (const minute of timelineTicks(timeStart, timeEnd)) {
+    const y = scale(minute, timeStart, timeEnd, margin.top, height - margin.bottom);
     addLine(els.weekTimelineChart, margin.left, y, width - margin.right, y, {
-      stroke: minute === 1440 ? axisLine : gridLine,
+      stroke: minute === timeEnd ? axisLine : gridLine,
       'stroke-width': 1,
     });
     addText(els.weekTimelineChart, margin.left - 12, y + 4, minute === 1440 ? '24:00' : `${padHour(minute / 60)}:00`, {
@@ -639,10 +659,18 @@ function renderWeekTimeline(series) {
   for (const segment of series.segments) {
     const xPadding = Math.max(7, dayWidth * 0.16);
     const x = margin.left + segment.dayIndex * dayWidth + xPadding;
-    const yStart = scale(segment.startMinute, 0, 1440, margin.top, height - margin.bottom);
-    const yEnd = scale(segment.endMinute, 0, 1440, margin.top, height - margin.bottom);
+    const yStart = scale(clampNumber(segment.startMinute, timeStart, timeEnd, timeStart), timeStart, timeEnd, margin.top, height - margin.bottom);
+    const yEnd = scale(clampNumber(segment.endMinute, timeStart, timeEnd, timeEnd), timeStart, timeEnd, margin.top, height - margin.bottom);
     const rectHeight = Math.max(3, yEnd - yStart);
-    const fill = segment.focusScore >= 78 ? strongFill : softFill;
+    const category = getTimelineSegmentCategory(segment, {
+      activeFill,
+      exitFill,
+      mutedFill,
+      shallowFill,
+      softFill,
+      strongFill,
+      weakFill,
+    });
     addRect(
       els.weekTimelineChart,
       x,
@@ -651,11 +679,12 @@ function renderWeekTimeline(series) {
       rectHeight,
       {
         rx: 6,
-        fill,
+        fill: category.fill,
+        opacity: segment.status === 'running' ? 0.72 : 0.96,
         stroke: 'rgba(255,255,255,0.16)',
         'stroke-width': 1,
       },
-      `${WEEKDAY_FULL_LABELS[segment.dayIndex]} ${formatClock(segment.start)} - ${formatClock(segment.end)} · ${escapeTitle(segment.subject)} · ${formatMinutesLabel(segment.minutes)} · 专注分 ${formatNumber(segment.focusScore, 0)}`,
+      `${WEEKDAY_FULL_LABELS[segment.dayIndex]} ${formatClock(segment.start)} - ${formatClock(segment.end)} · ${escapeTitle(segment.subject)} · ${category.label} · ${formatMinutesLabel(segment.minutes)} · 会话分 ${formatNumber(segment.focusScore, 0)}`,
     );
 
     if (rectHeight >= 24) {
@@ -664,6 +693,42 @@ function renderWeekTimeline(series) {
       });
     }
   }
+}
+
+function getTimelineSegmentCategory(segment, palette) {
+  if (segment.status === 'running') {
+    return { fill: palette.activeFill, label: '进行中' };
+  }
+  if (segment.status === 'emergency_exited') {
+    return { fill: palette.exitFill, label: '应急退出' };
+  }
+  if (segment.status === 'interrupted') {
+    return { fill: palette.mutedFill, label: '被打断' };
+  }
+  if (segment.focusScore >= 80) {
+    return { fill: palette.strongFill, label: '深度专注' };
+  }
+  if (segment.focusScore >= 65) {
+    return { fill: palette.softFill, label: '稳定专注' };
+  }
+  if (segment.focusScore >= 45) {
+    return { fill: palette.shallowFill, label: '浅层专注' };
+  }
+  return { fill: palette.weakFill, label: '低效专注' };
+}
+
+function timelineTicks(startMinute, endMinute) {
+  const startHour = Math.floor(startMinute / 60);
+  const endHour = Math.ceil(endMinute / 60);
+  const span = Math.max(1, endHour - startHour);
+  const step = span <= 8 ? 2 : span <= 14 ? 3 : 6;
+  const ticks = [];
+  for (let hour = startHour; hour <= endHour; hour += step) {
+    ticks.push(Math.min(1440, hour * 60));
+  }
+  const finalTick = Math.min(1440, endHour * 60);
+  if (!ticks.includes(finalTick)) ticks.push(finalTick);
+  return ticks;
 }
 
 function renderBestHourChart(series) {
@@ -724,7 +789,7 @@ function renderBestHourChart(series) {
           fill: topHours.has(item.hour) ? topFill : activeFill,
           stroke: 'rgba(255,255,255,0.14)',
         },
-        `${item.label} · ${formatMinutesLabel(item.minutes)} · 平均专注 ${formatNumber(item.avgFocus, 1)} · ${item.sessionCount} 段`,
+        `${item.label} · ${formatMinutesLabel(item.minutes)} · 会话质量 ${formatNumber(item.avgFocus, 1)} · ${item.sessionCount} 段`,
       );
     }
 
@@ -750,16 +815,15 @@ function renderYearHeatmap(series) {
   const margin = { top: 34, right: 16, bottom: 24, left: 42 };
   const gap = 3;
   const cell = Math.max(7, Math.min(12, (width - margin.left - margin.right - (series.columns - 1) * gap) / series.columns));
-  const activeRgb = cssVar('--heat-mid-rgb', '70, 211, 178');
-  const strongRgb = cssVar('--heat-high-rgb', '166, 223, 113');
-  const trackFill = cssVar('--chart-track', 'rgba(255,255,255,0.04)');
+  const heatColors = heatPalette();
+  const trackFill = cssVar('--heat-empty', 'rgba(255,255,255,0.04)');
   const heatStroke = cssVar('--heat-stroke', 'rgba(255,255,255,0.06)');
-  const maxMinutes = Math.max(1, series.maxMinutes);
+  const maxHeatValue = Math.max(1, series.maxHeatValue || 5);
 
   setSvgViewBox(els.yearHeatmapChart, width, height);
   els.yearHeatmapLabel.textContent = String(series.year);
   els.yearHeatmapSummary.textContent = series.activeDays
-    ? `${series.activeDays} 天 · ${formatMinutesLabel(series.totalMinutes)}`
+    ? `${series.effectiveDays || 0} 天达标 / ${series.activeDays} 天有记录 · ${formatMinutesLabel(series.totalMinutes)}`
     : '暂无数据';
 
   for (const marker of series.monthMarkers) {
@@ -781,9 +845,8 @@ function renderYearHeatmap(series) {
   for (const day of series.days) {
     const x = margin.left + day.column * (cell + gap);
     const y = margin.top + day.row * (cell + gap);
-    const intensity = day.minutes / maxMinutes;
-    const rgb = intensity > 0.72 ? strongRgb : activeRgb;
-    const fill = day.minutes > 0 ? `rgba(${rgb}, ${(0.18 + intensity * 0.76).toFixed(3)})` : trackFill;
+    const level = day.heatLevel ?? heatIntensityLevel(day.heatValue ?? day.minutes, maxHeatValue);
+    const fill = level > 0 ? heatColors[level] : trackFill;
     addRect(
       els.yearHeatmapChart,
       x,
@@ -794,8 +857,9 @@ function renderYearHeatmap(series) {
         rx: 3,
         fill,
         stroke: heatStroke,
+        'data-heat-level': level,
       },
-      `${day.date} · ${formatMinutesLabel(day.minutes)} · ${day.sessions} 段`,
+      `${day.date} · ${formatMinutesLabel(day.minutes)} · ${day.sessions} 段 · 日有效度 ${day.avgFocus == null ? '暂无' : formatNumber(day.avgFocus, 1)} · ${HEAT_LEVEL_LABELS[level]}`,
     );
   }
 
@@ -866,9 +930,9 @@ function syncSessionRowsControls(total, visible) {
 }
 
 function renderTargetProgress(target) {
-  els.targetProgressValue.textContent = `${formatNumber(target.percent * 100, 0)}%`;
+  els.targetProgressValue.textContent = target.label;
   els.targetProgressBar.style.width = `${formatNumber(Math.min(1, target.percent) * 100, 0)}%`;
-  els.targetProgressMeta.textContent = `${formatHours(target.actualMinutes)} / ${formatHours(target.targetMinutes)} · ${target.label}`;
+  els.targetProgressMeta.textContent = `${formatNumber(target.percent * 100, 0)}% · ${target.standard}`;
 }
 
 function renderComparisonPanel(comparison) {
@@ -882,7 +946,7 @@ function renderComparisonPanel(comparison) {
   els.comparisonSummary.textContent = `${tone} ${formatSignedPercent(comparison.minuteDelta || 0)}`;
   els.comparisonList.innerHTML = [
     ['时长', comparison.minuteDelta == null ? '--' : formatSignedPercent(comparison.minuteDelta)],
-    ['专注', `${formatSignedNumber(comparison.focusDelta, 1)} 分`],
+    ['日有效度', `${formatSignedNumber(comparison.focusDelta, 1)} 分`],
     ['任务', formatSignedPercent(comparison.taskRateDelta)],
   ]
     .map(
@@ -1024,7 +1088,7 @@ function renderQualityChart(quality) {
         'stroke-width': 1,
         opacity: 0.92,
       },
-      `${formatDateLabel(point.date)}：${point.minutes} 分钟，专注 ${formatNumber(point.focus, 1)}，${point.label}`,
+      `${formatDateLabel(point.date)}：${point.minutes} 分钟，日有效度 ${formatNumber(point.focus, 1)}，${point.label}`,
     );
   }
 
@@ -1037,7 +1101,7 @@ function renderQualityChart(quality) {
     'font-size': '12',
     'text-anchor': 'end',
   });
-  addText(els.qualityChart, 16, margin.top + 4, '专注分', {
+  addText(els.qualityChart, 16, margin.top + 4, '日有效度', {
     fill: 'var(--muted)',
     'font-size': '12',
   });
@@ -1067,22 +1131,27 @@ function renderConsistencyGrid(dailySeries) {
     return;
   }
 
-  const maxMinutes = Math.max(1, ...dailySeries.map((item) => item.minutes));
   els.consistencyGrid.innerHTML = dailySeries
     .map((item) => {
-      const intensity = item.minutes / maxMinutes;
       const activeClass = item.active ? 'is-active' : 'is-empty';
+      const level = item.heatLevel ?? DASHBOARD_ANALYTICS.getAnnualHeatLevel(item);
       const qualityClass =
-        item.avgFocus == null
-          ? 'is-empty'
-          : item.avgFocus >= 78
+        level >= 5
+          ? 'is-peak'
+          : level >= 4
             ? 'is-high'
-            : item.avgFocus >= 65
+            : level >= 3
               ? 'is-mid'
-              : 'is-low';
+              : level >= 2
+                ? 'is-under'
+                : level >= 1
+                  ? 'is-low'
+                  : 'is-empty';
       const taskLabel = item.tasksTotal ? `${item.tasksDone}/${item.tasksTotal}` : '无计划';
-      const title = `${formatDateLabel(item.date)}：${item.minutes} 分钟，专注 ${item.avgFocus == null ? '暂无' : formatNumber(item.avgFocus, 1)}，任务 ${taskLabel}`;
-      return `<span class="consistency-cell ${activeClass} ${qualityClass}" style="--level: ${intensity.toFixed(3)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;
+      const title = `${formatDateLabel(item.date)}：${item.minutes} 分钟，日有效度 ${
+        item.dailyFocusScore == null ? '暂无' : formatNumber(item.dailyFocusScore, 1)
+      }，${item.effective ? '达标' : '未达标'}，任务 ${taskLabel}`;
+      return `<span class="consistency-cell ${activeClass} ${qualityClass}" data-heat-level="${level}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;
     })
     .join('');
 }
@@ -1147,7 +1216,7 @@ function renderWindowList(timeWindowSeries) {
         <span class="rank">${index + 1}</span>
         <div>
           <strong>${item.label}</strong>
-          <span>${formatHours(item.minutes)} · 专注 ${formatNumber(item.avgFocus, 1)} · ${formatNumber(item.sessionCount, 0)} 次</span>
+          <span>${formatHours(item.minutes)} · 会话质量 ${formatNumber(item.avgFocus, 1)} · ${formatNumber(item.sessionCount, 0)} 次</span>
         </div>
       </li>`,
     )
@@ -1244,16 +1313,18 @@ function renderDataSourcePanel() {
   els.dataSourceMeta.textContent = meta.join(' · ');
 }
 
-function buildOverview(filtered, allRecords, anchorDate) {
+function buildOverview(filtered, allRecords, anchorDate, dailySeries = null) {
   const totalMinutes = sum(filtered, (item) => item.minutes);
-  const avgFocus = average(filtered.map((item) => item.focusScore));
+  const scopedDailySeries =
+    dailySeries || buildDailySeries(filtered, anchorDate, filtered.length ? daysBetween(getEarliestDate(filtered), anchorDate) + 1 : 0);
+  const avgFocus = averageDailyFocusScore(scopedDailySeries);
   const tasksDone = sum(filtered, (item) => Math.min(item.tasksDone, item.tasksTotal));
   const tasksTotal = sum(filtered, (item) => item.tasksTotal);
   const taskRate = tasksTotal > 0 ? tasksDone / tasksTotal : 0;
   const activeDays = uniqueCount(filtered, (item) => item.date);
   const streak = computeStreak(allRecords, anchorDate);
   const bestWindow = computeBestWindow(filtered);
-  const bestWindowNote = bestWindow ? '综合专注分与分钟数推算' : '暂无足够数据';
+  const bestWindowNote = bestWindow ? '综合会话质量与分钟数推算' : '暂无足够数据';
 
   return {
     totalMinutes,
@@ -1280,10 +1351,12 @@ function buildComparison(records, anchorDate, rangeDays) {
 
   const currentMinutes = sum(current, (item) => item.minutes);
   const previousMinutes = sum(previous, (item) => item.minutes);
-  const currentFocus = average(current.map((item) => item.focusScore));
-  const previousFocus = average(previous.map((item) => item.focusScore));
-  const currentTaskRate = buildOverview(current, records, anchorDate).taskRate;
-  const previousTaskRate = buildOverview(previous, records, previousAnchor).taskRate;
+  const currentDailySeries = buildDailySeries(current, anchorDate, currentDays);
+  const previousDailySeries = buildDailySeries(previous, previousAnchor, currentDays);
+  const currentFocus = averageDailyFocusScore(currentDailySeries);
+  const previousFocus = averageDailyFocusScore(previousDailySeries);
+  const currentTaskRate = buildOverview(current, records, anchorDate, currentDailySeries).taskRate;
+  const previousTaskRate = buildOverview(previous, records, previousAnchor, previousDailySeries).taskRate;
 
   return {
     days: currentDays,
@@ -1333,9 +1406,9 @@ function buildWeekTimelineSeries(records, weekOffset) {
   const start = startOfWeek(addDays(new Date(), weekOffset * 7));
   const end = addDays(start, 7);
   const segments = [];
+  const dayBuckets = Array.from({ length: 7 }, () => new Map());
 
   for (const record of records) {
-    if (!isRenderableTimelineRecord(record)) continue;
     for (const segment of splitRecordByClock(record)) {
       if (segment.end <= start || segment.start >= end) continue;
       const clippedStart = maxDate(segment.start, start);
@@ -1348,6 +1421,9 @@ function buildWeekTimelineSeries(records, weekOffset) {
 
       const nextMidnight = addDays(parseDateKey(date), 1);
       const endMinute = clippedEnd >= nextMidnight ? 1440 : minuteOfDay(clippedEnd);
+      const minutes = Math.max(0, (clippedEnd.getTime() - clippedStart.getTime()) / 60000);
+      if (!minutes) continue;
+      addClippedRecordSlice(dayBuckets[dayIndex], record, date, minutes);
       segments.push({
         record,
         dayIndex,
@@ -1359,10 +1435,20 @@ function buildWeekTimelineSeries(records, weekOffset) {
         end: clippedEnd,
         startMinute: minuteOfDay(clippedStart),
         endMinute: Math.max(minuteOfDay(clippedStart) + 1, endMinute),
-        minutes: Math.max(0, (clippedEnd.getTime() - clippedStart.getTime()) / 60000),
+        minutes,
       });
     }
   }
+
+  const days = dayBuckets.map((bucket, dayIndex) => {
+    const day = buildDailyAggregate(toDateKey(addDays(start, dayIndex)), [...bucket.values()]);
+    return day;
+  });
+  const activeSegments = segments.filter((segment) => segment.minutes > 0);
+  const minMinute = activeSegments.length ? Math.min(...activeSegments.map((segment) => segment.startMinute)) : 0;
+  const maxMinute = activeSegments.length ? Math.max(...activeSegments.map((segment) => segment.endMinute)) : 1440;
+  const timeStart = Math.max(0, Math.floor(Math.max(0, minMinute - 60) / 60) * 60);
+  const timeEnd = Math.min(1440, Math.ceil(Math.min(1440, maxMinute + 60) / 60) * 60);
 
   segments.sort((a, b) => a.dayIndex - b.dayIndex || a.start - b.start);
   return {
@@ -1370,12 +1456,11 @@ function buildWeekTimelineSeries(records, weekOffset) {
     end,
     label: formatWeekPeriodLabel(start, weekOffset),
     totalMinutes: sum(segments, (segment) => segment.minutes),
+    days,
     segments,
+    timeStart,
+    timeEnd: timeEnd > timeStart ? timeEnd : Math.min(1440, timeStart + 360),
   };
-}
-
-function isRenderableTimelineRecord(record) {
-  return record.focusScore >= 62 && record.status !== 'interrupted' && record.status !== 'emergency_exited';
 }
 
 function buildMonthlyBestHours(records, monthOffset) {
@@ -1432,45 +1517,34 @@ function buildMonthlyBestHours(records, monthOffset) {
 
 function buildYearHeatmapSeries(records, yearOffset) {
   const { start, end, year } = yearWindow(yearOffset);
-  const buckets = new Map();
+  const buckets = buildDailySliceMap(records, start, end);
 
-  for (const record of records) {
-    for (const segment of splitRecordByClock(record)) {
-      if (segment.end <= start || segment.start >= end) continue;
-      const clippedStart = maxDate(segment.start, start);
-      const clippedEnd = minDate(segment.end, end);
-      const minutes = Math.max(0, (clippedEnd.getTime() - clippedStart.getTime()) / 60000);
-      if (!minutes) continue;
-      const date = toDateKey(clippedStart);
-      const bucket = buckets.get(date) || { minutes: 0, sessions: new Set() };
-      bucket.minutes += minutes;
-      bucket.sessions.add(record.id || `${record.date}-${record.subject}-${record.startHour}-${record.minutes}`);
-      buckets.set(date, bucket);
-    }
-  }
-
-  const dayCount = daysBetween(start, end);
-  const startWeekday = mondayWeekday(start);
-  const columns = Math.ceil((dayCount + startWeekday) / 7);
-  const days = [];
-  for (let index = 0; index < dayCount; index += 1) {
-    const date = addDays(start, index);
-    const dateKey = toDateKey(date);
-    const bucket = buckets.get(dateKey) || { minutes: 0, sessions: new Set() };
-    days.push({
-      date: dateKey,
-      row: mondayWeekday(date),
-      column: Math.floor((index + startWeekday) / 7),
-      minutes: bucket.minutes,
-      sessions: bucket.sessions.size,
-    });
-  }
+  const dailyEntries = [...buckets.entries()].map(([date, bucket]) => {
+    const aggregate = buildDailyAggregate(date, [...bucket.values()]);
+    return {
+      date,
+      minutes: aggregate.minutes,
+      avgFocus: aggregate.dailyFocusScore,
+      dailyFocusScore: aggregate.dailyFocusScore,
+      effective: aggregate.effective,
+      heatLevel: aggregate.heatLevel,
+      heatValue: aggregate.heatLevel,
+      sessions: bucket.size,
+    };
+  });
+  const calendar = DASHBOARD_ANALYTICS.buildAnnualHeatmapCalendar(year, dailyEntries);
+  const days = calendar.days.map((day) => ({
+    ...day,
+    avgFocus: day.dailyFocusScore,
+    heatValue: day.heatLevel,
+    sessions: day.sessions || 0,
+  }));
 
   const monthMarkers = MONTH_LABELS.map((label, month) => {
     const monthStart = new Date(year, month, 1);
     return {
       label,
-      column: Math.floor((daysBetween(start, monthStart) + startWeekday) / 7),
+      column: Math.floor((daysBetween(start, monthStart) + mondayWeekday(start)) / 7),
     };
   });
 
@@ -1478,12 +1552,14 @@ function buildYearHeatmapSeries(records, yearOffset) {
     start,
     end,
     year,
-    columns,
+    columns: calendar.columns,
     days,
     monthMarkers,
-    activeDays: days.filter((day) => day.minutes > 0).length,
-    totalMinutes: sum(days, (day) => day.minutes),
+    activeDays: calendar.activeDays,
+    effectiveDays: calendar.effectiveDays,
+    totalMinutes: calendar.totalMinutes,
     maxMinutes: Math.max(0, ...days.map((day) => day.minutes)),
+    maxHeatValue: calendar.maxHeatValue,
   };
 }
 
@@ -1739,7 +1815,7 @@ function buildDailySnapshot(dailySeries) {
       label: '最长投入',
       date: longest.date,
       value: formatHours(longest.minutes),
-      meta: `专注 ${formatNumber(longest.avgFocus, 1)} 分 · ${formatNumber(longest.taskRate * 100, 0)}% 任务兑现`,
+      meta: `日有效度 ${formatNumber(longest.avgFocus, 1)} 分 · ${formatNumber(longest.taskRate * 100, 0)}% 任务兑现`,
       note: '这一天天数里最能看出你能坐多久，适合检查硬扛还是有效投入。',
       level: clampNumber((longest.minutes / maxMinutes) * 100, 0, 100, 0),
     },
@@ -1748,7 +1824,7 @@ function buildDailySnapshot(dailySeries) {
       label: '最典型',
       date: typical.date,
       value: '接近中位',
-      meta: `${formatHours(typical.minutes)} · 专注 ${formatNumber(typical.avgFocus, 1)} 分`,
+      meta: `${formatHours(typical.minutes)} · 日有效度 ${formatNumber(typical.avgFocus, 1)} 分`,
       note: '这更像你这个周期的常态节奏，比峰值更适合做基线。',
       level: clampNumber(
         (1 -
@@ -1783,18 +1859,12 @@ function buildDailySnapshot(dailySeries) {
   ];
 }
 
-function buildTargetProgress(overview, rangeDays) {
-  const targetDays = rangeDays === 'all' ? Math.max(overview.activeDays, 1) : Number(rangeDays);
-  const activeAverage = overview.activeDays > 0 ? overview.totalMinutes / overview.activeDays : 0;
-  const steadyDailyMinutes = Math.max(120, Math.min(300, activeAverage || 180));
-  const densityFactor = rangeDays === 'all' ? 1 : 0.72;
-  const targetMinutes = Math.max(60, targetDays * steadyDailyMinutes * densityFactor);
-
+function buildTargetProgress(dailySeries) {
+  const progress = DASHBOARD_ANALYTICS.buildEffectiveDayProgress(dailySeries);
   return {
-    actualMinutes: overview.totalMinutes,
-    targetMinutes,
-    percent: targetMinutes > 0 ? overview.totalMinutes / targetMinutes : 0,
-    label: rangeDays === 'all' ? '按活跃日稳态估算' : '按当前周期稳态估算',
+    ...progress,
+    actualMinutes: progress.effectiveDays,
+    targetMinutes: progress.totalDays,
   };
 }
 
@@ -1821,7 +1891,7 @@ function buildRiskItems(subjectGaps, taskFulfillment, lowEfficiencyDays, rhythm)
     const day = lowEfficiencyDays[0];
     risks.push({
       title: '低效日',
-      body: `${formatDateLabel(day.date)} 专注 ${formatNumber(day.avgFocus, 1)} 分`,
+      body: `${formatDateLabel(day.date)} 日有效度 ${formatNumber(day.avgFocus, 1)} 分`,
       severity: 72 - day.avgFocus * 0.4,
     });
   }
@@ -1924,13 +1994,13 @@ function buildPrescription(context) {
     subjectSeries.slice().sort((a, b) => a.avgFocus - b.avgFocus || a.minutes - b.minutes)[0];
   const focusSubject = weakSubject?.subject || subjectSeries[0]?.subject || '重点科目';
   const recommendedMinutes =
-    Math.round(Math.max(45, Math.min(120, (target.targetMinutes - target.actualMinutes) / 3 || 75)) / 15) * 15;
+    Math.round(Math.max(45, Math.min(120, overview.totalMinutes / Math.max(1, overview.activeDays) || 75)) / 15) * 15;
 
   if (weakSubject) {
     const gapLabel =
       weakSubject.deltaShare < 0
         ? `相对${weakSubject.baselineLabel}少 ${formatNumber(Math.abs(weakSubject.deltaShare) * 100, 0)} 个百分点`
-        : `当前专注 ${formatNumber(weakSubject.avgFocus, 1)} 分`;
+        : `当前会话质量 ${formatNumber(weakSubject.avgFocus, 1)} 分`;
     items.push({
       tone: 'is-priority',
       title: `补位 ${focusSubject}`,
@@ -1957,7 +2027,7 @@ function buildPrescription(context) {
       tone: 'is-risk',
       title: '拆掉低效硬撑',
       body: `遇到 ${formatNumber(day.minutes, 0)} 分钟以上但专注低的日子，改成 2 个 45 分钟块，中间换题型。`,
-      meta: `${formatDateLabel(day.date)} 专注 ${formatNumber(day.avgFocus, 1)} 分`,
+      meta: `${formatDateLabel(day.date)} 日有效度 ${formatNumber(day.avgFocus, 1)} 分`,
       priority: 82,
     });
   }
@@ -1987,7 +2057,7 @@ function buildPrescription(context) {
       tone: 'is-good',
       title: '保护黄金窗口',
       body: `${bestWindow.label} 不安排碎事，专门放阻力最大的题型或背诵任务。`,
-      meta: `专注 ${formatNumber(bestWindow.avgFocus, 1)} · ${formatHours(bestWindow.minutes)}`,
+      meta: `会话质量 ${formatNumber(bestWindow.avgFocus, 1)} · ${formatHours(bestWindow.minutes)}`,
       priority: 54,
     });
   }
@@ -2033,7 +2103,7 @@ function buildInsights(context) {
     items.push({
       priority: isDrop ? 94 : isRise ? 48 : 36,
       title: isDrop ? '先稳住总量' : '学习总量变化',
-      body: `当前周期学习时长较上一周期 ${formatSignedPercent(comparison.minuteDelta)}，专注分 ${formatSignedNumber(comparison.focusDelta, 1)}。${isDrop ? '下一轮先把固定学习块补回来。' : '继续同时观察时长和专注是否同向变化。'}`,
+      body: `当前周期学习时长较上一周期 ${formatSignedPercent(comparison.minuteDelta)}，日有效度 ${formatSignedNumber(comparison.focusDelta, 1)}。${isDrop ? '下一轮先把固定学习块补回来。' : '继续同时观察时长和有效度是否同向变化。'}`,
     });
   }
 
@@ -2059,7 +2129,7 @@ function buildInsights(context) {
     items.push({
       priority: 82,
       title: '低效硬撑日',
-      body: `${formatDateLabel(day.date)} 学了 ${formatNumber(day.minutes, 0)} 分钟，但专注只有 ${formatNumber(day.avgFocus, 1)}。这类日子更适合拆成短块并提前换题型。`,
+      body: `${formatDateLabel(day.date)} 学了 ${formatNumber(day.minutes, 0)} 分钟，但日有效度只有 ${formatNumber(day.avgFocus, 1)}。这类日子更适合拆成短块并提前换题型。`,
     });
   }
 
@@ -2091,7 +2161,7 @@ function buildInsights(context) {
     items.push({
       priority: 54,
       title: '高效窗口',
-      body: `${bestWindow.label} 的加权专注分最高（${formatNumber(bestWindow.avgFocus, 1)}），适合放数学大题、专业课背诵这类高阻力任务。`,
+      body: `${bestWindow.label} 的加权会话质量最高（${formatNumber(bestWindow.avgFocus, 1)}），适合放数学大题、专业课背诵这类高阻力任务。`,
     });
   }
 
@@ -2102,7 +2172,7 @@ function buildInsights(context) {
     items.push({
       priority: 42,
       title: '日内节奏',
-      body: `${direction}专注分更高（${formatNumber(Math.max(evening, morning), 1)} vs ${formatNumber(Math.min(evening, morning), 1)}），难题优先放到这个窗口。`,
+      body: `${direction}会话质量更高（${formatNumber(Math.max(evening, morning), 1)} vs ${formatNumber(Math.min(evening, morning), 1)}），难题优先放到这个窗口。`,
     });
   }
 
@@ -2156,8 +2226,8 @@ function buildExecutiveSummary({ overview, comparison, risks, prescription, data
   const qualityLabel = overview.avgFocus >= 78 ? '质量稳定' : overview.avgFocus >= 65 ? '质量可用' : '质量偏低';
   const headline = topRisk ? `当前优先处理：${topRisk.title}` : `${qualityLabel}，可以继续加厚记录`;
   const body = topAction
-    ? `${formatHours(overview.totalMinutes)} 学习量、${formatNumber(overview.avgFocus, 1)} 专注分、${formatNumber(overview.taskRate * 100, 0)}% 任务兑现。下一步：${topAction.body}`
-    : `${formatHours(overview.totalMinutes)} 学习量、${formatNumber(overview.avgFocus, 1)} 专注分；先保持记录连续性。`;
+    ? `${formatHours(overview.totalMinutes)} 学习量、${formatNumber(overview.avgFocus, 1)} 日有效度、${formatNumber(overview.taskRate * 100, 0)}% 任务兑现。下一步：${topAction.body}`
+    : `${formatHours(overview.totalMinutes)} 学习量、${formatNumber(overview.avgFocus, 1)} 日有效度；先保持记录连续性。`;
 
   return {
     headline,
@@ -2175,7 +2245,7 @@ function buildFooterStatus(overview, anchorDate, filteredCount, comparison) {
     comparison && comparison.minuteDelta != null
       ? `，较上一周期 ${comparison.minuteDelta >= 0 ? '提升' : '下降'} ${formatNumber(Math.abs(comparison.minuteDelta) * 100, 0)}%`
       : '';
-  return `当前范围 ${filteredCount} 条记录，平均专注 ${formatNumber(overview.avgFocus, 1)} 分，任务完成率 ${formatNumber(overview.taskRate * 100, 0)}%，截至 ${dateLabel}${comparisonPart}。`;
+  return `当前范围 ${filteredCount} 条记录，平均日有效度 ${formatNumber(overview.avgFocus, 1)} 分，任务完成率 ${formatNumber(overview.taskRate * 100, 0)}%，截至 ${dateLabel}${comparisonPart}。`;
 }
 
 function buildDailySeries(records, anchorDate, rangeDays) {
@@ -2184,32 +2254,125 @@ function buildDailySeries(records, anchorDate, rangeDays) {
   const days = [];
   const count = rangeDays === 'all' ? Math.max(1, daysBetween(getEarliestDate(records), anchorDate) + 1) : rangeDays;
   const startDate = rangeDays === 'all' ? getEarliestDate(records) : addDays(anchorDate, -(count - 1));
+  const dailySlices = buildDailySliceMap(records, startDate, addDays(anchorDate, 1));
 
-  const grouped = groupBy(records, (item) => item.date);
   for (let index = 0; index < count; index += 1) {
     const date = addDays(startDate, index);
     const key = toDateKey(date);
-    const bucket = grouped.get(key) || [];
-    days.push({
-      date: key,
-      minutes: sum(bucket, (item) => item.minutes),
-      avgFocus: bucket.length ? average(bucket.map((item) => item.focusScore)) : null,
-      tasksDone: sum(bucket, (item) => Math.min(item.tasksDone, item.tasksTotal)),
-      tasksTotal: sum(bucket, (item) => item.tasksTotal),
-      taskRate:
-        sum(bucket, (item) => item.tasksTotal) > 0
-          ? sum(bucket, (item) => Math.min(item.tasksDone, item.tasksTotal)) / sum(bucket, (item) => item.tasksTotal)
-          : 0,
-      sessionCount: bucket.length,
-      subjectCount: uniqueCount(bucket, (item) => item.subject),
-      efficiencyScore: bucket.length
-        ? average(bucket.map((item) => item.focusScore)) * Math.log(sum(bucket, (item) => item.minutes) + 1)
-        : 0,
-      active: bucket.length > 0,
-    });
+    const bucket = dailySlices.get(key);
+    days.push(buildDailyAggregate(key, bucket ? [...bucket.values()] : []));
   }
 
   return days;
+}
+
+function buildDailySliceMap(records, start, end) {
+  const buckets = new Map();
+
+  for (const record of records) {
+    for (const segment of splitRecordByClock(record)) {
+      if (segment.end <= start || segment.start >= end) continue;
+      const clippedStart = maxDate(segment.start, start);
+      const clippedEnd = minDate(segment.end, end);
+      const minutes = Math.max(0, (clippedEnd.getTime() - clippedStart.getTime()) / 60000);
+      if (!minutes) continue;
+      const date = toDateKey(clippedStart);
+      const bucket = buckets.get(date) || new Map();
+      addClippedRecordSlice(bucket, record, date, minutes);
+      buckets.set(date, bucket);
+    }
+  }
+
+  return buckets;
+}
+
+function addClippedRecordSlice(bucket, record, date, minutes) {
+  const key = record.id || `${record.date}-${record.subject}-${record.startedAt || record.startHour}`;
+  const existing = bucket.get(key) || buildClippedRecord(record, date, 0);
+  const nextMinutes = existing.minutes + minutes;
+  const sourceMinutes = Math.max(1, Number(record.minutes) || nextMinutes || 1);
+  const ratio = nextMinutes / sourceMinutes;
+  existing.date = date;
+  existing.minutes = nextMinutes;
+  existing.actualSeconds = Math.round(nextMinutes * 60);
+  existing.plannedSeconds = Math.max(
+    existing.actualSeconds,
+    Math.round((record.plannedSeconds || record.actualSeconds || sourceMinutes * 60) * ratio),
+  );
+  existing.pausedSeconds = Math.round((record.pausedSeconds || 0) * ratio);
+  existing.interruptionCount = Math.round((record.interruptionCount || 0) * ratio);
+  existing.emergencyExitCount = Math.round((record.emergencyExitCount || 0) * ratio);
+  existing.tasksDone = date === record.date ? record.tasksDone : 0;
+  existing.tasksTotal = date === record.date ? record.tasksTotal : 0;
+  bucket.set(key, existing);
+}
+
+function buildClippedRecord(record, date, minutes) {
+  const sourceMinutes = Math.max(1, Number(record.minutes) || minutes || 1);
+  const ratio = Math.max(0, minutes) / sourceMinutes;
+  const actualSeconds = Math.round(Math.max(0, minutes) * 60);
+  const plannedSeconds = Math.max(
+    actualSeconds,
+    Math.round((record.plannedSeconds || record.actualSeconds || sourceMinutes * 60) * ratio),
+  );
+
+  return {
+    ...record,
+    date,
+    minutes,
+    actualSeconds,
+    plannedSeconds,
+    pausedSeconds: Math.round((record.pausedSeconds || 0) * ratio),
+    interruptionCount: Math.round((record.interruptionCount || 0) * ratio),
+    emergencyExitCount: Math.round((record.emergencyExitCount || 0) * ratio),
+    tasksDone: date === record.date ? record.tasksDone : 0,
+    tasksTotal: date === record.date ? record.tasksTotal : 0,
+  };
+}
+
+function buildDailyAggregate(date, bucket) {
+  const minutes = sum(bucket, (item) => item.minutes);
+  const sessionQuality = bucket.length ? weightedAverage(bucket, (item) => item.focusScore, (item) => Math.max(1, item.minutes)) : null;
+  const tasksDone = sum(bucket, (item) => Math.min(item.tasksDone, item.tasksTotal));
+  const tasksTotal = sum(bucket, (item) => item.tasksTotal);
+  const score = DASHBOARD_ANALYTICS.calculateDailyFocusScore({
+    minutes,
+    sessionQuality: sessionQuality ?? 0,
+    tasksDone,
+    tasksTotal,
+    interruptionCount: sum(bucket, (item) => item.interruptionCount),
+    emergencyExitCount: sum(bucket, (item) => item.emergencyExitCount),
+    pausedSeconds: sum(bucket, (item) => item.pausedSeconds),
+    plannedSeconds: sum(bucket, (item) => item.plannedSeconds || item.actualSeconds || item.minutes * 60),
+  });
+  const dailyFocusScore = bucket.length ? score.score : null;
+  const taskRate = tasksTotal > 0 ? tasksDone / tasksTotal : 0;
+
+  return {
+    date,
+    minutes,
+    avgFocus: dailyFocusScore,
+    sessionQuality,
+    dailyFocusScore,
+    effective: score.effective,
+    heatLevel: DASHBOARD_ANALYTICS.getAnnualHeatLevel({ minutes, dailyFocusScore }),
+    scoreParts: score.parts,
+    tasksDone,
+    tasksTotal,
+    taskRate,
+    sessionCount: bucket.length,
+    subjectCount: uniqueCount(bucket, (item) => item.subject),
+    efficiencyScore: dailyFocusScore == null ? 0 : dailyFocusScore * Math.log(minutes + 1),
+    active: bucket.length > 0,
+  };
+}
+
+function averageDailyFocusScore(dailySeries) {
+  return average(
+    dailySeries
+      .filter((item) => item.active && item.dailyFocusScore != null)
+      .map((item) => item.dailyFocusScore),
+  );
 }
 
 function buildSubjectSeries(records) {
@@ -2306,10 +2469,39 @@ function renderTrendAxes(svg, margin, width, height, maxMinutes) {
     'text-anchor': 'end',
     'font-size': '11',
   });
-  addText(svg, right + 10, margin.top - 4, '专注分', {
+  addText(svg, right + 10, margin.top - 4, '日有效度', {
     fill: 'var(--muted)',
     'font-size': '11',
   });
+}
+
+function heatPalette() {
+  return [
+    cssVar('--heat-empty', 'color-mix(in srgb, var(--text) 8%, transparent)'),
+    cssVar('--heat-low', '#d85f45'),
+    cssVar('--heat-under', '#d7a33e'),
+    cssVar('--heat-met', '#9fca58'),
+    cssVar('--heat-high', '#3f9f63'),
+    cssVar('--heat-peak', '#0d6b4f'),
+  ];
+}
+
+function heatIntensityLevel(value, maxValue) {
+  const numeric = Number(value) || 0;
+  if (numeric <= 0) return 0;
+  if (maxValue === 5 && numeric >= 1 && numeric <= 5) return Math.round(numeric);
+  const ratio = numeric / Math.max(1, Number(maxValue) || 1);
+  if (ratio >= 0.84) return 5;
+  if (ratio >= 0.64) return 4;
+  if (ratio >= 0.42) return 3;
+  if (ratio >= 0.22) return 2;
+  return 1;
+}
+
+function heatValue(minutes, focusScore) {
+  if (!minutes) return 0;
+  const focusFactor = focusScore == null ? 0.72 : clampNumber(focusScore, 0, 100, 0) / 100;
+  return minutes * (0.45 + focusFactor * 0.75);
 }
 
 function drawChartGrid(svg, margin, width, height, lines) {
@@ -2455,11 +2647,16 @@ function normalizeRecord(raw) {
   const subject = String(raw.subject ?? raw.course ?? '未命名科目').trim() || '未命名科目';
   const minutes = clampNumber(raw.minutes ?? raw.studyMinutes ?? raw.duration, 0, 24 * 60, 0);
   const actualSeconds = clampNumber(raw.actualSeconds ?? raw.actual_seconds ?? minutes * 60, 0, 7 * 24 * 3600, minutes * 60);
+  const plannedSeconds = clampNumber(raw.plannedSeconds ?? raw.planned_seconds ?? actualSeconds, 0, 7 * 24 * 3600, actualSeconds);
+  const pausedSeconds = clampNumber(raw.pausedSeconds ?? raw.paused_seconds ?? 0, 0, 7 * 24 * 3600, 0);
+  const interruptionCount = clampNumber(raw.interruptionCount ?? raw.interruption_count ?? 0, 0, 1000, 0);
+  const emergencyExitCount = clampNumber(raw.emergencyExitCount ?? raw.emergency_exit_count ?? 0, 0, 1000, 0);
   const focusScore = clampNumber(raw.focusScore ?? raw.focus ?? raw.score, 0, 100, 0);
   const tasksTotal = clampNumber(raw.tasksTotal ?? raw.totalTasks ?? raw.tasks ?? 0, 0, 1000, 0);
   const tasksDone = clampNumber(raw.tasksDone ?? raw.doneTasks ?? 0, 0, Math.max(tasksTotal, 0), 0);
   const startHour = clampNumber(raw.startHour ?? raw.hour ?? (startedAt ? new Date(startedAt).getHours() : 19), 0, 23, 19);
   const status = String(raw.status ?? 'finished').trim() || 'finished';
+  const endReason = raw.endReason ?? raw.end_reason ?? '';
 
   return {
     id: raw.id != null || raw.uuid != null ? String(raw.id ?? raw.uuid) : '',
@@ -2467,12 +2664,17 @@ function normalizeRecord(raw) {
     subject,
     minutes,
     actualSeconds,
+    plannedSeconds,
+    pausedSeconds,
+    interruptionCount,
+    emergencyExitCount,
     focusScore,
     tasksDone,
     tasksTotal,
     startHour,
     startedAt,
     endedAt,
+    endReason: endReason == null ? '' : String(endReason),
     status,
   };
 }
@@ -2581,12 +2783,17 @@ function buildSampleRecord(date, subject, minutes, focusScore, tasksDone, tasksT
     subject,
     minutes,
     actualSeconds: minutes * 60,
+    plannedSeconds: minutes * 60,
+    pausedSeconds: 0,
+    interruptionCount: focusScore < 65 ? 2 : 0,
+    emergencyExitCount: 0,
     focusScore,
     tasksDone,
     tasksTotal,
     startHour,
     startedAt: start.toISOString(),
     endedAt: end.toISOString(),
+    endReason: 'completed',
     status: 'finished',
   };
 }
@@ -2713,6 +2920,19 @@ function average(values) {
   const list = values.filter((value) => Number.isFinite(value));
   if (!list.length) return 0;
   return list.reduce((sum, value) => sum + value, 0) / list.length;
+}
+
+function weightedAverage(values, valueMapper, weightMapper) {
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (const item of values) {
+    const value = Number(valueMapper(item));
+    const weight = Number(weightMapper(item));
+    if (!Number.isFinite(value) || !Number.isFinite(weight) || weight <= 0) continue;
+    weightedSum += value * weight;
+    totalWeight += weight;
+  }
+  return totalWeight > 0 ? weightedSum / totalWeight : 0;
 }
 
 function median(values) {

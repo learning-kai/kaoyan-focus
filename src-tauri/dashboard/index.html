@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#117460" />
-    <meta name="description" content="学习数据分析看板，查看学习时长、专注质量、任务完成率、科目分布和时间热力图。" />
+    <meta name="description" content="学习数据分析看板，查看学习时长、日有效度、任务完成率、科目分布和时间热力图。" />
     <meta property="og:title" content="Study Ledger | 学习数据看板" />
     <meta property="og:description" content="只读分析本地专注记录，生成周期诊断、科目结构和下一轮学习处方。" />
     <title>Study Ledger | 学习数据看板</title>
@@ -72,7 +72,7 @@
           <small id="metric-hours-note">按当前时间范围统计</small>
         </article>
         <article class="metric-card accent-amber">
-          <span class="metric-label">平均专注分</span>
+          <span class="metric-label">平均日有效度</span>
           <strong id="metric-focus">0</strong>
           <small id="metric-focus-note">0 - 100</small>
         </article>
@@ -119,8 +119,13 @@
             aria-label="本周专注时间线"
           ></svg>
           <div class="chart-legend">
-            <span><i class="legend-swatch legend-amber"></i>高分专注</span>
-            <span><i class="legend-swatch legend-teal"></i>有效专注</span>
+            <span><i class="legend-swatch legend-amber"></i>深度专注</span>
+            <span><i class="legend-swatch legend-teal"></i>稳定专注</span>
+            <span><i class="legend-swatch legend-blue"></i>浅层专注</span>
+            <span><i class="legend-swatch legend-warning"></i>低效专注</span>
+            <span><i class="legend-swatch legend-muted"></i>被打断</span>
+            <span><i class="legend-swatch legend-coral"></i>应急退出</span>
+            <span><i class="legend-swatch legend-lime"></i>进行中</span>
             <span id="week-timeline-total">0 分钟</span>
           </div>
         </article>
@@ -172,7 +177,11 @@
           ></svg>
           <div class="chart-legend">
             <span><i class="legend-swatch legend-track"></i>无记录</span>
-            <span><i class="legend-swatch legend-teal"></i>日专注强度</span>
+            <span><i class="legend-swatch legend-heat-low"></i>低效</span>
+            <span><i class="legend-swatch legend-heat-under"></i>未达标</span>
+            <span><i class="legend-swatch legend-heat-met"></i>达标</span>
+            <span><i class="legend-swatch legend-heat-high"></i>高效</span>
+            <span><i class="legend-swatch legend-heat-peak"></i>峰值</span>
             <span id="year-heatmap-summary">暂无数据</span>
           </div>
         </article>
@@ -181,13 +190,13 @@
       <section class="diagnostic-grid" aria-label="学习诊断">
         <article class="diagnostic-card">
           <div class="diagnostic-head">
-            <span>稳态目标</span>
+            <span>达标天数</span>
             <strong id="target-progress-value">0%</strong>
           </div>
           <div class="progress-track" aria-hidden="true">
             <span id="target-progress-bar"></span>
           </div>
-          <p id="target-progress-meta">按当前周期估算目标完成度</p>
+          <p id="target-progress-meta">达标标准：3 小时 + 日有效度 60 分</p>
         </article>
 
         <article class="diagnostic-card">
@@ -232,20 +241,20 @@
             <div class="panel-head">
               <div>
                 <p class="kicker">趋势</p>
-                <h2>学习时长与专注质量</h2>
+                <h2>学习时长与日有效度</h2>
               </div>
-              <p class="panel-copy">看每日学习量和质量是否同向上升，还是只是在硬扛。</p>
+              <p class="panel-copy">看每日学习量和有效度是否同向上升，还是只是在硬扛。</p>
             </div>
             <svg
               id="trend-chart"
               class="chart"
               viewBox="0 0 960 320"
               role="img"
-              aria-label="学习时长和专注质量趋势图"
+              aria-label="学习时长和日有效度趋势图"
             ></svg>
             <div class="chart-legend">
               <span><i class="legend-swatch legend-teal"></i>学习分钟</span>
-              <span><i class="legend-swatch legend-amber"></i>专注分</span>
+              <span><i class="legend-swatch legend-amber"></i>日有效度</span>
             </div>
           </article>
 
@@ -275,7 +284,7 @@
                 <p class="kicker">连续性</p>
                 <h2>每日达标矩阵</h2>
               </div>
-              <p class="panel-copy">每格代表一天，颜色同时考虑学习分钟和专注质量，用来找断点和低质日。</p>
+              <p class="panel-copy">每格代表一天，红色是低效，橙色是未达标，绿色是有效学习日。</p>
             </div>
             <div class="consistency-grid" id="consistency-grid" aria-label="每日达标矩阵"></div>
           </article>
@@ -297,7 +306,7 @@
                       <th>科目</th>
                       <th>分钟</th>
                       <th>占比</th>
-                      <th>平均分</th>
+                      <th>会话分</th>
                     </tr>
                   </thead>
                   <tbody id="subject-table"></tbody>
@@ -334,7 +343,7 @@
               </label>
               <div class="chip-group" role="group" aria-label="记录状态筛选">
                 <button class="chip-button is-active" type="button" data-record-filter="all">全部</button>
-                <button class="chip-button" type="button" data-record-filter="low-focus">低专注</button>
+                <button class="chip-button" type="button" data-record-filter="low-focus">低会话分</button>
                 <button class="chip-button" type="button" data-record-filter="task-debt">有欠账</button>
                 <button class="chip-button" type="button" data-record-filter="long-session">长时段</button>
               </div>
@@ -359,7 +368,7 @@
                     <th>科目</th>
                     <th>时段</th>
                     <th>分钟</th>
-                    <th>专注分</th>
+                    <th>会话分</th>
                     <th>任务</th>
                   </tr>
                 </thead>
@@ -424,7 +433,7 @@
                 <p class="kicker">节奏</p>
                 <h2>高效窗口</h2>
               </div>
-              <p class="panel-copy">结合分钟数和专注分，排序出更值得保护的学习时段。</p>
+              <p class="panel-copy">结合分钟数和会话质量，排序出更值得保护的学习时段。</p>
             </div>
             <div class="window-list" id="window-list"></div>
           </article>
@@ -459,6 +468,7 @@
       <footer class="page-foot" id="status-line" aria-live="polite"></footer>
     </main>
 
+    <script src="./analytics.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

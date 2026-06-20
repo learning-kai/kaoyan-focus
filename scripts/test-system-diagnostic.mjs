@@ -19,6 +19,15 @@ const summary = buildSystemDiagnosticSummary({
     app_data_dir: 'smoke/app.sqlite3',
     database_path: 'smoke/kaoyan-focus.sqlite3',
   },
+  calDavSettings: {
+    enabled: true,
+    server_url: 'https://dav.example.com',
+    username: 'study',
+    password: '',
+    password_configured: true,
+    selected_calendar_url: 'https://dav.example.com/calendars/study/exam',
+    selected_calendar_name: '备考日历',
+  },
   emailSettings: {
     enabled: true,
     smtp_host: 'smtp.example.com',
@@ -114,6 +123,7 @@ const expectedLines = [
   '- 对象存储：已关闭 / 密钥已配置',
   '- 邮件提醒：已启用 / SMTP smtp.example.com / 密码已配置',
   '- 飞书：已关闭 / 认证已完成 / App Secret未配置',
+  '- CalDAV 日历：已启用 / 备考日历 / 密码已配置',
   '- 最近同步：auto sync finished',
   '- 主题：dawn',
   '- 学习模式：deep',

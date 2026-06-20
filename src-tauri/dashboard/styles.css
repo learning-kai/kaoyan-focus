@@ -78,9 +78,12 @@ body.study-dashboard[data-theme='console'] {
   --grid-line: rgba(238, 247, 241, 0.06);
   --axis-soft: rgba(238, 247, 241, 0.1);
   --axis-line: rgba(238, 247, 241, 0.18);
-  --heat-high-rgb: 168, 223, 112;
-  --heat-mid-rgb: 74, 214, 166;
-  --heat-low-rgb: 120, 167, 255;
+  --heat-empty: rgba(238, 247, 241, 0.055);
+  --heat-low: #e35d42;
+  --heat-under: #d99a35;
+  --heat-met: #b5ce56;
+  --heat-high: #4fb46b;
+  --heat-peak: #11845f;
   --heat-stroke: rgba(238, 247, 241, 0.08);
   --quality-deep: rgba(74, 214, 166, 0.92);
   --quality-grind: rgba(240, 122, 109, 0.88);
@@ -139,9 +142,12 @@ body.study-dashboard[data-theme='paper'] {
   --grid-line: rgba(21, 32, 28, 0.08);
   --axis-soft: rgba(21, 32, 28, 0.12);
   --axis-line: rgba(21, 32, 28, 0.2);
-  --heat-high-rgb: 79, 135, 59;
-  --heat-mid-rgb: 17, 116, 96;
-  --heat-low-rgb: 49, 95, 168;
+  --heat-empty: rgba(21, 32, 28, 0.07);
+  --heat-low: #cf4f3d;
+  --heat-under: #c88b2f;
+  --heat-met: #9bb642;
+  --heat-high: #348e55;
+  --heat-peak: #0f694f;
   --heat-stroke: rgba(21, 32, 28, 0.09);
   --quality-deep: rgba(17, 116, 96, 0.9);
   --quality-grind: rgba(201, 68, 59, 0.86);
@@ -200,9 +206,12 @@ body.study-dashboard[data-theme='graphite'] {
   --grid-line: rgba(242, 242, 239, 0.055);
   --axis-soft: rgba(242, 242, 239, 0.1);
   --axis-line: rgba(242, 242, 239, 0.18);
-  --heat-high-rgb: 123, 211, 131;
-  --heat-mid-rgb: 94, 170, 255;
-  --heat-low-rgb: 255, 180, 84;
+  --heat-empty: rgba(242, 242, 239, 0.06);
+  --heat-low: #ff716c;
+  --heat-under: #ffb454;
+  --heat-met: #d6d96a;
+  --heat-high: #7bd383;
+  --heat-peak: #2aa876;
   --heat-stroke: rgba(242, 242, 239, 0.08);
   --quality-deep: rgba(94, 170, 255, 0.9);
   --quality-grind: rgba(255, 113, 108, 0.88);
@@ -260,9 +269,12 @@ body.study-dashboard[data-theme='focus'] {
   --grid-line: rgba(8, 17, 31, 0.08);
   --axis-soft: rgba(8, 17, 31, 0.12);
   --axis-line: rgba(8, 17, 31, 0.22);
-  --heat-high-rgb: 19, 122, 56;
-  --heat-mid-rgb: 0, 75, 255;
-  --heat-low-rgb: 194, 103, 0;
+  --heat-empty: rgba(8, 17, 31, 0.06);
+  --heat-low: #d8173a;
+  --heat-under: #c26700;
+  --heat-met: #98b94b;
+  --heat-high: #137a38;
+  --heat-peak: #075b39;
   --heat-stroke: rgba(8, 17, 31, 0.1);
   --quality-deep: rgba(0, 75, 255, 0.88);
   --quality-grind: rgba(216, 23, 58, 0.86);
@@ -844,10 +856,21 @@ body.study-dashboard[data-theme='focus'] .chip-button.is-active {
 }
 
 .timeline-session-label,
-.best-hour-value-label {
+.best-hour-value-label,
+.timeline-summary-label {
   fill: var(--text);
   font-size: 12px;
   font-weight: 760;
+}
+
+.timeline-summary-label {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.timeline-summary-label.is-effective {
+  fill: var(--heat-high);
 }
 
 .legend-muted {
@@ -855,7 +878,27 @@ body.study-dashboard[data-theme='focus'] .chip-button.is-active {
 }
 
 .legend-track {
-  background: color-mix(in srgb, var(--text) 12%, transparent);
+  background: var(--heat-empty);
+}
+
+.legend-heat-low {
+  background: var(--heat-low);
+}
+
+.legend-heat-under {
+  background: var(--heat-under);
+}
+
+.legend-heat-met {
+  background: var(--heat-met);
+}
+
+.legend-heat-high {
+  background: var(--heat-high);
+}
+
+.legend-heat-peak {
+  background: var(--heat-peak);
 }
 
 .diagnostic-grid {
@@ -1129,6 +1172,22 @@ svg text {
   background: var(--chart-focus);
 }
 
+.legend-blue {
+  background: var(--info);
+}
+
+.legend-warning {
+  background: color-mix(in srgb, var(--danger) 56%, var(--surface));
+}
+
+.legend-coral {
+  background: var(--danger);
+}
+
+.legend-lime {
+  background: var(--success);
+}
+
 .snapshot-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -1287,22 +1346,32 @@ svg text {
 }
 
 .consistency-cell.is-high {
-  background: color-mix(in srgb, var(--success) 62%, var(--surface));
-  border-color: color-mix(in srgb, var(--success) 56%, var(--line));
+  background: var(--heat-high);
+  border-color: color-mix(in srgb, var(--heat-high) 72%, var(--line));
+}
+
+.consistency-cell.is-peak {
+  background: var(--heat-peak);
+  border-color: color-mix(in srgb, var(--heat-peak) 78%, var(--line));
 }
 
 .consistency-cell.is-mid {
-  background: color-mix(in srgb, var(--accent) 54%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  background: var(--heat-met);
+  border-color: color-mix(in srgb, var(--heat-met) 68%, var(--line));
 }
 
 .consistency-cell.is-low {
-  background: color-mix(in srgb, var(--danger) 48%, var(--surface));
-  border-color: color-mix(in srgb, var(--danger) 48%, var(--line));
+  background: var(--heat-low);
+  border-color: color-mix(in srgb, var(--heat-low) 68%, var(--line));
+}
+
+.consistency-cell.is-under {
+  background: var(--heat-under);
+  border-color: color-mix(in srgb, var(--heat-under) 68%, var(--line));
 }
 
 .consistency-cell.is-empty {
-  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  background: var(--heat-empty);
   opacity: 0.72;
 }
 
