@@ -357,4 +357,13 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Improve dashboard analytics readability (d3ccb80)
 
+## v1.15.2 - 2026-06-23
+
+### Desktop
+#### Added
+- 新增学习趋势判断面板 (c80b0e0)
+
+#### Changed
+- Filter emergency exits from focus timeline (29da088)
+
 
