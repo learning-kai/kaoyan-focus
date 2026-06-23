@@ -102,15 +102,15 @@
         <article class="panel chart-panel learning-trend-panel">
           <div class="panel-head learning-trend-head">
             <div>
-              <p class="kicker">Trend verdict</p>
-              <h2>最近是在变好还是变差？</h2>
+              <p class="kicker">Focus time trend</p>
+              <h2>专注时间最近是在变多还是变少？</h2>
             </div>
-            <p class="panel-copy">用近几天和上一段对比，判断学习量、日有效度和达标天数是否真的在改善。</p>
+            <p class="panel-copy">先看近段日均专注时间有没有增加，再用日有效度判断是不是有效增加。</p>
           </div>
           <div class="trend-summary-strip" aria-label="学习趋势摘要">
             <span class="trend-verdict trend-delta-insufficient" id="learning-trend-verdict">样本不足</span>
             <span>
-              <small>趋势指数</small>
+              <small>日均变化</small>
               <strong id="learning-trend-delta">--</strong>
             </span>
             <span>
@@ -138,8 +138,8 @@
             aria-label="学习趋势判断图"
           ></svg>
           <div class="chart-legend">
+            <span><i class="legend-swatch legend-teal"></i>7 日均专注时间</span>
             <span><i class="legend-swatch legend-amber"></i>7 日均日有效度</span>
-            <span><i class="legend-swatch legend-teal"></i>7 日均学习量达标率</span>
             <span><i class="legend-swatch legend-track"></i>目标线 / 近段窗口</span>
           </div>
         </article>

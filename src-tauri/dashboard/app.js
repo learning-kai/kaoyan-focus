@@ -374,7 +374,9 @@ function renderLearningTrend(trend) {
   syncTrendStatusClass(els.learningTrendDelta, statusClass);
   els.learningTrendVerdict.textContent = trend?.label || '样本不足';
   els.learningTrendDelta.textContent =
-    status === 'insufficient' ? trend?.windowLabel || '至少需要 6 天' : `指数 ${formatSignedNumber(trend.delta, 1)}`;
+    status === 'insufficient'
+      ? trend?.windowLabel || '至少需要 6 天'
+      : `日均 ${formatSignedMinutesLabel(trend.deltaMinutes)}`;
   els.learningTrendWindow.textContent = trend?.windowLabel || '--';
   els.learningTrendEffective.textContent = current ? `${current.effectiveDays} / ${current.totalDays} 天` : '--';
   els.learningTrendMinutes.textContent = current ? formatMinutesLabel(current.avgMinutes) : '--';
@@ -393,7 +395,7 @@ function renderLearningTrendChart(trend) {
   const right = width - margin.right;
   const points = Array.isArray(trend?.points) ? trend.points : [];
   const focusColor = cssVar('--chart-focus', '#efb35b');
-  const volumeColor = cssVar('--chart-minutes', 'rgba(70, 211, 178, 0.78)');
+  const minutesColor = cssVar('--chart-minutes', 'rgba(70, 211, 178, 0.78)');
   const windowFill = cssVar('--trend-window-fill', 'rgba(70, 211, 178, 0.08)');
   const targetColor = cssVar('--axis-line', 'rgba(255,255,255,0.18)');
 
@@ -409,9 +411,11 @@ function renderLearningTrendChart(trend) {
     return;
   }
 
+  const maxMinutes = Math.max(180, ...points.map((point) => point.rollingMinutes || point.minutes || 0)) * 1.15;
   const step = points.length > 1 ? plotWidth / (points.length - 1) : 0;
   const xFor = (index) => margin.left + index * step;
-  const yFor = (value) => scale(value, 0, 110, bottom, margin.top);
+  const minuteYFor = (value) => scale(value, 0, maxMinutes, bottom, margin.top);
+  const focusYFor = (value) => scale(value, 0, 100, bottom, margin.top);
 
   if (trend?.current && points.length > 1) {
     const startX = Math.max(margin.left, xFor(trend.current.startIndex) - step / 2);
@@ -423,71 +427,71 @@ function renderLearningTrendChart(trend) {
   }
 
   drawChartGrid(els.learningTrendChart, margin, width, height, 5);
-  renderLearningTrendAxes(els.learningTrendChart, margin, width, height);
+  renderLearningTrendAxes(els.learningTrendChart, margin, width, height, maxMinutes);
 
-  addLine(els.learningTrendChart, margin.left, yFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_SCORE), right, yFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_SCORE), {
-    stroke: targetColor,
-    'stroke-width': 1.2,
-    'stroke-dasharray': '7 7',
-  });
-  addText(els.learningTrendChart, right + 8, yFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_SCORE) + 4, '60 分', {
-    fill: 'var(--muted)',
-    'font-size': '12',
-  });
-  addLine(els.learningTrendChart, margin.left, yFor(100), right, yFor(100), {
+  addLine(els.learningTrendChart, margin.left, minuteYFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_MINUTES), right, minuteYFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_MINUTES), {
     stroke: targetColor,
     'stroke-width': 1.2,
     'stroke-dasharray': '3 7',
   });
-  addText(els.learningTrendChart, right + 8, yFor(100) + 4, '3h', {
+  addText(els.learningTrendChart, right + 8, minuteYFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_MINUTES) + 4, '3h', {
+    fill: 'var(--muted)',
+    'font-size': '12',
+  });
+  addLine(els.learningTrendChart, margin.left, focusYFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_SCORE), right, focusYFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_SCORE), {
+    stroke: targetColor,
+    'stroke-width': 1.2,
+    'stroke-dasharray': '7 7',
+  });
+  addText(els.learningTrendChart, right + 8, focusYFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_SCORE) + 4, '60 分', {
     fill: 'var(--muted)',
     'font-size': '12',
   });
 
-  const focusLinePoints = points.map((point, index) => ({
+  const minutesLinePoints = points.map((point, index) => ({
     x: xFor(index),
-    y: yFor(point.rollingFocus),
+    y: minuteYFor(point.rollingMinutes),
     item: point,
   }));
-  const volumeLinePoints = points.map((point, index) => ({
+  const focusLinePoints = points.map((point, index) => ({
     x: xFor(index),
-    y: yFor(point.rollingVolumeRate),
+    y: focusYFor(point.rollingFocus),
     item: point,
   }));
 
-  drawLineSeries(els.learningTrendChart, volumeLinePoints, {
-    stroke: volumeColor,
-    'stroke-width': 2.6,
-    'stroke-dasharray': '8 6',
+  drawLineSeries(els.learningTrendChart, minutesLinePoints, {
+    stroke: minutesColor,
+    'stroke-width': 3.4,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
   });
   drawLineSeries(els.learningTrendChart, focusLinePoints, {
     stroke: focusColor,
-    'stroke-width': 3.2,
+    'stroke-width': 2.4,
+    'stroke-dasharray': '8 6',
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
   });
 
   for (const [index, point] of points.entries()) {
     const x = xFor(index);
-    const title = `${formatDateLabel(point.date)}：${formatMinutesLabel(point.minutes)}，日有效度 ${formatNumber(point.dailyFocusScore, 1)}，${point.effective ? '达标' : '未达标'}，7日均有效度 ${formatNumber(point.rollingFocus, 1)}`;
-    addCircle(els.learningTrendChart, x, yFor(point.rollingVolumeRate), 2.7, {
-      fill: volumeColor,
-      stroke: 'var(--panel)',
-      'stroke-width': 1,
-    }, title);
-    addCircle(els.learningTrendChart, x, yFor(point.rollingFocus), point.inCurrentWindow ? 4 : 3, {
-      fill: focusColor,
+    const title = `${formatDateLabel(point.date)}：${formatMinutesLabel(point.minutes)}，日有效度 ${formatNumber(point.dailyFocusScore, 1)}，${point.effective ? '达标' : '未达标'}，7日均专注 ${formatMinutesLabel(point.rollingMinutes)}，7日均有效度 ${formatNumber(point.rollingFocus, 1)}`;
+    addCircle(els.learningTrendChart, x, minuteYFor(point.rollingMinutes), point.inCurrentWindow ? 4.2 : 3.2, {
+      fill: minutesColor,
       stroke: 'var(--panel)',
       'stroke-width': 1.2,
+    }, title);
+    addCircle(els.learningTrendChart, x, focusYFor(point.rollingFocus), 2.7, {
+      fill: focusColor,
+      stroke: 'var(--panel)',
+      'stroke-width': 1,
     }, title);
   }
 
   drawXLabels(els.learningTrendChart, points, margin, width, height);
 }
 
-function renderLearningTrendAxes(svg, margin, width, height) {
+function renderLearningTrendAxes(svg, margin, width, height, maxMinutes) {
   const bottom = height - margin.bottom;
   const right = width - margin.right;
   const axisColor = cssVar('--axis-line', 'rgba(255,255,255,0.18)');
@@ -502,11 +506,20 @@ function renderLearningTrendAxes(svg, margin, width, height) {
     'stroke-width': 1,
   });
 
-  for (const value of [0, 50, 100]) {
-    const y = scale(value, 0, 110, bottom, margin.top);
-    addText(svg, margin.left - 12, y + 4, String(value), {
+  const minuteTicks = [0, Math.round(maxMinutes / 2), Math.round(maxMinutes)];
+  for (const value of minuteTicks) {
+    const y = scale(value, 0, maxMinutes, bottom, margin.top);
+    addText(svg, margin.left - 12, y + 4, formatCompactMinutes(value), {
       fill: mutedColor,
       'text-anchor': 'end',
+      'font-size': '12',
+    });
+  }
+
+  for (const value of [0, 50, 100]) {
+    const y = scale(value, 0, 100, bottom, margin.top);
+    addText(svg, right + 12, y + 4, String(value), {
+      fill: mutedColor,
       'font-size': '12',
     });
   }
@@ -3040,6 +3053,12 @@ function formatMinutesLabel(minutes) {
   const hours = Math.floor(value / 60);
   const rest = value % 60;
   return rest ? `${hours}小时${rest}分钟` : `${hours} 小时`;
+}
+
+function formatSignedMinutesLabel(minutes) {
+  const value = Math.round(Number(minutes) || 0);
+  const sign = value >= 0 ? '+' : '−';
+  return `${sign}${formatMinutesLabel(Math.abs(value))}`;
 }
 
 function formatCompactMinutes(minutes) {

@@ -3,7 +3,7 @@
   const EFFECTIVE_DAY_SCORE = 60;
   const LEARNING_TREND_MIN_DAYS = 6;
   const LEARNING_TREND_LONG_WINDOW = 7;
-  const LEARNING_TREND_THRESHOLD = 8;
+  const LEARNING_TREND_MINUTE_THRESHOLD = 30;
 
   function clamp(value, min, max) {
     const number = Number(value);
@@ -176,7 +176,6 @@
     const avgFocus = round(average(slice.map((day) => day.dailyFocusScore)), 1);
     const volumeTargetRate = round(average(slice.map((day) => day.volumeTargetRate)), 1);
     const effectiveDensity = totalDays > 0 ? round((effectiveDays / totalDays) * 100, 1) : 0;
-    const trendIndex = round(volumeTargetRate * 0.45 + avgFocus * 0.4 + effectiveDensity * 0.15, 1);
     return {
       startIndex,
       endIndex: startIndex + totalDays - 1,
@@ -188,7 +187,7 @@
       avgFocus,
       volumeTargetRate,
       effectiveDensity,
-      trendIndex,
+      totalMinutes: round(slice.reduce((total, day) => total + day.minutes, 0), 1),
     };
   }
 
@@ -199,6 +198,7 @@
       return {
         ...day,
         index,
+        rollingMinutes: round(average(window.map((item) => item.minutes)), 1),
         rollingFocus: round(average(window.map((item) => item.dailyFocusScore)), 1),
         rollingVolumeRate: round(average(window.map((item) => item.volumeTargetRate)), 1),
         inCurrentWindow: index >= currentStartIndex && index <= currentEndIndex,
@@ -213,7 +213,9 @@
         status: 'insufficient',
         label: '样本不足',
         delta: 0,
-        threshold: LEARNING_TREND_THRESHOLD,
+        deltaMinutes: 0,
+        deltaPercent: null,
+        thresholdMinutes: LEARNING_TREND_MINUTE_THRESHOLD,
         windowSize: 0,
         windowLabel: `至少需要 ${LEARNING_TREND_MIN_DAYS} 天`,
         previous: null,
@@ -230,19 +232,32 @@
     const previousStartIndex = currentStartIndex - windowSize;
     const previous = buildTrendWindowStats(days, previousStartIndex, windowSize);
     const current = buildTrendWindowStats(days, currentStartIndex, windowSize);
-    const delta = round(current.trendIndex - previous.trendIndex, 1);
-    const status = delta >= LEARNING_TREND_THRESHOLD ? 'up' : delta <= -LEARNING_TREND_THRESHOLD ? 'down' : 'flat';
+    const deltaMinutes = round(current.avgMinutes - previous.avgMinutes, 1);
+    const deltaPercent =
+      previous.avgMinutes > 0
+        ? round(deltaMinutes / previous.avgMinutes, 3)
+        : current.avgMinutes > 0
+          ? 1
+          : 0;
+    const status =
+      deltaMinutes >= LEARNING_TREND_MINUTE_THRESHOLD
+        ? 'up'
+        : deltaMinutes <= -LEARNING_TREND_MINUTE_THRESHOLD
+          ? 'down'
+          : 'flat';
     const labels = {
-      up: '趋势上升',
-      down: '趋势下滑',
-      flat: '基本持平',
+      up: '专注时间上升',
+      down: '专注时间下滑',
+      flat: '专注时间持平',
     };
 
     return {
       status,
       label: labels[status],
-      delta,
-      threshold: LEARNING_TREND_THRESHOLD,
+      delta: deltaMinutes,
+      deltaMinutes,
+      deltaPercent,
+      thresholdMinutes: LEARNING_TREND_MINUTE_THRESHOLD,
       windowSize,
       windowLabel: `${current.totalDays} 天对比 ${previous.totalDays} 天`,
       previous,

@@ -117,7 +117,7 @@ const upwardTrend = analytics.buildLearningTrend([
 ]);
 assert.equal(upwardTrend.status, 'up');
 assert.equal(upwardTrend.windowSize, 7);
-assert.ok(upwardTrend.delta >= 8);
+assert.ok(upwardTrend.deltaMinutes >= 30);
 assert.equal(upwardTrend.current.effectiveDays, 7);
 
 const downwardTrend = analytics.buildLearningTrend([
@@ -125,7 +125,7 @@ const downwardTrend = analytics.buildLearningTrend([
   ...Array.from({ length: 7 }, (_, index) => trendDay(index + 8, 70, 46)),
 ]);
 assert.equal(downwardTrend.status, 'down');
-assert.ok(downwardTrend.delta <= -8);
+assert.ok(downwardTrend.deltaMinutes <= -30);
 assert.equal(downwardTrend.current.effectiveDays, 0);
 
 const flatTrend = analytics.buildLearningTrend([
@@ -133,7 +133,21 @@ const flatTrend = analytics.buildLearningTrend([
   ...Array.from({ length: 7 }, (_, index) => trendDay(index + 8, 178, 67)),
 ]);
 assert.equal(flatTrend.status, 'flat');
-assert.ok(Math.abs(flatTrend.delta) < 8);
+assert.ok(Math.abs(flatTrend.deltaMinutes) < 30);
+
+const lessTimeEvenWithBetterScoreTrend = analytics.buildLearningTrend([
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 1, 240, 52)),
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 8, 120, 94)),
+]);
+assert.equal(lessTimeEvenWithBetterScoreTrend.status, 'down');
+assert.equal(lessTimeEvenWithBetterScoreTrend.deltaMinutes, -120);
+
+const moreTimeEvenWithLowerScoreTrend = analytics.buildLearningTrend([
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 1, 120, 94)),
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 8, 240, 52)),
+]);
+assert.equal(moreTimeEvenWithLowerScoreTrend.status, 'up');
+assert.equal(moreTimeEvenWithLowerScoreTrend.deltaMinutes, 120);
 
 const shortTrend = analytics.buildLearningTrend([
   trendDay(1, 210, 80),
