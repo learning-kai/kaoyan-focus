@@ -65,6 +65,13 @@ const els = {
   metricWindowNote: document.getElementById('metric-window-note'),
   metricDays: document.getElementById('metric-days'),
   metricDaysNote: document.getElementById('metric-days-note'),
+  learningTrendChart: document.getElementById('learning-trend-chart'),
+  learningTrendVerdict: document.getElementById('learning-trend-verdict'),
+  learningTrendDelta: document.getElementById('learning-trend-delta'),
+  learningTrendWindow: document.getElementById('learning-trend-window'),
+  learningTrendEffective: document.getElementById('learning-trend-effective'),
+  learningTrendMinutes: document.getElementById('learning-trend-minutes'),
+  learningTrendFocus: document.getElementById('learning-trend-focus'),
   weekTimelineChart: document.getElementById('week-timeline-chart'),
   weekTimelineLabel: document.getElementById('week-timeline-label'),
   weekTimelineTotal: document.getElementById('week-timeline-total'),
@@ -240,6 +247,7 @@ function render(message = datasetMessage) {
   const quality = buildQualityQuadrants(dailySeries);
   const dailySnapshot = buildDailySnapshot(dailySeries);
   const target = buildTargetProgress(dailySeries);
+  const learningTrend = DASHBOARD_ANALYTICS.buildLearningTrend(dailySeries);
   const risks = buildRiskItems(subjectGaps, taskFulfillment, lowEfficiencyDays, rhythm);
   const dataQuality = buildDataQuality(filtered, dailySeries, subjectSeries, taskFulfillment, rhythm);
   const prescription = buildPrescription({
@@ -279,6 +287,7 @@ function render(message = datasetMessage) {
   syncRangeButtons();
   renderExecutiveSummary(summary);
   renderMetrics(overview, anchorDate, filtered.length);
+  renderLearningTrend(learningTrend);
   renderTargetProgress(target);
   renderComparisonPanel(comparison);
   renderTaskFunnel(taskFulfillment);
@@ -354,6 +363,165 @@ function renderExecutiveSummary(summary) {
   els.summaryTrend.textContent = summary.trend;
   els.summaryRisk.textContent = summary.risk;
   els.summaryAction.textContent = summary.action;
+}
+
+function renderLearningTrend(trend) {
+  const status = trend?.status || 'insufficient';
+  const statusClass = trendStatusClass(status);
+  const current = trend?.current || null;
+
+  syncTrendStatusClass(els.learningTrendVerdict, statusClass);
+  syncTrendStatusClass(els.learningTrendDelta, statusClass);
+  els.learningTrendVerdict.textContent = trend?.label || '样本不足';
+  els.learningTrendDelta.textContent =
+    status === 'insufficient' ? trend?.windowLabel || '至少需要 6 天' : `指数 ${formatSignedNumber(trend.delta, 1)}`;
+  els.learningTrendWindow.textContent = trend?.windowLabel || '--';
+  els.learningTrendEffective.textContent = current ? `${current.effectiveDays} / ${current.totalDays} 天` : '--';
+  els.learningTrendMinutes.textContent = current ? formatMinutesLabel(current.avgMinutes) : '--';
+  els.learningTrendFocus.textContent = current ? formatNumber(current.avgFocus, 1) : '--';
+
+  renderLearningTrendChart(trend);
+}
+
+function renderLearningTrendChart(trend) {
+  clearSvg(els.learningTrendChart);
+  const width = 960;
+  const height = 320;
+  const margin = { top: 24, right: 76, bottom: 50, left: 54 };
+  const plotWidth = width - margin.left - margin.right;
+  const bottom = height - margin.bottom;
+  const right = width - margin.right;
+  const points = Array.isArray(trend?.points) ? trend.points : [];
+  const focusColor = cssVar('--chart-focus', '#efb35b');
+  const volumeColor = cssVar('--chart-minutes', 'rgba(70, 211, 178, 0.78)');
+  const windowFill = cssVar('--trend-window-fill', 'rgba(70, 211, 178, 0.08)');
+  const targetColor = cssVar('--axis-line', 'rgba(255,255,255,0.18)');
+
+  setSvgViewBox(els.learningTrendChart, width, height);
+  els.learningTrendChart.setAttribute('aria-label', `学习趋势判断：${trend?.label || '样本不足'}`);
+
+  if (!points.length) {
+    addText(els.learningTrendChart, width / 2, height / 2, '暂无趋势数据', {
+      fill: 'var(--muted)',
+      'text-anchor': 'middle',
+      'font-size': '18',
+    });
+    return;
+  }
+
+  const step = points.length > 1 ? plotWidth / (points.length - 1) : 0;
+  const xFor = (index) => margin.left + index * step;
+  const yFor = (value) => scale(value, 0, 110, bottom, margin.top);
+
+  if (trend?.current && points.length > 1) {
+    const startX = Math.max(margin.left, xFor(trend.current.startIndex) - step / 2);
+    const endX = Math.min(right, xFor(trend.current.endIndex) + step / 2);
+    addRect(els.learningTrendChart, startX, margin.top, Math.max(2, endX - startX), bottom - margin.top, {
+      fill: windowFill,
+      stroke: 'none',
+    });
+  }
+
+  drawChartGrid(els.learningTrendChart, margin, width, height, 5);
+  renderLearningTrendAxes(els.learningTrendChart, margin, width, height);
+
+  addLine(els.learningTrendChart, margin.left, yFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_SCORE), right, yFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_SCORE), {
+    stroke: targetColor,
+    'stroke-width': 1.2,
+    'stroke-dasharray': '7 7',
+  });
+  addText(els.learningTrendChart, right + 8, yFor(DASHBOARD_ANALYTICS.EFFECTIVE_DAY_SCORE) + 4, '60 分', {
+    fill: 'var(--muted)',
+    'font-size': '12',
+  });
+  addLine(els.learningTrendChart, margin.left, yFor(100), right, yFor(100), {
+    stroke: targetColor,
+    'stroke-width': 1.2,
+    'stroke-dasharray': '3 7',
+  });
+  addText(els.learningTrendChart, right + 8, yFor(100) + 4, '3h', {
+    fill: 'var(--muted)',
+    'font-size': '12',
+  });
+
+  const focusLinePoints = points.map((point, index) => ({
+    x: xFor(index),
+    y: yFor(point.rollingFocus),
+    item: point,
+  }));
+  const volumeLinePoints = points.map((point, index) => ({
+    x: xFor(index),
+    y: yFor(point.rollingVolumeRate),
+    item: point,
+  }));
+
+  drawLineSeries(els.learningTrendChart, volumeLinePoints, {
+    stroke: volumeColor,
+    'stroke-width': 2.6,
+    'stroke-dasharray': '8 6',
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+  });
+  drawLineSeries(els.learningTrendChart, focusLinePoints, {
+    stroke: focusColor,
+    'stroke-width': 3.2,
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+  });
+
+  for (const [index, point] of points.entries()) {
+    const x = xFor(index);
+    const title = `${formatDateLabel(point.date)}：${formatMinutesLabel(point.minutes)}，日有效度 ${formatNumber(point.dailyFocusScore, 1)}，${point.effective ? '达标' : '未达标'}，7日均有效度 ${formatNumber(point.rollingFocus, 1)}`;
+    addCircle(els.learningTrendChart, x, yFor(point.rollingVolumeRate), 2.7, {
+      fill: volumeColor,
+      stroke: 'var(--panel)',
+      'stroke-width': 1,
+    }, title);
+    addCircle(els.learningTrendChart, x, yFor(point.rollingFocus), point.inCurrentWindow ? 4 : 3, {
+      fill: focusColor,
+      stroke: 'var(--panel)',
+      'stroke-width': 1.2,
+    }, title);
+  }
+
+  drawXLabels(els.learningTrendChart, points, margin, width, height);
+}
+
+function renderLearningTrendAxes(svg, margin, width, height) {
+  const bottom = height - margin.bottom;
+  const right = width - margin.right;
+  const axisColor = cssVar('--axis-line', 'rgba(255,255,255,0.18)');
+  const mutedColor = cssVar('--muted', '#8d9a93');
+
+  addLine(svg, margin.left, bottom, right, bottom, {
+    stroke: axisColor,
+    'stroke-width': 1,
+  });
+  addLine(svg, margin.left, margin.top, margin.left, bottom, {
+    stroke: axisColor,
+    'stroke-width': 1,
+  });
+
+  for (const value of [0, 50, 100]) {
+    const y = scale(value, 0, 110, bottom, margin.top);
+    addText(svg, margin.left - 12, y + 4, String(value), {
+      fill: mutedColor,
+      'text-anchor': 'end',
+      'font-size': '12',
+    });
+  }
+}
+
+function trendStatusClass(status) {
+  if (status === 'up') return 'trend-delta-up';
+  if (status === 'down') return 'trend-delta-down';
+  if (status === 'flat') return 'trend-delta-flat';
+  return 'trend-delta-insufficient';
+}
+
+function syncTrendStatusClass(element, statusClass) {
+  element.classList.remove('trend-delta-up', 'trend-delta-down', 'trend-delta-flat', 'trend-delta-insufficient');
+  element.classList.add(statusClass);
 }
 
 function renderTrendChart(dailySeries) {

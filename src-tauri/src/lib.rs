@@ -17,7 +17,9 @@ use tauri::{
     Emitter, Manager, UserAttentionType, WindowEvent,
 };
 #[cfg(windows)]
-use tauri_winrt_notification::{Duration as ToastDuration, LoopableSound, Scenario, Sound, Toast};
+use tauri_winrt_notification::{
+    Duration as ToastDuration, LoopableSound, Scenario, Sound, Toast, ToastDismissalReason,
+};
 
 mod commands {
     pub mod alarm;
@@ -168,11 +170,13 @@ fn show_toast_with_close_event(
         .scenario(scenario)
         .duration(ToastDuration::Long)
         .sound(sound)
-        .on_dismissed(move |_| {
-            emit_reminder_notification_closed(
-                &app_for_dismiss,
-                notification_id_for_dismiss.as_deref(),
-            );
+        .on_dismissed(move |reason| {
+            if matches!(reason, Some(ToastDismissalReason::UserCanceled)) {
+                emit_reminder_notification_closed(
+                    &app_for_dismiss,
+                    notification_id_for_dismiss.as_deref(),
+                );
+            }
             Ok(())
         })
         .on_activated(move |_| {

@@ -1,6 +1,9 @@
 (function attachDashboardAnalytics(global) {
   const EFFECTIVE_DAY_MINUTES = 180;
   const EFFECTIVE_DAY_SCORE = 60;
+  const LEARNING_TREND_MIN_DAYS = 6;
+  const LEARNING_TREND_LONG_WINDOW = 7;
+  const LEARNING_TREND_THRESHOLD = 8;
 
   function clamp(value, min, max) {
     const number = Number(value);
@@ -11,6 +14,12 @@
   function round(value, digits = 0) {
     const factor = 10 ** digits;
     return Math.round(value * factor) / factor;
+  }
+
+  function average(values) {
+    const list = values.filter((value) => Number.isFinite(value));
+    if (!list.length) return 0;
+    return list.reduce((total, value) => total + value, 0) / list.length;
   }
 
   function calculateDailyFocusScore(input) {
@@ -145,6 +154,103 @@
     };
   }
 
+  function normalizeTrendDay(day, index) {
+    const minutes = clamp(day?.minutes, 0, 24 * 60);
+    const dailyFocusScore =
+      day?.dailyFocusScore == null && day?.score == null ? 0 : clamp(day?.dailyFocusScore ?? day?.score, 0, 100);
+    return {
+      date: String(day?.date ?? index + 1),
+      minutes,
+      dailyFocusScore,
+      volumeTargetRate: clamp((minutes / EFFECTIVE_DAY_MINUTES) * 100, 0, 100),
+      effective: minutes >= EFFECTIVE_DAY_MINUTES && dailyFocusScore >= EFFECTIVE_DAY_SCORE,
+      active: minutes > 0,
+    };
+  }
+
+  function buildTrendWindowStats(days, startIndex, size) {
+    const slice = days.slice(startIndex, startIndex + size);
+    const totalDays = slice.length;
+    const effectiveDays = slice.filter((day) => day.effective).length;
+    const avgMinutes = round(average(slice.map((day) => day.minutes)), 1);
+    const avgFocus = round(average(slice.map((day) => day.dailyFocusScore)), 1);
+    const volumeTargetRate = round(average(slice.map((day) => day.volumeTargetRate)), 1);
+    const effectiveDensity = totalDays > 0 ? round((effectiveDays / totalDays) * 100, 1) : 0;
+    const trendIndex = round(volumeTargetRate * 0.45 + avgFocus * 0.4 + effectiveDensity * 0.15, 1);
+    return {
+      startIndex,
+      endIndex: startIndex + totalDays - 1,
+      startDate: slice[0]?.date ?? '',
+      endDate: slice[slice.length - 1]?.date ?? '',
+      totalDays,
+      effectiveDays,
+      avgMinutes,
+      avgFocus,
+      volumeTargetRate,
+      effectiveDensity,
+      trendIndex,
+    };
+  }
+
+  function buildLearningTrendPoints(days, currentStartIndex, currentEndIndex) {
+    return days.map((day, index) => {
+      const start = Math.max(0, index - LEARNING_TREND_LONG_WINDOW + 1);
+      const window = days.slice(start, index + 1);
+      return {
+        ...day,
+        index,
+        rollingFocus: round(average(window.map((item) => item.dailyFocusScore)), 1),
+        rollingVolumeRate: round(average(window.map((item) => item.volumeTargetRate)), 1),
+        inCurrentWindow: index >= currentStartIndex && index <= currentEndIndex,
+      };
+    });
+  }
+
+  function buildLearningTrend(dailySeries) {
+    const days = (Array.isArray(dailySeries) ? dailySeries : []).map(normalizeTrendDay);
+    if (days.length < LEARNING_TREND_MIN_DAYS) {
+      return {
+        status: 'insufficient',
+        label: '样本不足',
+        delta: 0,
+        threshold: LEARNING_TREND_THRESHOLD,
+        windowSize: 0,
+        windowLabel: `至少需要 ${LEARNING_TREND_MIN_DAYS} 天`,
+        previous: null,
+        current: null,
+        points: buildLearningTrendPoints(days, -1, -1),
+      };
+    }
+
+    const windowSize =
+      days.length >= LEARNING_TREND_LONG_WINDOW * 2
+        ? LEARNING_TREND_LONG_WINDOW
+        : Math.max(3, Math.floor(days.length / 2));
+    const currentStartIndex = days.length - windowSize;
+    const previousStartIndex = currentStartIndex - windowSize;
+    const previous = buildTrendWindowStats(days, previousStartIndex, windowSize);
+    const current = buildTrendWindowStats(days, currentStartIndex, windowSize);
+    const delta = round(current.trendIndex - previous.trendIndex, 1);
+    const status = delta >= LEARNING_TREND_THRESHOLD ? 'up' : delta <= -LEARNING_TREND_THRESHOLD ? 'down' : 'flat';
+    const labels = {
+      up: '趋势上升',
+      down: '趋势下滑',
+      flat: '基本持平',
+    };
+
+    return {
+      status,
+      label: labels[status],
+      delta,
+      threshold: LEARNING_TREND_THRESHOLD,
+      windowSize,
+      windowLabel: `${current.totalDays} 天对比 ${previous.totalDays} 天`,
+      previous,
+      current,
+      points: buildLearningTrendPoints(days, current.startIndex, current.endIndex),
+    };
+  }
+
   function shouldExcludeFromFocusTimeline(record) {
     if (!record) return false;
     const status = String(record.status ?? '').trim().toLowerCase();
@@ -164,6 +270,7 @@
     EFFECTIVE_DAY_SCORE,
     buildAnnualHeatmapCalendar,
     buildEffectiveDayProgress,
+    buildLearningTrend,
     calculateDailyFocusScore,
     filterFocusTimelineRecords,
     getAnnualHeatLevel,

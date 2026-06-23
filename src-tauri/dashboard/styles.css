@@ -25,6 +25,7 @@ body.study-dashboard {
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
+  --trend-window-fill: color-mix(in srgb, var(--chart-minutes) 13%, transparent);
   color: var(--text);
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
@@ -1089,6 +1090,84 @@ body.study-dashboard[data-theme='focus'] .chip-button.is-active {
   min-width: 0;
 }
 
+.learning-trend-section {
+  margin-top: 14px;
+}
+
+.learning-trend-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.learning-trend-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 0;
+}
+
+.trend-summary-strip {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.25fr) repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+}
+
+.trend-summary-strip span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 12px 14px;
+  border-left: 1px solid var(--line);
+}
+
+.trend-summary-strip span:first-child {
+  border-left: 0;
+}
+
+.trend-summary-strip small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.trend-summary-strip strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.trend-verdict {
+  align-content: center;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.trend-delta-up {
+  color: var(--success) !important;
+}
+
+.trend-delta-down {
+  color: var(--danger) !important;
+}
+
+.trend-delta-flat {
+  color: var(--ghost) !important;
+}
+
+.trend-delta-insufficient {
+  color: var(--muted) !important;
+}
+
+.learning-trend-chart {
+  min-height: 270px;
+}
+
 .panel-head {
   margin-bottom: 18px;
 }
@@ -1822,6 +1901,23 @@ body.study-dashboard .executive-summary {
     display: grid;
   }
 
+  .learning-trend-head {
+    display: grid;
+    gap: 10px;
+  }
+
+  .trend-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .trend-summary-strip span:nth-child(2n + 1) {
+    border-left: 0;
+  }
+
+  .trend-summary-strip span:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
   .panel-copy {
     max-width: none;
   }
@@ -1840,6 +1936,10 @@ body.study-dashboard .executive-summary {
 
   .focus-timeline-chart {
     min-height: 280px;
+  }
+
+  .learning-trend-chart {
+    min-height: 250px;
   }
 
   .best-hour-chart,
@@ -1892,6 +1992,19 @@ body.study-dashboard .executive-summary {
 
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .trend-summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .trend-summary-strip span {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .trend-summary-strip span:first-child {
+    border-top: 0;
   }
 
   .metric-card {

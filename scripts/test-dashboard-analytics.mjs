@@ -101,6 +101,60 @@ assert.equal(emptyYearCalendar.effectiveDays, 0);
 assert.equal(emptyYearCalendar.totalMinutes, 0);
 assert.ok(emptyYearCalendar.days.every((day) => day.heatLevel === 0));
 
+function trendDay(day, minutes, dailyFocusScore) {
+  return {
+    date: `2026-06-${String(day).padStart(2, '0')}`,
+    minutes,
+    dailyFocusScore,
+    effective: minutes >= 180 && dailyFocusScore >= 60,
+    active: minutes > 0,
+  };
+}
+
+const upwardTrend = analytics.buildLearningTrend([
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 1, 75, 48)),
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 8, 230, 82)),
+]);
+assert.equal(upwardTrend.status, 'up');
+assert.equal(upwardTrend.windowSize, 7);
+assert.ok(upwardTrend.delta >= 8);
+assert.equal(upwardTrend.current.effectiveDays, 7);
+
+const downwardTrend = analytics.buildLearningTrend([
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 1, 240, 86)),
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 8, 70, 46)),
+]);
+assert.equal(downwardTrend.status, 'down');
+assert.ok(downwardTrend.delta <= -8);
+assert.equal(downwardTrend.current.effectiveDays, 0);
+
+const flatTrend = analytics.buildLearningTrend([
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 1, 170, 66)),
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 8, 178, 67)),
+]);
+assert.equal(flatTrend.status, 'flat');
+assert.ok(Math.abs(flatTrend.delta) < 8);
+
+const shortTrend = analytics.buildLearningTrend([
+  trendDay(1, 210, 80),
+  trendDay(2, 190, 72),
+  trendDay(3, 0, null),
+  trendDay(4, 160, 64),
+  trendDay(5, 220, 88),
+]);
+assert.equal(shortTrend.status, 'insufficient');
+assert.equal(shortTrend.windowSize, 0);
+
+const blankDaysCountAsZeroTrend = analytics.buildLearningTrend([
+  ...Array.from({ length: 7 }, (_, index) => trendDay(index + 1, 210, 90)),
+  ...Array.from({ length: 6 }, (_, index) => trendDay(index + 8, 210, 90)),
+  trendDay(14, 0, null),
+]);
+assert.equal(blankDaysCountAsZeroTrend.status, 'down');
+assert.equal(blankDaysCountAsZeroTrend.current.totalDays, 7);
+assert.equal(blankDaysCountAsZeroTrend.current.effectiveDays, 6);
+assert.ok(blankDaysCountAsZeroTrend.current.avgFocus < 80);
+
 assert.equal(
   analytics.shouldExcludeFromFocusTimeline({
     status: 'emergency_exited',

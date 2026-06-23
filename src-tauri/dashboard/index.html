@@ -98,6 +98,53 @@
         </article>
       </section>
 
+      <section class="learning-trend-section" aria-label="学习趋势判断">
+        <article class="panel chart-panel learning-trend-panel">
+          <div class="panel-head learning-trend-head">
+            <div>
+              <p class="kicker">Trend verdict</p>
+              <h2>最近是在变好还是变差？</h2>
+            </div>
+            <p class="panel-copy">用近几天和上一段对比，判断学习量、日有效度和达标天数是否真的在改善。</p>
+          </div>
+          <div class="trend-summary-strip" aria-label="学习趋势摘要">
+            <span class="trend-verdict trend-delta-insufficient" id="learning-trend-verdict">样本不足</span>
+            <span>
+              <small>趋势指数</small>
+              <strong id="learning-trend-delta">--</strong>
+            </span>
+            <span>
+              <small>比较窗口</small>
+              <strong id="learning-trend-window">--</strong>
+            </span>
+            <span>
+              <small>近段达标</small>
+              <strong id="learning-trend-effective">--</strong>
+            </span>
+            <span>
+              <small>近段日均</small>
+              <strong id="learning-trend-minutes">--</strong>
+            </span>
+            <span>
+              <small>日有效度</small>
+              <strong id="learning-trend-focus">--</strong>
+            </span>
+          </div>
+          <svg
+            id="learning-trend-chart"
+            class="chart learning-trend-chart"
+            viewBox="0 0 960 320"
+            role="img"
+            aria-label="学习趋势判断图"
+          ></svg>
+          <div class="chart-legend">
+            <span><i class="legend-swatch legend-amber"></i>7 日均日有效度</span>
+            <span><i class="legend-swatch legend-teal"></i>7 日均学习量达标率</span>
+            <span><i class="legend-swatch legend-track"></i>目标线 / 近段窗口</span>
+          </div>
+        </article>
+      </section>
+
       <section class="focus-stat-grid" aria-label="专注统计">
         <article class="panel chart-panel focus-stat-card focus-stat-card-wide">
           <div class="panel-head focus-stat-head">
