@@ -228,20 +228,22 @@ function getErrorMessage(error) {
 
 function render(message = datasetMessage) {
   const records = sortRecords(state.records);
+  const focusTimeRecords = DASHBOARD_ANALYTICS.filterFocusTimeRecords(records);
   const anchorDate = getAnchorDate(records);
   const rangeDays = resolveRangeDays(state.activeRange);
   const filtered = filterByRange(records, rangeDays, anchorDate);
-  const dailySeries = buildDailySeries(filtered, anchorDate, rangeDays);
-  const subjectSeries = buildSubjectSeries(filtered);
-  const heatmapSeries = buildHeatmapSeries(filtered);
-  const weekTimeline = buildWeekTimelineSeries(records, state.weekOffset);
-  const bestHours = buildMonthlyBestHours(records, state.monthOffset);
-  const yearHeatmap = buildYearHeatmapSeries(records, state.yearOffset);
-  const overview = buildOverview(filtered, records, anchorDate, dailySeries);
-  const comparison = buildComparison(records, anchorDate, rangeDays);
-  const timeWindowSeries = buildTimeWindowSeries(filtered);
-  const taskFulfillment = buildTaskFulfillment(filtered, dailySeries, subjectSeries);
-  const subjectGaps = buildSubjectGapSeries(filtered, records, rangeDays, anchorDate);
+  const filteredFocusTimeRecords = filterByRange(focusTimeRecords, rangeDays, anchorDate);
+  const dailySeries = buildDailySeries(filteredFocusTimeRecords, anchorDate, rangeDays);
+  const subjectSeries = buildSubjectSeries(filteredFocusTimeRecords);
+  const heatmapSeries = buildHeatmapSeries(filteredFocusTimeRecords);
+  const weekTimeline = buildWeekTimelineSeries(focusTimeRecords, state.weekOffset);
+  const bestHours = buildMonthlyBestHours(focusTimeRecords, state.monthOffset);
+  const yearHeatmap = buildYearHeatmapSeries(focusTimeRecords, state.yearOffset);
+  const overview = buildOverview(filteredFocusTimeRecords, focusTimeRecords, anchorDate, dailySeries);
+  const comparison = buildComparison(focusTimeRecords, anchorDate, rangeDays);
+  const timeWindowSeries = buildTimeWindowSeries(filteredFocusTimeRecords);
+  const taskFulfillment = buildTaskFulfillment(filteredFocusTimeRecords, dailySeries, subjectSeries);
+  const subjectGaps = buildSubjectGapSeries(filteredFocusTimeRecords, focusTimeRecords, rangeDays, anchorDate);
   const lowEfficiencyDays = detectLowEfficiencyDays(dailySeries);
   const rhythm = buildRhythmAdvice(dailySeries, rangeDays);
   const quality = buildQualityQuadrants(dailySeries);
@@ -249,7 +251,7 @@ function render(message = datasetMessage) {
   const target = buildTargetProgress(dailySeries);
   const learningTrend = DASHBOARD_ANALYTICS.buildLearningTrend(dailySeries);
   const risks = buildRiskItems(subjectGaps, taskFulfillment, lowEfficiencyDays, rhythm);
-  const dataQuality = buildDataQuality(filtered, dailySeries, subjectSeries, taskFulfillment, rhythm);
+  const dataQuality = buildDataQuality(filteredFocusTimeRecords, dailySeries, subjectSeries, taskFulfillment, rhythm);
   const prescription = buildPrescription({
     overview,
     comparison,
@@ -281,12 +283,12 @@ function render(message = datasetMessage) {
     risks,
     prescription,
     dataQuality,
-    filteredCount: filtered.length,
+    filteredCount: filteredFocusTimeRecords.length,
   });
 
   syncRangeButtons();
   renderExecutiveSummary(summary);
-  renderMetrics(overview, anchorDate, filtered.length);
+  renderMetrics(overview, anchorDate, filteredFocusTimeRecords.length);
   renderLearningTrend(learningTrend);
   renderTargetProgress(target);
   renderComparisonPanel(comparison);
@@ -315,7 +317,7 @@ function render(message = datasetMessage) {
   els.datasetStatus.textContent = message;
   els.datasetMeta.textContent = `${records.length} 条记录 · ${countSubjects(records)} 个科目`;
   els.rangeLabel.textContent = RANGE_LABELS[state.activeRange] || '自定义范围';
-  els.statusLine.textContent = buildFooterStatus(overview, anchorDate, filtered.length, comparison);
+  els.statusLine.textContent = buildFooterStatus(overview, anchorDate, filteredFocusTimeRecords.length, comparison);
   renderDataSourcePanel();
 }
 
@@ -344,17 +346,17 @@ function syncThemeButtons() {
 function renderMetrics(overview, anchorDate, filteredCount) {
   const { totalMinutes, avgFocus, taskRate, streak, bestWindow, activeDays } = overview;
   els.metricHours.textContent = formatHours(totalMinutes);
-  els.metricHoursNote.textContent = `${filteredCount} 条记录，截止 ${formatDateLabel(anchorDate)}`;
+  els.metricHoursNote.textContent = `${filteredCount} 条有效专注记录，截止 ${formatDateLabel(anchorDate)}`;
   els.metricFocus.textContent = formatNumber(avgFocus, 1);
   els.metricFocusNote.textContent = '按天综合：质量、时长、任务、打断';
   els.metricTaskRate.textContent = `${formatNumber(taskRate * 100, 0)}%`;
   els.metricTaskNote.textContent = `${overview.tasksDone} / ${overview.tasksTotal}`;
   els.metricStreak.textContent = String(streak);
-  els.metricStreakNote.textContent = '连续有学习记录的天数';
+  els.metricStreakNote.textContent = '连续有有效专注记录的天数';
   els.metricWindow.textContent = bestWindow || '--';
   els.metricWindowNote.textContent = overview.bestWindowNote || '根据会话质量和学习时长综合判断';
   els.metricDays.textContent = String(activeDays);
-  els.metricDaysNote.textContent = '有学习记录的日期数';
+  els.metricDaysNote.textContent = '有有效专注记录的日期数';
 }
 
 function renderExecutiveSummary(summary) {
@@ -1505,7 +1507,7 @@ function buildOverview(filtered, allRecords, anchorDate, dailySeries = null) {
   const activeDays = uniqueCount(filtered, (item) => item.date);
   const streak = computeStreak(allRecords, anchorDate);
   const bestWindow = computeBestWindow(filtered);
-  const bestWindowNote = bestWindow ? '综合会话质量与分钟数推算' : '暂无足够数据';
+  const bestWindowNote = bestWindow ? '综合会话质量与有效专注分钟推算' : '暂无足够数据';
 
   return {
     totalMinutes,
@@ -1550,7 +1552,7 @@ function buildComparison(records, anchorDate, rangeDays) {
 function buildTimeWindowSeries(records) {
   const buckets = new Map();
 
-  for (const record of records) {
+  for (const record of DASHBOARD_ANALYTICS.filterFocusTimeRecords(records)) {
     for (const segment of splitRecordByHour(record)) {
       const bucket = buckets.get(segment.hour) || {
         hour: segment.hour,
@@ -1589,7 +1591,7 @@ function buildWeekTimelineSeries(records, weekOffset) {
   const segments = [];
   const dayBuckets = Array.from({ length: 7 }, () => new Map());
 
-  for (const record of DASHBOARD_ANALYTICS.filterFocusTimelineRecords(records)) {
+  for (const record of DASHBOARD_ANALYTICS.filterFocusTimeRecords(records)) {
     for (const segment of splitRecordByClock(record)) {
       if (segment.end <= start || segment.start >= end) continue;
       const clippedStart = maxDate(segment.start, start);
@@ -1654,7 +1656,7 @@ function buildMonthlyBestHours(records, monthOffset) {
     sessionIds: new Set(),
   }));
 
-  for (const record of records) {
+  for (const record of DASHBOARD_ANALYTICS.filterFocusTimeRecords(records)) {
     for (const segment of splitRecordByClock(record)) {
       if (segment.end <= start || segment.start >= end) continue;
       const clippedStart = maxDate(segment.start, start);
@@ -2390,8 +2392,8 @@ function buildInsights(context) {
 function buildExecutiveSummary({ overview, comparison, risks, prescription, dataQuality, filteredCount }) {
   if (!filteredCount) {
     return {
-      headline: '还没有可分析的学习记录',
-      body: '先积累几次带科目和任务的专注记录，看板会自动汇总周期趋势、风险和下一轮动作。',
+      headline: '还没有可分析的有效专注记录',
+      body: '先积累几次正常结束或手动中断的专注记录，看板会自动汇总周期趋势、风险和下一轮动作。',
       trend: '无样本',
       risk: '待判断',
       action: '先记录',
@@ -2426,7 +2428,7 @@ function buildFooterStatus(overview, anchorDate, filteredCount, comparison) {
     comparison && comparison.minuteDelta != null
       ? `，较上一周期 ${comparison.minuteDelta >= 0 ? '提升' : '下降'} ${formatNumber(Math.abs(comparison.minuteDelta) * 100, 0)}%`
       : '';
-  return `当前范围 ${filteredCount} 条记录，平均日有效度 ${formatNumber(overview.avgFocus, 1)} 分，任务完成率 ${formatNumber(overview.taskRate * 100, 0)}%，截至 ${dateLabel}${comparisonPart}。`;
+  return `当前范围 ${filteredCount} 条有效专注记录，平均日有效度 ${formatNumber(overview.avgFocus, 1)} 分，任务完成率 ${formatNumber(overview.taskRate * 100, 0)}%，截至 ${dateLabel}${comparisonPart}。`;
 }
 
 function buildDailySeries(records, anchorDate, rangeDays) {
@@ -2450,7 +2452,7 @@ function buildDailySeries(records, anchorDate, rangeDays) {
 function buildDailySliceMap(records, start, end) {
   const buckets = new Map();
 
-  for (const record of records) {
+  for (const record of DASHBOARD_ANALYTICS.filterFocusTimeRecords(records)) {
     for (const segment of splitRecordByClock(record)) {
       if (segment.end <= start || segment.start >= end) continue;
       const clippedStart = maxDate(segment.start, start);

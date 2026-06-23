@@ -226,4 +226,219 @@ assert.deepEqual(
   ['normal-session', 'paused-but-not-emergency'],
 );
 
+assert.equal(typeof analytics.filterFocusTimeRecords, 'function');
+
+const focusTimeCandidates = analytics.filterFocusTimeRecords([
+  {
+    id: 'valid-finished-session',
+    minutes: 60,
+    emergencyExitCount: 0,
+    endReason: 'completed',
+    status: 'finished',
+  },
+  {
+    id: 'valid-interrupted-session',
+    minutes: 45,
+    emergencyExitCount: 0,
+    endReason: 'user_marked_interrupted',
+    status: 'interrupted',
+  },
+  {
+    id: 'invalid-emergency-status',
+    minutes: 680,
+    emergencyExitCount: 0,
+    endReason: 'completed',
+    status: 'emergency_exited',
+  },
+  {
+    id: 'invalid-emergency-reason',
+    minutes: 720,
+    emergencyExitCount: 0,
+    endReason: 'emergency_exit',
+    status: 'finished',
+  },
+  {
+    id: 'invalid-emergency-count',
+    minutes: 540,
+    emergencyExitCount: 1,
+    endReason: 'completed',
+    status: 'finished',
+  },
+]);
+
+assert.deepEqual(
+  focusTimeCandidates.map((record) => record.id),
+  ['valid-finished-session', 'valid-interrupted-session'],
+);
+
+class FakeElement {
+  constructor(tag = 'div', id = '') {
+    this.tag = tag;
+    this.id = id;
+    this.children = [];
+    this.attributes = {};
+    this.dataset = {};
+    this.style = {};
+    this.textContent = '';
+    this.innerHTML = '';
+    this.value = '';
+    this.disabled = false;
+    this.hidden = false;
+    this.classList = {
+      values: new Set(),
+      add: (...names) => names.forEach((name) => this.classList.values.add(name)),
+      remove: (...names) => names.forEach((name) => this.classList.values.delete(name)),
+      toggle: (name, force) => {
+        const enabled = force == null ? !this.classList.values.has(name) : Boolean(force);
+        if (enabled) this.classList.values.add(name);
+        else this.classList.values.delete(name);
+        return enabled;
+      },
+    };
+  }
+
+  get firstChild() {
+    return this.children[0] || null;
+  }
+
+  appendChild(child) {
+    this.children.push(child);
+    child.parentNode = this;
+    return child;
+  }
+
+  removeChild(child) {
+    const index = this.children.indexOf(child);
+    if (index >= 0) this.children.splice(index, 1);
+    return child;
+  }
+
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+  }
+
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
+  addEventListener() {}
+}
+
+function createFakeDocument() {
+  const elements = new Map();
+  const getElementById = (id) => {
+    if (!elements.has(id)) elements.set(id, new FakeElement(id.includes('chart') ? 'svg' : 'div', id));
+    return elements.get(id);
+  };
+  const segmentButtons = ['7', '30', '90', 'all'].map((range) => {
+    const button = new FakeElement('button');
+    button.dataset.range = range;
+    return button;
+  });
+  const themeButtons = ['console', 'paper', 'graphite', 'focus'].map((theme) => {
+    const button = new FakeElement('button');
+    button.dataset.theme = theme;
+    return button;
+  });
+  const recordFilterButtons = ['all', 'low-focus', 'task-debt', 'long-session'].map((filter) => {
+    const button = new FakeElement('button');
+    button.dataset.recordFilter = filter;
+    return button;
+  });
+  const focusPeriodButtons = ['week-prev', 'week-next', 'month-prev', 'month-next', 'year-prev', 'year-next'].map(
+    (period) => {
+      const button = new FakeElement('button');
+      button.dataset.focusPeriod = period;
+      return button;
+    },
+  );
+
+  return {
+    body: new FakeElement('body'),
+    createElementNS: (_namespace, tag) => new FakeElement(tag),
+    getElementById,
+    querySelectorAll: (selector) => {
+      if (selector === '.segment-button') return segmentButtons;
+      if (selector === 'button[data-theme]') return themeButtons;
+      if (selector === '[data-record-filter]') return recordFilterButtons;
+      if (selector === '[data-focus-period]') return focusPeriodButtons;
+      return [];
+    },
+  };
+}
+
+const appSource = await readFile(new URL('../src-tauri/dashboard/app.js', import.meta.url), 'utf8');
+const appDocument = createFakeDocument();
+const appSandbox = {
+  console,
+  document: appDocument,
+  fetch: async () => ({ ok: false, status: 401 }),
+  getComputedStyle: () => ({ getPropertyValue: () => '' }),
+  setTimeout,
+  clearTimeout,
+  URLSearchParams,
+  window: {
+    location: { search: '?token=test' },
+    DashboardAnalytics: analytics,
+  },
+};
+vm.createContext(appSandbox);
+vm.runInContext(
+  `${appSource.replace('void loadProjectData();', '')}
+globalThis.__dashboardTest = { state, render, els, dedupeRecords };`,
+  appSandbox,
+  { filename: 'app.js' },
+);
+
+const dashboard = appSandbox.__dashboardTest;
+dashboard.state.activeRange = 'all';
+dashboard.state.records = dashboard.dedupeRecords([
+  {
+    id: 'normal-60',
+    date: '2026-06-20',
+    subject: '数学',
+    minutes: 60,
+    focusScore: 88,
+    tasksDone: 2,
+    tasksTotal: 2,
+    startHour: 9,
+    status: 'finished',
+    endReason: 'completed',
+    emergencyExitCount: 0,
+  },
+  {
+    id: 'forgotten-overnight',
+    date: '2026-06-21',
+    subject: '英语',
+    minutes: 720,
+    focusScore: 12,
+    tasksDone: 0,
+    tasksTotal: 3,
+    startHour: 22,
+    status: 'emergency_exited',
+    endReason: 'emergency_exit',
+    emergencyExitCount: 1,
+  },
+  {
+    id: 'normal-30',
+    date: '2026-06-22',
+    subject: '政治',
+    minutes: 30,
+    focusScore: 80,
+    tasksDone: 1,
+    tasksTotal: 1,
+    startHour: 20,
+    status: 'interrupted',
+    endReason: 'user_marked_interrupted',
+    emergencyExitCount: 0,
+  },
+]);
+dashboard.render('test');
+
+assert.equal(dashboard.els.metricHours.textContent, '1.5h');
+assert.match(dashboard.els.metricHoursNote.textContent, /2 条有效专注记录/);
+assert.equal(dashboard.els.metricDays.textContent, '2');
+assert.match(dashboard.els.statusLine.textContent, /2 条有效专注记录/);
+assert.doesNotMatch(dashboard.els.metricHours.textContent, /13\.5h/);
+
 console.log('dashboard analytics probe passed');

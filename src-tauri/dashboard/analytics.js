@@ -266,7 +266,7 @@
     };
   }
 
-  function shouldExcludeFromFocusTimeline(record) {
+  function shouldExcludeFromFocusTimeStats(record) {
     if (!record) return false;
     const status = String(record.status ?? '').trim().toLowerCase();
     const endReason = String(record.endReason ?? record.end_reason ?? '')
@@ -276,8 +276,16 @@
     return status === 'emergency_exited' || endReason === 'emergency_exit' || emergencyExitCount > 0;
   }
 
+  function filterFocusTimeRecords(records) {
+    return (Array.isArray(records) ? records : []).filter((record) => !shouldExcludeFromFocusTimeStats(record));
+  }
+
+  function shouldExcludeFromFocusTimeline(record) {
+    return shouldExcludeFromFocusTimeStats(record);
+  }
+
   function filterFocusTimelineRecords(records) {
-    return (Array.isArray(records) ? records : []).filter((record) => !shouldExcludeFromFocusTimeline(record));
+    return filterFocusTimeRecords(records);
   }
 
   global.DashboardAnalytics = {
@@ -287,9 +295,11 @@
     buildEffectiveDayProgress,
     buildLearningTrend,
     calculateDailyFocusScore,
+    filterFocusTimeRecords,
     filterFocusTimelineRecords,
     getAnnualHeatLevel,
     isEffectiveDay,
+    shouldExcludeFromFocusTimeStats,
     shouldExcludeFromFocusTimeline,
   };
 })(typeof window === 'undefined' ? globalThis : window);
