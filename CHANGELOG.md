@@ -366,4 +366,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Filter emergency exits from focus timeline (29da088)
 
+## v1.15.3 - 2026-06-23
+
+### Desktop
+#### Changed
+- 调整学习趋势为专注时间判断 (634bdde)
+
 
