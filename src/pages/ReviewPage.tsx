@@ -1,5 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, NotebookPen, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  ListChecks,
+  LoaderCircle,
+  NotebookPen,
+  RefreshCw,
+  Save,
+  Target,
+  Timer,
+  Trash2,
+} from 'lucide-react';
 import {
   deleteDailyReview,
   deleteWeeklyReview,
@@ -42,6 +56,23 @@ function formatDuration(seconds: number) {
   if (seconds < 3600) return `${Math.round(seconds / 60)} 分钟`;
   const hours = seconds / 3600;
   return `${Number.isInteger(hours) ? hours.toFixed(0) : hours.toFixed(1)} 小时`;
+}
+
+function formatReviewDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return value;
+  const date = new Date(year, month - 1, day);
+  return `${year} 年 ${month} 月 ${day} 日，${['周日', '周一', '周二', '周三', '周四', '周五', '周六'][date.getDay()]}`;
+}
+
+function formatWeekRange(start: string, end: string) {
+  const [startYear, startMonth, startDay] = start.split('-').map(Number);
+  const [endYear, endMonth, endDay] = end.split('-').map(Number);
+  if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
+    return `${start} 至 ${end}`;
+  }
+  const endPrefix = startYear === endYear ? '' : `${endYear} 年 `;
+  return `${startYear} 年 ${startMonth} 月 ${startDay} 日 - ${endPrefix}${endMonth} 月 ${endDay} 日`;
 }
 
 function emptyDailyDraft(date: string): DailyReviewDraft {
@@ -95,14 +126,10 @@ export default function ReviewPage() {
     const token = dailyRefreshTokenRef.current + 1;
     dailyRefreshTokenRef.current = token;
     try {
-      if (showLoading) {
-        setLoadingReview(true);
-      }
+      if (showLoading) setLoadingReview(true);
       setError(null);
       const pageData = await getDailyReviewPageData(date);
-      if (dailyRefreshTokenRef.current !== token) {
-        return;
-      }
+      if (dailyRefreshTokenRef.current !== token) return;
       setData(pageData);
       setDraft({
         reviewDate: pageData.review_date,
@@ -117,9 +144,7 @@ export default function ReviewPage() {
         setError(reason instanceof Error ? reason.message : String(reason));
       }
     } finally {
-      if (dailyRefreshTokenRef.current === token && showLoading) {
-        setLoadingReview(false);
-      }
+      if (dailyRefreshTokenRef.current === token && showLoading) setLoadingReview(false);
     }
   }
 
@@ -127,14 +152,10 @@ export default function ReviewPage() {
     const token = weeklyRefreshTokenRef.current + 1;
     weeklyRefreshTokenRef.current = token;
     try {
-      if (showLoading) {
-        setLoadingReview(true);
-      }
+      if (showLoading) setLoadingReview(true);
       setError(null);
       const pageData = await getWeeklyReviewPageData(date);
-      if (weeklyRefreshTokenRef.current !== token) {
-        return;
-      }
+      if (weeklyRefreshTokenRef.current !== token) return;
       setWeeklyData(pageData);
       setWeeklyDraft({
         weekStartDate: pageData.week_start_date,
@@ -149,9 +170,7 @@ export default function ReviewPage() {
         setError(reason instanceof Error ? reason.message : String(reason));
       }
     } finally {
-      if (weeklyRefreshTokenRef.current === token && showLoading) {
-        setLoadingReview(false);
-      }
+      if (weeklyRefreshTokenRef.current === token && showLoading) setLoadingReview(false);
     }
   }
 
@@ -160,9 +179,7 @@ export default function ReviewPage() {
   }
 
   async function confirmDiscardDraft() {
-    if (!activeDraftDirty()) {
-      return true;
-    }
+    if (!activeDraftDirty()) return true;
 
     return confirm({
       cancelLabel: '继续编辑',
@@ -176,52 +193,50 @@ export default function ReviewPage() {
     });
   }
 
+  function clearFeedback() {
+    setError(null);
+    setMessage(null);
+  }
+
   async function handleModeChange(nextMode: ReviewMode) {
-    if (nextMode === mode) return;
-    if (!(await confirmDiscardDraft())) return;
-    if (mode === 'daily') {
-      setDailyDirty(false);
-    } else {
-      setWeeklyDirty(false);
-    }
+    if (nextMode === mode || !(await confirmDiscardDraft())) return;
+    if (mode === 'daily') setDailyDirty(false);
+    else setWeeklyDirty(false);
+    clearFeedback();
     setMode(nextMode);
   }
 
   async function handleDateChange(nextDate: string) {
-    if (nextDate === selectedDate) return;
-    if (!(await confirmDiscardDraft())) return;
-    if (mode === 'daily') {
-      setDailyDirty(false);
-    } else {
-      setWeeklyDirty(false);
-    }
+    if (nextDate === selectedDate || !(await confirmDiscardDraft())) return;
+    if (mode === 'daily') setDailyDirty(false);
+    else setWeeklyDirty(false);
+    clearFeedback();
     setSelectedDate(nextDate);
   }
 
   async function handleRefresh() {
     if (!(await confirmDiscardDraft())) return;
-    if (mode === 'daily') {
-      await refreshDaily();
-    } else {
-      await refreshWeekly();
-    }
+    clearFeedback();
+    if (mode === 'daily') await refreshDaily();
+    else await refreshWeekly();
   }
 
   function updateDailyDraft(patch: Partial<DailyReviewDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
     setDailyDirty(true);
+    setMessage(null);
   }
 
   function updateWeeklyDraft(patch: Partial<WeeklyReviewDraft>) {
     setWeeklyDraft((current) => ({ ...current, ...patch }));
     setWeeklyDirty(true);
+    setMessage(null);
   }
 
   async function handleSave() {
     try {
       setSaving(true);
-      setError(null);
-      setMessage(null);
+      clearFeedback();
       if (mode === 'daily') {
         await saveDailyReview(draft);
         await refreshDaily(draft.reviewDate, false);
@@ -231,7 +246,7 @@ export default function ReviewPage() {
         await refreshWeekly(weeklyDraft.weekStartDate, false);
         setWeeklyDirty(false);
       }
-      setMessage('复盘已保存。');
+      setMessage('复盘已保存，记录已同步到本地数据。');
       void syncConfiguredStateChange('local_data_change').catch(() => undefined);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -256,8 +271,7 @@ export default function ReviewPage() {
 
     try {
       setSaving(true);
-      setError(null);
-      setMessage(null);
+      clearFeedback();
       if (mode === 'daily') {
         await deleteDailyReview(reviewId);
         await refreshDaily(selectedDate, false);
@@ -277,211 +291,172 @@ export default function ReviewPage() {
   }
 
   const activeSummary = mode === 'daily' ? data?.summary : weeklyData?.summary;
-  const activeLabel =
-    mode === 'daily'
-      ? (data?.review_date ?? selectedDate)
-      : `${weeklyData?.week_start_date ?? weekStartString(selectedDate)} ~ ${weeklyData?.week_end_date ?? shiftDate(weekStartString(selectedDate), 6)}`;
+  const activeReview = mode === 'daily' ? data?.review : weeklyData?.review;
+  const activeDate = data?.review_date ?? selectedDate;
+  const activeWeekStart = weeklyData?.week_start_date ?? weekStartString(selectedDate);
+  const activeWeekEnd = weeklyData?.week_end_date ?? shiftDate(activeWeekStart, 6);
+  const activePeriodLabel =
+    mode === 'daily' ? formatReviewDate(activeDate) : formatWeekRange(activeWeekStart, activeWeekEnd);
+  const isDirty = activeDraftDirty();
+  const isToday = selectedDate === formatDateKey();
+  const dailyTotal = (data?.summary.schedule_total ?? 0) + (data?.summary.today_total ?? 0);
+  const dailyCompleted = (data?.summary.schedule_completed ?? 0) + (data?.summary.today_completed ?? 0);
+  const completionPercent = dailyTotal > 0 ? Math.round((dailyCompleted / dailyTotal) * 100) : 0;
+  const moodScore = mode === 'daily' ? draft.moodScore : weeklyDraft.moodScore;
+  const editorDisabled = loadingReview || saving;
 
   return (
-    <section className="page-shell review-shell">
+    <section className="page-shell review-shell" aria-busy={loadingReview}>
       <header className="review-hero">
-        <div>
-          <p className="eyebrow">Review</p>
-          <h2>{mode === 'daily' ? '每日复盘' : '周复盘'}</h2>
-          <p>
-            {mode === 'daily'
-              ? '把今天的学习节奏、问题卡点和明日重点收拢起来。'
-              : '按周一到周日复盘本周推进、卡点和下周重点。'}
-          </p>
+        <div className="review-hero-copy">
+          <p className="eyebrow">学习回顾</p>
+          <h2>{mode === 'daily' ? '每日复盘' : '周度复盘'}</h2>
+          <p>{mode === 'daily' ? '收束今天的投入，为明天留下一条清楚的起点。' : '看清一周的投入与阻力，把下周的重点压缩到可执行。'}</p>
         </div>
-        <div className="review-date-tools">
-          <div className="segmented-control review-mode-toggle">
-            <button
-              className={mode === 'daily' ? 'active' : ''}
-              type="button"
-              onClick={() => void handleModeChange('daily')}
-            >
+
+        <div className="review-toolbar" aria-label="复盘时间与视图">
+          <div className="segmented-control review-mode-toggle" aria-label="复盘视图">
+            <button aria-pressed={mode === 'daily'} className={mode === 'daily' ? 'active' : ''} type="button" onClick={() => void handleModeChange('daily')}>
               日复盘
             </button>
-            <button
-              className={mode === 'weekly' ? 'active' : ''}
-              type="button"
-              onClick={() => void handleModeChange('weekly')}
-            >
+            <button aria-pressed={mode === 'weekly'} className={mode === 'weekly' ? 'active' : ''} type="button" onClick={() => void handleModeChange('weekly')}>
               周复盘
             </button>
           </div>
-          <button
-            aria-label={mode === 'daily' ? '前一天' : '前一周'}
-            className="ghost-action icon-action"
-            type="button"
-            onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? -1 : -7))}
-          >
-            <ChevronLeft size={16} />
+          <div className="review-date-tools">
+            <button aria-label={mode === 'daily' ? '前一天' : '前一周'} className="ghost-action icon-action" disabled={editorDisabled} title={mode === 'daily' ? '前一天' : '前一周'} type="button" onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? -1 : -7))}>
+              <ChevronLeft size={17} />
+            </button>
+            <label className="review-date-picker">
+              <span className="sr-only">{mode === 'daily' ? '选择复盘日期' : '选择所在日期，自动归入对应周'}</span>
+              <CalendarDays aria-hidden="true" size={16} />
+              <input className="text-input" type="date" value={selectedDate} onChange={(event) => void handleDateChange(event.target.value)} />
+            </label>
+            <button aria-label={mode === 'daily' ? '后一天' : '后一周'} className="ghost-action icon-action" disabled={editorDisabled} title={mode === 'daily' ? '后一天' : '后一周'} type="button" onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? 1 : 7))}>
+              <ChevronRight size={17} />
+            </button>
+          </div>
+          <button className="ghost-action review-today-action" disabled={editorDisabled || isToday} type="button" onClick={() => void handleDateChange(formatDateKey())}>
+            今天
           </button>
-          <input
-            className="text-input"
-            type="date"
-            value={selectedDate}
-            onChange={(event) => void handleDateChange(event.target.value)}
-          />
-          <button
-            aria-label={mode === 'daily' ? '后一天' : '后一周'}
-            className="ghost-action icon-action"
-            type="button"
-            onClick={() => void handleDateChange(shiftDate(selectedDate, mode === 'daily' ? 1 : 7))}
-          >
-            <ChevronRight size={16} />
-          </button>
-          <button
-            className="ghost-action"
-            disabled={loadingReview || saving}
-            type="button"
-            onClick={() => void handleRefresh()}
-          >
-            <RefreshCw size={16} /> {loadingReview ? '刷新中' : '刷新'}
+          <button aria-label="重新读取复盘数据" className="ghost-action icon-action" disabled={editorDisabled} title="重新读取复盘数据" type="button" onClick={() => void handleRefresh()}>
+            <RefreshCw className={loadingReview ? 'is-spinning' : ''} size={16} />
           </button>
         </div>
       </header>
 
-      {(error || message) && (
-        <div
-          className={error ? 'alert error' : 'alert success'}
-          role={error ? 'alert' : 'status'}
-          aria-live={error ? undefined : 'polite'}
-        >
-          {error ?? message}
+      {error && (
+        <div className="alert error review-feedback" role="alert">
+          <CircleAlert aria-hidden="true" size={18} />
+          <span>读取或保存复盘失败：{error}</span>
+          <button className="small-action" disabled={saving || loadingReview} type="button" onClick={() => void handleRefresh()}>
+            重试
+          </button>
+        </div>
+      )}
+      {message && !error && (
+        <div className="alert success review-feedback" role="status" aria-live="polite">
+          <CheckCircle2 aria-hidden="true" size={18} />
+          <span>{message}</span>
         </div>
       )}
       {loadingReview && (
-        <p className="alert neutral" aria-live="polite">
-          正在更新复盘数据...
-        </p>
+        <div className="review-loading" role="status" aria-live="polite">
+          <LoaderCircle aria-hidden="true" className="is-spinning" size={17} /> 正在更新复盘数据…
+        </div>
       )}
       {confirmDialog}
 
+      <div className="review-context-row">
+        <div>
+          <p className="eyebrow">{mode === 'daily' ? '当日概览' : '本周概览'}</p>
+          <h3>{activePeriodLabel}</h3>
+        </div>
+        <span className={isDirty ? 'review-draft-state is-dirty' : 'review-draft-state'} aria-live="polite">
+          {isDirty ? '有未保存修改' : activeReview ? '已保存' : '尚未保存'}
+        </span>
+      </div>
+
       <div className="review-grid">
-        <aside className="review-summary-panel soft-panel">
+        <aside className="review-summary-panel soft-panel" aria-label={mode === 'daily' ? '当日数据概览' : '本周数据概览'}>
           <div className="panel-title">
             <div>
-              <p className="eyebrow">{mode === 'daily' ? 'Daily Signal' : 'Weekly Signal'}</p>
-              <h3>{activeLabel}</h3>
+              <p className="eyebrow">投入记录</p>
+              <h3>{mode === 'daily' ? '今天的学习信号' : '本周的学习信号'}</h3>
             </div>
-            <Sparkles size={20} />
+            <Timer aria-hidden="true" size={20} />
           </div>
           <div className="review-metric-grid">
             <Metric label="学习时长" value={formatDuration(activeSummary?.study_seconds ?? 0)} />
             <Metric label="番茄记录" value={`${activeSummary?.focus_session_count ?? 0} 条`} />
             <Metric label="干扰次数" value={`${activeSummary?.interruption_count ?? 0} 次`} />
           </div>
+
+          {mode === 'daily' ? (
+            <section className="review-progress" aria-label="今日完成进度">
+              <div className="review-progress-head">
+                <div>
+                  <p>今日完成</p>
+                  <strong>{dailyTotal > 0 ? `${dailyCompleted} / ${dailyTotal}` : '暂无计划'}</strong>
+                </div>
+                <span>{dailyTotal > 0 ? `${completionPercent}%` : '—'}</span>
+              </div>
+              <div aria-label={dailyTotal > 0 ? `已完成 ${completionPercent}%` : '暂无可统计的计划'} aria-valuemax={100} aria-valuemin={0} aria-valuenow={completionPercent} className="review-progress-track" role="progressbar">
+                <span style={{ width: `${completionPercent}%` }} />
+              </div>
+              <div className="review-progress-breakdown">
+                <span><ListChecks aria-hidden="true" size={14} /> 日程 {data?.summary.schedule_completed ?? 0}/{data?.summary.schedule_total ?? 0}</span>
+                <span><Target aria-hidden="true" size={14} /> 今日任务 {data?.summary.today_completed ?? 0}/{data?.summary.today_total ?? 0}</span>
+              </div>
+            </section>
+          ) : (
+            <p className="review-week-note">周视图仅汇总学习记录；计划完成情况请在对应日复盘中查看。</p>
+          )}
         </aside>
 
-        <section className="review-editor soft-panel">
-          <div className="panel-title">
-            <div>
-              <p className="eyebrow">{mode === 'daily' ? 'Daily Notes' : 'Weekly Notes'}</p>
-              <h3>{mode === 'daily' ? '今天留下什么' : '这一周沉淀什么'}</h3>
+        <section className="review-editor soft-panel" aria-label={mode === 'daily' ? '每日复盘编辑器' : '周复盘编辑器'}>
+          <div className="review-editor-heading">
+            <div className="panel-title">
+              <div>
+                <p className="eyebrow">写下复盘</p>
+                <h3>{mode === 'daily' ? '留住今天的判断' : '沉淀这一周的判断'}</h3>
+              </div>
+              <NotebookPen aria-hidden="true" size={20} />
             </div>
-            <NotebookPen size={20} />
+            {!activeReview && !loadingReview && <p className="review-empty-note">还没有这段时间的复盘。写下几句，再保存即可。</p>}
           </div>
 
-          <div className="review-score-row">
-            <span>状态评分</span>
-            {[1, 2, 3, 4, 5].map((score) => (
-              <button
-                className={(mode === 'daily' ? draft.moodScore : weeklyDraft.moodScore) === score ? 'active' : ''}
-                key={score}
-                type="button"
-                onClick={() => {
-                  if (mode === 'daily') {
-                    updateDailyDraft({ moodScore: score });
-                  } else {
-                    updateWeeklyDraft({ moodScore: score });
-                  }
-                }}
-              >
-                {score}
-              </button>
-            ))}
-          </div>
+          <fieldset className="review-score-row" disabled={editorDisabled}>
+            <legend>状态评分</legend>
+            <span>凭直觉选一个分数即可</span>
+            <div className="review-score-buttons">
+              {[1, 2, 3, 4, 5].map((score) => (
+                <button aria-label={`状态评分 ${score} 分`} aria-pressed={moodScore === score} className={moodScore === score ? 'active' : ''} key={score} type="button" onClick={() => (mode === 'daily' ? updateDailyDraft({ moodScore: score }) : updateWeeklyDraft({ moodScore: score }))}>
+                  {score}
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
           {mode === 'daily' ? (
             <>
-              <label className="field-block">
-                <span>今日总结</span>
-                <textarea
-                  className="text-input review-textarea"
-                  value={draft.summary ?? ''}
-                  onChange={(event) => updateDailyDraft({ summary: event.target.value })}
-                  placeholder="今天真正推进了什么？哪些安排有效？"
-                />
-              </label>
-              <label className="field-block">
-                <span>问题卡点</span>
-                <textarea
-                  className="text-input review-textarea"
-                  value={draft.blockers ?? ''}
-                  onChange={(event) => updateDailyDraft({ blockers: event.target.value })}
-                  placeholder="卡住的题、分心原因、没有执行的原因。"
-                />
-              </label>
-              <label className="field-block">
-                <span>明日重点</span>
-                <textarea
-                  className="text-input review-textarea"
-                  value={draft.tomorrowFocus ?? ''}
-                  onChange={(event) => updateDailyDraft({ tomorrowFocus: event.target.value })}
-                  placeholder="明天最先做哪几件事？"
-                />
-              </label>
+              <ReviewField disabled={editorDisabled} hint="记录真正推进的内容，以及有效的安排。" id="daily-summary" label="今日总结" maxLength={1200} onChange={(summary) => updateDailyDraft({ summary })} placeholder="今天真正推进了什么？哪些安排有效？" value={draft.summary ?? ''} />
+              <ReviewField disabled={editorDisabled} hint="把题目、节奏或注意力上的阻力说具体。" id="daily-blockers" label="问题卡点" maxLength={1200} onChange={(blockers) => updateDailyDraft({ blockers })} placeholder="卡住的题、分心原因、没有执行的原因。" value={draft.blockers ?? ''} />
+              <ReviewField disabled={editorDisabled} hint="只写最值得先完成的几件事。" id="daily-focus" label="明日重点" maxLength={1200} onChange={(tomorrowFocus) => updateDailyDraft({ tomorrowFocus })} placeholder="明天最先做哪几件事？" value={draft.tomorrowFocus ?? ''} />
             </>
           ) : (
             <>
-              <label className="field-block">
-                <span>本周总结</span>
-                <textarea
-                  className="text-input review-textarea"
-                  value={weeklyDraft.summary ?? ''}
-                  onChange={(event) => updateWeeklyDraft({ summary: event.target.value })}
-                  placeholder="这一周最重要的推进是什么？"
-                />
-              </label>
-              <label className="field-block">
-                <span>问题卡点</span>
-                <textarea
-                  className="text-input review-textarea"
-                  value={weeklyDraft.blockers ?? ''}
-                  onChange={(event) => updateWeeklyDraft({ blockers: event.target.value })}
-                  placeholder="这周反复卡住在哪里？"
-                />
-              </label>
-              <label className="field-block">
-                <span>下周重点</span>
-                <textarea
-                  className="text-input review-textarea"
-                  value={weeklyDraft.nextWeekFocus ?? ''}
-                  onChange={(event) => updateWeeklyDraft({ nextWeekFocus: event.target.value })}
-                  placeholder="下周最先守住哪几个重点？"
-                />
-              </label>
+              <ReviewField disabled={editorDisabled} hint="归纳这周最重要的进展，而不是流水账。" id="weekly-summary" label="本周总结" maxLength={1200} onChange={(summary) => updateWeeklyDraft({ summary })} placeholder="这一周最重要的推进是什么？" value={weeklyDraft.summary ?? ''} />
+              <ReviewField disabled={editorDisabled} hint="识别这一周反复出现的阻力。" id="weekly-blockers" label="问题卡点" maxLength={1200} onChange={(blockers) => updateWeeklyDraft({ blockers })} placeholder="这周反复卡住在哪里？" value={weeklyDraft.blockers ?? ''} />
+              <ReviewField disabled={editorDisabled} hint="把下周的方向压缩到少数明确优先项。" id="weekly-focus" label="下周重点" maxLength={1200} onChange={(nextWeekFocus) => updateWeeklyDraft({ nextWeekFocus })} placeholder="下周最先守住哪几个重点？" value={weeklyDraft.nextWeekFocus ?? ''} />
             </>
           )}
 
           <div className="review-actions">
-            <button
-              className="primary-action"
-              disabled={saving || loadingReview}
-              type="button"
-              onClick={() => void handleSave()}
-            >
-              <Save size={16} /> 保存复盘
+            <button className="primary-action" disabled={editorDisabled} type="button" onClick={() => void handleSave()}>
+              <Save size={16} /> {saving ? '正在保存…' : isDirty ? '保存修改' : '保存复盘'}
             </button>
-            <button
-              className="small-action danger"
-              disabled={saving || loadingReview || (mode === 'daily' ? !data?.review : !weeklyData?.review)}
-              type="button"
-              onClick={() => void handleDelete()}
-            >
+            <button className="small-action danger" disabled={editorDisabled || !activeReview} type="button" onClick={() => void handleDelete()}>
               <Trash2 size={15} /> 删除
             </button>
           </div>
@@ -497,5 +472,35 @@ function Metric({ label, value }: { label: string; value: string }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </article>
+  );
+}
+
+function ReviewField({
+  disabled,
+  hint,
+  id,
+  label,
+  maxLength,
+  onChange,
+  placeholder,
+  value,
+}: {
+  disabled: boolean;
+  hint: string;
+  id: string;
+  label: string;
+  maxLength: number;
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  const hintId = `${id}-hint`;
+  return (
+    <label className="field-block review-field" htmlFor={id}>
+      <span className="review-field-label">{label}</span>
+      <span className="review-field-hint" id={hintId}>{hint}</span>
+      <textarea aria-describedby={hintId} className="text-input review-textarea" disabled={disabled} id={id} maxLength={maxLength} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} />
+      <span className="review-character-count">{value.length}/{maxLength}</span>
+    </label>
   );
 }
