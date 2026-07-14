@@ -372,4 +372,11 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 调整学习趋势为专注时间判断 (634bdde)
 
+## v1.15.4 - 2026-07-14
+
+### Desktop
+#### Changed
+- refactor(review): redesign retrospective dashboard (f7103d6)
+- Use valid focus records in dashboard analytics (e388763)
+
 
