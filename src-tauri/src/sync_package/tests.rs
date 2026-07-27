@@ -321,6 +321,50 @@ mod tests {
     }
 
     #[test]
+    fn active_study_mode_accepts_remote_skip_break_command() {
+        let mut local = empty_payload("desktop", 60_000);
+        let mut local_mode = running_study_mode("mode-1", 1, "break", 1500, 50_000, 2_000);
+        local_mode.last_control_action = Some("skip_break".to_string());
+        local_mode.last_control_device_id = Some("phone".to_string());
+        local_mode.last_control_at = Some(55_000);
+        local.study_modes.push(local_mode);
+        let mut remote = empty_payload("phone", 60_000);
+        let mut remote_mode = running_study_mode("mode-1", 2, "focus", 1500, 55_000, 3_000);
+        remote_mode.last_control_action = Some("skip_break".to_string());
+        remote_mode.last_control_device_id = Some("phone".to_string());
+        remote_mode.last_control_at = Some(55_000);
+        remote.study_modes.push(remote_mode);
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 60_000);
+        assert_eq!(merged.study_modes[0].phase.as_deref(), Some("focus"));
+        assert_eq!(merged.study_modes[0].round_number, Some(2));
+    }
+
+    #[test]
+    fn remote_skip_break_does_not_apply_from_focus_phase() {
+        let local = running_study_mode("mode-1", 1, "focus", 1500, 50_000, 2_000);
+        let remote = running_study_mode("mode-1", 2, "focus", 1500, 55_000, 3_000);
+        assert!(!control_action_matches_state("skip_break", &local, &remote));
+    }
+
+    #[test]
+    fn remote_skip_break_requires_round_advance() {
+        let mut local = empty_payload("desktop", 60_000);
+        local
+            .study_modes
+            .push(running_study_mode("mode-1", 2, "break", 1500, 50_000, 2_000));
+        let mut remote = empty_payload("phone", 60_000);
+        let mut remote_mode = running_study_mode("mode-1", 2, "focus", 1500, 55_000, 3_000);
+        remote_mode.last_control_action = Some("skip_break".to_string());
+        remote_mode.last_control_device_id = Some("phone".to_string());
+        remote_mode.last_control_at = Some(55_000);
+        remote.study_modes.push(remote_mode);
+
+        let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 60_000);
+        assert_eq!(merged.study_modes[0].phase.as_deref(), Some("break"));
+    }
+
+    #[test]
     fn active_study_mode_accepts_remote_finish_command_and_session() {
         let mut local = empty_payload("desktop", 60_000);
         let mut local_mode = running_study_mode("mode-1", 1, "focus", 100, 50_000, 2_000);

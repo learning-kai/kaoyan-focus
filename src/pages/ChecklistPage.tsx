@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
   closestCenter,
   DndContext,
@@ -393,7 +393,7 @@ export default function ChecklistPage() {
         ...current,
         [categoryKey]: emptyTaskDraft(categoryKey),
       }));
-      setComposerCategoryKey(null);
+      setComposerCategoryKey(categoryKey);
     }, '待办已加入当前分类。', categoryKey);
   }
 
@@ -902,6 +902,13 @@ function TaskEditor({
   submitLabel: string;
 }) {
   const canSubmit = !saving && Boolean(draft.title.trim());
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (submitOnEnter && !saving && draft.title === '') {
+      titleInputRef.current?.focus();
+    }
+  }, [draft.title, saving, submitOnEnter]);
 
   return (
     <div className="task-editor-grid compact">
@@ -909,6 +916,7 @@ function TaskEditor({
         <span>{titleLabel}</span>
         <input
           className="text-input"
+          ref={titleInputRef}
           onChange={(event) => onChange({ title: event.target.value })}
           onKeyDown={(event) => handleSubmitOnEnter(event, submitOnEnter && canSubmit, onSubmit)}
           placeholder="写下一条清晰的待办"

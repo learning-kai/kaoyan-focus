@@ -297,6 +297,70 @@ pub fn confirm_study_break(
 }
 
 #[tauri::command]
+pub fn skip_study_break(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StudyModeState, String> {
+    let current_state = advance_study_mode(&app, state.inner())?;
+    if current_state.status != "active" {
+        return Ok(current_state);
+    }
+    if !matches!(current_state.phase.as_str(), "awaiting_break" | "break") {
+        return Err("当前不是可跳过的休息阶段".to_string());
+    }
+    if current_state.is_paused {
+        return Err("学习模式暂停中，请先继续再跳过休息".to_string());
+    }
+
+    let connection = open_database(&database_path(&app)?)?;
+    let Some(record) = get_active_study_mode_record(&connection)? else {
+        return Err("没有正在运行的学习模式".to_string());
+    };
+    let now = Utc::now();
+    let device_id = load_or_create_device_id(&connection)?;
+    let next_accumulated = if record.phase == "awaiting_break" {
+        let accumulated = study_elapsed_seconds(&record, now)?;
+        if accumulated >= record.planned_seconds {
+            complete_study_mode_record(&connection, state.inner(), &record, now, "completed")?;
+            return load_current_study_mode_state(&connection, now);
+        }
+        if let Some(session_id) = record.current_session_id {
+            finish_running_focus_session(
+                &connection,
+                session_id,
+                focus_session_actual_seconds(&record, now)?,
+                now,
+                "pomodoro_completed",
+            )?;
+        }
+        accumulated
+    } else {
+        record.accumulated_study_seconds
+    };
+    let session = insert_focus_session(
+        &connection,
+        record.focus_seconds,
+        &record.mode,
+        record.subject_id,
+        &now.to_rfc3339(),
+    )?;
+    connection.execute(
+        "UPDATE study_modes SET phase = 'focus', state_revision = state_revision + 1,
+         phase_started_at = ?1, cycle_index = cycle_index + 1, phase_paused_seconds = 0,
+         paused_stage_elapsed_seconds = 0, paused_at = NULL, accumulated_study_seconds = ?2,
+         current_session_id = ?3, last_control_device_id = ?4, last_control_action = ?5,
+         last_control_at = ?6, updated_at = ?1 WHERE id = ?7 AND status = 'active'",
+        params![now.to_rfc3339(), next_accumulated, session.id, device_id, CONTROL_SKIP_BREAK,
+            now.timestamp_millis(), record.id],
+    ).map_err(|error| error.to_string())?;
+    set_runtime_state(state.inner(), true, Some(session.id))?;
+    let next_state = load_current_study_mode_state(&connection, now)?;
+    sync_focus_widget_for_state(&app, &next_state);
+    trigger_shared_sync(&app, "focus_state_change");
+    Ok(next_state)
+}
+
+#[tauri::command]
 pub fn pause_study_mode(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -642,4 +706,3 @@ pub fn tick_background_study_mode(app: &AppHandle) -> Result<(), String> {
 
     Ok(())
 }
-

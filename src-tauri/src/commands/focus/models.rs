@@ -14,6 +14,7 @@ const MIN_RECORDED_FOCUS_SECONDS: i64 = 60;
 const CONTROL_PAUSE: &str = "pause";
 const CONTROL_RESUME: &str = "resume";
 const CONTROL_CONFIRM_BREAK: &str = "confirm_break";
+const CONTROL_SKIP_BREAK: &str = "skip_break";
 const CONTROL_FINISH: &str = "finish";
 const CONTROL_EMERGENCY_EXIT: &str = "emergency_exit";
 const CONTROL_SWITCH_SUBJECT: &str = "switch_subject";

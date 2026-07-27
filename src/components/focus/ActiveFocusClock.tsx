@@ -1,4 +1,4 @@
-import { Coffee, Pause, Play } from 'lucide-react';
+import { Coffee, FastForward, Pause, Play } from 'lucide-react';
 import type { StudyModeState } from '../../types/focus';
 
 type ActiveFocusClockProps = {
@@ -10,6 +10,7 @@ type ActiveFocusClockProps = {
   studyState: StudyModeState;
   timerValue: string;
   onConfirmBreak: () => void;
+  onSkipBreak: () => void;
   onTogglePause: () => void;
 };
 
@@ -19,6 +20,7 @@ export default function ActiveFocusClock({
   breakKindLabel,
   canTogglePause,
   onConfirmBreak,
+  onSkipBreak,
   onTogglePause,
   phaseMessage,
   studyState,
@@ -52,6 +54,11 @@ export default function ActiveFocusClock({
             type="button"
           >
             <Coffee size={26} />
+          </button>
+        )}
+        {(studyState.phase === 'awaiting_break' || studyState.phase === 'break') && (
+          <button aria-label="跳过休息，开始下一轮专注" className="focus-round-button secondary" disabled={studyState.is_paused} onClick={onSkipBreak} title="跳过休息，开始下一轮专注" type="button">
+            <FastForward size={24} />
           </button>
         )}
       </div>

@@ -1,13 +1,13 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, Gauge, Leaf, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
+import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, FastForward, Gauge, Leaf, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import LearningHub from '../components/focus/LearningHub';
 import ScheduleDrawer from '../components/ScheduleDrawer';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
 import { completeTodayPlanItem, createTodayPlanItem, deleteTodayPlanItem, getChecklistPageData, reorderTodayPlanItems, updateTodayPlanItem } from '../services/checklistApi';
-import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSessions, listSubjects, pauseStudyMode, resetStudyMode, resumeStudyMode, startStudyMode, updateStudyModeSubject } from '../services/focusApi';
+import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSessions, listSubjects, pauseStudyMode, resetStudyMode, resumeStudyMode, skipStudyBreak, startStudyMode, updateStudyModeSubject } from '../services/focusApi';
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { createScheduleBlock, createScheduleBlockFromTodayItem, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
@@ -479,6 +479,19 @@ export default function FocusPage() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
 
+  async function handleSkipBreak() {
+    try {
+      setError(null);
+      const requestId = beginStudyStateRequest();
+      const nextState = await skipStudyBreak();
+      if (!applyStudyStateIfCurrent(nextState, requestId)) return;
+      setNotice('已跳过休息，下一轮专注开始。');
+      markStudyReminderSeen(nextState, syncDeviceId);
+      await refreshDashboard();
+      queueConfiguredSync();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+  }
+
   useEffect(() => {
     if (!autoStartBreakAfterFocus || !active || studyState.phase !== 'awaiting_break' || studyState.is_paused) {
       return;
@@ -876,6 +889,7 @@ export default function FocusPage() {
               <div className="focus-round-controls">
                 {canTogglePause && <button aria-label={studyState.is_paused ? '继续计时' : '暂停计时'} className={studyState.is_paused ? 'focus-round-button primary' : 'focus-round-button'} onClick={handleTogglePause} title={studyState.is_paused ? '继续计时' : '暂停'} type="button">{studyState.is_paused ? <Play size={28} /> : <Pause size={28} />}</button>}
                 {studyState.phase === 'awaiting_break' && <button aria-label={'确认开始' + breakKindLabel(studyState.break_kind)} className="focus-round-button secondary" disabled={studyState.is_paused} onClick={handleConfirmBreak} title={'确认开始' + breakKindLabel(studyState.break_kind)} type="button"><Coffee size={26} /></button>}
+                {(studyState.phase === 'awaiting_break' || studyState.phase === 'break') && <button aria-label="跳过休息，开始下一轮专注" className="focus-round-button secondary" disabled={studyState.is_paused} onClick={handleSkipBreak} title="跳过休息，开始下一轮专注" type="button"><FastForward size={24} /></button>}
               </div>
             </main>
 

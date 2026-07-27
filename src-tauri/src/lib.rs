@@ -505,6 +505,7 @@ pub fn run() {
             commands::focus::start_study_mode,
             commands::focus::get_study_mode_state,
             commands::focus::confirm_study_break,
+            commands::focus::skip_study_break,
             commands::focus::pause_study_mode,
             commands::focus::resume_study_mode,
             commands::focus::update_study_mode_subject,
