@@ -154,10 +154,11 @@ fn active_sort_key(mode: &SharedStudyMode) -> (i64, i64) {
     )
 }
 
-const ACTIVE_CONTROL_ACTIONS: [&str; 6] = [
+const ACTIVE_CONTROL_ACTIONS: [&str; 7] = [
     "pause",
     "resume",
     "confirm_break",
+    "skip_break",
     "finish",
     "emergency_exit",
     "switch_subject",
@@ -418,6 +419,11 @@ fn control_action_matches_state(
             local_paused && !remote_paused && matches!(remote_phase, "focus" | "awaiting_break")
         }
         "confirm_break" => local_phase == "awaiting_break" && remote_phase == "break",
+        "skip_break" => {
+            matches!(local_phase, "awaiting_break" | "break")
+                && remote_phase == "focus"
+                && remote.round_number.unwrap_or(0) > local.round_number.unwrap_or(0)
+        }
         "finish" => {
             remote.status.as_deref() == Some("finished")
                 || remote_phase == "finished"

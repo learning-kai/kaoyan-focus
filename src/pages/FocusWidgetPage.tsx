@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftToLine, Coffee, EyeOff, Pause, Pin, PinOff, Play } from 'lucide-react';
-import { confirmStudyBreak, getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode } from '../services/focusApi';
+import { ArrowLeftToLine, Coffee, EyeOff, FastForward, Pause, Pin, PinOff, Play } from 'lucide-react';
+import { confirmStudyBreak, getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode, skipStudyBreak } from '../services/focusApi';
 import {
   collapseFocusWidgetToEdge,
   defaultFocusWidgetDockState,
@@ -322,6 +322,16 @@ export default function FocusWidgetPage() {
     }
   }, [canInteract]);
 
+  const handleSkipBreak = useCallback(async () => {
+    if (!canInteract || studyState.is_paused || !['awaiting_break', 'break'].includes(studyState.phase)) return;
+    try {
+      setStudyState(await skipStudyBreak());
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [canInteract, studyState.is_paused, studyState.phase]);
+
   const peekFromEdge = useCallback(async () => {
     if (!canInteract || dockModeRef.current !== 'collapsed') return;
     const previousDockState = dockState;
@@ -543,6 +553,16 @@ export default function FocusWidgetPage() {
               type="button"
             >
               <Coffee size={15} />
+            </button>
+            <button
+              aria-label="跳过休息，开始下一轮专注"
+              className="focus-widget-icon-button"
+              disabled={!canInteract || studyState.is_paused || !['awaiting_break', 'break'].includes(studyState.phase)}
+              onClick={() => void handleSkipBreak()}
+              title="跳过休息，开始下一轮专注"
+              type="button"
+            >
+              <FastForward size={15} />
             </button>
           </div>
         </header>
