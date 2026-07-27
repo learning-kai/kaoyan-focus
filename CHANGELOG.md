@@ -379,4 +379,17 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - refactor(review): redesign retrospective dashboard (f7103d6)
 - Use valid focus records in dashboard analytics (e388763)
 
+## v1.15.5 - 2026-07-27
+
+### Desktop
+#### Added
+- feat: skip breaks and add checklist tasks continuously (9fde76c)
+
+#### Changed
+- docs: record release verification (1fbfaaf)
+- merge: skip breaks and continuous checklist entry (2ca9fb7)
+- chore: release v1.15.4 (63def6f)
+- refactor(review): redesign retrospective dashboard (f7103d6)
+- Use valid focus records in dashboard analytics (e388763)
+
 
