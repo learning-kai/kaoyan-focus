@@ -25,6 +25,29 @@ function parseTime(value: string) {
   return (Number.isFinite(hour) ? hour : 0) * 60 + (Number.isFinite(minute) ? minute : 0);
 }
 
+
+function isScheduleBlockCompleted(
+  block: ScheduleBlock,
+  todayItems: Array<{ id: number; completed: boolean }>,
+) {
+  if (block.status === 'completed') {
+    return true;
+  }
+  if (block.source_today_item_id == null) {
+    return false;
+  }
+  return todayItems.some((item) => item.id === block.source_today_item_id && item.completed);
+}
+
+function scheduleBlockStatusClass(
+  block: ScheduleBlock,
+  todayItems: Array<{ id: number; completed: boolean }>,
+) {
+  const completed = isScheduleBlockCompleted(block, todayItems);
+  const running = block.status === 'running';
+  return `${completed ? ' is-completed' : ''}${running ? ' is-running' : ''}`;
+}
+
 function categoryLabel(key: string) {
   if (key === 'politics') return '政治';
   if (key === 'english') return '英语';
@@ -106,11 +129,19 @@ export default function ScheduleDrawer({
 
       <div className="schedule-drawer-timeline">
         {nowTop !== null && <div className="schedule-drawer-now" style={{ top: `${nowTop}%` }} />}
-        {data?.day_blocks.length ? data.day_blocks.map((block) => (
-          <article className={`schedule-drawer-block category-${block.category_key}${block.has_conflict ? ' conflict' : ''}`} key={block.id}>
+        {data?.day_blocks.length ? data.day_blocks.map((block) => {
+          const blockCompleted = isScheduleBlockCompleted(block, data.today_items ?? []);
+          const statusLabel = blockCompleted ? '已完成' : block.status === 'running' ? '进行中' : null;
+          return (
+          <article
+            aria-label={`${block.title}，${formatMinute(block.start_minute)} 到 ${formatMinute(block.end_minute)}${statusLabel ? `，${statusLabel}` : ''}${block.has_conflict ? '，时间冲突' : ''}`}
+            className={`schedule-drawer-block category-${block.category_key}${block.has_conflict ? ' conflict' : ''}${scheduleBlockStatusClass(block, data.today_items ?? [])}`}
+            key={block.id}
+          >
             <div>
-              <span>{formatMinute(block.start_minute)}-{formatMinute(block.end_minute)} · {categoryLabel(block.category_key)}</span>
+              <span>{formatMinute(block.start_minute)}-{formatMinute(block.end_minute)} · {categoryLabel(block.category_key)}{statusLabel ? ` · ${statusLabel}` : ''}</span>
               <strong>{block.title}</strong>
+              {blockCompleted && <small className="schedule-completed-badge">✓ 完成</small>}
               {block.has_conflict && <small>时间冲突</small>}
             </div>
             <div className="schedule-drawer-actions">
@@ -118,7 +149,8 @@ export default function ScheduleDrawer({
               <button aria-label="删除日程" disabled={saving} type="button" onClick={() => onDelete(block.id)}><Trash2 size={13} /></button>
             </div>
           </article>
-        )) : (
+          );
+        }) : (
           <div className="empty-state compact">
             <CalendarClock size={24} />
             <strong>今天还没有日程安排</strong>

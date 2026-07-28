@@ -392,4 +392,19 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - refactor(review): redesign retrospective dashboard (f7103d6)
 - Use valid focus records in dashboard analytics (e388763)
 
+## v1.17.0 - 2026-07-28
+
+### Desktop
+- No commits found.
+
+## v1.17.1 - 2026-07-28
+
+### Desktop
+- No commits found.
+
+## v1.17.3 - 2026-07-28
+
+### Desktop
+- No commits found.
+
 

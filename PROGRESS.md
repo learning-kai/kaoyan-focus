@@ -1,8 +1,36 @@
-任务 0（2026-07-27）：已确认工作区仅有用户既有 CSS 与 BGM 修改，未触碰。基线 npm run build 通过；cargo test --lib 为 74 passed、0 failed、1 ignored。
-执行顺序：先补回归脚本，再实现后端跳过状态转换与同步，最后接入主界面/悬浮窗及清单连续输入。
-最大风险：休息跳过必须与现有自动进入下一轮逻辑共用状态语义，避免重复创建 session 或破坏跨设备控制动作。
+# PROGRESS · UI polish 1.17.1（2026-07-28）
 
-已完成：新增 skip_study_break 前后端命令、skip_break 同步动作与 3 条同步回归测试；主界面和悬浮窗均接入跳过按钮；分类清单新增成功后保持 composer 展开并恢复标题输入焦点。
-当前验证：npm run build、cargo fmt --check、cargo clippy --all-targets -D warnings 均通过；cargo test --lib 为 77 passed、0 failed、1 ignored。
-已完成：scripts/test-focus-skip-and-checklist-entry.mjs 已通过真实 Edge CDP 回归，覆盖清单连续创建 A、B、awaiting_break 跳过和 break 阶段跳过；两次输出均为 `Focus skip and checklist entry browser assertions passed`。
-已完成发布验证：`npm run tauri -- build` 成功生成 `src-tauri/target/release/bundle/nsis/考研专注_1.15.4_x64-setup.exe`；功能提交已合并回 `master` 并推送到 `origin/master`。
+## 任务0
+- typecheck / test-ui-regression-fix / test-schedule-completed-mark 全绿，基线 1.17.0。
+- 目标：时间轴可完成 > 字不溢出 > 卡片 radius-card=12 > 倒计时放大 > 美观。
+- 顺序：时间轴完成 → 卡片/溢出 → 倒计时 → 脚本+1.17.1 包。
+- 风险：HIG !important 再误伤布局。
+
+## 任务1 时间轴一键完成
+- schedule-block-actions 在 source_today_item_id 非空时渲染 Check 钮。
+- 调用 handleCompleteTodayItem + stopPropagation；is-completed 保留。
+- 反向：去掉时间轴 handleCompleteTodayItem → 脚本红；还原绿。
+
+## 任务2 卡片统一 + 防溢出
+- styles .schedule-block → border-radius: var(--radius-card,12px) + overflow:hidden + min-width:0。
+- apple-hig .schedule-page .schedule-block 同步 radius-card；strong/span/small ellipsis。
+- schedule-block 并入主卡组。
+
+## 任务3 倒计时放大
+- .focus-clock-zone strong → clamp(88px,16vw,140px)
+- .timer-orbit strong → clamp(64px,10vw,112px)
+- 全屏档 +约10%（103/24vmin/264 等）
+- 反向：改回旧 clamp → 脚本红；还原绿。
+
+## 任务4 脚本 + 包
+- 新建 scripts/test-ui-polish-1171.mjs
+- release:prepare --version 1.17.1
+- tauri build → 考研专注_1.17.1_x64-setup.exe（约 8.38MB）
+
+## 验收
+- npm.cmd run typecheck 绿
+- node scripts/test-ui-polish-1171.mjs 绿
+- node scripts/test-ui-regression-fix.mjs 绿
+- node scripts/test-schedule-completed-mark.mjs 绿
+- 安装包：src-tauri/target/release/bundle/nsis/考研专注_1.17.1_x64-setup.exe
+- 未 git commit；无新依赖

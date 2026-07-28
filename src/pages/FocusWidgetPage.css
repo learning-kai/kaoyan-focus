@@ -668,3 +668,27 @@
 .edge-bottom .focus-widget-collapsed-tab span:last-child {
   justify-self: end;
 }
+
+/* Apple HIG token bridge for focus widget */
+.focus-widget-shell {
+  --widget-blue: var(--blue, #0a84ff);
+  --widget-green: var(--green, #30d158);
+  --widget-red: var(--red, #ff453a);
+  --widget-text: var(--ink, rgba(18, 22, 30, 0.94));
+  --widget-muted: var(--muted, rgba(48, 52, 63, 0.64));
+}
+
+.focus-widget-panel button:active,
+.focus-widget-shell button:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-widget-panel,
+  .focus-widget-shell,
+  .focus-widget-panel *,
+  .focus-widget-shell * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

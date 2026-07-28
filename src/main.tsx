@@ -6,6 +6,7 @@ import './theme-light.css';
 import './professional-ui.css';
 import './theme-variants.css';
 import './motion.css';
+import './apple-hig.css';
 
 async function renderCurrentWindow() {
   const root = document.getElementById('root');

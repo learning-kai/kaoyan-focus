@@ -71,6 +71,7 @@ export default function Layout({
           </span>
           <div>
             <h1>考研专注</h1>
+            <p>本地学习工作台</p>
           </div>
         </div>
 

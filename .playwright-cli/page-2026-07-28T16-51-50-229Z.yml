@@ -1,0 +1,230 @@
+- generic [ref=e3]:
+  - link "跳到主内容" [ref=e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=e5]:
+    - navigation "主导航" [ref=e11]:
+      - generic [ref=e12]:
+        - button "专注：开始学习与约束，快捷键 Alt+1" [ref=e13] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "清单：今天真正要做的事，快捷键 Alt+2" [ref=e17] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "日历：安排学习日程，快捷键 Alt+3" [ref=e21] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "白名单：学习前确认放行，快捷键 Alt+4" [ref=e24] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "复盘：每日总结与明日重点，快捷键 Alt+5" [ref=e28] [cursor=pointer]:
+          - generic:
+            - strong
+      - generic [ref=e32]:
+        - button "统计：学习记录与干扰，快捷键 Alt+6" [ref=e33] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "闹钟：全局一次性提醒，快捷键 Alt+7" [ref=e36] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "设置：节奏、同步与更新，快捷键 Alt+8" [ref=e44] [cursor=pointer]:
+          - generic:
+            - strong
+  - main [active] [ref=e48]:
+    - generic [ref=e213]:
+      - generic [ref=e214]:
+        - generic [ref=e215]:
+          - paragraph [ref=e216]: 日程安排
+          - heading "今日日历" [level=2] [ref=e217]
+          - paragraph [ref=e218]: 把今日任务和手动安排放进一天的时间轴。新增、拖拽、删除会自动保存；需要时可手动同步日历/云端。
+        - generic [ref=e219]:
+          - button "同步日历" [ref=e220] [cursor=pointer]
+          - button "刷新" [ref=e226] [cursor=pointer]
+          - button "日程" [ref=e232] [cursor=pointer]
+      - alert [ref=e234]: 请在 Windows 桌面应用中运行考研专注。浏览器预览只用于界面检查，无法访问本机数据、通知、更新和 Windows 守护能力。
+      - generic [ref=e235]:
+        - generic [ref=e236]:
+          - button "今日日历" [ref=e237] [cursor=pointer]
+          - button "本周" [ref=e238] [cursor=pointer]
+        - generic [ref=e239]:
+          - button "前一天" [ref=e240] [cursor=pointer]
+          - textbox [ref=e243]: 2026-07-29
+          - button "后一天" [ref=e244] [cursor=pointer]
+        - button "周重复" [ref=e247] [cursor=pointer]
+      - generic [ref=e251]:
+        - complementary [ref=e252]:
+          - generic [ref=e254]:
+            - paragraph [ref=e255]: 今日待排
+            - heading "今日任务" [level=3] [ref=e256]
+          - generic [ref=e257]: 今日任务为空。
+        - generic [ref=e258]:
+          - generic [ref=e259]:
+            - generic [ref=e260]: 06:00
+            - generic [ref=e261]: 07:00
+            - generic [ref=e262]: 08:00
+            - generic [ref=e263]: 09:00
+            - generic [ref=e264]: 10:00
+            - generic [ref=e265]: 11:00
+            - generic [ref=e266]: 12:00
+            - generic [ref=e267]: 13:00
+            - generic [ref=e268]: 14:00
+            - generic [ref=e269]: 15:00
+            - generic [ref=e270]: 16:00
+            - generic [ref=e271]: 17:00
+            - generic [ref=e272]: 18:00
+            - generic [ref=e273]: 19:00
+            - generic [ref=e274]: 20:00
+            - generic [ref=e275]: 21:00
+            - generic [ref=e276]: 22:00
+            - generic [ref=e277]: 23:00
+            - generic [ref=e278]: 24:00
+          - generic [ref=e279]:
+            - button "在 06:00 添加安排" [ref=e280] [cursor=pointer]:
+              - generic [ref=e281]: +
+            - button "在 06:15 添加安排" [ref=e282] [cursor=pointer]:
+              - generic [ref=e283]: +
+            - button "在 06:30 添加安排" [ref=e284] [cursor=pointer]:
+              - generic [ref=e285]: +
+            - button "在 06:45 添加安排" [ref=e286] [cursor=pointer]:
+              - generic [ref=e287]: +
+            - button "在 07:00 添加安排" [ref=e288] [cursor=pointer]:
+              - generic [ref=e289]: +
+            - button "在 07:15 添加安排" [ref=e290] [cursor=pointer]:
+              - generic [ref=e291]: +
+            - button "在 07:30 添加安排" [ref=e292] [cursor=pointer]:
+              - generic [ref=e293]: +
+            - button "在 07:45 添加安排" [ref=e294] [cursor=pointer]:
+              - generic [ref=e295]: +
+            - button "在 08:00 添加安排" [ref=e296] [cursor=pointer]:
+              - generic [ref=e297]: +
+            - button "在 08:15 添加安排" [ref=e298] [cursor=pointer]:
+              - generic [ref=e299]: +
+            - button "在 08:30 添加安排" [ref=e300] [cursor=pointer]:
+              - generic [ref=e301]: +
+            - button "在 08:45 添加安排" [ref=e302] [cursor=pointer]:
+              - generic [ref=e303]: +
+            - button "在 09:00 添加安排" [ref=e304] [cursor=pointer]:
+              - generic [ref=e305]: +
+            - button "在 09:15 添加安排" [ref=e306] [cursor=pointer]:
+              - generic [ref=e307]: +
+            - button "在 09:30 添加安排" [ref=e308] [cursor=pointer]:
+              - generic [ref=e309]: +
+            - button "在 09:45 添加安排" [ref=e310] [cursor=pointer]:
+              - generic [ref=e311]: +
+            - button "在 10:00 添加安排" [ref=e312] [cursor=pointer]:
+              - generic [ref=e313]: +
+            - button "在 10:15 添加安排" [ref=e314] [cursor=pointer]:
+              - generic [ref=e315]: +
+            - button "在 10:30 添加安排" [ref=e316] [cursor=pointer]:
+              - generic [ref=e317]: +
+            - button "在 10:45 添加安排" [ref=e318] [cursor=pointer]:
+              - generic [ref=e319]: +
+            - button "在 11:00 添加安排" [ref=e320] [cursor=pointer]:
+              - generic [ref=e321]: +
+            - button "在 11:15 添加安排" [ref=e322] [cursor=pointer]:
+              - generic [ref=e323]: +
+            - button "在 11:30 添加安排" [ref=e324] [cursor=pointer]:
+              - generic [ref=e325]: +
+            - button "在 11:45 添加安排" [ref=e326] [cursor=pointer]:
+              - generic [ref=e327]: +
+            - button "在 12:00 添加安排" [ref=e328] [cursor=pointer]:
+              - generic [ref=e329]: +
+            - button "在 12:15 添加安排" [ref=e330] [cursor=pointer]:
+              - generic [ref=e331]: +
+            - button "在 12:30 添加安排" [ref=e332] [cursor=pointer]:
+              - generic [ref=e333]: +
+            - button "在 12:45 添加安排" [ref=e334] [cursor=pointer]:
+              - generic [ref=e335]: +
+            - button "在 13:00 添加安排" [ref=e336] [cursor=pointer]:
+              - generic [ref=e337]: +
+            - button "在 13:15 添加安排" [ref=e338] [cursor=pointer]:
+              - generic [ref=e339]: +
+            - button "在 13:30 添加安排" [ref=e340] [cursor=pointer]:
+              - generic [ref=e341]: +
+            - button "在 13:45 添加安排" [ref=e342] [cursor=pointer]:
+              - generic [ref=e343]: +
+            - button "在 14:00 添加安排" [ref=e344] [cursor=pointer]:
+              - generic [ref=e345]: +
+            - button "在 14:15 添加安排" [ref=e346] [cursor=pointer]:
+              - generic [ref=e347]: +
+            - button "在 14:30 添加安排" [ref=e348] [cursor=pointer]:
+              - generic [ref=e349]: +
+            - button "在 14:45 添加安排" [ref=e350] [cursor=pointer]:
+              - generic [ref=e351]: +
+            - button "在 15:00 添加安排" [ref=e352] [cursor=pointer]:
+              - generic [ref=e353]: +
+            - button "在 15:15 添加安排" [ref=e354] [cursor=pointer]:
+              - generic [ref=e355]: +
+            - button "在 15:30 添加安排" [ref=e356] [cursor=pointer]:
+              - generic [ref=e357]: +
+            - button "在 15:45 添加安排" [ref=e358] [cursor=pointer]:
+              - generic [ref=e359]: +
+            - button "在 16:00 添加安排" [ref=e360] [cursor=pointer]:
+              - generic [ref=e361]: +
+            - button "在 16:15 添加安排" [ref=e362] [cursor=pointer]:
+              - generic [ref=e363]: +
+            - button "在 16:30 添加安排" [ref=e364] [cursor=pointer]:
+              - generic [ref=e365]: +
+            - button "在 16:45 添加安排" [ref=e366] [cursor=pointer]:
+              - generic [ref=e367]: +
+            - button "在 17:00 添加安排" [ref=e368] [cursor=pointer]:
+              - generic [ref=e369]: +
+            - button "在 17:15 添加安排" [ref=e370] [cursor=pointer]:
+              - generic [ref=e371]: +
+            - button "在 17:30 添加安排" [ref=e372] [cursor=pointer]:
+              - generic [ref=e373]: +
+            - button "在 17:45 添加安排" [ref=e374] [cursor=pointer]:
+              - generic [ref=e375]: +
+            - button "在 18:00 添加安排" [ref=e376] [cursor=pointer]:
+              - generic [ref=e377]: +
+            - button "在 18:15 添加安排" [ref=e378] [cursor=pointer]:
+              - generic [ref=e379]: +
+            - button "在 18:30 添加安排" [ref=e380] [cursor=pointer]:
+              - generic [ref=e381]: +
+            - button "在 18:45 添加安排" [ref=e382] [cursor=pointer]:
+              - generic [ref=e383]: +
+            - button "在 19:00 添加安排" [ref=e384] [cursor=pointer]:
+              - generic [ref=e385]: +
+            - button "在 19:15 添加安排" [ref=e386] [cursor=pointer]:
+              - generic [ref=e387]: +
+            - button "在 19:30 添加安排" [ref=e388] [cursor=pointer]:
+              - generic [ref=e389]: +
+            - button "在 19:45 添加安排" [ref=e390] [cursor=pointer]:
+              - generic [ref=e391]: +
+            - button "在 20:00 添加安排" [ref=e392] [cursor=pointer]:
+              - generic [ref=e393]: +
+            - button "在 20:15 添加安排" [ref=e394] [cursor=pointer]:
+              - generic [ref=e395]: +
+            - button "在 20:30 添加安排" [ref=e396] [cursor=pointer]:
+              - generic [ref=e397]: +
+            - button "在 20:45 添加安排" [ref=e398] [cursor=pointer]:
+              - generic [ref=e399]: +
+            - button "在 21:00 添加安排" [ref=e400] [cursor=pointer]:
+              - generic [ref=e401]: +
+            - button "在 21:15 添加安排" [ref=e402] [cursor=pointer]:
+              - generic [ref=e403]: +
+            - button "在 21:30 添加安排" [ref=e404] [cursor=pointer]:
+              - generic [ref=e405]: +
+            - button "在 21:45 添加安排" [ref=e406] [cursor=pointer]:
+              - generic [ref=e407]: +
+            - button "在 22:00 添加安排" [ref=e408] [cursor=pointer]:
+              - generic [ref=e409]: +
+            - button "在 22:15 添加安排" [ref=e410] [cursor=pointer]:
+              - generic [ref=e411]: +
+            - button "在 22:30 添加安排" [ref=e412] [cursor=pointer]:
+              - generic [ref=e413]: +
+            - button "在 22:45 添加安排" [ref=e414] [cursor=pointer]:
+              - generic [ref=e415]: +
+            - button "在 23:00 添加安排" [ref=e416] [cursor=pointer]:
+              - generic [ref=e417]: +
+            - button "在 23:15 添加安排" [ref=e418] [cursor=pointer]:
+              - generic [ref=e419]: +
+            - button "在 23:30 添加安排" [ref=e420] [cursor=pointer]:
+              - generic [ref=e421]: +
+            - button "在 23:45 添加安排" [ref=e422] [cursor=pointer]:
+              - generic [ref=e423]: +
+            - generic: 点击时间格添加今天的安排。
+        - complementary [ref=e424]:
+          - generic [ref=e426]:
+            - paragraph [ref=e427]: Template
+            - heading "周重复" [level=3] [ref=e428]
+          - generic [ref=e432]: 还没有周重复。

@@ -785,3 +785,33 @@ button:hover .theme-swatch,
     animation: none !important;
   }
 }
+
+/* Apple HIG: disable decorative sheen loops by default */
+.nav-item::after,
+.nav-item .active-sheen,
+.active-sheen,
+.primary-action::after {
+  display: none !important;
+  animation: none !important;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition,
+  .confirm-dialog,
+  .confirm-backdrop,
+  .update-dialog,
+  .update-backdrop,
+  .schedule-drawer,
+  .today-plan-drawer,
+  .soft-panel,
+  .command-panel,
+  .focus-widget-shell,
+  .nav-item,
+  .primary-action,
+  .primary-button {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

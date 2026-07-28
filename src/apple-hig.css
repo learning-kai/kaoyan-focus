@@ -1,0 +1,981 @@
+/* =========================================================
+   Apple HIG final cascade layer
+   Loaded last. Owns shell, controls, density, motion discipline.
+   Themes only provide tokens; this file enforces control grammar.
+   ========================================================= */
+
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --control-height: 36px;
+  --control-height-lg: 44px;
+  --press-scale: 0.97;
+  --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-panel: 240ms;
+  --motion-enter: 260ms;
+  --radius-control: 10px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+  --radius-shell: 18px;
+  --surface-card: var(--bg-elevated, #fff);
+  --surface-card-soft: var(--surface-soft, #f2f2f7);
+  --surface-control: rgba(120, 120, 128, 0.12);
+}
+
+/* Ensure dark has complete token set even if variants lag */
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #000000;
+  --bg-elevated: #1c1c1e;
+  --surface: rgba(28, 28, 30, 0.82);
+  --surface-strong: #1c1c1e;
+  --surface-soft: #2c2c2e;
+  --ink: rgba(255, 255, 255, 0.92);
+  --muted: rgba(235, 235, 245, 0.6);
+  --line: rgba(84, 84, 88, 0.65);
+  --line-strong: rgba(84, 84, 88, 0.85);
+  --blue: #0a84ff;
+  --blue-soft: rgba(10, 132, 255, 0.18);
+  --green: #30d158;
+  --amber: #ff9f0a;
+  --red: #ff453a;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-strong: 0 16px 40px rgba(0, 0, 0, 0.55);
+  --focus-ring: 0 0 0 4px rgba(10, 132, 255, 0.35);
+  --surface-card: #1c1c1e;
+  --surface-control: rgba(120, 120, 128, 0.24);
+}
+
+html[data-theme='light'],
+html:not([data-theme]) {
+  color-scheme: light;
+  --bg: #f2f2f7;
+  --bg-elevated: #ffffff;
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-strong: #ffffff;
+  --surface-soft: #f2f2f7;
+  --ink: rgba(0, 0, 0, 0.88);
+  --muted: rgba(60, 60, 67, 0.6);
+  --line: rgba(60, 60, 67, 0.12);
+  --line-strong: rgba(60, 60, 67, 0.29);
+  --blue: #007aff;
+  --blue-soft: rgba(0, 122, 255, 0.12);
+  --green: #34c759;
+  --amber: #ff9500;
+  --red: #ff3b30;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-strong: 0 8px 28px rgba(0, 0, 0, 0.1);
+  --focus-ring: 0 0 0 3px rgba(0, 122, 255, 0.24);
+  --surface-card: #ffffff;
+  --surface-control: rgba(120, 120, 128, 0.12);
+}
+
+html,
+body {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  font-size: 14px;
+  line-height: 1.45;
+  background: var(--bg) !important;
+  color: var(--ink);
+  background-image: none !important;
+}
+
+/* UI regression base type */
+
+
+/* ---------------- Shell ---------------- */
+.app-shell {
+  grid-template-columns: 220px minmax(0, 1fr);
+  background: var(--bg);
+}
+
+.sidebar {
+  gap: var(--space-3) !important;
+  padding: var(--space-5) var(--space-3) !important;
+  border-right: 1px solid var(--line) !important;
+  background: color-mix(in srgb, var(--bg) 88%, transparent) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+.brand {
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-4);
+}
+
+.brand-mark {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 8px !important;
+  color: #fff !important;
+  background: var(--blue) !important;
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--blue) 28%, transparent) !important;
+}
+
+.brand h1 {
+  font-size: 15px !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.02em;
+}
+
+.brand p {
+  font-size: 11px !important;
+  color: var(--muted) !important;
+}
+
+.nav-list,
+.nav-group {
+  gap: 2px !important;
+}
+
+.nav-group + .nav-group {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.nav-group-label {
+  margin: 0 var(--space-3) var(--space-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none !important;
+}
+
+.nav-item {
+  min-height: 40px !important;
+  padding: 8px 10px !important;
+  border: none !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+  transform: none !important;
+  overflow: hidden;
+}
+
+.nav-item::before,
+.nav-item::after,
+.nav-item .active-sheen,
+.active-sheen,
+.primary-action::after,
+.metric-card::after,
+.page-shell::before,
+.page-shell::after {
+  display: none !important;
+  content: none !important;
+  animation: none !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+.nav-item:hover {
+  color: var(--ink) !important;
+  background: color-mix(in srgb, var(--ink) 6%, transparent) !important;
+}
+
+.nav-item.active,
+.nav-item[aria-current='page'] {
+  color: var(--ink) !important;
+  background: color-mix(in srgb, var(--ink) 8%, transparent) !important;
+  font-weight: 600;
+}
+
+.main-panel {
+  background: var(--bg) !important;
+  padding: var(--space-5) var(--space-6) !important;
+}
+
+.page-transition {
+  animation: page-enter var(--motion-enter) var(--ease-apple) both;
+}
+
+.page-shell,
+.focus-prepare-shell,
+.checklist-shell,
+.schedule-page,
+.whitelist-shell,
+.review-shell,
+.stats-shell,
+.alarm-shell,
+.settings-shell {
+  gap: var(--space-5) !important;
+  padding: var(--space-4) var(--space-5) !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.page-shell .page-header h2,
+.prepare-header h2,
+.settings-shell .page-header h2,
+.checklist-shell .page-header h2,
+.stats-shell .page-header h2,
+.whitelist-shell .page-header h2,
+.alarm-shell .page-header h2,
+.review-shell .page-header h2,
+.schedule-page .page-header h2 {
+  font-size: 21px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+  color: var(--ink) !important;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.eyebrow {
+  color: var(--muted) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+  text-transform: none !important;
+}
+
+/* ---------------- Surfaces / cards ---------------- */
+.soft-panel,
+.command-panel,
+.card,
+.schedule-block,
+.metric-card,
+.details-card,
+.core-fact,
+.header-metrics article,
+.start-console,
+.control-panel,
+.monitor-callout,
+.focus-control-dock,
+.board-column,
+.today-composer,
+.task-composer,
+.empty-state,
+.reminder-sound-panel,
+.settings-section,
+.settings-group,
+.settings-panel,
+.settings-block,
+.schedule-hero,
+.schedule-toolbar,
+.template-rail,
+.today-task-rail,
+.week-board,
+.day-board,
+.stats-card,
+.review-editor,
+.alarm-panel {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-card, 12px) !important;
+  background: var(--surface-card) !important;
+  box-shadow: var(--shadow-soft) !important;
+  backdrop-filter: none !important;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ---------------- Controls ---------------- */
+.primary-action,
+.primary-button,
+.btn-primary,
+button.primary-action,
+.confirm-dialog-actions .primary-action,
+.schedule-page .primary-button {
+  min-height: var(--control-height) !important;
+  padding: 0 16px !important;
+  border: none !important;
+  border-radius: var(--radius-control) !important;
+  color: #fff !important;
+  background: var(--blue) !important;
+  background-image: none !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 4px 12px color-mix(in srgb, var(--blue) 28%, transparent) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    filter var(--motion-fast) var(--ease-standard),
+    opacity var(--motion-fast) var(--ease-standard) !important;
+}
+
+.primary-action:hover,
+.primary-button:hover,
+.btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.primary-action:active,
+.primary-button:active,
+.btn-primary:active,
+.secondary-action:active,
+.ghost-action:active,
+.small-action:active,
+.chip:active,
+.nav-item:active,
+.icon-button:active,
+.date-stepper button:active,
+.segmented-control button:active,
+.stepper-control button:active {
+  transform: scale(var(--press-scale)) !important;
+}
+
+.secondary-action,
+.ghost-action,
+.small-action,
+.chip,
+.segmented-control button,
+.stepper-control button,
+.icon-button,
+.date-stepper button,
+.settings-collapse-button,
+.schedule-page .ghost-button {
+  min-height: 32px;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-control) !important;
+  color: var(--ink) !important;
+  background: var(--surface-control) !important;
+  box-shadow: none !important;
+  background-image: none !important;
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    background var(--motion-base) var(--ease-standard),
+    border-color var(--motion-base) var(--ease-standard) !important;
+}
+
+.ghost-action {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+.secondary-action:hover,
+.small-action:hover,
+.chip:hover,
+.segmented-control button:hover,
+.stepper-control button:hover,
+.icon-button:hover,
+.settings-collapse-button:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent) !important;
+}
+
+.text-input,
+.number-input,
+.select-input,
+.review-textarea,
+input[type='text'],
+input[type='number'],
+input[type='password'],
+input[type='email'],
+input[type='url'],
+input[type='time'],
+input[type='date'],
+input[type='search'],
+textarea,
+select {
+  min-height: var(--control-height);
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-control) !important;
+  color: var(--ink) !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: none !important;
+}
+
+.text-input:focus,
+.number-input:focus,
+.select-input:focus,
+.review-textarea:focus,
+input:focus,
+textarea:focus,
+select:focus,
+.primary-action:focus-visible,
+.secondary-action:focus-visible,
+.nav-item:focus-visible,
+button:focus-visible {
+  outline: none !important;
+  box-shadow: var(--focus-ring) !important;
+  border-color: color-mix(in srgb, var(--blue) 55%, var(--line)) !important;
+}
+
+.segmented-control {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--surface-control) !important;
+  border: 1px solid var(--line) !important;
+}
+
+.segmented-control button[aria-pressed='true'],
+.segmented-control button.active,
+.segmented-control button.is-active {
+  background: var(--bg-elevated) !important;
+  color: var(--ink) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+/* Lists / rows — iOS grouped list feel */
+.setting-row,
+.capability-row,
+.list-row,
+.record-row,
+.tool-row,
+.alarm-row,
+.today-item-row,
+.checklist-task-card,
+.category-task-row,
+.template-row,
+.schedule-task-row,
+.subject-stat-row,
+.blocked-option,
+.process-option,
+.sound-option-card {
+  border: 1px solid var(--line) !important;
+  border-radius: 12px !important;
+  background: var(--surface-card) !important;
+  box-shadow: none !important;
+}
+
+.setting-row + .setting-row,
+.capability-row + .capability-row,
+.list-row + .list-row {
+  margin-top: 8px;
+}
+
+/* Settings system grouping */
+.settings-layout {
+  display: grid !important;
+  gap: var(--space-5) !important;
+}
+
+.settings-layout > * {
+  min-width: 0;
+}
+
+.settings-section,
+.settings-group,
+.settings-panel,
+.settings-block {
+  padding: var(--space-4) !important;
+}
+
+/* ---------------- Dialog / drawer / toast ---------------- */
+.confirm-backdrop,
+.confirm-dialog-backdrop,
+.drawer-backdrop,
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.36) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(10px) saturate(120%);
+  animation: backdrop-enter var(--motion-panel) var(--ease-standard) both;
+}
+
+.confirm-dialog {
+  width: min(100%, 420px);
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: var(--shadow-strong) !important;
+  animation: dialog-enter var(--motion-panel) var(--ease-apple) both;
+}
+
+.confirm-dialog-head,
+.confirm-dialog-body,
+.confirm-dialog-actions {
+  padding: 16px 18px;
+}
+
+.confirm-dialog-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+}
+
+.confirm-dialog-head h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.confirm-dialog-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 65%, transparent);
+}
+
+.schedule-drawer,
+.today-plan-drawer {
+  border-left: 1px solid var(--line) !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.12) !important;
+  /* never animate closed drawers — animation-fill would pin them open */
+  animation: none !important;
+}
+
+.schedule-drawer:not(.is-open),
+.today-plan-drawer:not(.is-open) {
+  opacity: 0 !important;
+  transform: translateX(calc(100% + 28px)) !important;
+  pointer-events: none !important;
+}
+
+.schedule-drawer.is-open,
+.today-plan-drawer.is-open {
+  opacity: 1 !important;
+  transform: translateX(0) !important;
+  pointer-events: auto !important;
+  animation: drawer-enter var(--motion-panel) var(--ease-apple) both;
+}
+
+.update-notification {
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: var(--shadow-strong) !important;
+  color: var(--ink) !important;
+}
+
+/* ---------------- Page hierarchy ---------------- */
+.focus-layout,
+.focus-grid,
+.checklist-layout,
+.schedule-layout,
+.stats-layout,
+.review-layout,
+.settings-layout,
+.whitelist-layout,
+.alarm-layout {
+  gap: var(--space-5) !important;
+}
+
+.timer-display,
+.focus-timer,
+.clock-readout {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  font-weight: 650;
+}
+
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* Focus active shell calm */
+.focus-active-shell {
+  border-radius: var(--radius-panel);
+  background: var(--bg) !important;
+}
+
+/* Widget */
+.focus-widget-shell,
+.focus-widget-root,
+.widget-shell {
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent) !important;
+  box-shadow: var(--shadow) !important;
+  color: var(--ink) !important;
+  backdrop-filter: saturate(160%) blur(16px);
+  -webkit-backdrop-filter: saturate(160%) blur(16px);
+}
+
+/* Kill thick dashboard shadows on light patches */
+html[data-theme='light'] .page-shell,
+html:not([data-theme]) .page-shell,
+html[data-theme='light'] .command-panel,
+html:not([data-theme]) .command-panel,
+html[data-theme='light'] .soft-panel,
+html:not([data-theme]) .soft-panel {
+  background: var(--surface-card) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+html[data-theme='light'] .page-shell,
+html:not([data-theme]) .page-shell {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+/* Decorative mono/dawn gradients become token tints only — layout unchanged */
+html[data-theme='mono'] .primary-action,
+html[data-theme='dawn'] .primary-action,
+html[data-theme='forest'] .primary-action,
+html[data-theme='sakura'] .primary-action,
+html[data-theme='mono'] .primary-button,
+html[data-theme='dawn'] .primary-button,
+html[data-theme='forest'] .primary-button,
+html[data-theme='sakura'] .primary-button {
+  background: var(--blue) !important;
+  background-image: none !important;
+}
+
+/* Dense lists on wide screens */
+@media (min-width: 960px) {
+  .setting-row,
+  .capability-row,
+  .list-row,
+  .record-row,
+  .tool-row {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .app-shell {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .brand h1,
+  .brand p,
+  .nav-group-label,
+  .nav-title-full,
+  .nav-shortcut {
+    display: none !important;
+  }
+
+  .nav-title-short {
+    display: none !important;
+  }
+
+  .nav-item {
+    justify-content: center;
+  }
+}
+
+/* ---------------- Motion ---------------- */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drawer-enter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes backdrop-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+
+
+/* Update dialog (actual class names in UpdateNotification) */
+.update-backdrop {
+  background: rgba(0, 0, 0, 0.36) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(10px) saturate(120%);
+  animation: backdrop-enter var(--motion-panel) var(--ease-standard) both;
+}
+
+.update-dialog {
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: var(--shadow-strong) !important;
+  color: var(--ink) !important;
+  animation: dialog-enter var(--motion-panel) var(--ease-apple) both;
+}
+
+.update-dialog-head,
+.update-dialog-body,
+.update-dialog-actions {
+  padding: 16px 18px;
+}
+
+.update-dialog-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+}
+
+.update-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--line);
+}
+
+.danger-action {
+  min-height: var(--control-height) !important;
+  padding: 0 16px !important;
+  border: none !important;
+  border-radius: var(--radius-control) !important;
+  color: #fff !important;
+  background: var(--red) !important;
+  background-image: none !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--red) 28%, transparent) !important;
+  font-weight: 600 !important;
+}
+
+.danger-action:active {
+  transform: scale(var(--press-scale)) !important;
+}
+
+/* Kill looping decorative motion from motion.css by default */
+.nav-item .active-sheen,
+.active-sheen,
+.drop-zone-pulse,
+[class*="ambient"],
+.timer-glow,
+.clock-breathe,
+.status-breathe,
+.timeline-pulse {
+  animation: none !important;
+}
+
+.nav-item::after,
+.primary-action::before,
+.primary-action::after {
+  animation: none !important;
+}
+
+/* Page-specific calm density */
+.focus-prepare-shell .start-console,
+.focus-prepare-shell .control-panel {
+  padding: var(--space-5) !important;
+}
+
+.checklist-clean-shell .category-task-row.is-completed,
+.today-item-row.is-completed {
+  opacity: 0.72;
+}
+
+.schedule-page .schedule-block {
+  border-radius: var(--radius-card, 12px) !important;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.schedule-page .schedule-block span,
+.schedule-page .schedule-block small,
+.schedule-page .schedule-block strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-block-actions .is-complete-toggle {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+
+.schedule-block-actions .is-complete-toggle.enabled {
+  color: var(--green, #30d158);
+}
+
+.stats-shell .metric-card,
+.review-shell .soft-panel,
+.whitelist-shell .soft-panel,
+.alarm-shell .soft-panel {
+  padding: var(--space-4);
+}
+
+/* Ensure switch tracks use system green not product gradient */
+.switch-track[aria-checked='true'],
+.switch.on,
+[role='switch'][aria-checked='true'] {
+  background: var(--green) !important;
+  background-image: none !important;
+}
+
+
+
+/* ---- UI regression: overflow + card text ---- */
+.soft-panel,
+.command-panel,
+.metric-card,
+.details-card,
+.list-row,
+.record-row,
+.setting-row,
+.tool-row,
+.schedule-task-row,
+.today-item-row,
+.category-task-row,
+.checklist-task-card,
+.template-row,
+.nav-item,
+.brand h1,
+.brand p {
+  min-width: 0;
+}
+
+.soft-panel strong,
+.command-panel strong,
+.metric-card strong,
+.details-card strong,
+.list-row strong,
+.record-row strong,
+.schedule-task-row strong,
+.today-item-row strong,
+.category-task-row strong,
+.checklist-task-card strong,
+.template-row strong,
+.schedule-block strong,
+.schedule-block span,
+.schedule-block small,
+.week-block,
+.nav-item span,
+.brand h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.schedule-task-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-task-row > div:first-child,
+.today-item-copy,
+.list-row > div:first-child,
+.category-task-row > div:first-child {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.page-header h2,
+.prepare-header h2 {
+  max-width: 100%;
+}
+
+
+
+/* Schedule page today-task complete control */
+.schedule-task-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.schedule-task-copy {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.schedule-task-copy strong,
+.schedule-task-copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-task-row.is-completed {
+  opacity: 0.72;
+}
+
+.schedule-task-row.is-completed .schedule-task-copy strong {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+
+.schedule-task-row .icon-action.enabled {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 35%, var(--line));
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+}
+
+/* reduced-motion: kill travel/scale on main surfaces */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .page-transition,
+  .confirm-dialog,
+  .confirm-backdrop,
+  .confirm-dialog-backdrop,
+  .schedule-drawer,
+  .today-plan-drawer,
+  .update-notification,
+  .nav-item,
+  .primary-action,
+  .primary-button,
+  .secondary-action,
+  .soft-panel,
+  .command-panel,
+  .focus-widget-shell {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .primary-action:active,
+  .primary-button:active,
+  .secondary-action:active,
+  .ghost-action:active,
+  .nav-item:active,
+  .chip:active,
+  .icon-button:active {
+    transform: none !important;
+  }
+}

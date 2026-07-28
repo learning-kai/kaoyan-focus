@@ -48,6 +48,10 @@ export function moveScheduleBlock(
   });
 }
 
+export function setScheduleBlockCompleted(id: number, completed: boolean): Promise<ScheduleBlock> {
+  return invokeCommand<ScheduleBlock>('set_schedule_block_completed', { id, completed });
+}
+
 export function deleteScheduleBlock(id: number): Promise<void> {
   return invokeCommand<void>('delete_schedule_block', { id });
 }

@@ -61,6 +61,7 @@ pub struct ScheduleTemplate {
 #[derive(Debug, Clone, Serialize)]
 pub struct ScheduleTodayItem {
     pub id: i64,
+    pub source_task_id: Option<i64>,
     pub title: String,
     pub note: Option<String>,
     pub due_date: Option<String>,
@@ -293,6 +294,32 @@ pub fn move_schedule_block(
 }
 
 #[tauri::command]
+pub fn set_schedule_block_completed(
+    app: AppHandle,
+    id: i64,
+    completed: bool,
+) -> Result<ScheduleBlock, String> {
+    let connection = open_database(&database_path(&app)?)?;
+    let now = Utc::now().to_rfc3339();
+    let status = if completed { "completed" } else { "planned" };
+    connection
+        .execute(
+            "
+            UPDATE schedule_blocks
+            SET status = ?1,
+                updated_at = ?2
+            WHERE id = ?3
+            ",
+            params![status, now, id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    let block = get_schedule_block_by_id(&connection, id)?;
+    trigger_shared_sync(&app, "schedule_change");
+    Ok(block)
+}
+
+#[tauri::command]
 pub fn delete_schedule_block(app: AppHandle, id: i64) -> Result<(), String> {
     let connection = open_database(&database_path(&app)?)?;
     let now = Utc::now().timestamp_millis();
@@ -509,6 +536,42 @@ pub(crate) fn mark_schedule_block_completed(
     Ok(())
 }
 
+pub(crate) fn cascade_schedule_blocks_for_today_item_completion(
+    connection: &Connection,
+    today_item_id: i64,
+    completed: bool,
+    now: &str,
+) -> Result<(), String> {
+    if completed {
+        connection
+            .execute(
+                "
+                UPDATE schedule_blocks
+                SET status = 'completed',
+                    updated_at = ?1
+                WHERE source_today_item_id = ?2
+                  AND status != 'running'
+                ",
+                params![now, today_item_id],
+            )
+            .map_err(|error| error.to_string())?;
+    } else {
+        connection
+            .execute(
+                "
+                UPDATE schedule_blocks
+                SET status = 'planned',
+                    updated_at = ?1
+                WHERE source_today_item_id = ?2
+                  AND status = 'completed'
+                ",
+                params![now, today_item_id],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 fn load_schedule_page_data(
     connection: &Connection,
     selected: NaiveDate,
@@ -695,7 +758,7 @@ fn list_today_items(
     let mut statement = connection
         .prepare(
             "
-            SELECT id, title, note, due_date, subject_id, completed
+            SELECT id, source_task_id, title, note, due_date, subject_id, completed
             FROM today_plan_items
             WHERE today_date = ?1
             ORDER BY completed ASC, sort_order ASC, id ASC
@@ -707,11 +770,12 @@ fn list_today_items(
         .query_map(params![today_date], |row| {
             Ok(ScheduleTodayItem {
                 id: row.get(0)?,
-                title: row.get(1)?,
-                note: row.get(2)?,
-                due_date: row.get(3)?,
-                subject_id: row.get(4)?,
-                completed: row.get::<_, i64>(5)? != 0,
+                source_task_id: row.get(1)?,
+                title: row.get(2)?,
+                note: row.get(3)?,
+                due_date: row.get(4)?,
+                subject_id: row.get(5)?,
+                completed: row.get::<_, i64>(6)? != 0,
             })
         })
         .map_err(|error| error.to_string())?
@@ -1098,5 +1162,167 @@ mod tests {
                 .expect("load focus session links");
         assert_eq!(session_schedule_block_id, Some(block_id));
         assert_eq!(session_today_plan_item_id, Some(today_item_id));
+    }
+
+    #[test]
+    fn completing_today_item_cascades_planned_schedule_block_to_completed() {
+        let directory = tempdir().expect("create temp directory");
+        let connection = open_database(&directory.path().join("cascade-complete.sqlite3"))
+            .expect("open test database");
+        let now = Utc::now().to_rfc3339();
+
+        connection
+            .execute(
+                "
+            INSERT INTO today_plan_items (
+              today_date, source_task_id, subject_id, title, note, due_date, sort_order,
+              completed, synced_source_completion, created_at, updated_at
+            ) VALUES ('2026-07-28', NULL, 3, 'Math drill', NULL, NULL, 1, 0, 0, ?1, ?1)
+            ",
+                params![now],
+            )
+            .expect("insert today item");
+        let today_item_id = connection.last_insert_rowid();
+
+        connection
+            .execute(
+                "
+            INSERT INTO schedule_blocks (
+              schedule_date, title, note, category_key, subject_id, source_today_item_id,
+              template_id, start_minute, end_minute, status, created_at, updated_at
+            ) VALUES ('2026-07-28', 'Math block', NULL, 'math', 3, ?1, NULL, 540, 600, 'planned', ?2, ?2)
+            ",
+                params![today_item_id, now],
+            )
+            .expect("insert planned block");
+        let planned_id = connection.last_insert_rowid();
+
+        cascade_schedule_blocks_for_today_item_completion(&connection, today_item_id, true, &now)
+            .expect("cascade complete");
+
+        let status: String = connection
+            .query_row(
+                "SELECT status FROM schedule_blocks WHERE id = ?1",
+                params![planned_id],
+                |row| row.get(0),
+            )
+            .expect("load planned block status");
+        assert_eq!(status, "completed");
+    }
+
+    #[test]
+    fn uncompleting_today_item_restores_completed_block_but_keeps_running() {
+        let directory = tempdir().expect("create temp directory");
+        let connection = open_database(&directory.path().join("cascade-restore.sqlite3"))
+            .expect("open test database");
+        let now = Utc::now().to_rfc3339();
+
+        connection
+            .execute(
+                "
+            INSERT INTO today_plan_items (
+              today_date, source_task_id, subject_id, title, note, due_date, sort_order,
+              completed, synced_source_completion, created_at, updated_at
+            ) VALUES ('2026-07-28', NULL, 2, 'English review', NULL, NULL, 1, 1, 0, ?1, ?1)
+            ",
+                params![now],
+            )
+            .expect("insert today item");
+        let today_item_id = connection.last_insert_rowid();
+
+        connection
+            .execute(
+                "
+            INSERT INTO schedule_blocks (
+              schedule_date, title, note, category_key, subject_id, source_today_item_id,
+              template_id, start_minute, end_minute, status, created_at, updated_at
+            ) VALUES
+              ('2026-07-28', 'Done block', NULL, 'english', 2, ?1, NULL, 540, 600, 'completed', ?2, ?2),
+              ('2026-07-28', 'Running block', NULL, 'english', 2, ?1, NULL, 620, 680, 'running', ?2, ?2)
+            ",
+                params![today_item_id, now],
+            )
+            .expect("insert blocks");
+
+        let completed_id: i64 = connection
+            .query_row(
+                "SELECT id FROM schedule_blocks WHERE title = 'Done block'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("load completed id");
+        let running_id: i64 = connection
+            .query_row(
+                "SELECT id FROM schedule_blocks WHERE title = 'Running block'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("load running id");
+
+        cascade_schedule_blocks_for_today_item_completion(&connection, today_item_id, false, &now)
+            .expect("cascade uncomplete");
+
+        let completed_status: String = connection
+            .query_row(
+                "SELECT status FROM schedule_blocks WHERE id = ?1",
+                params![completed_id],
+                |row| row.get(0),
+            )
+            .expect("load restored status");
+        let running_status: String = connection
+            .query_row(
+                "SELECT status FROM schedule_blocks WHERE id = ?1",
+                params![running_id],
+                |row| row.get(0),
+            )
+            .expect("load running status");
+        assert_eq!(completed_status, "planned");
+        assert_eq!(running_status, "running");
+    }
+
+    #[test]
+    fn completing_today_item_does_not_override_running_schedule_block() {
+        let directory = tempdir().expect("create temp directory");
+        let connection = open_database(&directory.path().join("cascade-running.sqlite3"))
+            .expect("open test database");
+        let now = Utc::now().to_rfc3339();
+
+        connection
+            .execute(
+                "
+            INSERT INTO today_plan_items (
+              today_date, source_task_id, subject_id, title, note, due_date, sort_order,
+              completed, synced_source_completion, created_at, updated_at
+            ) VALUES ('2026-07-28', NULL, 1, 'Politics', NULL, NULL, 1, 0, 0, ?1, ?1)
+            ",
+                params![now],
+            )
+            .expect("insert today item");
+        let today_item_id = connection.last_insert_rowid();
+
+        connection
+            .execute(
+                "
+            INSERT INTO schedule_blocks (
+              schedule_date, title, note, category_key, subject_id, source_today_item_id,
+              template_id, start_minute, end_minute, status, created_at, updated_at
+            ) VALUES ('2026-07-28', 'Running politics', NULL, 'politics', 1, ?1, NULL, 540, 600, 'running', ?2, ?2)
+            ",
+                params![today_item_id, now],
+            )
+            .expect("insert running block");
+        let running_id = connection.last_insert_rowid();
+
+        cascade_schedule_blocks_for_today_item_completion(&connection, today_item_id, true, &now)
+            .expect("cascade complete");
+
+        let status: String = connection
+            .query_row(
+                "SELECT status FROM schedule_blocks WHERE id = ?1",
+                params![running_id],
+                |row| row.get(0),
+            )
+            .expect("load running status");
+        assert_eq!(status, "running");
     }
 }

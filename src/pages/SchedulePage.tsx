@@ -6,6 +6,7 @@ import type {
 } from 'react';
 import {
   CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -16,10 +17,12 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react';
+import { completeTodayPlanItem } from '../services/checklistApi';
 import { getAppSettings } from '../services/settingsApi';
 import { syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT, syncFeishuBridge } from '../services/feishuApi';
 import { CALDAV_SYNC_REFRESH_EVENT } from '../services/caldavApi';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import {
   createScheduleBlock,
   createScheduleBlockFromTodayItem,
@@ -28,6 +31,7 @@ import {
   deleteScheduleTemplate,
   getSchedulePageData,
   moveScheduleBlock,
+  setScheduleBlockCompleted,
   startStudyModeFromScheduleBlock,
   updateScheduleBlock,
   updateScheduleTemplate,
@@ -53,6 +57,7 @@ const dayEnd = 24 * 60;
 const slotMinutes = 15;
 const minBlockMinutes = 15;
 const defaultBlockMinutes = 60;
+const calendarDragActivationDistance = 8;
 const todayItemDragType = 'application/x-schedule-today-item';
 const quickScheduleSlots = [
   { label: '上午', minute: 8 * 60 },
@@ -150,6 +155,13 @@ type CalendarDragState = {
   originClientY?: number;
 };
 
+type PendingBlockDragState = {
+  block: ScheduleBlock;
+  originClientX: number;
+  originClientY: number;
+  pointerId: number;
+};
+
 function layoutScheduleBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlock[] {
   const ordered = [...blocks].sort((left, right) =>
     left.start_minute - right.start_minute ||
@@ -201,6 +213,37 @@ function positionedBlockTimelineStyle(positioned: PositionedScheduleBlock) {
   };
 }
 
+function isScheduleBlockCompleted(
+  block: ScheduleBlock,
+  todayItems: Array<{ id: number; completed: boolean }>,
+) {
+  if (block.status === 'completed') {
+    return true;
+  }
+  if (block.source_today_item_id == null) {
+    return false;
+  }
+  return todayItems.some((item) => item.id === block.source_today_item_id && item.completed);
+}
+
+function scheduleBlockStatusClass(
+  block: ScheduleBlock,
+  todayItems: Array<{ id: number; completed: boolean }>,
+) {
+  const completed = isScheduleBlockCompleted(block, todayItems);
+  const running = block.status === 'running';
+  return `${completed ? ' is-completed' : ''}${running ? ' is-running' : ''}`;
+}
+
+function scheduleBlockStatusLabel(
+  block: ScheduleBlock,
+  todayItems: Array<{ id: number; completed: boolean }>,
+) {
+  if (isScheduleBlockCompleted(block, todayItems)) return '已完成';
+  if (block.status === 'running') return '进行中';
+  return null;
+}
+
 function categoryLabel(key: string) {
   return categories.find((item) => item.key === key)?.label ?? '通用';
 }
@@ -231,6 +274,7 @@ function draftFromTemplate(template: ScheduleTemplate): ScheduleTemplateDraft {
 }
 
 export default function SchedulePage() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [data, setData] = useState<SchedulePageData | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -252,12 +296,18 @@ export default function SchedulePage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragState, setDragState] = useState<CalendarDragState | null>(null);
+  const [pendingBlockDrag, setPendingBlockDrag] = useState<PendingBlockDragState | null>(null);
   const refreshTokenRef = useRef(0);
   const laneRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<CalendarDragState | null>(null);
+  const pendingBlockDragRef = useRef<PendingBlockDragState | null>(null);
+  const blockedTodayItemDragRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const pendingDragClientYRef = useRef<number | null>(null);
   const dragEffectKey = dragState && dragState.mode !== 'create' ? `${dragState.mode}:${dragState.blockId ?? ''}` : null;
+  const pointerGestureKey = pendingBlockDrag
+    ? `pending:${pendingBlockDrag.pointerId}:${pendingBlockDrag.block.id}`
+    : dragEffectKey;
 
   useEffect(() => {
     void initialize();
@@ -286,30 +336,74 @@ export default function SchedulePage() {
     setDragState(next);
   }
 
+  function setPendingBlockDragState(next: PendingBlockDragState | null) {
+    pendingBlockDragRef.current = next;
+    setPendingBlockDrag(next);
+  }
+
   useEffect(() => {
     const active = dragStateRef.current;
-    if (!active || active.mode === 'create') return;
+    const pending = pendingBlockDragRef.current;
+    if ((!active || active.mode === 'create') && !pending) return;
 
     function handlePointerMove(event: PointerEvent) {
+      const pendingDrag = pendingBlockDragRef.current;
+      if (pendingDrag) {
+        if (event.pointerId !== pendingDrag.pointerId) return;
+        const distance = Math.hypot(
+          event.clientX - pendingDrag.originClientX,
+          event.clientY - pendingDrag.originClientY,
+        );
+        if (distance < calendarDragActivationDistance) return;
+
+        event.preventDefault();
+        setPendingBlockDragState(null);
+        startBlockDrag(pendingDrag.block, 'move', pendingDrag.originClientY);
+        updateDragPreview(event.clientY);
+        return;
+      }
+
+      const current = dragStateRef.current;
+      if (!current || current.mode === 'create') return;
       event.preventDefault();
       scheduleDragPreview(event.clientY);
     }
 
-    function handlePointerUp() {
+    function handlePointerUp(event: PointerEvent) {
+      const pendingDrag = pendingBlockDragRef.current;
+      if (pendingDrag) {
+        if (event.pointerId !== pendingDrag.pointerId) return;
+        setPendingBlockDragState(null);
+        return;
+      }
+
+      const current = dragStateRef.current;
+      if (!current || current.mode === 'create') return;
       flushScheduledDragPreview();
-      void commitDrag(dragStateRef.current);
+      void commitDrag(current);
+    }
+
+    function handlePointerCancel(event: PointerEvent) {
+      const pendingDrag = pendingBlockDragRef.current;
+      if (pendingDrag && event.pointerId === pendingDrag.pointerId) {
+        setPendingBlockDragState(null);
+      }
+      if (dragStateRef.current?.mode !== 'create') {
+        cancelScheduledDragPreview();
+        setCalendarDragState(null);
+      }
     }
 
     window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp, { once: true });
-    window.addEventListener('pointercancel', handlePointerUp, { once: true });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerCancel);
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
       cancelScheduledDragPreview();
     };
-  }, [dragEffectKey]);
+  }, [pointerGestureKey]);
 
   const positionedDayBlocks = useMemo(
     () => layoutScheduleBlocks(data?.day_blocks ?? []),
@@ -573,6 +667,11 @@ export default function SchedulePage() {
   }
 
   function handleTodayItemDragStart(event: ReactDragEvent<HTMLElement>, itemId: number, title: string) {
+    if (blockedTodayItemDragRef.current === itemId) {
+      blockedTodayItemDragRef.current = null;
+      event.preventDefault();
+      return;
+    }
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.setData(todayItemDragType, String(itemId));
     event.dataTransfer.setData('text/plain', title);
@@ -615,8 +714,12 @@ export default function SchedulePage() {
   function handleBlockPointerDown(event: ReactPointerEvent<HTMLElement>, block: ScheduleBlock) {
     if (event.button !== 0 || editingBlockId === block.id || isInteractiveElement(event.target)) return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    event.preventDefault();
-    startBlockDrag(block, 'move', event.clientY);
+    setPendingBlockDragState({
+      block,
+      originClientX: event.clientX,
+      originClientY: event.clientY,
+      pointerId: event.pointerId,
+    });
   }
 
   function handleResizePointerDown(
@@ -836,6 +939,37 @@ export default function SchedulePage() {
     }, '日程已添加。');
   }
 
+  async function handleCompleteTodayItem(itemId: number, completed: boolean) {
+    const item = data?.today_items.find((candidate) => candidate.id === itemId);
+    if (!item) return;
+
+    const nextCompleted = !completed;
+    let syncSourceCompletion = false;
+    if (nextCompleted && item.source_task_id !== null) {
+      syncSourceCompletion = await confirm({
+        cancelLabel: '只完成今日任务',
+        confirmLabel: '同步完成',
+        message: '这条今日任务来自清单待办。同步完成会把源待办也移入已完成；只完成今日任务则保留源待办。',
+        title: '同步完成源待办？',
+      });
+    }
+
+    await withSave(async () => {
+      await completeTodayPlanItem(itemId, nextCompleted, syncSourceCompletion);
+    }, nextCompleted ? '今日任务已完成。' : '今日任务已恢复为未完成。');
+  }
+
+  async function handleCompleteScheduleBlock(block: ScheduleBlock, completed: boolean) {
+    if (block.source_today_item_id !== null) {
+      await handleCompleteTodayItem(block.source_today_item_id, completed);
+      return;
+    }
+
+    await withSave(async () => {
+      await setScheduleBlockCompleted(block.id, !completed);
+    }, completed ? '日程已恢复为未完成。' : '日程已完成。');
+  }
+
   async function handleAddTodayItem(itemId: number) {
     setView('day');
     setQuickAddDraft(null);
@@ -998,6 +1132,8 @@ export default function SchedulePage() {
         </div>
       )}
 
+      {confirmDialog}
+
       <section className="schedule-toolbar soft-panel">
         <div className="segmented-control">
           <button className={view === 'day' ? 'active' : ''} type="button" onClick={() => setView('day')}>今日日历</button>
@@ -1103,25 +1239,46 @@ export default function SchedulePage() {
             const picking = pendingTodayItemId === item.id;
             return (
               <article
-                className={`schedule-task-row${picking ? ' picking' : ''}`}
+                className={`schedule-task-row${picking ? ' picking' : ''}${item.completed ? ' is-completed' : ''}`}
                 draggable={!saving}
                 key={item.id}
                 onDragEnd={handleTodayItemDragEnd}
                 onDragStart={(event) => handleTodayItemDragStart(event, item.id, item.title)}
               >
-                <div>
-                  <strong>{item.title}</strong>
-                  <span>{subjectName(subjects, item.subject_id)}{item.due_date ? ` / ${item.due_date}` : ''}</span>
+                <div className="schedule-task-main">
+                  <button
+                    aria-label={item.completed ? '恢复为未完成' : '标记完成'}
+                    className={item.completed ? 'small-action icon-action enabled' : 'small-action icon-action'}
+                    disabled={saving}
+                    title={item.completed ? '恢复为未完成' : '标记完成'}
+                    type="button"
+                    onPointerCancel={() => { blockedTodayItemDragRef.current = null; }}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      blockedTodayItemDragRef.current = item.id;
+                    }}
+                    onPointerUp={() => { blockedTodayItemDragRef.current = null; }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleCompleteTodayItem(item.id, item.completed);
+                    }}
+                  >
+                    <Check size={13} />
+                  </button>
+                  <div className="schedule-task-copy">
+                    <strong>{item.title}</strong>
+                    <span>{subjectName(subjects, item.subject_id)}{item.due_date ? ` / ${item.due_date}` : ''}</span>
+                  </div>
                 </div>
                 <div className="schedule-task-actions">
-                  <button disabled={saving} type="button" onClick={() => void handleAddTodayItem(item.id)}>
+                  <button disabled={saving || item.completed} type="button" onClick={() => void handleAddTodayItem(item.id)}>
                     {picking ? '取消' : '选时间'}
                   </button>
                   <div className="schedule-quick-slots" aria-label={`${item.title} 快捷安排`}>
                     {quickScheduleSlots.map((slot) => (
                       <button
                         aria-label={`安排 ${item.title} 到${slot.label} ${formatMinute(slot.minute)}`}
-                        disabled={saving}
+                        disabled={saving || item.completed}
                         key={slot.label}
                         type="button"
                         onClick={() => void handleAddTodayItemAt(item.id, slot.minute)}
@@ -1176,11 +1333,14 @@ export default function SchedulePage() {
               {currentMinute !== null && currentMinute >= dayStart && currentMinute <= dayEnd && (
                 <div className="schedule-now-line" style={{ top: `${timelinePercent(currentMinute)}%` }} />
               )}
-              {positionedDayBlocks.map(({ block, columnCount, columnIndex }) => (
+              {positionedDayBlocks.map(({ block, columnCount, columnIndex }) => {
+                const blockCompleted = isScheduleBlockCompleted(block, data?.today_items ?? []);
+                const statusLabel = scheduleBlockStatusLabel(block, data?.today_items ?? []);
+                return (
                 <article
-                  aria-label={`${block.title}，${formatMinute(block.start_minute)} 到 ${formatMinute(block.end_minute)}，${columnCount > 1 ? '时间冲突，' : ''}按 Enter 编辑，方向键每次移动 15 分钟，Shift 加方向键调整开始或结束时间，Delete 删除`}
+                  aria-label={`${block.title}，${formatMinute(block.start_minute)} 到 ${formatMinute(block.end_minute)}，${statusLabel ? `${statusLabel}，` : ''}${columnCount > 1 ? '时间冲突，' : ''}按 Enter 编辑，方向键每次移动 15 分钟，Shift 加方向键调整开始或结束时间，Delete 删除`}
                   aria-keyshortcuts="Enter Delete ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"
-                  className={`schedule-block category-${block.category_key}${columnCount > 1 ? ' conflict' : ''}${dragState?.blockId === block.id ? ' is-dragging' : ''}`}
+                  className={`schedule-block category-${block.category_key}${columnCount > 1 ? ' conflict' : ''}${scheduleBlockStatusClass(block, data?.today_items ?? [])}${dragState?.blockId === block.id ? ' is-dragging' : ''}`}
                   key={block.id}
                   onKeyDown={(event) => handleBlockKeyDown(event, block)}
                   onPointerDown={(event) => handleBlockPointerDown(event, block)}
@@ -1211,12 +1371,27 @@ export default function SchedulePage() {
                         type="button"
                       />
                       <div onDoubleClick={() => beginEditBlock(block)}>
-                        <span>{formatMinute(block.start_minute)}-{formatMinute(block.end_minute)} · {categoryLabel(block.category_key)}</span>
+                        <span>{formatMinute(block.start_minute)}-{formatMinute(block.end_minute)} · {categoryLabel(block.category_key)}{statusLabel ? ` · ${statusLabel}` : ''}</span>
                         <strong>{block.title}</strong>
                         <small>{subjectName(subjects, block.subject_id)}</small>
+                        {blockCompleted && <span className="schedule-completed-badge">✓ 完成</span>}
                         {columnCount > 1 && <span className="schedule-conflict-badge">时间冲突，点击编辑解决</span>}
                       </div>
                       <div className="schedule-block-actions">
+                        <button
+                          aria-label={blockCompleted ? '恢复为未完成' : '标记完成'}
+                          className={blockCompleted ? 'is-complete-toggle enabled' : 'is-complete-toggle'}
+                          disabled={saving || block.status === 'running'}
+                          title={block.status === 'running' ? '进行中的日程会在学习结束后自动完成' : blockCompleted ? '恢复为未完成' : '标记完成'}
+                          type="button"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleCompleteScheduleBlock(block, blockCompleted);
+                          }}
+                        >
+                          <Check size={14} />
+                        </button>
                         <button aria-label="开始专注" type="button" onClick={() => void handleStart(block)}><Play size={14} /></button>
                         <button
                           aria-label={`编辑 ${block.title}`}
@@ -1237,7 +1412,8 @@ export default function SchedulePage() {
                     </>
                   )}
                 </article>
-              ))}
+                );
+              })}
               {dragState && (
                 <div
                   className={`schedule-drag-preview is-${dragState.mode}`}
@@ -1300,11 +1476,23 @@ export default function SchedulePage() {
               <article className="week-day" key={day.date}>
                 <header><strong>{weekdays[index]}</strong><span>{day.date.slice(5)} · {Math.round(day.planned_minutes / 60 * 10) / 10}h</span></header>
                 <div className="week-blocks">
-                  {day.blocks.map((block) => (
-                    <button key={block.id} className={`week-block category-${block.category_key}`} type="button" onClick={() => { setSelectedDate(day.date); setView('day'); }}>
-                      <span>{formatMinute(block.start_minute)}</span>{block.title}
-                    </button>
-                  ))}
+                  {day.blocks.map((block) => {
+                    const blockCompleted = isScheduleBlockCompleted(block, data?.today_items ?? []);
+                    const statusLabel = scheduleBlockStatusLabel(block, data?.today_items ?? []);
+                    return (
+                      <button
+                        aria-label={`${block.title}，${formatMinute(block.start_minute)}${statusLabel ? `，${statusLabel}` : ''}`}
+                        className={`week-block category-${block.category_key}${scheduleBlockStatusClass(block, data?.today_items ?? [])}`}
+                        key={block.id}
+                        type="button"
+                        onClick={() => { setSelectedDate(day.date); setView('day'); }}
+                      >
+                        <span>{formatMinute(block.start_minute)}{blockCompleted ? ' · 完成' : ''}</span>
+                        {block.title}
+                        {blockCompleted && <span aria-hidden="true">✓</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               </article>
             ))}

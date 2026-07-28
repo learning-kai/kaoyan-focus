@@ -1,4 +1,5 @@
 use crate::{
+    commands::schedule::cascade_schedule_blocks_for_today_item_completion,
     storage::db::open_database,
     sync_package::{ensure_sync_meta_for_local_id, mark_entity_deleted},
 };
@@ -570,6 +571,8 @@ pub fn complete_today_plan_item(
                     .map_err(|error| error.to_string())?;
             }
         }
+
+        cascade_schedule_blocks_for_today_item_completion(&transaction, id, completed, &now)?;
 
         let item = get_today_plan_item_by_id(&transaction, id)?;
         transaction.commit().map_err(|error| error.to_string())?;

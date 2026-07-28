@@ -33,6 +33,7 @@ export type ScheduleTemplate = {
 
 export type ScheduleTodayItem = {
   id: number;
+  source_task_id: number | null;
   title: string;
   note: string | null;
   due_date: string | null;

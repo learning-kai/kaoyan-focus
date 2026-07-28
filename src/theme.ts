@@ -15,14 +15,14 @@ export const APP_THEME_OPTIONS: AppThemeOption[] = [
     id: 'light',
     label: '浅色',
     shortLabel: '浅色',
-    description: '干净明亮，Apple 风格。',
-    swatch: ['#ffffff', '#007aff', '#34c759'],
+    description: '系统浅色：#F2F2F7 背景与 #007AFF 强调。',
+    swatch: ['#f2f2f7', '#007aff', '#34c759'],
   },
   {
     id: 'dark',
     label: '深色',
     shortLabel: '深色',
-    description: '纯黑背景，高对比专注感。',
+    description: '系统深色：纯黑背景与 #0A84FF 强调。',
     swatch: ['#000000', '#0a84ff', '#30d158'],
   },
   {

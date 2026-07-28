@@ -486,6 +486,7 @@ pub fn run() {
             commands::schedule::create_schedule_block_from_today_item,
             commands::schedule::update_schedule_block,
             commands::schedule::move_schedule_block,
+            commands::schedule::set_schedule_block_completed,
             commands::schedule::delete_schedule_block,
             commands::schedule::create_schedule_template,
             commands::schedule::update_schedule_template,
