@@ -60,6 +60,20 @@ if (!completeToggleMatch || !completeToggleMatch[0].includes('onPointerDown')) {
   failed = true;
 }
 
+const deleteActionMatch = schedulePage.match(
+  /className="is-delete-action"[\s\S]*?<Trash2 size=\{14\} \/>/,
+);
+if (!deleteActionMatch || !deleteActionMatch[0].includes('onPointerDown')) {
+  console.error('Schedule delete action must isolate pointer down from block dragging');
+  failed = true;
+}
+
+const hig = readFileSync(resolve(root, 'src/apple-hig.css'), 'utf8');
+if (!hig.includes('.schedule-block-actions .is-delete-action')) {
+  console.error('Schedule delete action is missing its enlarged hit target');
+  failed = true;
+}
+
 if (!schedulePage.includes('blockedTodayItemDragRef.current === itemId')) {
   console.error('Today-item completion control must block native drag activation');
   failed = true;

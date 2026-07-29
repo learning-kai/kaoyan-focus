@@ -21,11 +21,10 @@ import './FocusWidgetPage.css';
 
 const REMAINING_REFRESH_MS = 1000;
 const TITLE = '专注悬浮窗';
-const HOVER_EXPAND_DELAY_MS = 120;
-const HOVER_COLLAPSE_DELAY_MS = 180;
+const HOVER_EXPAND_DELAY_MS = 60;
+const HOVER_COLLAPSE_DELAY_MS = 160;
 const HOVER_COLLAPSE_RETRY_MS = 40;
-const HOVER_REENTRY_LOCK_MS = 220;
-const RETRACT_PREPARE_MS = 48;
+const HOVER_REENTRY_LOCK_MS = 180;
 
 const idleState: StudyModeState = {
   id: null,
@@ -87,6 +86,7 @@ export default function FocusWidgetPage() {
   const collapseTimerRef = useRef<number | null>(null);
   const hoverLockUntilRef = useRef(0);
   const dockModeRef = useRef(dockState.mode);
+  const transitionGenerationRef = useRef(0);
   const canInteract = isTauriRuntime();
 
   useEffect(() => {
@@ -186,6 +186,9 @@ export default function FocusWidgetPage() {
     void listenFocusWidgetDockState((nextDockState) => {
       if (!cancelled) {
         setDockState(nextDockState);
+        if (nextDockState.mode === 'peek') {
+          setIsRetracting(false);
+        }
       }
     })
       .then((dispose) => {
@@ -211,6 +214,7 @@ export default function FocusWidgetPage() {
 
   useEffect(() => {
     return () => {
+      transitionGenerationRef.current += 1;
       if (expandTimerRef.current !== null) {
         window.clearTimeout(expandTimerRef.current);
         expandTimerRef.current = null;
@@ -332,11 +336,15 @@ export default function FocusWidgetPage() {
     }
   }, [canInteract, studyState.is_paused, studyState.phase]);
 
-  const peekFromEdge = useCallback(async () => {
-    if (!canInteract || dockModeRef.current !== 'collapsed') return;
+  const peekFromEdge = useCallback(async (interruptRetraction = false) => {
+    const startsFromCollapsed = dockModeRef.current === 'collapsed';
+    const reversesRetraction = interruptRetraction && dockModeRef.current === 'peek';
+    if (!canInteract || (!startsFromCollapsed && !reversesRetraction)) return;
     const previousDockState = dockState;
     const edge = previousDockState.edge;
     if (!edge) return;
+    const transitionGeneration = transitionGenerationRef.current + 1;
+    transitionGenerationRef.current = transitionGeneration;
 
     if (expandTimerRef.current !== null) {
       window.clearTimeout(expandTimerRef.current);
@@ -348,20 +356,30 @@ export default function FocusWidgetPage() {
     }
     hoverLockUntilRef.current = Date.now() + HOVER_REENTRY_LOCK_MS;
     dockModeRef.current = 'peek';
-    setIsExpanding(true);
+    setIsExpanding(startsFromCollapsed);
     setIsRetracting(false);
     setDockState({ mode: 'peek', edge });
 
     try {
-      await waitForNextPaint();
-      setDockState(await peekFocusWidgetFromEdge());
+      if (startsFromCollapsed) {
+        await waitForNextPaint();
+        if (transitionGenerationRef.current !== transitionGeneration) return;
+        setIsExpanding(false);
+      }
+
+      const nextDockState = await peekFocusWidgetFromEdge();
+      if (transitionGenerationRef.current !== transitionGeneration) return;
+      setDockState(nextDockState);
       setError(null);
     } catch (reason) {
+      if (transitionGenerationRef.current !== transitionGeneration) return;
       dockModeRef.current = previousDockState.mode;
       setDockState(previousDockState);
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      setIsExpanding(false);
+      if (transitionGenerationRef.current === transitionGeneration) {
+        setIsExpanding(false);
+      }
     }
   }, [canInteract, dockState]);
 
@@ -370,6 +388,8 @@ export default function FocusWidgetPage() {
     const previousDockState = dockState;
     const edge = previousDockState.edge;
     if (!edge) return;
+    const transitionGeneration = transitionGenerationRef.current + 1;
+    transitionGenerationRef.current = transitionGeneration;
 
     if (expandTimerRef.current !== null) {
       window.clearTimeout(expandTimerRef.current);
@@ -383,11 +403,11 @@ export default function FocusWidgetPage() {
     setIsRetracting(true);
 
     try {
-      await waitForNextPaint();
-      await waitForMilliseconds(RETRACT_PREPARE_MS);
-      setDockState(await collapseFocusWidgetToEdge());
+      await collapseFocusWidgetToEdge();
+      if (transitionGenerationRef.current !== transitionGeneration) return;
       setError(null);
     } catch (reason) {
+      if (transitionGenerationRef.current !== transitionGeneration) return;
       dockModeRef.current = previousDockState.mode;
       setDockState(previousDockState);
       setIsRetracting(false);
@@ -429,7 +449,12 @@ export default function FocusWidgetPage() {
       window.clearTimeout(collapseTimerRef.current);
       collapseTimerRef.current = null;
     }
-  }, []);
+
+    if (isRetracting) {
+      hoverLockUntilRef.current = Date.now() + HOVER_REENTRY_LOCK_MS;
+      void peekFromEdge(true);
+    }
+  }, [isRetracting, peekFromEdge]);
 
   const handleExpandedMouseLeave = useCallback(() => {
     if (!canInteract || dockModeRef.current !== 'peek') return;
@@ -618,12 +643,6 @@ function waitForNextPaint() {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => resolve());
     });
-  });
-}
-
-function waitForMilliseconds(delayMs: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, delayMs);
   });
 }
 

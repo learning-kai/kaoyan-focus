@@ -87,7 +87,7 @@ html,
 body {
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   font-size: 14px;
   line-height: 1.45;
   background: var(--bg) !important;
@@ -131,7 +131,7 @@ body {
 .brand h1 {
   font-size: 15px !important;
   font-weight: 650 !important;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .brand p {
@@ -201,10 +201,14 @@ body {
 .main-panel {
   background: var(--bg) !important;
   padding: var(--space-5) var(--space-6) !important;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 .page-transition {
   animation: page-enter var(--motion-enter) var(--ease-apple) both;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 .page-shell,
@@ -236,7 +240,7 @@ body {
 .schedule-page .page-header h2 {
   font-size: 21px !important;
   font-weight: 700 !important;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--ink) !important;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -306,7 +310,7 @@ button.primary-action,
   background-image: none !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 4px 12px color-mix(in srgb, var(--blue) 28%, transparent) !important;
   font-weight: 600 !important;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   transition:
     transform var(--motion-fast) var(--ease-standard),
     filter var(--motion-fast) var(--ease-standard),
@@ -509,7 +513,7 @@ button:focus-visible {
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .confirm-dialog-head p {
@@ -529,6 +533,7 @@ button:focus-visible {
 
 .schedule-drawer,
 .today-plan-drawer {
+  max-height: calc(100dvh - 40px);
   border-left: 1px solid var(--line) !important;
   background: var(--bg-elevated) !important;
   box-shadow: -12px 0 40px rgba(0, 0, 0, 0.12) !important;
@@ -538,8 +543,9 @@ button:focus-visible {
 
 .schedule-drawer:not(.is-open),
 .today-plan-drawer:not(.is-open) {
+  visibility: hidden !important;
   opacity: 0 !important;
-  transform: translateX(calc(100% + 28px)) !important;
+  transform: none !important;
   pointer-events: none !important;
 }
 
@@ -576,7 +582,7 @@ button:focus-visible {
 .focus-timer,
 .clock-readout {
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.04em;
+  letter-spacing: 0;
   font-weight: 650;
 }
 
@@ -789,6 +795,10 @@ html[data-theme='sakura'] .primary-button {
   padding: var(--space-5) !important;
 }
 
+.focus-prepare-shell .start-ritual-button {
+  order: -1;
+}
+
 .checklist-clean-shell .category-task-row.is-completed,
 .today-item-row.is-completed {
   opacity: 0.72;
@@ -809,7 +819,8 @@ html[data-theme='sakura'] .primary-button {
   white-space: nowrap;
 }
 
-.schedule-block-actions .is-complete-toggle {
+.schedule-block-actions .is-complete-toggle,
+.schedule-block-actions .is-delete-action {
   width: 36px;
   min-width: 36px;
   height: 36px;
@@ -977,5 +988,162 @@ html[data-theme='sakura'] .primary-button {
   .chip:active,
   .icon-button:active {
     transform: none !important;
+  }
+}
+
+/* Active study mode stays inside the normal app shell so navigation remains available.
+   The shell gets a fixed viewport track; drawers are fixed overlays and do not affect
+   the countdown layout's intrinsic size. */
+html:has(.focus-active-shell),
+body:has(.focus-active-shell) {
+  overflow: clip;
+  scrollbar-gutter: auto;
+}
+
+.app-shell:has(.focus-active-shell) {
+  height: 100dvh;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-shell:has(.focus-active-shell) .main-panel {
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: clip;
+}
+
+.app-shell:has(.focus-active-shell) .page-transition {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: clip;
+}
+
+.focus-active-shell {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  border-radius: 0 !important;
+  overflow: clip;
+}
+
+.focus-active-shell > .schedule-drawer,
+.focus-active-shell > .today-plan-drawer {
+  position: fixed !important;
+  z-index: 3;
+}
+
+.focus-active-header {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
+  align-items: center;
+  min-width: 0;
+  padding: clamp(10px, 2vh, 18px) clamp(14px, 2.4vw, 28px);
+}
+
+.focus-active-header > * {
+  min-width: 0;
+}
+
+.focus-active-header .top-subject-switch {
+  justify-self: center;
+  width: min(220px, 100%);
+}
+
+.focus-header-right {
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.focus-clock-zone {
+  min-height: 0;
+  min-width: 0;
+  padding: clamp(10px, 2.8vh, 28px) clamp(14px, 2.4vw, 28px);
+}
+
+.focus-clock-zone strong {
+  max-width: 100%;
+  font-size: clamp(74px, 13vw, 132px);
+}
+
+.focus-active-footer {
+  min-width: 0;
+  padding: clamp(10px, 1.8vh, 18px) clamp(14px, 2.4vw, 28px);
+}
+
+.focus-quiet-meta,
+.focus-quiet-actions {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .focus-hud-card {
+    padding-inline: 8px;
+  }
+
+  .focus-hud-task {
+    min-width: 112px;
+  }
+
+  .focus-header-right {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 960px) {
+  .app-shell:has(.focus-active-shell) {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .app-shell:has(.focus-active-shell) .sidebar {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    min-height: 0;
+    padding: var(--space-5) var(--space-2) !important;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+  }
+
+  .focus-active-header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .focus-active-header .top-subject-switch {
+    justify-self: end;
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .focus-header-right {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-end;
+  }
+
+  .focus-active-header {
+    row-gap: 8px;
+  }
+}
+
+@media (max-height: 720px) {
+  .focus-active-header {
+    padding-block: 8px;
+  }
+
+  .focus-clock-zone {
+    gap: 8px;
+    padding-block: 8px;
+  }
+
+  .focus-clock-zone strong {
+    font-size: clamp(68px, 16vmin, 118px);
+  }
+
+  .focus-active-footer {
+    padding-block: 8px;
   }
 }

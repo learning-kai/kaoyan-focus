@@ -1,0 +1,35 @@
+- generic [ref=f1e3]:
+  - link "跳到主内容" [ref=f1e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=f1e5]:
+    - navigation "主导航" [ref=f1e11]:
+      - generic [ref=f1e12]:
+        - button "专注：开始学习与约束，快捷键 Alt+1" [ref=f1e13] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "清单：今天真正要做的事，快捷键 Alt+2" [ref=f1e17] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "日历：安排学习日程，快捷键 Alt+3" [ref=f1e21] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "白名单：学习前确认放行，快捷键 Alt+4" [ref=f1e24] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "复盘：每日总结与明日重点，快捷键 Alt+5" [ref=f1e28] [cursor=pointer]:
+          - generic:
+            - strong
+      - generic [ref=f1e32]:
+        - button "统计：学习记录与干扰，快捷键 Alt+6" [ref=f1e33] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "闹钟：全局一次性提醒，快捷键 Alt+7" [ref=f1e36] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "设置：节奏、同步与更新，快捷键 Alt+8" [ref=f1e44] [cursor=pointer]:
+          - generic:
+            - strong
+  - main [active] [ref=f1e48]:
+    - generic [ref=f1e50]:
+      - paragraph [ref=f1e51]: Loading
+      - heading "正在加载页面..." [level=2] [ref=f1e52]

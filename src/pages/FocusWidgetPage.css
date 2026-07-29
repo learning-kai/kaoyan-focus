@@ -32,19 +32,16 @@
   --widget-window-radius: 32px;
   --widget-spring-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --widget-control-ease: cubic-bezier(0.2, 0.82, 0.2, 1);
-  --widget-panel-enter-x: 0px;
-  --widget-panel-enter-y: 2px;
-  --widget-panel-enter-scale-x: 0.982;
-  --widget-panel-enter-scale-y: 0.982;
-  --widget-tab-enter-x: 0px;
-  --widget-tab-enter-y: 0px;
-  --widget-tab-enter-scale: 0.9;
+  --widget-material-enter: 220ms;
+  --widget-material-exit: 200ms;
+  --widget-panel-material-scale: 0.986;
+  --widget-tab-enter-scale: 0.96;
   width: 100vw;
   height: 100vh;
   min-width: 0;
   box-sizing: border-box;
   display: grid;
-  padding: 8px;
+  padding: 5px;
   overflow: hidden;
   border-radius: var(--widget-window-radius);
   color: var(--widget-text);
@@ -54,14 +51,25 @@
   -webkit-app-region: no-drag;
 }
 
+/* The native window owns the rounded transparent region; keep the shell itself
+ * free of the global page surface so only the panel reads as glass. */
+.focus-widget-shell {
+  border: 0 !important;
+  border-radius: var(--widget-window-radius) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 .focus-widget-panel {
   position: relative;
   min-width: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  gap: 4px;
-  padding: 9px 11px 9px;
+  grid-template-rows: 22px minmax(34px, 1fr) auto auto;
+  gap: 2px;
+  padding: 6px 8px;
   overflow: hidden;
   border: 1px solid var(--widget-line);
   border-radius: 24px;
@@ -77,6 +85,8 @@
   backdrop-filter: blur(32px) saturate(190%) contrast(105%);
   -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(105%);
   transform: translateZ(0);
+  filter: blur(0);
+  opacity: 1;
   -webkit-app-region: no-drag;
 }
 
@@ -106,136 +116,58 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .focus-widget-panel,
-  .focus-widget-time,
   .focus-widget-collapsed-tab {
-    will-change: transform, opacity;
+    will-change: transform, opacity, filter;
   }
 
-  .focus-widget-shell.is-peek.is-expanding .focus-widget-panel {
-    animation: focus-widget-glass-in 150ms var(--widget-control-ease) both;
+  .focus-widget-panel {
+    transition:
+      opacity var(--widget-material-enter) var(--widget-control-ease),
+      transform var(--widget-material-enter) var(--widget-control-ease),
+      filter 180ms var(--widget-control-ease);
+  }
+
+  .focus-widget-shell.is-peek.is-expanding .focus-widget-panel,
+  .focus-widget-shell.is-retracting .focus-widget-panel {
+    opacity: 0.18;
+    filter: blur(0.7px);
+    transform: translateZ(0) scale(var(--widget-panel-material-scale));
   }
 
   .focus-widget-shell.is-retracting .focus-widget-panel {
-    animation: focus-widget-glass-out 180ms cubic-bezier(0.36, 0, 0.18, 1) both;
     pointer-events: none;
-  }
-
-  .focus-widget-shell.is-retracting .focus-widget-time {
-    animation: focus-widget-time-contract 42ms linear both;
-  }
-
-  .focus-widget-shell.is-retracting .focus-widget-topbar,
-  .focus-widget-shell.is-retracting .focus-widget-subject,
-  .focus-widget-shell.is-retracting .focus-widget-progress {
-    animation: focus-widget-detail-fade-out 56ms ease-out both;
-  }
-
-  .focus-widget-shell.is-collapsed .focus-widget-collapsed-tab {
-    animation: focus-widget-tab-in 220ms var(--widget-spring-ease) both;
+    transition-duration:
+      var(--widget-material-exit),
+      var(--widget-material-exit),
+      170ms;
   }
 
   .edge-left .focus-widget-panel {
-    --widget-panel-enter-x: -3px;
-    --widget-panel-enter-y: 0px;
     transform-origin: left center;
   }
 
   .edge-right .focus-widget-panel {
-    --widget-panel-enter-x: 3px;
-    --widget-panel-enter-y: 0px;
     transform-origin: right center;
   }
 
   .edge-top .focus-widget-panel {
-    --widget-panel-enter-x: 0px;
-    --widget-panel-enter-y: -3px;
     transform-origin: center top;
   }
 
   .edge-bottom .focus-widget-panel {
-    --widget-panel-enter-x: 0px;
-    --widget-panel-enter-y: 3px;
     transform-origin: center bottom;
   }
 
-  .edge-left .focus-widget-collapsed-tab {
-    --widget-tab-enter-x: -4px;
-    transform-origin: left center;
-  }
-
-  .edge-right .focus-widget-collapsed-tab {
-    --widget-tab-enter-x: 4px;
-    transform-origin: right center;
-  }
-
-  .edge-top .focus-widget-collapsed-tab {
-    --widget-tab-enter-y: -4px;
-    transform-origin: center top;
-  }
-
-  .edge-bottom .focus-widget-collapsed-tab {
-    --widget-tab-enter-y: 4px;
-    transform-origin: center bottom;
-  }
-}
-
-@keyframes focus-widget-glass-in {
-  from {
-    opacity: 0.9;
-    transform: translate3d(var(--widget-panel-enter-x), var(--widget-panel-enter-y), 0);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-@keyframes focus-widget-time-contract {
-  from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  to {
-    opacity: 0.86;
-    transform: translate3d(0, 0, 0) scale(0.56);
-  }
-}
-
-@keyframes focus-widget-detail-fade-out {
-  from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    opacity: 0.2;
-    transform: translate3d(0, -2px, 0);
-  }
-}
-
-@keyframes focus-widget-glass-out {
-  from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1, 1);
-  }
-
-  to {
-    opacity: 0.12;
-    transform:
-      translate3d(var(--widget-panel-enter-x), var(--widget-panel-enter-y), 0)
-      scale(var(--widget-panel-enter-scale-x), var(--widget-panel-enter-scale-y));
+  .focus-widget-shell.is-collapsed .focus-widget-collapsed-tab {
+    animation: focus-widget-tab-in var(--widget-material-enter) var(--widget-spring-ease) both;
   }
 }
 
 @keyframes focus-widget-tab-in {
   from {
-    opacity: 0.72;
-    transform:
-      translate3d(var(--widget-tab-enter-x), var(--widget-tab-enter-y), 0)
-      scale(var(--widget-tab-enter-scale));
-    filter: blur(0.35px);
+    opacity: 0.74;
+    transform: translateZ(0) scale(var(--widget-tab-enter-scale));
+    filter: blur(0.4px);
   }
 
   76% {
@@ -245,7 +177,7 @@
 
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translateZ(0) scale(1);
     filter: blur(0);
   }
 }
@@ -263,15 +195,15 @@
 
 .focus-widget-topbar {
   justify-content: space-between;
-  gap: 7px;
-  min-height: 24px;
+  gap: 5px;
+  min-height: 22px;
   -webkit-app-region: drag;
 }
 
 .focus-widget-stage {
-  gap: 6px;
+  gap: 5px;
   color: var(--widget-muted);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 680;
   line-height: 1;
   overflow: hidden;
@@ -299,7 +231,7 @@
 
 .focus-widget-actions {
   flex: 0 0 auto;
-  gap: 4px;
+  gap: 3px;
   -webkit-app-region: no-drag;
 }
 
@@ -316,12 +248,12 @@
 }
 
 .focus-widget-icon-button {
-  width: 23px;
-  height: 23px;
+  width: 21px;
+  height: 21px;
   display: inline-grid;
   place-items: center;
   padding: 0;
-  border-radius: 11px;
+  border-radius: 9px;
   line-height: 1;
   box-shadow:
     0 1px 2px rgba(31, 35, 43, 0.08),
@@ -372,7 +304,7 @@
   min-width: 0;
   color: var(--widget-text);
   align-self: center;
-  font-size: 56px;
+  font-size: clamp(40px, 31vh, 50px);
   line-height: 0.9;
   font-weight: 780;
   font-variant-numeric: tabular-nums;
@@ -390,8 +322,8 @@
   position: relative;
   z-index: 1;
   margin: 0;
-  font-size: 10.5px;
-  line-height: 1.15;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .focus-widget-subject {
@@ -405,7 +337,7 @@
   min-width: 0;
   display: grid;
   align-self: end;
-  gap: 4px;
+  gap: 2px;
 }
 
 .focus-widget-meta-row {
@@ -413,7 +345,7 @@
   justify-content: space-between;
   gap: 8px;
   color: rgba(48, 52, 63, 0.56);
-  font-size: 9.8px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1;
 }
@@ -434,12 +366,12 @@
 
 .focus-widget-progress-row strong {
   color: rgba(29, 29, 31, 0.82);
-  font-size: 10.5px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .focus-widget-bar {
-  height: 5px;
+  height: 4px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(96, 112, 132, 0.14);
@@ -669,6 +601,28 @@
   justify-self: end;
 }
 
+@media (max-width: 48px) and (max-height: 48px) {
+  .focus-widget-shell.is-collapsed {
+    padding: 1px;
+  }
+
+  .focus-widget-collapsed-tab {
+    display: grid;
+    place-items: center;
+    padding: 0;
+  }
+
+  .focus-widget-collapsed-tab strong,
+  .focus-widget-collapsed-tab span:last-child {
+    display: none;
+  }
+
+  .focus-widget-collapsed-tab .focus-widget-dot {
+    width: 9px;
+    height: 9px;
+  }
+}
+
 /* Apple HIG token bridge for focus widget */
 .focus-widget-shell {
   --widget-blue: var(--blue, #0a84ff);
@@ -684,11 +638,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .focus-widget-collapsed-tab,
   .focus-widget-panel,
   .focus-widget-shell,
   .focus-widget-panel *,
   .focus-widget-shell * {
     animation: none !important;
     transition: none !important;
+    transform: none !important;
+    filter: none !important;
   }
 }

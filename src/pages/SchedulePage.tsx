@@ -1401,7 +1401,19 @@ export default function SchedulePage() {
                         >
                           <PencilLine size={14} /> 编辑
                         </button>
-                        <button aria-label="删除" type="button" onClick={() => void withSave(() => deleteScheduleBlock(block.id), '日程已删除。')}><Trash2 size={14} /></button>
+                        <button
+                          aria-label={`删除 ${block.title}`}
+                          className="is-delete-action"
+                          title="删除日程"
+                          type="button"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void withSave(() => deleteScheduleBlock(block.id), '日程已删除。');
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                       <button
                         aria-label={`调整 ${block.title} 的结束时间`}

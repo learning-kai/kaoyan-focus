@@ -1,0 +1,168 @@
+- generic [ref=e3]:
+  - link "跳到主内容" [ref=e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=e5]:
+    - navigation "主导航" [ref=e11]:
+      - generic [ref=e12]:
+        - button "专注：开始学习与约束，快捷键 Alt+1" [ref=e13] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "清单：今天真正要做的事，快捷键 Alt+2" [ref=e17] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "日历：安排学习日程，快捷键 Alt+3" [ref=e21] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "白名单：学习前确认放行，快捷键 Alt+4" [ref=e24] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "复盘：每日总结与明日重点，快捷键 Alt+5" [ref=e28] [cursor=pointer]:
+          - generic:
+            - strong
+      - generic [ref=e32]:
+        - button "统计：学习记录与干扰，快捷键 Alt+6" [ref=e33] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "闹钟：全局一次性提醒，快捷键 Alt+7" [ref=e36] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "设置：节奏、同步与更新，快捷键 Alt+8" [ref=e44] [cursor=pointer]:
+          - generic:
+            - strong
+  - main [active] [ref=e48]:
+    - generic [ref=e681]:
+      - generic [ref=e682]:
+        - heading "设置" [level=2] [ref=e684]
+        - button "刷新" [ref=e686] [cursor=pointer]
+      - alert [ref=e692]: 请在 Windows 桌面应用中运行考研专注。浏览器预览只用于界面检查，无法访问本机数据、通知、更新和 Windows 守护能力。
+      - generic [ref=e693]:
+        - tablist "设置分区" [ref=e694]:
+          - tab "基础" [selected] [ref=e695] [cursor=pointer]
+          - tab "同步" [ref=e700] [cursor=pointer]
+          - tab "集成" [ref=e704] [cursor=pointer]
+          - tab "系统" [ref=e710] [cursor=pointer]
+        - tabpanel [ref=e714]:
+          - tabpanel "基础" [ref=e715]:
+            - generic [ref=e716]:
+              - button "学习节奏" [ref=e717] [cursor=pointer]
+              - button "自动化" [ref=e718] [cursor=pointer]
+              - button "悬浮窗" [ref=e719] [cursor=pointer]
+              - button "提醒音效" [ref=e720] [cursor=pointer]
+            - generic [ref=e721]:
+              - generic [ref=e723]:
+                - paragraph [ref=e724]: Rhythm
+                - heading "学习节奏" [level=3] [ref=e725]
+              - generic [ref=e729]:
+                - generic [ref=e730]:
+                  - generic [ref=e731]:
+                    - strong [ref=e732]: 学习模式时长
+                    - paragraph [ref=e733]: 进入学习模式后的总约束时间。
+                  - generic [ref=e734]:
+                    - button "学习模式时长减少" [ref=e735] [cursor=pointer]: "-"
+                    - generic [ref=e736]:
+                      - spinbutton "分钟" [ref=e737]: "120"
+                      - generic [ref=e738]: 分钟
+                    - button "学习模式时长增加" [ref=e739] [cursor=pointer]: +
+                - generic [ref=e740]:
+                  - generic [ref=e741]:
+                    - strong [ref=e742]: 番茄专注时长
+                    - paragraph [ref=e743]: 学习模式内每轮番茄钟的专注分钟数。
+                  - generic [ref=e744]:
+                    - button "番茄专注时长减少" [ref=e745] [cursor=pointer]: "-"
+                    - generic [ref=e746]:
+                      - spinbutton "分钟" [ref=e747]: "25"
+                      - generic [ref=e748]: 分钟
+                    - button "番茄专注时长增加" [ref=e749] [cursor=pointer]: +
+                - generic [ref=e750]:
+                  - generic [ref=e751]:
+                    - strong [ref=e752]: 短休
+                    - paragraph [ref=e753]: 普通番茄轮次结束后的休息分钟数。
+                  - generic [ref=e754]:
+                    - button "短休减少" [ref=e755] [cursor=pointer]: "-"
+                    - generic [ref=e756]:
+                      - spinbutton "分钟" [ref=e757]: "5"
+                      - generic [ref=e758]: 分钟
+                    - button "短休增加" [ref=e759] [cursor=pointer]: +
+                - generic [ref=e760]:
+                  - generic [ref=e761]:
+                    - strong [ref=e762]: 长休
+                    - paragraph [ref=e763]: 达到长休息轮次后的休息分钟数。
+                  - generic [ref=e764]:
+                    - button "长休减少" [ref=e765] [cursor=pointer]: "-"
+                    - generic [ref=e766]:
+                      - spinbutton "分钟" [ref=e767]: "15"
+                      - generic [ref=e768]: 分钟
+                    - button "长休增加" [ref=e769] [cursor=pointer]: +
+                - generic [ref=e770]:
+                  - generic [ref=e771]:
+                    - strong [ref=e772]: 长休间隔
+                    - paragraph [ref=e773]: 每几个番茄钟进入一次长休息。
+                  - generic [ref=e774]:
+                    - button "长休间隔减少" [ref=e775] [cursor=pointer]: "-"
+                    - generic [ref=e776]:
+                      - spinbutton "轮" [ref=e777]: "4"
+                      - generic [ref=e778]: 轮
+                    - button "长休间隔增加" [ref=e779] [cursor=pointer]: +
+                - generic [ref=e780]:
+                  - generic [ref=e781]:
+                    - strong [ref=e782]: 默认专注模式
+                    - paragraph [ref=e783]: 普通模式更轻量，强制模式会保持更严格的学习约束。
+                  - generic [ref=e784]:
+                    - button "普通" [ref=e785] [cursor=pointer]
+                    - button "强制" [ref=e786] [cursor=pointer]
+                - generic [ref=e787]:
+                  - generic [ref=e788]:
+                    - strong [ref=e789]: 前台规则模式
+                    - paragraph [ref=e790]: 白名单模式：只放行命中规则的应用、网站或视频。
+                  - generic [ref=e791]:
+                    - button "白名单" [ref=e792] [cursor=pointer]
+                    - button "黑名单" [ref=e793] [cursor=pointer]
+                - generic [ref=e794]:
+                  - generic [ref=e795]:
+                    - strong [ref=e796]: 界面配色
+                    - paragraph [ref=e797]: 选择适合当前学习状态的界面风格，顶部也可以快速切换。
+                  - radiogroup "界面配色" [ref=e798]:
+                    - 'radio "浅色 系统浅色：#F2F2F7 背景与 #007AFF 强调。" [checked] [ref=e799] [cursor=pointer]':
+                      - generic [ref=e801]:
+                        - strong [ref=e802]: 浅色
+                        - generic [ref=e803]: "系统浅色：#F2F2F7 背景与 #007AFF 强调。"
+                    - 'radio "深色 系统深色：纯黑背景与 #0A84FF 强调。" [ref=e804] [cursor=pointer]':
+                      - generic [ref=e806]:
+                        - strong [ref=e807]: 深色
+                        - generic [ref=e808]: "系统深色：纯黑背景与 #0A84FF 强调。"
+                    - radio "水墨纸面 低饱和纸面质感，适合长时间阅读。" [ref=e809] [cursor=pointer]:
+                      - generic [ref=e811]:
+                        - strong [ref=e812]: 水墨纸面
+                        - generic [ref=e813]: 低饱和纸面质感，适合长时间阅读。
+                    - radio "晨光琥珀 明亮、温和，保留清晰任务边界。" [ref=e814] [cursor=pointer]:
+                      - generic [ref=e816]:
+                        - strong [ref=e817]: 晨光琥珀
+                        - generic [ref=e818]: 明亮、温和，保留清晰任务边界。
+                    - radio "清新浅绿 清新淡绿，低饱和明亮，适合长时间学习。" [ref=e819] [cursor=pointer]:
+                      - generic [ref=e821]:
+                        - strong [ref=e822]: 清新浅绿
+                        - generic [ref=e823]: 清新淡绿，低饱和明亮，适合长时间学习。
+                    - radio "樱色晨雾 柔和亮色，粉蓝点缀但不过分甜腻。" [ref=e824] [cursor=pointer]:
+                      - generic [ref=e826]:
+                        - strong [ref=e827]: 樱色晨雾
+                        - generic [ref=e828]: 柔和亮色，粉蓝点缀但不过分甜腻。
+                - generic [ref=e829]:
+                  - generic [ref=e830]:
+                    - strong [ref=e831]: 开机自启
+                    - paragraph [ref=e832]: 随 Windows 登录自动启动，方便后台提醒和同步。
+                  - generic [ref=e833]:
+                    - button "开启" [ref=e834] [cursor=pointer]
+                    - button "关闭" [ref=e837] [cursor=pointer]
+            - generic [ref=e838]:
+              - generic [ref=e839]:
+                - generic [ref=e840]: 当前默认节奏
+                - strong [ref=e841]:
+                  - generic [ref=e842]: "25"
+                  - generic [ref=e843]: 专注
+                  - generic [ref=e844]: "5"
+                  - generic [ref=e845]: 短休
+                  - generic [ref=e846]: "15"
+                  - generic [ref=e847]: 长休
+                  - generic [ref=e848]: "4"
+                  - generic [ref=e849]: 轮一次
+              - button "保存设置" [ref=e850] [cursor=pointer]

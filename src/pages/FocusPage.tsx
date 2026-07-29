@@ -16,7 +16,6 @@ import { buildStudyReminder, isFinishedStudyMode, isStaleFinishedStudyReminder, 
 import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
 import { CALDAV_SYNC_REFRESH_EVENT } from '../services/caldavApi';
-import { setStudyFullscreen } from '../services/systemApi';
 import { listenTauriEvent } from '../services/tauriEvents';
 import { isTauriRuntime } from '../services/tauriInvoke';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
@@ -312,11 +311,6 @@ export default function FocusPage() {
       window.removeEventListener(CALDAV_SYNC_REFRESH_EVENT, handleCalendarRefresh);
     };
   }, []);
-
-  useEffect(() => {
-    void setStudyFullscreen(active && ['focus', 'awaiting_break', 'break'].includes(studyState.phase)).catch(() => undefined);
-    return () => { if (active) void setStudyFullscreen(false).catch(() => undefined); };
-  }, [active, studyState.phase]);
 
   useEffect(() => {
     if (!active) return undefined;

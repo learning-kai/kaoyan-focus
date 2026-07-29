@@ -1,0 +1,212 @@
+- generic [ref=e3]:
+  - link "跳到主内容" [ref=e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=e5]:
+    - navigation "主导航" [ref=e11]:
+      - generic [ref=e12]:
+        - button "专注：开始学习与约束，快捷键 Alt+1" [ref=e13] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "清单：今天真正要做的事，快捷键 Alt+2" [ref=e17] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "日历：安排学习日程，快捷键 Alt+3" [ref=e21] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "白名单：学习前确认放行，快捷键 Alt+4" [ref=e24] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "复盘：每日总结与明日重点，快捷键 Alt+5" [ref=e28] [cursor=pointer]:
+          - generic:
+            - strong
+      - generic [ref=e32]:
+        - button "统计：学习记录与干扰，快捷键 Alt+6" [ref=e33] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "闹钟：全局一次性提醒，快捷键 Alt+7" [ref=e36] [cursor=pointer]:
+          - generic:
+            - strong
+        - button "设置：节奏、同步与更新，快捷键 Alt+8" [ref=e44] [cursor=pointer]:
+          - generic:
+            - strong
+  - main [active] [ref=e48]:
+    - generic [ref=e855]:
+      - generic [ref=e856]:
+        - generic [ref=e857]:
+          - generic [ref=e858]:
+            - paragraph [ref=e859]: Focus Ritual
+            - heading "进入学习模式" [level=2] [ref=e860]
+            - paragraph [ref=e861]: 设定本次学习长度、番茄节奏和休息规则。开始后界面会切换为极简番茄钟，配置入口自动锁定。
+          - generic [ref=e862]:
+            - generic [ref=e863]: 待开始
+            - strong [ref=e864]: 待命
+        - alert [ref=e865]: 请在 Windows 桌面应用中运行考研专注。浏览器预览只用于界面检查，无法访问本机数据、通知、更新和 Windows 守护能力。
+        - generic "今日学习中枢" [ref=e866]:
+          - generic [ref=e867]:
+            - paragraph [ref=e868]: 今日学习中枢
+            - heading "今天的任务已经收束" [level=3] [ref=e869]
+            - paragraph [ref=e870]: 添加一条今日任务，应用会把它接进日历和专注流程里。
+          - generic [ref=e871]:
+            - generic [ref=e872]:
+              - strong [ref=e873]: "0"
+              - generic [ref=e874]: 待完成
+            - generic [ref=e875]:
+              - strong [ref=e876]: "0"
+              - generic [ref=e877]: 日程
+            - generic [ref=e878]:
+              - strong [ref=e879]: "0"
+              - generic [ref=e880]: 已完成
+          - generic [ref=e881]:
+            - button "今日任务 查看待办" [ref=e882] [cursor=pointer]:
+              - generic [ref=e887]:
+                - generic [ref=e888]: 今日任务
+                - strong [ref=e889]: 查看待办
+            - button "今日日历 查看时间轴" [ref=e890] [cursor=pointer]:
+              - generic [ref=e896]:
+                - generic [ref=e897]: 今日日历
+                - strong [ref=e898]: 查看时间轴
+        - generic [ref=e899]:
+          - generic [ref=e900]:
+            - generic [ref=e901]:
+              - generic [ref=e902]: 下一轮专注
+              - strong [ref=e903]: 25:00
+              - paragraph [ref=e904]: 未指定科目 / 普通模式
+            - generic [ref=e905]:
+              - article [ref=e906]:
+                - generic [ref=e907]: 学习模式
+                - strong [ref=e908]: 2 小时
+              - article [ref=e909]:
+                - generic [ref=e910]: 番茄时长
+                - strong [ref=e911]: 25 分钟
+              - article [ref=e912]:
+                - generic [ref=e913]: 短休息
+                - strong [ref=e914]: 5 分钟
+              - article [ref=e915]:
+                - generic [ref=e916]: 长休息
+                - strong [ref=e917]: 15 分钟 / 4 轮
+            - button "开始学习" [ref=e918] [cursor=pointer]
+          - complementary [ref=e921]:
+            - generic [ref=e923]:
+              - paragraph [ref=e924]: Plan
+              - heading "本次节奏" [level=3] [ref=e925]
+            - generic [ref=e928]:
+              - generic [ref=e929]:
+                - generic [ref=e930]: 学习模式
+                - combobox "学习模式" [ref=e931]:
+                  - option "60m"
+                  - option "120m" [selected]
+                  - option "180m"
+                  - option "240m"
+              - generic [ref=e932]:
+                - generic [ref=e933]: 番茄时长
+                - combobox "番茄时长" [ref=e934]:
+                  - option "25m" [selected]
+                  - option "45m"
+                  - option "60m"
+                  - option "90m"
+              - generic [ref=e935]:
+                - generic [ref=e936]: 短休时长
+                - combobox "短休时长" [ref=e937]:
+                  - option "5m" [selected]
+                  - option "10m"
+                  - option "15m"
+                  - option "20m"
+              - generic [ref=e938]:
+                - generic [ref=e939]: 长休时长
+                - combobox "长休时长" [ref=e940]:
+                  - option "10m"
+                  - option "15m" [selected]
+                  - option "20m"
+                  - option "30m"
+              - generic [ref=e941]:
+                - generic [ref=e942]: 长休间隔
+                - combobox "长休间隔" [ref=e943]:
+                  - option "2轮"
+                  - option "3轮"
+                  - option "4轮" [selected]
+                  - option "6轮"
+            - generic [ref=e944]:
+              - generic [ref=e945]: 科目
+              - combobox "科目" [disabled] [ref=e946]:
+                - option "不指定" [selected]
+            - generic [ref=e947]:
+              - button "普通模式" [ref=e948] [cursor=pointer]
+              - button "强制模式" [ref=e949] [cursor=pointer]
+            - generic [ref=e950]:
+              - generic [ref=e951]: 以当前设备为主
+              - switch "以当前设备为主" [disabled] [ref=e952] [cursor=pointer]
+            - paragraph [ref=e953]: 未设置主端。主端可主导专注状态，另一端不能回退本端进度。
+            - generic [ref=e954]:
+              - generic [ref=e955]: 启用前台规则
+              - switch "启用前台规则" [checked] [ref=e956] [cursor=pointer]
+        - generic [ref=e957]:
+          - generic [ref=e958]:
+            - generic [ref=e960]:
+              - paragraph [ref=e961]: Today
+              - heading "今日状态" [level=3] [ref=e962]
+            - generic [ref=e966]:
+              - article [ref=e967]:
+                - generic [ref=e971]: 今日
+                - strong [ref=e972]: 0 分钟
+              - article [ref=e973]:
+                - generic [ref=e977]: 本周
+                - strong [ref=e978]: 0 分钟
+              - article [ref=e979]:
+                - generic [ref=e983]: 本月
+                - strong [ref=e984]: 0 分钟
+              - article [ref=e985]:
+                - generic [ref=e989]: 拦截
+                - strong [ref=e990]: "0"
+          - generic [ref=e991]:
+            - generic [ref=e993]:
+              - paragraph [ref=e994]: Monitor
+              - heading "白名单状态" [level=3] [ref=e995]
+            - generic [ref=e1003]:
+              - strong [ref=e1004]: 准备就绪
+              - paragraph [ref=e1005]: 开始学习后会持续检查前台窗口，并按白名单拦截未命中规则。
+          - generic [ref=e1006]:
+            - generic [ref=e1008]:
+              - paragraph [ref=e1009]: History
+              - heading "最近记录" [level=3] [ref=e1010]
+            - generic [ref=e1016]: 还没有专注记录。
+      - generic:
+        - generic:
+          - generic:
+            - paragraph: 今日队列
+            - heading [level=3]: 今日任务
+          - generic:
+            - button
+            - button:
+              - generic:
+                - generic: 新增
+                - strong: 今日任务
+            - button
+        - generic:
+          - generic: 日期
+          - generic: 0 项
+        - generic:
+          - generic:
+            - strong: 今天还没有进入任务
+            - paragraph: 可以在清单页拖入，也可以直接在这里补一条今天要推进的任务。
+      - generic:
+        - generic:
+          - generic:
+            - paragraph: 今日安排
+            - heading [level=3]: 今日日历
+          - generic:
+            - button
+            - button
+        - generic:
+          - generic: 0 个日程
+          - generic: 0 已完成
+        - generic:
+          - textbox:
+            - /placeholder: 新增日程
+          - textbox: 08:00
+          - textbox: 09:00
+          - button [disabled]: 添加
+        - generic:
+          - generic:
+            - strong: 今天还没有日程安排
+            - paragraph: 可以在这里临时补一块时间。
+      - status [ref=e1017]
