@@ -19,11 +19,11 @@ const MAIN_PAGES = [
 ];
 
 const ACTIVE_STATES = [
-  { name: 'focus', query: 'uiPhase=focus', required: ['打开今日任务', '打开今日日历', '暂停计时', '刷新前台状态', '结束学习'] },
-  { name: 'paused', query: 'uiPhase=focus&paused=1', required: ['打开今日任务', '打开今日日历', '继续计时', '刷新前台状态', '结束学习'] },
-  { name: 'awaiting_break', query: 'uiPhase=awaiting_break', required: ['打开今日任务', '打开今日日历', '暂停计时', '确认开始短休息', '跳过休息，开始下一轮专注', '刷新前台状态', '结束学习'] },
-  { name: 'break', query: 'uiPhase=break', required: ['打开今日任务', '打开今日日历', '跳过休息，开始下一轮专注', '刷新前台状态', '结束学习'] },
-  { name: 'strict', query: 'uiPhase=focus&mode=strict', required: ['打开今日任务', '打开今日日历', '暂停计时', '刷新前台状态'] },
+  { name: 'focus', query: 'uiPhase=focus', required: ['打开今日任务', '打开今日日历', '暂停计时', '启用前台规则', '刷新前台状态', '结束学习'] },
+  { name: 'paused', query: 'uiPhase=focus&paused=1', required: ['打开今日任务', '打开今日日历', '继续计时', '启用前台规则', '刷新前台状态', '结束学习'] },
+  { name: 'awaiting_break', query: 'uiPhase=awaiting_break', required: ['打开今日任务', '打开今日日历', '暂停计时', '确认开始短休息', '跳过休息，开始下一轮专注', '启用前台规则', '刷新前台状态', '结束学习'] },
+  { name: 'break', query: 'uiPhase=break', required: ['打开今日任务', '打开今日日历', '跳过休息，开始下一轮专注', '启用前台规则', '刷新前台状态', '结束学习'] },
+  { name: 'strict', query: 'uiPhase=focus&mode=strict', required: ['打开今日任务', '打开今日日历', '暂停计时', '启用前台规则', '刷新前台状态'] },
 ];
 
 const WIDGET_CASES = [
@@ -193,6 +193,28 @@ export async function runResponsiveMatrix(page, options) {
       } catch (error) {
         failures.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
       }
+    }
+  }
+
+  if (allow('focus')) {
+    note('focus/foreground-rule-toggle');
+    try {
+      await page.setViewportSize(MAIN_SIZES[0]);
+      await gotoReady(`${baseUrl}/?uiPhase=focus&theme=light#focus`, '.focus-active-shell');
+      const foregroundRuleSwitch = page.locator('[aria-label="启用前台规则"]');
+      check(await foregroundRuleSwitch.isChecked(), 'focus/foreground-rule-toggle initially enabled');
+      await foregroundRuleSwitch.uncheck();
+      await settleLayout();
+      check(!(await foregroundRuleSwitch.isChecked()), 'focus/foreground-rule-toggle did not turn off');
+      check(await page.getByText('前台规则已关闭', { exact: true }).count() > 0, 'focus/foreground-rule-toggle status did not update');
+
+      await gotoReady(`${baseUrl}/?uiPhase=focus&mode=strict&theme=light#focus`, '.focus-active-shell');
+      const strictForegroundRuleSwitch = page.locator('[aria-label="启用前台规则"]');
+      check(await strictForegroundRuleSwitch.isChecked(), 'focus/strict foreground rules not enabled');
+      check(await strictForegroundRuleSwitch.isDisabled(), 'focus/strict foreground rule switch not locked');
+      rows.push('focus/foreground-rule-toggle normal=mutable strict=locked');
+    } catch (error) {
+      failures.push(`focus/foreground-rule-toggle: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

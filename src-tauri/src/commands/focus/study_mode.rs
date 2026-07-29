@@ -543,6 +543,47 @@ pub fn update_study_mode_subject(
 }
 
 #[tauri::command]
+pub fn update_study_mode_whitelist(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    whitelist_enabled: bool,
+) -> Result<StudyModeState, String> {
+    let current_state = advance_study_mode(&app, state.inner())?;
+    if current_state.status != "active" {
+        return Err("没有正在运行的学习模式".to_string());
+    }
+
+    let connection = open_database(&database_path(&app)?)?;
+    let Some(record) = get_active_study_mode_record(&connection)? else {
+        set_runtime_state(state.inner(), false, None)?;
+        return Err("没有正在运行的学习模式".to_string());
+    };
+
+    if record.mode == "strict" {
+        if !whitelist_enabled {
+            return Err("强制模式下前台规则必须保持开启".to_string());
+        }
+        return load_current_study_mode_state(&connection, Utc::now());
+    }
+
+    if record.whitelist_enabled == whitelist_enabled {
+        return load_current_study_mode_state(&connection, Utc::now());
+    }
+
+    // Foreground enforcement is device-local and is intentionally excluded from shared progress.
+    connection
+        .execute(
+            "UPDATE study_modes SET whitelist_enabled = ?1 WHERE id = ?2 AND status = 'active'",
+            params![whitelist_enabled, record.id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    let next_state = load_current_study_mode_state(&connection, Utc::now())?;
+    sync_focus_widget_for_state(&app, &next_state);
+    Ok(next_state)
+}
+
+#[tauri::command]
 pub fn emergency_exit_study_mode(
     app: AppHandle,
     state: State<'_, AppState>,

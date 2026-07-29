@@ -7,7 +7,7 @@ import LearningHub from '../components/focus/LearningHub';
 import ScheduleDrawer from '../components/ScheduleDrawer';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
 import { completeTodayPlanItem, createTodayPlanItem, deleteTodayPlanItem, getChecklistPageData, reorderTodayPlanItems, updateTodayPlanItem } from '../services/checklistApi';
-import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSessions, listSubjects, pauseStudyMode, resetStudyMode, resumeStudyMode, skipStudyBreak, startStudyMode, updateStudyModeSubject } from '../services/focusApi';
+import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSessions, listSubjects, pauseStudyMode, resetStudyMode, resumeStudyMode, skipStudyBreak, startStudyMode, updateStudyModeSubject, updateStudyModeWhitelist } from '../services/focusApi';
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { createScheduleBlock, createScheduleBlockFromTodayItem, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
@@ -235,6 +235,7 @@ export default function FocusPage() {
   const [checklistSaving, setChecklistSaving] = useState(false);
   const [isStartingStudy, setIsStartingStudy] = useState(false);
   const [isQuickSchedulingTask, setIsQuickSchedulingTask] = useState(false);
+  const [isUpdatingForegroundRules, setIsUpdatingForegroundRules] = useState(false);
   const [localClockNow, setLocalClockNow] = useState(() => Date.now());
   const [pendingConfirm, setPendingConfirm] = useState<FocusConfirmRequest | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -276,7 +277,7 @@ export default function FocusPage() {
   const activeModeMessage = buildActiveModeMessage(studyState, ruleModeLabel);
   const isPrimaryDevice = Boolean(syncDeviceId && primaryOwnerDeviceId === syncDeviceId);
   const primaryStatusLabel = isPrimaryDevice ? '当前为主端' : primaryOwnerDeviceId ? '当前非主端' : '未设置主端';
-  const quietMeta = [activeModeLabel, '第 ' + studyState.cycle_index + ' 轮', '剩余 ' + formatSeconds(studyState.study_remaining_seconds), nextBreakLabel(studyState), primaryStatusLabel, latestAppCheck ? foregroundSummary(latestAppCheck) : '前台监控待命'];
+  const quietMeta = [activeModeLabel, '第 ' + studyState.cycle_index + ' 轮', '剩余 ' + formatSeconds(studyState.study_remaining_seconds), nextBreakLabel(studyState), primaryStatusLabel, latestAppCheck ? foregroundSummary(latestAppCheck) : studyState.whitelist_enabled ? '前台监控待命' : '前台规则关闭'];
 
   useEffect(() => { void initializePage(); }, []);
 
@@ -523,6 +524,18 @@ export default function FocusPage() {
       await refreshDashboard();
       queueConfiguredSync();
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+  }
+
+  async function handleActiveWhitelistChange(whitelistEnabled: boolean) {
+    try {
+      setIsUpdatingForegroundRules(true);
+      setError(null); setMonitorError(null); setLatestAppCheck(null);
+      const requestId = beginStudyStateRequest();
+      const nextState = await updateStudyModeWhitelist(whitelistEnabled);
+      if (!applyStudyStateIfCurrent(nextState, requestId)) return;
+      setNotice(whitelistEnabled ? `已启用${ruleModeLabel}前台规则。` : '已关闭前台规则。');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setIsUpdatingForegroundRules(false); }
   }
 
   function handleNormalExit() {
@@ -889,6 +902,20 @@ export default function FocusPage() {
             <footer className="focus-active-footer">
               <div className="focus-quiet-meta">{quietMeta.map((item) => <span key={item}>{item}</span>)}</div>
               <div className="focus-quiet-actions">
+                <label
+                  className={'focus-hud-card live-primary-toggle live-rule-toggle' + (studyState.whitelist_enabled ? ' is-active' : '')}
+                  title={studyState.mode === 'strict' ? '强制模式下前台规则始终开启' : '切换本次学习的前台规则'}
+                >
+                  <span>{studyState.mode === 'strict' ? '前台规则锁定' : '前台规则'}</span>
+                  <input
+                    aria-label="启用前台规则"
+                    checked={studyState.whitelist_enabled}
+                    disabled={studyState.mode === 'strict' || isUpdatingForegroundRules}
+                    onChange={(event) => void handleActiveWhitelistChange(event.target.checked)}
+                    role="switch"
+                    type="checkbox"
+                  />
+                </label>
                 <button aria-label="刷新前台状态" className="focus-hud-card focus-command-button" onClick={() => void handleCheckForeground()} title="刷新前台状态" type="button">
                   <span className="focus-hud-icon"><Gauge size={14} /></span>
                   <span className="focus-hud-copy">

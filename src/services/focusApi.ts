@@ -55,6 +55,10 @@ export function updateStudyModeSubject(subjectId: number | null): Promise<StudyM
   return invokeCommand<StudyModeState>('update_study_mode_subject', { subjectId });
 }
 
+export function updateStudyModeWhitelist(whitelistEnabled: boolean): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('update_study_mode_whitelist', { whitelistEnabled });
+}
+
 export function resetStudyMode(): Promise<StudyModeState> {
   return invokeCommand<StudyModeState>('reset_study_mode');
 }

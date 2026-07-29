@@ -14,6 +14,7 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ### Changed
 
+- Allowed foreground rules to be toggled while a normal study session is running, while keeping them locked on in strict mode.
 - Changed Feishu task conflict resolution to use local and remote content fingerprints before timestamp arbitration, so local edits are not overwritten just because Feishu reports a newer remote timestamp.
 - Standardized local check scripts so contributors can use cross-shell npm commands instead of Windows-only `npm.cmd` inside package scripts.
 - Clarified that desktop releases are the default public path and Android release syncing is opt-in for maintainers.
@@ -444,5 +445,4 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ### Desktop
 #### Changed
 - 扩大了默认打开界面大小 (70f52a7)
-
 

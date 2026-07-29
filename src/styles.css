@@ -3052,6 +3052,30 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   color: var(--ink);
 }
 
+.live-rule-toggle {
+  min-height: 36px;
+  padding-right: 9px;
+}
+
+.live-rule-toggle input[type='checkbox'] {
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+}
+
+.live-rule-toggle input[type='checkbox']::after {
+  width: 18px;
+  height: 18px;
+}
+
+.live-rule-toggle input[type='checkbox']:checked::after {
+  transform: translateX(16px);
+}
+
+.live-rule-toggle input[type='checkbox']:disabled {
+  cursor: not-allowed;
+}
+
 .details-card {
   display: grid;
   gap: 8px;

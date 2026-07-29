@@ -223,8 +223,15 @@
       callbacks.get(id)?.(data);
     },
     callbacks,
-    async invoke(command) {
+    async invoke(command, args) {
       if (command === 'plugin:event|listen') return callbackId++;
+      if (command === 'update_study_mode_whitelist') {
+        if (studyState.mode !== 'strict') {
+          studyState.whitelist_enabled = Boolean(args?.whitelistEnabled);
+          studyState.focus_enforcement_active = studyState.whitelist_enabled && phase !== 'break';
+        }
+        return structuredClone(studyState);
+      }
       if (stateCommands.has(command)) return structuredClone(studyState);
       if (command === 'focus_widget_toggle_always_on_top') return true;
       if (voidCommands.has(command)) return null;
