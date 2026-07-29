@@ -2999,6 +2999,18 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   transform: translateX(20px);
 }
 
+.settings-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+}
+
+.settings-switch:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .focus-primary-hint {
   margin: -4px 0 0;
   color: var(--muted);

@@ -15,7 +15,7 @@ const MAIN_PAGES = [
   { name: 'review', entry: '.review-mode-toggle' },
   { name: 'stats', entry: '.stats-hero-grid, .stats-toolbar-grid' },
   { name: 'alarm', entry: '.alarm-shell .page-header' },
-  { name: 'settings', entry: '.settings-nav-item' },
+  { name: 'settings', entry: '[aria-label="学习中显示前台规则开关"]' },
 ];
 
 const ACTIVE_STATES = [
@@ -152,6 +152,9 @@ export async function runResponsiveMatrix(page, options) {
         const unknown = await page.evaluate(() => [...new Set(window.__UI_FIXTURE_UNKNOWN_COMMANDS__ || [])]);
         check(unknown.length === 0, `${label} fixture commands missing`, unknown.join(', '));
         rows.push(`${label} overflow=0 entry=visible nav=8`);
+        if (screenshots && pageCase.name === 'settings' && size.width === 960 && size.height === 680) {
+          await page.screenshot({ path: `${outputDir}/settings-960x680.png`, animations: 'disabled' });
+        }
       } catch (error) {
         failures.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -212,6 +215,10 @@ export async function runResponsiveMatrix(page, options) {
       const strictForegroundRuleSwitch = page.locator('[aria-label="启用前台规则"]');
       check(await strictForegroundRuleSwitch.isChecked(), 'focus/strict foreground rules not enabled');
       check(await strictForegroundRuleSwitch.isDisabled(), 'focus/strict foreground rule switch not locked');
+
+      await gotoReady(`${baseUrl}/?uiPhase=focus&showForegroundRuleToggle=0&theme=light#focus`, '.focus-active-shell');
+      check(await page.locator('[aria-label="启用前台规则"]').count() === 0, 'focus/hidden foreground rule switch still visible');
+      check(await page.locator('.live-badge').count() === 1, 'focus/hidden foreground rule status missing');
       rows.push('focus/foreground-rule-toggle normal=mutable strict=locked');
     } catch (error) {
       failures.push(`focus/foreground-rule-toggle: ${error instanceof Error ? error.message : String(error)}`);

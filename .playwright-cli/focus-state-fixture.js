@@ -63,6 +63,7 @@
     ui_theme: 'light',
     launch_at_startup: false,
     auto_start_break_after_focus: false,
+    show_foreground_rule_toggle: true,
     schedule_reminder_enabled: false,
     schedule_reminder_lead_minutes: 10,
     focus_widget_enabled: true,

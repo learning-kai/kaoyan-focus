@@ -13,6 +13,7 @@ const WHITELIST_MODE_KEY: &str = "whitelist_mode";
 const UI_THEME_KEY: &str = "ui_theme";
 const LAUNCH_AT_STARTUP_KEY: &str = "launch_at_startup";
 const AUTO_START_BREAK_AFTER_FOCUS_KEY: &str = "auto_start_break_after_focus";
+const SHOW_FOREGROUND_RULE_TOGGLE_KEY: &str = "show_foreground_rule_toggle";
 const SCHEDULE_REMINDER_ENABLED_KEY: &str = "schedule_reminder_enabled";
 const SCHEDULE_REMINDER_LEAD_MINUTES_KEY: &str = "schedule_reminder_lead_minutes";
 const FOCUS_WIDGET_ENABLED_KEY: &str = "focus_widget_enabled";
@@ -59,6 +60,7 @@ pub struct AppSettings {
     pub ui_theme: String,
     pub launch_at_startup: bool,
     pub auto_start_break_after_focus: bool,
+    pub show_foreground_rule_toggle: bool,
     pub schedule_reminder_enabled: bool,
     pub schedule_reminder_lead_minutes: i64,
     pub focus_widget_enabled: bool,
@@ -121,6 +123,7 @@ impl Default for AppSettings {
             ui_theme: "dark".to_string(),
             launch_at_startup: false,
             auto_start_break_after_focus: false,
+            show_foreground_rule_toggle: true,
             schedule_reminder_enabled: true,
             schedule_reminder_lead_minutes: 5,
             focus_widget_enabled: false,
@@ -210,6 +213,11 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             &connection,
             AUTO_START_BREAK_AFTER_FOCUS_KEY,
             defaults.auto_start_break_after_focus,
+        )?,
+        show_foreground_rule_toggle: get_bool_setting(
+            &connection,
+            SHOW_FOREGROUND_RULE_TOGGLE_KEY,
+            defaults.show_foreground_rule_toggle,
         )?,
         schedule_reminder_enabled: get_bool_setting(
             &connection,
@@ -356,6 +364,7 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         ui_theme: normalize_theme(&settings.ui_theme),
         launch_at_startup: settings.launch_at_startup,
         auto_start_break_after_focus: settings.auto_start_break_after_focus,
+        show_foreground_rule_toggle: settings.show_foreground_rule_toggle,
         schedule_reminder_enabled: settings.schedule_reminder_enabled,
         schedule_reminder_lead_minutes: settings.schedule_reminder_lead_minutes.clamp(0, 60),
         focus_widget_enabled: settings.focus_widget_enabled,
@@ -460,6 +469,16 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         AUTO_START_BREAK_AFTER_FOCUS_KEY,
         if normalized.auto_start_break_after_focus {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        SHOW_FOREGROUND_RULE_TOGGLE_KEY,
+        if normalized.show_foreground_rule_toggle {
             "1"
         } else {
             "0"

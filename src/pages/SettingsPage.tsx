@@ -99,6 +99,7 @@ const defaultSettings: AppSettings = {
   ui_theme: 'light',
   launch_at_startup: false,
   auto_start_break_after_focus: false,
+  show_foreground_rule_toggle: true,
   schedule_reminder_enabled: true,
   schedule_reminder_lead_minutes: 5,
   focus_widget_enabled: false,

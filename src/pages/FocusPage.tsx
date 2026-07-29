@@ -214,6 +214,7 @@ export default function FocusPage() {
   const [mode, setMode] = useState<FocusMode>('normal');
   const [whitelistMode, setWhitelistMode] = useState<AppSettings['whitelist_mode']>('allowlist');
   const [autoStartBreakAfterFocus, setAutoStartBreakAfterFocus] = useState(false);
+  const [showForegroundRuleToggle, setShowForegroundRuleToggle] = useState(true);
   const [normalWhitelistEnabled, setNormalWhitelistEnabled] = useState(true);
   const [syncDeviceId, setSyncDeviceId] = useState<string | null>(null);
   const [primaryOwnerDeviceId, setPrimaryOwnerDeviceId] = useState<string | null>(null);
@@ -354,6 +355,7 @@ export default function FocusPage() {
       setMode(settings.default_focus_mode);
       setWhitelistMode(settings.whitelist_mode);
       setAutoStartBreakAfterFocus(settings.auto_start_break_after_focus);
+      setShowForegroundRuleToggle(settings.show_foreground_rule_toggle);
       setPrimaryOwnerDeviceId(settings.primary_owner_device_id);
       setSyncDeviceId(deviceId);
       setSubjects(subjectsData);
@@ -902,20 +904,22 @@ export default function FocusPage() {
             <footer className="focus-active-footer">
               <div className="focus-quiet-meta">{quietMeta.map((item) => <span key={item}>{item}</span>)}</div>
               <div className="focus-quiet-actions">
-                <label
-                  className={'focus-hud-card live-primary-toggle live-rule-toggle' + (studyState.whitelist_enabled ? ' is-active' : '')}
-                  title={studyState.mode === 'strict' ? '强制模式下前台规则始终开启' : '切换本次学习的前台规则'}
-                >
-                  <span>{studyState.mode === 'strict' ? '前台规则锁定' : '前台规则'}</span>
-                  <input
-                    aria-label="启用前台规则"
-                    checked={studyState.whitelist_enabled}
-                    disabled={studyState.mode === 'strict' || isUpdatingForegroundRules}
-                    onChange={(event) => void handleActiveWhitelistChange(event.target.checked)}
-                    role="switch"
-                    type="checkbox"
-                  />
-                </label>
+                {showForegroundRuleToggle && (
+                  <label
+                    className={'focus-hud-card live-primary-toggle live-rule-toggle' + (studyState.whitelist_enabled ? ' is-active' : '')}
+                    title={studyState.mode === 'strict' ? '强制模式下前台规则始终开启' : '切换本次学习的前台规则'}
+                  >
+                    <span>{studyState.mode === 'strict' ? '前台规则锁定' : '前台规则'}</span>
+                    <input
+                      aria-label="启用前台规则"
+                      checked={studyState.whitelist_enabled}
+                      disabled={studyState.mode === 'strict' || isUpdatingForegroundRules}
+                      onChange={(event) => void handleActiveWhitelistChange(event.target.checked)}
+                      role="switch"
+                      type="checkbox"
+                    />
+                  </label>
+                )}
                 <button aria-label="刷新前台状态" className="focus-hud-card focus-command-button" onClick={() => void handleCheckForeground()} title="刷新前台状态" type="button">
                   <span className="focus-hud-icon"><Gauge size={14} /></span>
                   <span className="focus-hud-copy">

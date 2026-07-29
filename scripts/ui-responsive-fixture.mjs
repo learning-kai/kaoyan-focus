@@ -82,6 +82,7 @@
     ui_theme: requestedTheme,
     launch_at_startup: false,
     auto_start_break_after_focus: false,
+    show_foreground_rule_toggle: query.get('showForegroundRuleToggle') !== '0',
     schedule_reminder_enabled: false,
     schedule_reminder_lead_minutes: 10,
     focus_widget_enabled: true,

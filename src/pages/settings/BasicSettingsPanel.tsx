@@ -126,6 +126,24 @@ export function BasicSettingsPanel({
                 </div>
               </div>
 
+              <div className="setting-row mode-setting">
+                <div>
+                  <strong>学习中显示前台规则开关</strong>
+                  <p>只控制专注页底部的切换入口，不会启用或关闭前台规则。</p>
+                </div>
+                <label className="settings-switch focus-whitelist-toggle">
+                  <input
+                    aria-label="学习中显示前台规则开关"
+                    checked={settings.show_foreground_rule_toggle}
+                    disabled={settingsLocked}
+                    onChange={(event) => updateSettings({ show_foreground_rule_toggle: event.target.checked })}
+                    role="switch"
+                    type="checkbox"
+                  />
+                  <span>{settings.show_foreground_rule_toggle ? '显示' : '隐藏'}</span>
+                </label>
+              </div>
+
               <div className="setting-row mode-setting theme-setting-row">
                 <div>
                   <strong>界面配色</strong>

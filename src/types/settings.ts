@@ -17,6 +17,7 @@ export type AppSettings = {
   ui_theme: AppTheme;
   launch_at_startup: boolean;
   auto_start_break_after_focus: boolean;
+  show_foreground_rule_toggle: boolean;
   schedule_reminder_enabled: boolean;
   schedule_reminder_lead_minutes: number;
   focus_widget_enabled: boolean;
