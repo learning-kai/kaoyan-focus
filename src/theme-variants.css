@@ -2772,7 +2772,7 @@ html[data-theme='sakura'] {
 
 :is(html[data-theme='light'], html:not([data-theme])) :is(
   .capability-row,
-  .focus-whitelist-toggle,
+  .focus-whitelist-toggle:not(.foreground-toggle-visibility),
   .live-primary-toggle
 ):has(input[type='checkbox']:checked) {
   border-color: color-mix(in srgb, var(--blue) 32%, var(--line));
@@ -2782,7 +2782,7 @@ html[data-theme='sakura'] {
 
 :is(html[data-theme='mono'], html[data-theme='dawn'], html[data-theme='sakura']) :is(
   .capability-row,
-  .focus-whitelist-toggle,
+  .focus-whitelist-toggle:not(.foreground-toggle-visibility),
   .live-primary-toggle
 ):has(input[type='checkbox']:checked) {
   border-color: color-mix(in srgb, var(--blue) 30%, var(--line)) !important;
@@ -2790,13 +2790,21 @@ html[data-theme='sakura'] {
   box-shadow: var(--shadow-card);
 }
 
-html[data-theme='forest'] :is(.capability-row, .focus-whitelist-toggle, .live-primary-toggle):has(input[type='checkbox']:checked) {
+html[data-theme='forest'] :is(
+  .capability-row,
+  .focus-whitelist-toggle:not(.foreground-toggle-visibility),
+  .live-primary-toggle
+):has(input[type='checkbox']:checked) {
   border-color: color-mix(in srgb, var(--green) 34%, var(--line)) !important;
   background: color-mix(in srgb, var(--green) 16%, var(--theme-card-sheen)) !important;
   box-shadow: var(--shadow-card);
 }
 
-html[data-theme='dark'] :is(.capability-row, .focus-whitelist-toggle, .live-primary-toggle):has(input[type='checkbox']:checked) {
+html[data-theme='dark'] :is(
+  .capability-row,
+  .focus-whitelist-toggle:not(.foreground-toggle-visibility),
+  .live-primary-toggle
+):has(input[type='checkbox']:checked) {
   border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
   background: color-mix(in srgb, var(--blue) 14%, var(--surface-strong));
 }

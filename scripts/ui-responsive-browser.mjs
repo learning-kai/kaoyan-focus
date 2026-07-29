@@ -153,6 +153,25 @@ export async function runResponsiveMatrix(page, options) {
         check(await nav.count() === 8, `${label} navigation count`, `actual=${await nav.count()}`);
         check(await page.locator(`.nav-item[aria-current="page"]`).count() === 1, `${label} active navigation marker`);
         check(await boxIsInViewport(pageCase.entry), `${label} primary work entry not visible`, pageCase.entry);
+        if (pageCase.name === 'settings') {
+          const switchContainerStyle = await page.locator(pageCase.entry).evaluate((input) => {
+            const style = getComputedStyle(input.closest('label'));
+            return {
+              backgroundColor: style.backgroundColor,
+              backgroundImage: style.backgroundImage,
+              borderWidth: style.borderWidth,
+              boxShadow: style.boxShadow,
+            };
+          });
+          check(
+            switchContainerStyle.backgroundColor === 'rgba(0, 0, 0, 0)'
+              && switchContainerStyle.backgroundImage === 'none'
+              && switchContainerStyle.borderWidth === '0px'
+              && switchContainerStyle.boxShadow === 'none',
+            `${label} foreground switch container must stay transparent`,
+            JSON.stringify(switchContainerStyle),
+          );
+        }
         const unknown = await page.evaluate(() => [...new Set(window.__UI_FIXTURE_UNKNOWN_COMMANDS__ || [])]);
         check(unknown.length === 0, `${label} fixture commands missing`, unknown.join(', '));
         rows.push(`${label} overflow=0 entry=visible nav=8`);
