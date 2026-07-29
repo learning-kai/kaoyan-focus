@@ -407,4 +407,14 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ### Desktop
 - No commits found.
 
+## v1.18.1 - 2026-07-29
+
+### Desktop
+#### Added
+- feat: add responsive UI testing scripts with Playwright (dcca7f5)
+
+#### Changed
+- Cache native animation context for focus widget frames (b600db7)
+- Refactor application structure and update UI behavior (e69f0e9)
+
 
