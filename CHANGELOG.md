@@ -446,3 +446,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 扩大了默认打开界面大小 (70f52a7)
 
+## v1.18.7 - 2026-07-29
+
+### Desktop
+#### Changed
+- 添加使用过程中能够控制前台规则 (05c0d2a)
+
+
