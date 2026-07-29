@@ -459,4 +459,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 设置加控制 (cd4d621)
 
+## v1.18.9 - 2026-07-29
+
+### Desktop
+#### Changed
+- 增强设置面板和响应式布局，添加前台规则控制开关样式 (d5115dd)
+
 
