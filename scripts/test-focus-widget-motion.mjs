@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(process.cwd());
-const read = (relativePath) => readFileSync(resolve(root, relativePath), 'utf8');
+const read = (relativePath) => readFileSync(resolve(root, relativePath), 'utf8').replace(/\r\n/g, '\n');
 
 let failed = false;
 function assert(condition, message) {
@@ -30,6 +30,31 @@ const css = read('src/pages/FocusWidgetPage.css');
 const manifest = JSON.parse(read('package.json'));
 const lockfile = JSON.parse(read('package-lock.json'));
 const lockedManifest = lockfile.packages?.[''] ?? {};
+
+const windowHandlers = sourceSection(
+  rust,
+  'fn attach_window_handlers(',
+  'fn apply_study_mode_visibility(',
+);
+const movedHandler = sourceSection(
+  windowHandlers,
+  'WindowEvent::Moved(_) => {',
+  'WindowEvent::Resized(_)',
+);
+const resizedHandler = sourceSection(
+  windowHandlers,
+  'WindowEvent::Resized(_)',
+  'WindowEvent::CloseRequested',
+);
+assert(
+  !movedHandler.includes('apply_focus_widget_window_shape'),
+  'moving the widget must not rebuild an unchanged native window region',
+);
+assert(
+  resizedHandler.includes('if !should_suppress_geometry_events()') &&
+    resizedHandler.includes('apply_focus_widget_window_shape(&window_for_events);'),
+  'animation-driven resize events must skip native window-region rebuilds',
+);
 
 const collapseSection = sourceSection(
   rust,
@@ -93,6 +118,11 @@ assert(
 assert(
   spawnSection.includes('animate_focus_widget_geometry(&window, animation)'),
   'queued work must use the generation and live geometry captured by the command path',
+);
+assert(
+  spawnSection.includes('run_focus_widget_animation_task_if_current(') &&
+    spawnSection.includes('apply_focus_widget_native_shape(native_shape);'),
+  'only the current animation generation may restore the final native window region',
 );
 assert(
   rust.includes('struct FocusWidgetGeometryAnimation') &&
@@ -222,6 +252,17 @@ const nativeCursorProbe = sourceSection(
 assert(
   nativeCursorProbe.includes('GetCursorPos(') && nativeCursorProbe.includes('GetWindowRect('),
   'collapse re-entry probing must not queue behind Tauri/WebView resize events',
+);
+
+const nativeAnimationPreparation = sourceSection(
+  rust,
+  'fn prepare_focus_widget_hwnd_animation(',
+  'unsafe extern "system" fn focus_widget_wndproc(',
+);
+assert(
+  nativeAnimationPreparation.includes('SetWindowRgn(hwnd, None, false)') &&
+    !nativeAnimationPreparation.includes('DockAnimationKind::Expand'),
+  'expand and collapse must both remove the complex native region before their first frame',
 );
 
 assert(
