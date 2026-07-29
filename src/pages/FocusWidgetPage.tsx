@@ -4,6 +4,7 @@ import { confirmStudyBreak, getStudyModeState, listSubjects, pauseStudyMode, res
 import {
   collapseFocusWidgetToEdge,
   defaultFocusWidgetDockState,
+  FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT,
   getFocusWidgetAlwaysOnTop,
   getFocusWidgetDockState,
   hideFocusWidget,
@@ -25,6 +26,7 @@ const HOVER_EXPAND_DELAY_MS = 60;
 const HOVER_COLLAPSE_DELAY_MS = 160;
 const HOVER_COLLAPSE_RETRY_MS = 40;
 const HOVER_REENTRY_LOCK_MS = 180;
+const RETRACT_TRANSITION_FALLBACK_MS = 220;
 
 const idleState: StudyModeState = {
   id: null,
@@ -82,6 +84,7 @@ export default function FocusWidgetPage() {
   const [isRetracting, setIsRetracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const shellRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const expandTimerRef = useRef<number | null>(null);
   const collapseTimerRef = useRef<number | null>(null);
   const hoverLockUntilRef = useRef(0);
@@ -360,16 +363,20 @@ export default function FocusWidgetPage() {
     setIsRetracting(false);
     setDockState({ mode: 'peek', edge });
 
+    if (reversesRetraction) {
+      return;
+    }
+
     try {
+      const nextDockState = await peekFocusWidgetFromEdge();
+      if (transitionGenerationRef.current !== transitionGeneration) return;
+      dockModeRef.current = nextDockState.mode;
+      setDockState(nextDockState);
       if (startsFromCollapsed) {
-        await waitForNextPaint();
+        await waitForAnimationFrame();
         if (transitionGenerationRef.current !== transitionGeneration) return;
         setIsExpanding(false);
       }
-
-      const nextDockState = await peekFocusWidgetFromEdge();
-      if (transitionGenerationRef.current !== transitionGeneration) return;
-      setDockState(nextDockState);
       setError(null);
     } catch (reason) {
       if (transitionGenerationRef.current !== transitionGeneration) return;
@@ -384,7 +391,7 @@ export default function FocusWidgetPage() {
   }, [canInteract, dockState]);
 
   const collapseToEdge = useCallback(async () => {
-    if (!canInteract || dockModeRef.current !== 'peek') return;
+    if (!canInteract || dockModeRef.current !== 'peek' || isRetracting) return;
     const previousDockState = dockState;
     const edge = previousDockState.edge;
     if (!edge) return;
@@ -403,8 +410,12 @@ export default function FocusWidgetPage() {
     setIsRetracting(true);
 
     try {
-      await collapseFocusWidgetToEdge();
+      await waitForPanelTransition(panelRef.current);
       if (transitionGenerationRef.current !== transitionGeneration) return;
+      const nextDockState = await collapseFocusWidgetToEdge();
+      if (transitionGenerationRef.current !== transitionGeneration) return;
+      dockModeRef.current = nextDockState.mode;
+      setDockState(nextDockState);
       setError(null);
     } catch (reason) {
       if (transitionGenerationRef.current !== transitionGeneration) return;
@@ -413,7 +424,28 @@ export default function FocusWidgetPage() {
       setIsRetracting(false);
       setError(reason instanceof Error ? reason.message : String(reason));
     }
-  }, [canInteract, dockState]);
+  }, [canInteract, dockState, isRetracting]);
+
+  useEffect(() => {
+    if (!canInteract) return undefined;
+
+    let cancelled = false;
+    let unlistenCollapseRequest: (() => void) | undefined;
+    void listenTauriEvent(FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT, () => {
+      if (!cancelled) void collapseToEdge();
+    })
+      .then((dispose) => {
+        unlistenCollapseRequest = dispose;
+      })
+      .catch(() => {
+        // Pointer leave handling remains the primary collapse path.
+      });
+
+    return () => {
+      cancelled = true;
+      unlistenCollapseRequest?.();
+    };
+  }, [canInteract, collapseToEdge]);
 
   const handleCollapsedMouseEnter = useCallback(() => {
     if (!canInteract || dockModeRef.current !== 'collapsed') return;
@@ -521,7 +553,7 @@ export default function FocusWidgetPage() {
       onMouseEnter={handleExpandedMouseEnter}
       onMouseLeave={handleExpandedMouseLeave}
     >
-      <div className="focus-widget-panel">
+      <div ref={panelRef} className="focus-widget-panel">
         <header className="focus-widget-topbar">
           <span className="focus-widget-stage">
             <span className="focus-widget-dot" />
@@ -638,11 +670,31 @@ function formatCompactDuration(totalSeconds: number) {
   return `${minutes}m`;
 }
 
-function waitForNextPaint() {
+function waitForAnimationFrame() {
   return new Promise<void>((resolve) => {
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => resolve());
-    });
+    window.requestAnimationFrame(() => resolve());
+  });
+}
+
+function waitForPanelTransition(panel: HTMLElement | null) {
+  if (!panel || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      window.clearTimeout(timeoutId);
+      panel.removeEventListener('transitionend', handleTransitionEnd);
+      resolve();
+    };
+    const handleTransitionEnd = (event: TransitionEvent) => {
+      if (event.target === panel && event.propertyName === 'transform') finish();
+    };
+    const timeoutId = window.setTimeout(finish, RETRACT_TRANSITION_FALLBACK_MS);
+    panel.addEventListener('transitionend', handleTransitionEnd);
   });
 }
 

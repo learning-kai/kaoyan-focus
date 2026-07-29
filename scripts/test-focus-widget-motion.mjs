@@ -24,8 +24,13 @@ function dependencyNames(manifest, section) {
   return Object.keys(manifest[section] ?? {}).sort();
 }
 
+function count(source, needle) {
+  return source.split(needle).length - 1;
+}
+
 const rust = read('src-tauri/src/windows/focus_widget.rs');
 const widget = read('src/pages/FocusWidgetPage.tsx');
+const widgetApi = read('src/services/focusWidgetApi.ts');
 const css = read('src/pages/FocusWidgetPage.css');
 const manifest = JSON.parse(read('package.json'));
 const lockfile = JSON.parse(read('package-lock.json'));
@@ -53,7 +58,7 @@ assert(
 assert(
   resizedHandler.includes('if !should_suppress_geometry_events()') &&
     resizedHandler.includes('apply_focus_widget_window_shape(&window_for_events);'),
-  'animation-driven resize events must skip native window-region rebuilds',
+  'one-shot resize events must skip duplicate native window-region rebuilds',
 );
 
 const collapseSection = sourceSection(
@@ -64,162 +69,148 @@ const collapseSection = sourceSection(
 const expandSection = sourceSection(
   rust,
   'fn expand_window_to_edge(',
-  'fn spawn_focus_widget_geometry_animation(',
-);
-assert(
-  !collapseSection.includes('set_focus_widget_geometry_frame('),
-  'cancelled collapse must not snap the window to its stale target',
+  '#[cfg(windows)]\nfn set_focus_widget_geometry_frame(',
 );
 for (const [name, section] of [
   ['collapse', collapseSection],
   ['expand', expandSection],
 ]) {
-  const claimIndex = section.indexOf(
-    'let (animation_generation, current_geometry) = begin_focus_widget_animation(window)?;',
-  );
-  const spawnIndex = section.indexOf('spawn_focus_widget_geometry_animation(');
   assert(
-    claimIndex >= 0 && spawnIndex > claimIndex,
-    `${name} must cancel stale work and capture live geometry before queueing animation`,
+    count(section, 'set_focus_widget_geometry_frame(') === 1,
+    `${name} must perform exactly one native geometry update`,
+  );
+  assert(
+    section.includes('prepare_focus_widget_geometry_change(window);') &&
+      section.includes('apply_focus_widget_window_shape(window);'),
+    `${name} must clear the old region before resizing and apply the final region once`,
   );
 }
-const beginSection = sourceSection(
-  rust,
-  '#[cfg(windows)]\nfn begin_focus_widget_animation(',
-  '#[cfg(not(windows))]\nfn begin_focus_widget_animation(',
+assert(
+  collapseSection.includes('schedule_collapsed_mouse_reentry(app, window, edge, geometry_generation);'),
+  'collapsed cursor re-entry must remain available after the one-shot resize',
 );
 assert(
-  beginSection.includes('logical_geometry_from_hwnd(hwnd, scale_factor)?') &&
-    !beginSection.includes('logical_geometry_from_window(window)?'),
-  'Windows cancellation must capture live geometry under the frame lock without Tauri re-entry',
-);
-assert(
-  collapseSection.includes('spawn_focus_widget_geometry_animation(') &&
-    !collapseSection.includes('animate_focus_widget_geometry(window'),
-  'collapse animation must release the synchronous Tauri command path',
-);
-assert(
-  collapseSection.includes(
-    'schedule_collapsed_mouse_reentry(app, window, edge, animation_generation);',
-  ),
-  'collapse must keep native cursor re-entry interruptible while WebView resize events are busy',
-);
-const spawnSection = sourceSection(
-  rust,
-  'fn spawn_focus_widget_geometry_animation(',
-  'fn animate_focus_widget_geometry(',
-);
-assert(
-  spawnSection.includes('tauri::async_runtime::spawn_blocking') &&
-    spawnSection.includes('Ok(false) => {}') &&
-    !spawnSection.includes('begin_focus_widget_animation(window)?'),
-  'geometry animation must run off the command path and stale work must exit silently',
-);
-assert(
-  spawnSection.includes('animate_focus_widget_geometry(&window, animation)'),
-  'queued work must use the generation and live geometry captured by the command path',
-);
-assert(
-  spawnSection.includes('run_focus_widget_animation_task_if_current(') &&
-    spawnSection.includes('apply_focus_widget_native_shape(native_shape);'),
-  'only the current animation generation may restore the final native window region',
-);
-assert(
-  rust.includes('struct FocusWidgetGeometryAnimation') &&
-    rust.includes('generation: animation_generation') &&
-    rust.includes('from: current_geometry'),
-  'queued animation must retain the generation and live geometry captured by the command path',
-);
-assert(
-  rust.includes('apply_animation_frame_if_current(generation, current_generation'),
-  'every native frame must reject stale animation generations',
-);
-const frameDispatchSection = sourceSection(
-  rust,
-  'fn run_focus_widget_animation_task_if_current',
-  'fn apply_animation_frame_if_current',
-);
-assert(
-  frameDispatchSection.includes('.run_on_main_thread(move ||') &&
-    frameDispatchSection.includes('focus_widget_animation_frame_lock()') &&
-    frameDispatchSection.includes('current_window_animation_generation()') &&
-    frameDispatchSection.includes('F: FnOnce() -> Result<(), String>'),
-  'generation check and native geometry write must execute together on the window main thread',
-);
-const frameSubmitSection = sourceSection(
-  rust,
-  'fn set_focus_widget_animation_frame(',
-  'fn run_focus_widget_animation_task_if_current',
-);
-const windowsFrameSubmitSection = sourceSection(
-  rust,
-  '#[cfg(windows)]\nfn set_focus_widget_animation_frame(',
-  '#[cfg(not(windows))]\nfn set_focus_widget_animation_frame(',
-);
-assert(
-  frameSubmitSection.includes('run_focus_widget_animation_task_if_current(') &&
-    frameSubmitSection.includes('set_focus_widget_geometry_frame_physical(') &&
-    !frameSubmitSection.includes('focus_widget_animation_frame_lock()') &&
-    !frameSubmitSection.includes('move |window|'),
-  'main-thread frame tasks must use precomputed native geometry without re-entering Tauri dispatch',
-);
-assert(
-  !windowsFrameSubmitSection.includes('window.hwnd()') &&
-    !windowsFrameSubmitSection.includes('window.scale_factor()') &&
-    windowsFrameSubmitSection.includes('native_context'),
-  'each Windows frame must consume the immutable native context captured before animation',
-);
-assert(
-  rust.includes('native_context: FocusWidgetNativeAnimationContext') &&
-    rust.includes('native_context: Some(FocusWidgetNativeAnimationContext') &&
-    rust.includes('native_context,\n        },'),
-  'animation generation must carry the native context captured at its start',
+  expandSection.includes('schedule_peek_mouse_auto_collapse(app);'),
+  'expanded pointer-leave fallback must remain available',
 );
 
-for (const name of ['DOCK_EXPAND_RESPONSE_MS', 'DOCK_COLLAPSE_RESPONSE_MS']) {
-  const match = rust.match(new RegExp(`const ${name}: u64 = (\\d+);`));
-  const responseMs = Number(match?.[1]);
-  assert(responseMs >= 320 && responseMs <= 400, `${name} must stay within 320-400ms`);
+for (const obsolete of [
+  'DOCK_ANIMATION_FRAME_MS',
+  'DOCK_EXPAND_RESPONSE_MS',
+  'DOCK_COLLAPSE_RESPONSE_MS',
+  'FocusWidgetGeometryAnimation',
+  'FocusWidgetNativeAnimationContext',
+  'animate_focus_widget_geometry',
+  'set_focus_widget_animation_frame',
+  'run_focus_widget_animation_task_if_current',
+  'focus_widget_animation_frame_lock',
+  'critically_damped_spring_progress',
+  'std::thread::sleep',
+  'mpsc::sync_channel',
+]) {
+  assert(!rust.includes(obsolete), `obsolete per-frame animation path must not return: ${obsolete}`);
 }
-assert(
-  rust.includes('fn critically_damped_spring_progress(') &&
-    rust.includes('std::f64::consts::TAU') &&
-    rust.includes('(-scaled_time).exp()') &&
-    rust.includes('.clamp(0.0, 1.0)'),
-  'native motion must use a clamped critically damped spring helper',
-);
-assert(!rust.includes('dock_animation_steps('), 'fixed animation steps must not return');
-assert(!rust.includes('cubic_bezier_y_for_x('), 'native cubic-bezier interpolation must not return');
-assert(
-  rust.includes('geometry_event_suppression_duration()') &&
-    rust.includes('DOCK_EXPAND_RESPONSE_MS.max(DOCK_COLLAPSE_RESPONSE_MS)'),
-  'geometry event suppression must cover the full spring response',
+
+const suppressionSection = sourceSection(
+  rust,
+  'fn geometry_event_suppression_duration()',
+  'fn note_current_study_mode(',
 );
 assert(
-  rust.includes('critically_damped_spring_is_monotonic_and_never_overshoots') &&
-    rust.includes('stale_animation_generation_does_not_apply_its_frame'),
-  'spring and stale-generation Rust tests are required',
+  suppressionSection.includes('Duration::from_millis(GEOMETRY_SUPPRESSION_GRACE_MS)') &&
+    !suppressionSection.includes('GEOMETRY_DEBOUNCE_MS'),
+  'geometry suppression must cover only the one-shot resize event burst',
 );
 
-assert(widget.includes('transitionGenerationRef'), 'frontend transition generation guard is missing');
-assert(widget.includes('peekFromEdge(true)'), 'pointer re-entry must reverse an active retraction');
-assert(
-  widget.includes("if (nextDockState.mode === 'peek')") &&
-    widget.includes('setIsRetracting(false);'),
-  'native re-entry must release the frontend material retraction state',
+const nativeAutoCollapse = sourceSection(
+  rust,
+  'fn schedule_peek_mouse_auto_collapse(',
+  'fn schedule_collapsed_mouse_reentry(',
 );
-assert(!widget.includes('RETRACT_PREPARE_MS'), 'artificial retract preparation delay must not return');
-assert(!widget.includes('waitForMilliseconds'), 'timer-based retract staging must not return');
-assert(!css.includes('42ms') && !css.includes('56ms'), 'hard-cut inner-content timings must not return');
+assert(
+  nativeAutoCollapse.includes('FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT') &&
+    !nativeAutoCollapse.includes('collapse_window_from_current_state'),
+  'native pointer polling must request the frontend transition instead of snapping the window closed',
+);
+assert(
+  widgetApi.includes("FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT = 'focus-widget-collapse-requested'"),
+  'frontend API must expose the native collapse-request event',
+);
+
+const peekSection = sourceSection(
+  widget,
+  'const peekFromEdge = useCallback',
+  'const collapseToEdge = useCallback',
+);
+const nativeExpandIndex = peekSection.indexOf('await peekFocusWidgetFromEdge()');
+const paintIndex = peekSection.indexOf('await waitForAnimationFrame()');
+const releaseExpandIndex = peekSection.indexOf('setIsExpanding(false);', paintIndex);
+assert(
+  nativeExpandIndex >= 0 && paintIndex > nativeExpandIndex && releaseExpandIndex > paintIndex,
+  'expansion must resize once, paint the initial CSS state, then release the transition',
+);
+assert(
+  peekSection.includes('if (reversesRetraction) {') &&
+    peekSection.indexOf('if (reversesRetraction) {') < nativeExpandIndex,
+  'reversing a pending CSS retraction must not issue another native resize',
+);
+
+const collapseFrontendSection = sourceSection(
+  widget,
+  'const collapseToEdge = useCallback',
+  'useEffect(() => {\n    if (!canInteract) return undefined;',
+);
+const transitionIndex = collapseFrontendSection.indexOf('await waitForPanelTransition(panelRef.current)');
+const generationCheckIndex = collapseFrontendSection.indexOf(
+  'if (transitionGenerationRef.current !== transitionGeneration) return;',
+  transitionIndex,
+);
+const nativeCollapseIndex = collapseFrontendSection.indexOf('await collapseFocusWidgetToEdge()');
+assert(
+  transitionIndex >= 0 && generationCheckIndex > transitionIndex && nativeCollapseIndex > generationCheckIndex,
+  'collapse must finish the interruptible CSS transition and reject stale work before resizing once',
+);
+assert(
+  collapseFrontendSection.includes("dockModeRef.current !== 'peek' || isRetracting"),
+  'duplicate native collapse requests must not start concurrent transitions',
+);
+assert(
+  widget.includes('listenTauriEvent(FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT') &&
+    widget.includes("event.propertyName === 'transform'") &&
+    widget.includes('RETRACT_TRANSITION_FALLBACK_MS'),
+  'frontend must handle native collapse requests and use transitionend with a bounded fallback',
+);
+
+const frameHelper = sourceSection(
+  widget,
+  'function waitForAnimationFrame()',
+  'function waitForPanelTransition(',
+);
+assert(
+  count(frameHelper, 'window.requestAnimationFrame(') === 1,
+  'expansion preparation must wait only one animation frame',
+);
+assert(!widget.includes('waitForNextPaint'), 'nested two-frame expansion delay must not return');
 
 const motionStyles = sourceSection(
   css,
   '@media (prefers-reduced-motion: no-preference)',
-  '@keyframes focus-widget-tab-in',
+  '.focus-widget-topbar,',
 );
-assert(!motionStyles.includes('translate3d('), 'material animation must not fight native window travel');
-assert(motionStyles.includes('opacity') && motionStyles.includes('filter: blur('), 'material transition must animate opacity and blur');
-assert(motionStyles.includes('scale(var(--widget-panel-material-scale))'), 'material transition must use only a light scale');
+assert(
+  motionStyles.includes('opacity') && motionStyles.includes('transform'),
+  'material transition must retain opacity and transform feedback',
+);
+assert(!motionStyles.includes('filter'), 'material transition must not animate filter');
+assert(!motionStyles.includes('@keyframes'), 'dock transitions must remain interruptible CSS transitions');
+assert(
+  css.includes('--widget-control-ease: cubic-bezier(0.23, 1, 0.32, 1);') &&
+    css.includes('--widget-material-enter: 180ms;') &&
+    css.includes('--widget-material-exit: 160ms;'),
+  'focus widget motion must use the responsive target curve and sub-300ms durations',
+);
+assert(!css.includes('blur(32px)'), '32px backdrop blur must not return');
+assert(count(css, 'backdrop-filter: blur(16px)') >= 2, 'panel and collapsed tab must use 16px backdrop blur');
 
 const reducedMotion = css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
 for (const selector of ['.focus-widget-shell', '.focus-widget-panel', '.focus-widget-collapsed-tab']) {
@@ -229,7 +220,7 @@ assert(
   reducedMotion.includes('animation: none !important') &&
     reducedMotion.includes('transition: none !important') &&
     reducedMotion.includes('transform: none !important'),
-  'reduced-motion must disable animation, transition, and geometric transforms',
+  'reduced-motion must disable motion while preserving the state change',
 );
 
 const nativeReentry = sourceSection(
@@ -242,27 +233,17 @@ assert(
     nativeReentry.includes('observed_outside = !inside') &&
     nativeReentry.includes('focus_widget_native_cursor_is_inside') &&
     nativeReentry.includes('expand_window_to_edge('),
-  'native re-entry watcher must validate generation and use OS cursor geometry after outside-to-inside motion',
-);
-const nativeCursorProbe = sourceSection(
-  rust,
-  'fn focus_widget_native_cursor_is_inside(',
-  'fn focus_widget_cursor_is_inside_window(',
-);
-assert(
-  nativeCursorProbe.includes('GetCursorPos(') && nativeCursorProbe.includes('GetWindowRect('),
-  'collapse re-entry probing must not queue behind Tauri/WebView resize events',
+  'native re-entry watcher must reject stale work and use OS cursor geometry',
 );
 
-const nativeAnimationPreparation = sourceSection(
+const nativePreparation = sourceSection(
   rust,
-  'fn prepare_focus_widget_hwnd_animation(',
-  'unsafe extern "system" fn focus_widget_wndproc(',
+  'fn prepare_focus_widget_geometry_change(',
+  '#[cfg(not(windows))]\nfn prepare_focus_widget_geometry_change(',
 );
 assert(
-  nativeAnimationPreparation.includes('SetWindowRgn(hwnd, None, false)') &&
-    !nativeAnimationPreparation.includes('DockAnimationKind::Expand'),
-  'expand and collapse must both remove the complex native region before their first frame',
+  nativePreparation.includes('SetWindowRgn(hwnd, None, false)'),
+  'one-shot geometry changes must remove the stale native region before resizing',
 );
 
 assert(
