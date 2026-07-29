@@ -1448,7 +1448,7 @@ export default function SchedulePage() {
                   </div>
                   <select value={quickAddSourceTodayItemId ?? ''} onChange={(event) => handleQuickSourceChange(event.target.value)}>
                     <option value="">手动安排</option>
-                    {(data?.today_items ?? []).map((item) => (
+                    {(data?.today_items ?? []).filter((item) => !item.completed).map((item) => (
                       <option key={item.id} value={item.id}>{item.title}</option>
                     ))}
                   </select>

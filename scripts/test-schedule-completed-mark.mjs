@@ -99,6 +99,14 @@ if (!schedulePage.includes('已完成') || !drawer.includes('已完成')) {
   failed = true;
 }
 
+const quickAddOptionsMatch = schedulePage.match(
+  /<select value=\{quickAddSourceTodayItemId[\s\S]*?<\/select>/,
+);
+if (!quickAddOptionsMatch?.[0].includes('.filter((item) => !item.completed)')) {
+  console.error('Schedule quick add must exclude completed today items');
+  failed = true;
+}
+
 if (failed) {
   process.exit(1);
 }
