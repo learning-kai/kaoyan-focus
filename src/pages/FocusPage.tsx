@@ -449,7 +449,7 @@ export default function FocusPage() {
       const requestId = beginStudyStateRequest();
       const nextState = await startStudyMode(studyMinutes * 60, focusMinutes * 60, breakMinutes * 60, longBreakMinutes * 60, longBreakInterval, mode, selectedSubjectId, mode === 'strict' ? true : normalWhitelistEnabled);
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
-      setNotice(nextState.focus_enforcement_active ? `学习模式已开始。窗口关闭后会进入托盘，后台继续计时并执行${ruleModeLabel}。` : '学习模式已开始。窗口关闭后会进入托盘，后台继续计时，前台规则已关闭。');
+      setNotice('学习已开始');
       resetStudyReminderScope(nextState, activeReminderScopeRef);
       markStudyReminderSeen(nextState, syncDeviceId);
       void notifyStudyReminder({ title: '学习模式已开始', body: '第 ' + nextState.cycle_index + ' 轮番茄钟开始，专注 ' + formatDuration(nextState.focus_seconds) + '。' });
@@ -873,9 +873,8 @@ export default function FocusPage() {
               </div>
             </header>
 
-            {(error || notice || monitorError) && <div className="focus-notice-stack">{error && <p className="alert error" role="alert">{error}</p>}{notice && <p aria-live="polite" className="alert success" role="status">{notice}</p>}{monitorError && <p className="alert error" role="alert">前台检测失败：{monitorError}</p>}</div>}
-
             <main className="focus-clock-zone">
+              {(error || notice || monitorError) && <div className="focus-notice-stack">{error && <p className="alert error" role="alert">{error}</p>}{notice && <p aria-live="polite" className="alert success" role="status">{notice}</p>}{monitorError && <p className="alert error" role="alert">前台检测失败：{monitorError}</p>}</div>}
               <p>{activeClockLabel}</p>
               <strong>{timerValue}</strong>
               <span>{buildPhaseMessage(studyState)}</span>

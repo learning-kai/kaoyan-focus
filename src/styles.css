@@ -6656,9 +6656,25 @@ html[data-theme='light'] .subject-dot {
 }
 
 .focus-notice-stack {
-  display: grid;
-  gap: 8px;
-  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0 12px;
+}
+
+.focus-clock-zone .focus-notice-stack .alert {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .focus-clock-zone {
