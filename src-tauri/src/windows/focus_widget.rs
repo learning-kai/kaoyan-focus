@@ -551,10 +551,13 @@ fn attach_window_handlers(app: &AppHandle, window: &WebviewWindow) {
     let window_for_events = window.clone();
 
     window.on_window_event(move |event| match event {
-        WindowEvent::Moved(_)
-        | WindowEvent::Resized(_)
-        | WindowEvent::ScaleFactorChanged { .. } => {
-            apply_focus_widget_window_shape(&window_for_events);
+        WindowEvent::Moved(_) => {
+            let _ = handle_focus_widget_geometry_event(&app_for_events, &window_for_events);
+        }
+        WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
+            if !should_suppress_geometry_events() {
+                apply_focus_widget_window_shape(&window_for_events);
+            }
             let _ = handle_focus_widget_geometry_event(&app_for_events, &window_for_events);
         }
         WindowEvent::CloseRequested { api, .. } => {
@@ -1769,11 +1772,9 @@ fn install_focus_widget_chrome_guard(window: &WebviewWindow) {
 fn install_focus_widget_chrome_guard(_window: &WebviewWindow) {}
 
 #[cfg(windows)]
-fn prepare_focus_widget_hwnd_animation(hwnd: HWND, kind: DockAnimationKind) {
+fn prepare_focus_widget_hwnd_animation(hwnd: HWND, _kind: DockAnimationKind) {
     enforce_focus_widget_chrome_less(hwnd);
-    if matches!(kind, DockAnimationKind::Expand) {
-        let _ = unsafe { SetWindowRgn(hwnd, None, false) };
-    }
+    let _ = unsafe { SetWindowRgn(hwnd, None, false) };
 }
 
 #[cfg(windows)]
