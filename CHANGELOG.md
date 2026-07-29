@@ -417,4 +417,17 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - Cache native animation context for focus widget frames (b600db7)
 - Refactor application structure and update UI behavior (e69f0e9)
 
+## v1.18.4 - 2026-07-29
+
+### Desktop
+#### Fixed
+- Merge branch '修复日历快速添加' (7c73c8b)
+- fix: 修复快速添加功能，确保不包含已完成的今日事项 (8216fa5)
+- fix: 更新学习模式通知信息，优化通知样式 (24fe032)
+- Merge branch 'codex/修复悬浮窗卡顿' (cc7df2a)
+- fix: 修复悬浮窗卡顿问题，优化窗口事件处理和动画准备逻辑 (10ca584)
+
+#### Changed
+- Merge commit '24fe032d66af62bebb9bcf026d812facaaa3a1c5' (a3abf4f)
+
 
