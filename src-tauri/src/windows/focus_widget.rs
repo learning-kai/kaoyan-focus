@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    sync::{mpsc, Mutex, OnceLock},
+    sync::{Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -41,6 +41,7 @@ pub const FOCUS_WIDGET_LABEL: &str = "focus-widget";
 const MAIN_WINDOW_LABEL: &str = "main";
 const FOCUS_WIDGET_TITLE: &str = "";
 const FOCUS_WIDGET_DOCK_STATE_CHANGED_EVENT: &str = "focus-widget-dock-state-changed";
+const FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT: &str = "focus-widget-collapse-requested";
 const FOCUS_WIDGET_STUDY_STATE_EVENT: &str = "focus-widget-study-state";
 const FOCUS_WIDGET_STUDY_STATE_CHANGED_EVENT: &str = "focus-widget-study-state-changed";
 const FOCUS_WIDGET_INITIALIZATION_SCRIPT: &str = r#"
@@ -68,9 +69,6 @@ const COLLAPSED_BAR_HEIGHT: f64 = 36.0;
 const EDGE_COLLAPSE_THRESHOLD: f64 = 18.0;
 const EDGE_SAFE_MARGIN: f64 = 8.0;
 const GEOMETRY_DEBOUNCE_MS: u64 = 250;
-const DOCK_EXPAND_RESPONSE_MS: u64 = 360;
-const DOCK_COLLAPSE_RESPONSE_MS: u64 = 340;
-const DOCK_ANIMATION_FRAME_MS: u64 = 16;
 const GEOMETRY_SUPPRESSION_GRACE_MS: u64 = 80;
 const FLOATING_WINDOW_RADIUS: i32 = 32;
 const COLLAPSED_WINDOW_RADIUS: i32 = 22;
@@ -83,7 +81,6 @@ const COLLAPSE_REENTRY_HOVER_MS: u64 = 32;
 
 static CREATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static RUNTIME_STATE: OnceLock<Mutex<FocusWidgetRuntimeState>> = OnceLock::new();
-static FOCUS_WIDGET_ANIMATION_FRAME_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 #[cfg(windows)]
 static FOCUS_WIDGET_ORIGINAL_WNDPROC: OnceLock<usize> = OnceLock::new();
 
@@ -98,8 +95,6 @@ struct FocusWidgetGeometry {
     y: Option<f64>,
     width: f64,
     height: f64,
-    #[cfg(windows)]
-    native_context: Option<FocusWidgetNativeAnimationContext>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -163,32 +158,6 @@ struct WidgetSize {
     width: f64,
     height: f64,
 }
-
-#[derive(Debug, Clone, Copy)]
-enum DockAnimationKind {
-    Expand,
-    Collapse,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct FocusWidgetGeometryAnimation {
-    generation: u64,
-    from: FocusWidgetGeometry,
-    target: FocusWidgetGeometry,
-    kind: DockAnimationKind,
-    native_context: FocusWidgetNativeAnimationContext,
-}
-
-#[cfg(windows)]
-#[derive(Debug, Clone, Copy)]
-struct FocusWidgetNativeAnimationContext {
-    hwnd: isize,
-    scale_factor: f64,
-}
-
-#[cfg(not(windows))]
-#[derive(Debug, Clone, Copy)]
-struct FocusWidgetNativeAnimationContext;
 
 #[cfg(windows)]
 #[derive(Debug, Clone, Copy)]
@@ -669,8 +638,6 @@ fn focus_widget_geometry_from_settings(settings: &AppSettings) -> FocusWidgetGeo
         y: position.map(|(_, y)| y),
         width,
         height,
-        #[cfg(windows)]
-        native_context: None,
     }
 }
 
@@ -803,13 +770,8 @@ fn collapse_window_to_edge(
     window: &WebviewWindow,
     edge: FocusWidgetDockEdge,
 ) -> Result<FocusWidgetDockState, String> {
-    let (animation_generation, current_geometry) = begin_focus_widget_animation(window)?;
-    #[cfg(windows)]
-    let native_context = current_geometry
-        .native_context
-        .ok_or_else(|| "focus widget native animation context is missing".to_string())?;
-    #[cfg(not(windows))]
-    let native_context = FocusWidgetNativeAnimationContext;
+    let geometry_generation = next_window_animation_generation();
+    let current_geometry = logical_geometry_from_window(window)?;
     let normal_geometry = if current_dock_state().mode == FocusWidgetDockMode::Floating {
         normalize_normal_geometry(current_geometry)
     } else {
@@ -827,27 +789,24 @@ fn collapse_window_to_edge(
         y: Some(position.y.unwrap_or(area.y)),
         width: size.width,
         height: size.height,
-        #[cfg(windows)]
-        native_context: None,
     };
 
     suppress_geometry_events_briefly();
     apply_size_constraints(window, true)?;
-    store_dock_state(next_state);
-    spawn_focus_widget_geometry_animation(
-        app,
+    prepare_focus_widget_geometry_change(window);
+    set_focus_widget_geometry_frame(
         window,
-        FocusWidgetGeometryAnimation {
-            generation: animation_generation,
-            from: current_geometry,
-            target: target_geometry,
-            kind: DockAnimationKind::Collapse,
-            native_context,
-        },
-        next_state,
-        true,
-    );
-    schedule_collapsed_mouse_reentry(app, window, edge, animation_generation);
+        target_geometry.x.unwrap_or(area.x),
+        target_geometry.y.unwrap_or(area.y),
+        target_geometry.width,
+        target_geometry.height,
+    )?;
+    let state_changed = store_dock_state(next_state);
+    apply_focus_widget_window_shape(window);
+    if state_changed {
+        emit_dock_state_change(app, next_state);
+    }
+    schedule_collapsed_mouse_reentry(app, window, edge, geometry_generation);
     Ok(next_state)
 }
 
@@ -857,13 +816,8 @@ fn expand_window_to_edge(
     edge: FocusWidgetDockEdge,
     mode: FocusWidgetDockMode,
 ) -> Result<FocusWidgetDockState, String> {
-    let (animation_generation, current_geometry) = begin_focus_widget_animation(window)?;
-    #[cfg(windows)]
-    let native_context = current_geometry
-        .native_context
-        .ok_or_else(|| "focus widget native animation context is missing".to_string())?;
-    #[cfg(not(windows))]
-    let native_context = FocusWidgetNativeAnimationContext;
+    next_window_animation_generation();
+    let current_geometry = logical_geometry_from_window(window)?;
     let normal_geometry = runtime_normal_geometry().unwrap_or_else(|| {
         normalize_normal_geometry(focus_widget_geometry_from_settings(
             &get_app_settings(app.clone()).unwrap_or_default(),
@@ -877,297 +831,25 @@ fn expand_window_to_edge(
         FocusWidgetDockMode::Peek => FocusWidgetDockState::peek(edge),
     };
 
-    set_dock_state(app, next_state);
     suppress_geometry_events_briefly();
     apply_size_constraints(window, false)?;
+    prepare_focus_widget_geometry_change(window);
+    set_focus_widget_geometry_frame(
+        window,
+        expanded_geometry.x.unwrap_or(area.x),
+        expanded_geometry.y.unwrap_or(area.y),
+        expanded_geometry.width,
+        expanded_geometry.height,
+    )?;
+    let state_changed = store_dock_state(next_state);
     apply_focus_widget_window_shape(window);
-    spawn_focus_widget_geometry_animation(
-        app,
-        window,
-        FocusWidgetGeometryAnimation {
-            generation: animation_generation,
-            from: current_geometry,
-            target: expanded_geometry,
-            kind: DockAnimationKind::Expand,
-            native_context,
-        },
-        next_state,
-        false,
-    );
+    if state_changed {
+        emit_dock_state_change(app, next_state);
+    }
+    if next_state.mode == FocusWidgetDockMode::Peek {
+        schedule_peek_mouse_auto_collapse(app);
+    }
     Ok(next_state)
-}
-
-fn spawn_focus_widget_geometry_animation(
-    app: &AppHandle,
-    window: &WebviewWindow,
-    animation: FocusWidgetGeometryAnimation,
-    completed_state: FocusWidgetDockState,
-    emit_state_on_complete: bool,
-) {
-    let app = app.clone();
-    let window = window.clone();
-
-    tauri::async_runtime::spawn_blocking(move || {
-        match animate_focus_widget_geometry(&window, animation) {
-            Ok(true) => {
-                #[cfg(windows)]
-                let native_shape = focus_widget_native_shape_snapshot(&window, completed_state);
-                let completion = run_focus_widget_animation_task_if_current(
-                    &window,
-                    animation.generation,
-                    move || {
-                        #[cfg(windows)]
-                        if let Some(native_shape) = native_shape {
-                            apply_focus_widget_native_shape(native_shape);
-                        }
-                        if emit_state_on_complete {
-                            emit_dock_state_change(&app, completed_state);
-                        }
-                        if completed_state.mode == FocusWidgetDockMode::Peek {
-                            schedule_peek_mouse_auto_collapse(&app);
-                        }
-                        Ok(())
-                    },
-                );
-                if let Err(error) = completion {
-                    eprintln!("Focus widget animation completion failed: {error}");
-                }
-            }
-            Ok(false) => {}
-            Err(error) => eprintln!("Focus widget geometry animation failed: {error}"),
-        }
-    });
-}
-
-fn animate_focus_widget_geometry(
-    window: &WebviewWindow,
-    animation: FocusWidgetGeometryAnimation,
-) -> Result<bool, String> {
-    let FocusWidgetGeometryAnimation {
-        generation,
-        from,
-        target: to,
-        kind,
-        native_context,
-    } = animation;
-    let start_x = from.x.unwrap_or_else(|| to.x.unwrap_or(0.0));
-    let start_y = from.y.unwrap_or_else(|| to.y.unwrap_or(0.0));
-    let end_x = to.x.unwrap_or(start_x);
-    let end_y = to.y.unwrap_or(start_y);
-    let response = dock_animation_response(kind);
-    let frame_interval = Duration::from_millis(DOCK_ANIMATION_FRAME_MS);
-    let started_at = Instant::now();
-    let mut next_frame_at = started_at;
-
-    if !prepare_focus_widget_animation(window, generation, kind)? {
-        return Ok(false);
-    }
-
-    loop {
-        let now = Instant::now();
-        if next_frame_at > now {
-            std::thread::sleep(next_frame_at - now);
-        }
-
-        let elapsed = started_at.elapsed();
-        if elapsed >= response {
-            break;
-        }
-
-        let progress = critically_damped_spring_progress(elapsed, response);
-        let next_x = lerp(start_x, end_x, progress);
-        let next_y = lerp(start_y, end_y, progress);
-        let next_width = lerp(from.width, to.width, progress);
-        let next_height = lerp(from.height, to.height, progress);
-
-        if !set_focus_widget_animation_frame(
-            window,
-            generation,
-            native_context,
-            next_x,
-            next_y,
-            next_width,
-            next_height,
-        )? {
-            return Ok(false);
-        }
-
-        next_frame_at += frame_interval;
-        if next_frame_at < Instant::now() {
-            next_frame_at = Instant::now() + frame_interval;
-        }
-    }
-
-    set_focus_widget_animation_frame(
-        window,
-        generation,
-        native_context,
-        end_x,
-        end_y,
-        to.width,
-        to.height,
-    )
-}
-
-#[cfg(windows)]
-fn begin_focus_widget_animation(
-    window: &WebviewWindow,
-) -> Result<(u64, FocusWidgetGeometry), String> {
-    let hwnd = window.hwnd().map_err(|error| error.to_string())?;
-    let scale_factor = window.scale_factor().map_err(|error| error.to_string())?;
-    let _frame_guard = focus_widget_animation_frame_lock()
-        .lock()
-        .map_err(|_| "focus widget animation frame lock is poisoned".to_string())?;
-    let generation = next_window_animation_generation();
-    let geometry = logical_geometry_from_hwnd(hwnd, scale_factor)?;
-    Ok((
-        generation,
-        FocusWidgetGeometry {
-            native_context: Some(FocusWidgetNativeAnimationContext {
-                hwnd: hwnd.0 as isize,
-                scale_factor,
-            }),
-            ..geometry
-        },
-    ))
-}
-
-#[cfg(not(windows))]
-fn begin_focus_widget_animation(
-    window: &WebviewWindow,
-) -> Result<(u64, FocusWidgetGeometry), String> {
-    let _frame_guard = focus_widget_animation_frame_lock()
-        .lock()
-        .map_err(|_| "focus widget animation frame lock is poisoned".to_string())?;
-    let generation = next_window_animation_generation();
-    let geometry = logical_geometry_from_window(window)?;
-    Ok((generation, geometry))
-}
-
-#[cfg(windows)]
-fn logical_geometry_from_hwnd(
-    hwnd: HWND,
-    scale_factor: f64,
-) -> Result<FocusWidgetGeometry, String> {
-    let mut rect = RECT::default();
-    unsafe { GetWindowRect(hwnd, &mut rect) }.map_err(|error| error.to_string())?;
-    Ok(FocusWidgetGeometry {
-        x: Some(rect.left as f64 / scale_factor),
-        y: Some(rect.top as f64 / scale_factor),
-        width: (rect.right - rect.left) as f64 / scale_factor,
-        height: (rect.bottom - rect.top) as f64 / scale_factor,
-        native_context: None,
-    })
-}
-
-#[cfg(windows)]
-fn set_focus_widget_animation_frame(
-    window: &WebviewWindow,
-    generation: u64,
-    native_context: FocusWidgetNativeAnimationContext,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-) -> Result<bool, String> {
-    let physical_x = (x * native_context.scale_factor).round() as i32;
-    let physical_y = (y * native_context.scale_factor).round() as i32;
-    let physical_width = ((width * native_context.scale_factor).round() as i32).max(1);
-    let physical_height = ((height * native_context.scale_factor).round() as i32).max(1);
-
-    run_focus_widget_animation_task_if_current(window, generation, move || {
-        set_focus_widget_geometry_frame_physical(
-            HWND(native_context.hwnd as _),
-            physical_x,
-            physical_y,
-            physical_width,
-            physical_height,
-        )
-    })
-}
-
-#[cfg(not(windows))]
-fn set_focus_widget_animation_frame(
-    window: &WebviewWindow,
-    generation: u64,
-    _native_context: FocusWidgetNativeAnimationContext,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-) -> Result<bool, String> {
-    let current_generation = current_window_animation_generation();
-    apply_animation_frame_if_current(generation, current_generation, || {
-        set_focus_widget_geometry_frame_fallback(window, x, y, width, height)
-    })
-}
-
-fn run_focus_widget_animation_task_if_current<F>(
-    window: &WebviewWindow,
-    generation: u64,
-    task: F,
-) -> Result<bool, String>
-where
-    F: FnOnce() -> Result<(), String> + Send + 'static,
-{
-    let (sender, receiver) = mpsc::sync_channel(1);
-
-    window
-        .run_on_main_thread(move || {
-            let result = (|| {
-                let _frame_guard = focus_widget_animation_frame_lock()
-                    .lock()
-                    .map_err(|_| "focus widget animation frame lock is poisoned".to_string())?;
-                let current_generation = current_window_animation_generation();
-
-                apply_animation_frame_if_current(generation, current_generation, task)
-            })();
-            let _ = sender.send(result);
-        })
-        .map_err(|error| error.to_string())?;
-
-    receiver
-        .recv()
-        .map_err(|_| "focus widget animation main-thread task was cancelled".to_string())?
-}
-
-fn apply_animation_frame_if_current<F>(
-    generation: u64,
-    current_generation: u64,
-    apply_frame: F,
-) -> Result<bool, String>
-where
-    F: FnOnce() -> Result<(), String>,
-{
-    if generation != current_generation {
-        return Ok(false);
-    }
-
-    apply_frame()?;
-    Ok(true)
-}
-
-#[cfg(windows)]
-fn prepare_focus_widget_animation(
-    window: &WebviewWindow,
-    generation: u64,
-    kind: DockAnimationKind,
-) -> Result<bool, String> {
-    let hwnd = window.hwnd().map_err(|error| error.to_string())?;
-    let hwnd = hwnd.0 as isize;
-    run_focus_widget_animation_task_if_current(window, generation, move || {
-        prepare_focus_widget_hwnd_animation(HWND(hwnd as _), kind);
-        Ok(())
-    })
-}
-
-#[cfg(not(windows))]
-fn prepare_focus_widget_animation(
-    _window: &WebviewWindow,
-    generation: u64,
-    _kind: DockAnimationKind,
-) -> Result<bool, String> {
-    apply_animation_frame_if_current(generation, current_window_animation_generation(), || Ok(()))
 }
 
 #[cfg(windows)]
@@ -1255,13 +937,6 @@ fn next_window_animation_generation() -> u64 {
         .unwrap_or(0)
 }
 
-fn current_window_animation_generation() -> u64 {
-    runtime_state()
-        .lock()
-        .map(|runtime| runtime.window_animation_generation)
-        .unwrap_or(0)
-}
-
 fn next_peek_mouse_watch_generation() -> u64 {
     runtime_state()
         .lock()
@@ -1271,34 +946,6 @@ fn next_peek_mouse_watch_generation() -> u64 {
             runtime.peek_mouse_watch_generation
         })
         .unwrap_or(0)
-}
-
-fn lerp(from: f64, to: f64, progress: f64) -> f64 {
-    from + (to - from) * progress
-}
-
-fn dock_animation_response(kind: DockAnimationKind) -> Duration {
-    Duration::from_millis(match kind {
-        DockAnimationKind::Expand => DOCK_EXPAND_RESPONSE_MS,
-        DockAnimationKind::Collapse => DOCK_COLLAPSE_RESPONSE_MS,
-    })
-}
-
-fn critically_damped_spring_progress(elapsed: Duration, response: Duration) -> f64 {
-    if elapsed.is_zero() {
-        return 0.0;
-    }
-    if response.is_zero() || elapsed >= response {
-        return 1.0;
-    }
-
-    let angular_frequency = std::f64::consts::TAU / response.as_secs_f64();
-    let scaled_time = angular_frequency * elapsed.as_secs_f64();
-    (1.0 - (1.0 + scaled_time) * (-scaled_time).exp()).clamp(0.0, 1.0)
-}
-
-fn focus_widget_animation_frame_lock() -> &'static Mutex<()> {
-    FOCUS_WIDGET_ANIMATION_FRAME_LOCK.get_or_init(|| Mutex::new(()))
 }
 
 fn schedule_peek_mouse_auto_collapse(app: &AppHandle) {
@@ -1341,7 +988,7 @@ fn schedule_peek_mouse_auto_collapse(app: &AppHandle) {
                 continue;
             }
 
-            let _ = collapse_window_from_current_state(&app, &window);
+            let _ = app.emit(FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT, ());
             return;
         }
     });
@@ -1364,14 +1011,12 @@ fn schedule_collapsed_mouse_reentry(
         let mut inside_since: Option<Instant> = None;
 
         loop {
-            let poll_ms = if started_at.elapsed()
-                <= dock_animation_response(DockAnimationKind::Collapse)
-                    + Duration::from_millis(GEOMETRY_SUPPRESSION_GRACE_MS)
-            {
-                COLLAPSE_REENTRY_POLL_MS
-            } else {
-                COLLAPSE_REENTRY_IDLE_POLL_MS
-            };
+            let poll_ms =
+                if started_at.elapsed() <= Duration::from_millis(GEOMETRY_SUPPRESSION_GRACE_MS) {
+                    COLLAPSE_REENTRY_POLL_MS
+                } else {
+                    COLLAPSE_REENTRY_IDLE_POLL_MS
+                };
             tokio::time::sleep(Duration::from_millis(poll_ms)).await;
 
             let should_continue = runtime_state()
@@ -1539,8 +1184,6 @@ fn logical_geometry_from_window(window: &WebviewWindow) -> Result<FocusWidgetGeo
         y: Some(logical_position.y),
         width: logical_size.width,
         height: logical_size.height,
-        #[cfg(windows)]
-        native_context: None,
     })
 }
 
@@ -1578,32 +1221,24 @@ fn docked_position(
             y: Some(centered_y.clamp(area.y + EDGE_SAFE_MARGIN, y_limit)),
             width: size.width,
             height: size.height,
-            #[cfg(windows)]
-            native_context: None,
         },
         FocusWidgetDockEdge::Right => FocusWidgetGeometry {
             x: Some(area.x + area.width - size.width),
             y: Some(centered_y.clamp(area.y + EDGE_SAFE_MARGIN, y_limit)),
             width: size.width,
             height: size.height,
-            #[cfg(windows)]
-            native_context: None,
         },
         FocusWidgetDockEdge::Top => FocusWidgetGeometry {
             x: Some(centered_x.clamp(area.x + EDGE_SAFE_MARGIN, x_limit)),
             y: Some(area.y),
             width: size.width,
             height: size.height,
-            #[cfg(windows)]
-            native_context: None,
         },
         FocusWidgetDockEdge::Bottom => FocusWidgetGeometry {
             x: Some(centered_x.clamp(area.x + EDGE_SAFE_MARGIN, x_limit)),
             y: Some(area.y + area.height - size.height),
             width: size.width,
             height: size.height,
-            #[cfg(windows)]
-            native_context: None,
         },
     }
 }
@@ -1660,8 +1295,6 @@ fn normalize_normal_geometry(geometry: FocusWidgetGeometry) -> FocusWidgetGeomet
         height: geometry
             .height
             .clamp(MIN_NORMAL_HEIGHT as f64, MAX_NORMAL_HEIGHT as f64),
-        #[cfg(windows)]
-        native_context: None,
     }
 }
 
@@ -1772,10 +1405,16 @@ fn install_focus_widget_chrome_guard(window: &WebviewWindow) {
 fn install_focus_widget_chrome_guard(_window: &WebviewWindow) {}
 
 #[cfg(windows)]
-fn prepare_focus_widget_hwnd_animation(hwnd: HWND, _kind: DockAnimationKind) {
+fn prepare_focus_widget_geometry_change(window: &WebviewWindow) {
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
     enforce_focus_widget_chrome_less(hwnd);
     let _ = unsafe { SetWindowRgn(hwnd, None, false) };
 }
+
+#[cfg(not(windows))]
+fn prepare_focus_widget_geometry_change(_window: &WebviewWindow) {}
 
 #[cfg(windows)]
 unsafe extern "system" fn focus_widget_wndproc(
@@ -2043,11 +1682,7 @@ fn suppress_geometry_events_briefly() {
 }
 
 fn geometry_event_suppression_duration() -> Duration {
-    Duration::from_millis(
-        GEOMETRY_DEBOUNCE_MS
-            + DOCK_EXPAND_RESPONSE_MS.max(DOCK_COLLAPSE_RESPONSE_MS)
-            + GEOMETRY_SUPPRESSION_GRACE_MS,
-    )
+    Duration::from_millis(GEOMETRY_SUPPRESSION_GRACE_MS)
 }
 
 fn note_current_study_mode(study_mode_id: Option<i64>) {
@@ -2141,11 +1776,8 @@ fn round_to_i64(value: f64) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, time::Duration};
-
     use super::{
-        apply_animation_frame_if_current, critically_damped_spring_progress,
-        cursor_is_inside_window_bounds, lerp, PhysicalWindowBounds, StudyModeVisibilitySnapshot,
+        cursor_is_inside_window_bounds, PhysicalWindowBounds, StudyModeVisibilitySnapshot,
     };
 
     fn snapshot(status: &str, is_paused: bool) -> StudyModeVisibilitySnapshot {
@@ -2193,65 +1825,5 @@ mod tests {
 
         assert!(!cursor_is_inside_window_bounds(91.0, 250.0, bounds, 8.0));
         assert!(!cursor_is_inside_window_bounds(250.0, 353.0, bounds, 8.0));
-    }
-
-    #[test]
-    fn critically_damped_spring_is_monotonic_and_never_overshoots() {
-        let response = Duration::from_millis(360);
-        let mut previous = 0.0;
-
-        for elapsed_ms in (0..=360).step_by(4) {
-            let progress =
-                critically_damped_spring_progress(Duration::from_millis(elapsed_ms), response);
-            assert!((0.0..=1.0).contains(&progress));
-            assert!(progress >= previous);
-            previous = progress;
-        }
-
-        assert_eq!(critically_damped_spring_progress(response, response), 1.0);
-        assert!(critically_damped_spring_progress(Duration::from_millis(359), response) > 0.98);
-    }
-
-    #[test]
-    fn spring_lerp_preserves_direction_for_every_geometry_axis() {
-        let response = Duration::from_millis(340);
-
-        for (from, to) in [(0.0, 120.0), (120.0, 0.0), (-40.0, 60.0), (60.0, -40.0)] {
-            let mut previous = from;
-            for elapsed_ms in (0..=340).step_by(4) {
-                let progress =
-                    critically_damped_spring_progress(Duration::from_millis(elapsed_ms), response);
-                let value = lerp(from, to, progress);
-                if to >= from {
-                    assert!(value >= previous);
-                } else {
-                    assert!(value <= previous);
-                }
-                previous = value;
-            }
-            assert!((previous - to).abs() < f64::EPSILON);
-        }
-    }
-
-    #[test]
-    fn stale_animation_generation_does_not_apply_its_frame() {
-        let applied_frames = Cell::new(0);
-        let applied = apply_animation_frame_if_current(7, 8, || {
-            applied_frames.set(applied_frames.get() + 1);
-            Ok(())
-        })
-        .expect("stale frame check should succeed");
-
-        assert!(!applied);
-        assert_eq!(applied_frames.get(), 0);
-
-        let applied = apply_animation_frame_if_current(8, 8, || {
-            applied_frames.set(applied_frames.get() + 1);
-            Ok(())
-        })
-        .expect("current frame should apply");
-
-        assert!(applied);
-        assert_eq!(applied_frames.get(), 1);
     }
 }

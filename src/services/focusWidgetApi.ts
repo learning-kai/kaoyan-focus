@@ -10,6 +10,7 @@ export type FocusWidgetDockState = {
 };
 
 export const FOCUS_WIDGET_DOCK_STATE_CHANGED_EVENT = 'focus-widget-dock-state-changed';
+export const FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT = 'focus-widget-collapse-requested';
 
 export const defaultFocusWidgetDockState: FocusWidgetDockState = {
   mode: 'floating',

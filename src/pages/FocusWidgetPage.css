@@ -30,12 +30,10 @@
   --widget-green: #30d158;
   --widget-red: #ff453a;
   --widget-window-radius: 32px;
-  --widget-spring-ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --widget-control-ease: cubic-bezier(0.2, 0.82, 0.2, 1);
-  --widget-material-enter: 220ms;
-  --widget-material-exit: 200ms;
+  --widget-control-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --widget-material-enter: 180ms;
+  --widget-material-exit: 160ms;
   --widget-panel-material-scale: 0.986;
-  --widget-tab-enter-scale: 0.96;
   width: 100vw;
   height: 100vh;
   min-width: 0;
@@ -82,10 +80,9 @@
     0 8px 18px rgba(32, 39, 55, 0.12),
     inset 0 1px 1px rgba(255, 255, 255, 0.86),
     inset 0 -1px 1px rgba(53, 65, 87, 0.08);
-  backdrop-filter: blur(32px) saturate(190%) contrast(105%);
-  -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(105%);
+  backdrop-filter: blur(16px) saturate(165%) contrast(103%);
+  -webkit-backdrop-filter: blur(16px) saturate(165%) contrast(103%);
   transform: translateZ(0);
-  filter: blur(0);
   opacity: 1;
   -webkit-app-region: no-drag;
 }
@@ -117,20 +114,18 @@
 @media (prefers-reduced-motion: no-preference) {
   .focus-widget-panel,
   .focus-widget-collapsed-tab {
-    will-change: transform, opacity, filter;
+    will-change: transform, opacity;
   }
 
   .focus-widget-panel {
     transition:
       opacity var(--widget-material-enter) var(--widget-control-ease),
-      transform var(--widget-material-enter) var(--widget-control-ease),
-      filter 180ms var(--widget-control-ease);
+      transform var(--widget-material-enter) var(--widget-control-ease);
   }
 
   .focus-widget-shell.is-peek.is-expanding .focus-widget-panel,
   .focus-widget-shell.is-retracting .focus-widget-panel {
     opacity: 0.18;
-    filter: blur(0.7px);
     transform: translateZ(0) scale(var(--widget-panel-material-scale));
   }
 
@@ -138,8 +133,7 @@
     pointer-events: none;
     transition-duration:
       var(--widget-material-exit),
-      var(--widget-material-exit),
-      170ms;
+      var(--widget-material-exit);
   }
 
   .edge-left .focus-widget-panel {
@@ -158,28 +152,6 @@
     transform-origin: center bottom;
   }
 
-  .focus-widget-shell.is-collapsed .focus-widget-collapsed-tab {
-    animation: focus-widget-tab-in var(--widget-material-enter) var(--widget-spring-ease) both;
-  }
-}
-
-@keyframes focus-widget-tab-in {
-  from {
-    opacity: 0.74;
-    transform: translateZ(0) scale(var(--widget-tab-enter-scale));
-    filter: blur(0.4px);
-  }
-
-  76% {
-    opacity: 1;
-    filter: blur(0);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateZ(0) scale(1);
-    filter: blur(0);
-  }
 }
 
 .focus-widget-topbar,
@@ -464,8 +436,8 @@
     0 3px 10px rgba(31, 38, 52, 0.08),
     inset 0 1px 1px rgba(255, 255, 255, 0.84),
     inset 0 -1px 1px rgba(54, 66, 86, 0.06);
-  backdrop-filter: blur(32px) saturate(190%) contrast(104%);
-  -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(104%);
+  backdrop-filter: blur(16px) saturate(165%) contrast(103%);
+  -webkit-backdrop-filter: blur(16px) saturate(165%) contrast(103%);
   background-clip: padding-box;
   clip-path: inset(0 round var(--widget-collapsed-inner-radius));
   transform: translateZ(0);
