@@ -430,4 +430,13 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - Merge commit '24fe032d66af62bebb9bcf026d812facaaa3a1c5' (a3abf4f)
 
+## v1.18.5 - 2026-07-29
+
+### Desktop
+#### Fixed
+- 修复卡顿 (62c3646)
+
+#### Changed
+- Merge commit '62c36468c52e13ac55fc09d304430fd88f3510f4' (51ab8e8)
+
 
