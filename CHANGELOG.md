@@ -453,3 +453,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 添加使用过程中能够控制前台规则 (05c0d2a)
 
+## v1.18.8 - 2026-07-29
+
+### Desktop
+#### Changed
+- 设置加控制 (cd4d621)
+
+
