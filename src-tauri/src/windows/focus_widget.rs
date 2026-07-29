@@ -98,6 +98,8 @@ struct FocusWidgetGeometry {
     y: Option<f64>,
     width: f64,
     height: f64,
+    #[cfg(windows)]
+    native_context: Option<FocusWidgetNativeAnimationContext>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -174,7 +176,19 @@ struct FocusWidgetGeometryAnimation {
     from: FocusWidgetGeometry,
     target: FocusWidgetGeometry,
     kind: DockAnimationKind,
+    native_context: FocusWidgetNativeAnimationContext,
 }
+
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy)]
+struct FocusWidgetNativeAnimationContext {
+    hwnd: isize,
+    scale_factor: f64,
+}
+
+#[cfg(not(windows))]
+#[derive(Debug, Clone, Copy)]
+struct FocusWidgetNativeAnimationContext;
 
 #[cfg(windows)]
 #[derive(Debug, Clone, Copy)]
@@ -652,6 +666,8 @@ fn focus_widget_geometry_from_settings(settings: &AppSettings) -> FocusWidgetGeo
         y: position.map(|(_, y)| y),
         width,
         height,
+        #[cfg(windows)]
+        native_context: None,
     }
 }
 
@@ -785,6 +801,12 @@ fn collapse_window_to_edge(
     edge: FocusWidgetDockEdge,
 ) -> Result<FocusWidgetDockState, String> {
     let (animation_generation, current_geometry) = begin_focus_widget_animation(window)?;
+    #[cfg(windows)]
+    let native_context = current_geometry
+        .native_context
+        .ok_or_else(|| "focus widget native animation context is missing".to_string())?;
+    #[cfg(not(windows))]
+    let native_context = FocusWidgetNativeAnimationContext;
     let normal_geometry = if current_dock_state().mode == FocusWidgetDockMode::Floating {
         normalize_normal_geometry(current_geometry)
     } else {
@@ -802,6 +824,8 @@ fn collapse_window_to_edge(
         y: Some(position.y.unwrap_or(area.y)),
         width: size.width,
         height: size.height,
+        #[cfg(windows)]
+        native_context: None,
     };
 
     suppress_geometry_events_briefly();
@@ -815,6 +839,7 @@ fn collapse_window_to_edge(
             from: current_geometry,
             target: target_geometry,
             kind: DockAnimationKind::Collapse,
+            native_context,
         },
         next_state,
         true,
@@ -830,6 +855,12 @@ fn expand_window_to_edge(
     mode: FocusWidgetDockMode,
 ) -> Result<FocusWidgetDockState, String> {
     let (animation_generation, current_geometry) = begin_focus_widget_animation(window)?;
+    #[cfg(windows)]
+    let native_context = current_geometry
+        .native_context
+        .ok_or_else(|| "focus widget native animation context is missing".to_string())?;
+    #[cfg(not(windows))]
+    let native_context = FocusWidgetNativeAnimationContext;
     let normal_geometry = runtime_normal_geometry().unwrap_or_else(|| {
         normalize_normal_geometry(focus_widget_geometry_from_settings(
             &get_app_settings(app.clone()).unwrap_or_default(),
@@ -855,6 +886,7 @@ fn expand_window_to_edge(
             from: current_geometry,
             target: expanded_geometry,
             kind: DockAnimationKind::Expand,
+            native_context,
         },
         next_state,
         false,
@@ -913,6 +945,7 @@ fn animate_focus_widget_geometry(
         from,
         target: to,
         kind,
+        native_context,
     } = animation;
     let start_x = from.x.unwrap_or_else(|| to.x.unwrap_or(0.0));
     let start_y = from.y.unwrap_or_else(|| to.y.unwrap_or(0.0));
@@ -947,6 +980,7 @@ fn animate_focus_widget_geometry(
         if !set_focus_widget_animation_frame(
             window,
             generation,
+            native_context,
             next_x,
             next_y,
             next_width,
@@ -961,7 +995,15 @@ fn animate_focus_widget_geometry(
         }
     }
 
-    set_focus_widget_animation_frame(window, generation, end_x, end_y, to.width, to.height)
+    set_focus_widget_animation_frame(
+        window,
+        generation,
+        native_context,
+        end_x,
+        end_y,
+        to.width,
+        to.height,
+    )
 }
 
 #[cfg(windows)]
@@ -975,7 +1017,16 @@ fn begin_focus_widget_animation(
         .map_err(|_| "focus widget animation frame lock is poisoned".to_string())?;
     let generation = next_window_animation_generation();
     let geometry = logical_geometry_from_hwnd(hwnd, scale_factor)?;
-    Ok((generation, geometry))
+    Ok((
+        generation,
+        FocusWidgetGeometry {
+            native_context: Some(FocusWidgetNativeAnimationContext {
+                hwnd: hwnd.0 as isize,
+                scale_factor,
+            }),
+            ..geometry
+        },
+    ))
 }
 
 #[cfg(not(windows))]
@@ -1002,6 +1053,7 @@ fn logical_geometry_from_hwnd(
         y: Some(rect.top as f64 / scale_factor),
         width: (rect.right - rect.left) as f64 / scale_factor,
         height: (rect.bottom - rect.top) as f64 / scale_factor,
+        native_context: None,
     })
 }
 
@@ -1009,22 +1061,20 @@ fn logical_geometry_from_hwnd(
 fn set_focus_widget_animation_frame(
     window: &WebviewWindow,
     generation: u64,
+    native_context: FocusWidgetNativeAnimationContext,
     x: f64,
     y: f64,
     width: f64,
     height: f64,
 ) -> Result<bool, String> {
-    let hwnd = window.hwnd().map_err(|error| error.to_string())?;
-    let hwnd = hwnd.0 as isize;
-    let scale_factor = window.scale_factor().map_err(|error| error.to_string())?;
-    let physical_x = (x * scale_factor).round() as i32;
-    let physical_y = (y * scale_factor).round() as i32;
-    let physical_width = ((width * scale_factor).round() as i32).max(1);
-    let physical_height = ((height * scale_factor).round() as i32).max(1);
+    let physical_x = (x * native_context.scale_factor).round() as i32;
+    let physical_y = (y * native_context.scale_factor).round() as i32;
+    let physical_width = ((width * native_context.scale_factor).round() as i32).max(1);
+    let physical_height = ((height * native_context.scale_factor).round() as i32).max(1);
 
     run_focus_widget_animation_task_if_current(window, generation, move || {
         set_focus_widget_geometry_frame_physical(
-            HWND(hwnd as _),
+            HWND(native_context.hwnd as _),
             physical_x,
             physical_y,
             physical_width,
@@ -1037,6 +1087,7 @@ fn set_focus_widget_animation_frame(
 fn set_focus_widget_animation_frame(
     window: &WebviewWindow,
     generation: u64,
+    _native_context: FocusWidgetNativeAnimationContext,
     x: f64,
     y: f64,
     width: f64,
@@ -1485,6 +1536,8 @@ fn logical_geometry_from_window(window: &WebviewWindow) -> Result<FocusWidgetGeo
         y: Some(logical_position.y),
         width: logical_size.width,
         height: logical_size.height,
+        #[cfg(windows)]
+        native_context: None,
     })
 }
 
@@ -1522,24 +1575,32 @@ fn docked_position(
             y: Some(centered_y.clamp(area.y + EDGE_SAFE_MARGIN, y_limit)),
             width: size.width,
             height: size.height,
+            #[cfg(windows)]
+            native_context: None,
         },
         FocusWidgetDockEdge::Right => FocusWidgetGeometry {
             x: Some(area.x + area.width - size.width),
             y: Some(centered_y.clamp(area.y + EDGE_SAFE_MARGIN, y_limit)),
             width: size.width,
             height: size.height,
+            #[cfg(windows)]
+            native_context: None,
         },
         FocusWidgetDockEdge::Top => FocusWidgetGeometry {
             x: Some(centered_x.clamp(area.x + EDGE_SAFE_MARGIN, x_limit)),
             y: Some(area.y),
             width: size.width,
             height: size.height,
+            #[cfg(windows)]
+            native_context: None,
         },
         FocusWidgetDockEdge::Bottom => FocusWidgetGeometry {
             x: Some(centered_x.clamp(area.x + EDGE_SAFE_MARGIN, x_limit)),
             y: Some(area.y + area.height - size.height),
             width: size.width,
             height: size.height,
+            #[cfg(windows)]
+            native_context: None,
         },
     }
 }
@@ -1596,6 +1657,8 @@ fn normalize_normal_geometry(geometry: FocusWidgetGeometry) -> FocusWidgetGeomet
         height: geometry
             .height
             .clamp(MIN_NORMAL_HEIGHT as f64, MAX_NORMAL_HEIGHT as f64),
+        #[cfg(windows)]
+        native_context: None,
     }
 }
 

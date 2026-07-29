@@ -121,12 +121,29 @@ const frameSubmitSection = sourceSection(
   'fn set_focus_widget_animation_frame(',
   'fn run_focus_widget_animation_task_if_current',
 );
+const windowsFrameSubmitSection = sourceSection(
+  rust,
+  '#[cfg(windows)]\nfn set_focus_widget_animation_frame(',
+  '#[cfg(not(windows))]\nfn set_focus_widget_animation_frame(',
+);
 assert(
   frameSubmitSection.includes('run_focus_widget_animation_task_if_current(') &&
     frameSubmitSection.includes('set_focus_widget_geometry_frame_physical(') &&
     !frameSubmitSection.includes('focus_widget_animation_frame_lock()') &&
     !frameSubmitSection.includes('move |window|'),
   'main-thread frame tasks must use precomputed native geometry without re-entering Tauri dispatch',
+);
+assert(
+  !windowsFrameSubmitSection.includes('window.hwnd()') &&
+    !windowsFrameSubmitSection.includes('window.scale_factor()') &&
+    windowsFrameSubmitSection.includes('native_context'),
+  'each Windows frame must consume the immutable native context captured before animation',
+);
+assert(
+  rust.includes('native_context: FocusWidgetNativeAnimationContext') &&
+    rust.includes('native_context: Some(FocusWidgetNativeAnimationContext') &&
+    rust.includes('native_context,\n        },'),
+  'animation generation must carry the native context captured at its start',
 );
 
 for (const name of ['DOCK_EXPAND_RESPONSE_MS', 'DOCK_COLLAPSE_RESPONSE_MS']) {

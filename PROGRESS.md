@@ -104,3 +104,17 @@
 - 真实 Windows 调试链路（此前最终 native 回流复测）：贴边折叠 `280×172→36×112`，hover 展开 `36×112→280×172`；快速反向在 `199×152` 抢占，最低 `98×127` 后回到 `280×172`，宽/高/y 逆向帧为 `0`；前台窗口未变化，`Topmost=true`、`NoActivate=true`。
 - 结论：旧动画取消不再落旧 target；几何从 live presentation 接管、临界阻尼无 overshoot；材质动画不与窗口位移争用，reduced-motion 不做大幅位移。
 - 交付包：已先单独运行 `npm.cmd run build` 通过，再用 Tauri CLI `--config {"version":"1.18.0","build":{"beforeBuildCommand":""}}` 生成 NSIS；安装包为 `src-tauri/target/release/bundle/nsis/考研专注_1.18.0_x64-setup.exe`（8,801,883 bytes）。未改 `Cargo.toml`、`tauri.conf.json` 或 `package-lock.json`。
+
+# PROGRESS · Focus widget per-frame native context（2026-07-29）
+- 任务0复跑：`npm.cmd run typecheck`、`npm.cmd run test:focus-widget-motion`、`npm.cmd run check:rust`、`git diff --check` 全部通过；Rust 83 passed、1 ignored、0 failed。
+- 当前工作区仍为 `master...origin/master [ahead 2]`，无未提交改动。
+- 目标：逐帧提交只消费预计算 HWND/DPI 原生上下文，消除每 16ms 重复 Tauri 窗口查询，同时保持 generation 抢占和主线程 SetWindowPos。
+- 顺序：先追加旧实现必红的新断言，再做 Rust 快照修复，最后复跑门禁与白名单审计。
+- 最大风险：快照跨 DPI/反向动画失效，或为降开销重新引入跨线程窗口死锁。
+- 当前未验证：本轮尚未运行真实 100%/150% DPI Windows 20 次快速反向矩阵。
+- 任务1红证据：在旧实现运行 `npm.cmd run test:focus-widget-motion`，按预期失败：`FAIL: each Windows frame must consume the immutable native context captured before animation`。
+- 任务1绿证据：新增断言在快照修复后运行 `npm.cmd run test:focus-widget-motion`，输出 `Focus widget motion assertions passed`。
+- 任务2：`FocusWidgetNativeAnimationContext` 在动画启动时快照 HWND/DPI，并随 generation 进入 `FocusWidgetGeometryAnimation`；Windows 逐帧提交不再调用 `window.hwnd()`/`window.scale_factor()`，仍由主线程做 generation 校验和 `SetWindowPos`。
+- 任务2门禁：`npm.cmd run check:rust` 通过，Rust 为 83 passed、1 ignored、0 failed；未改依赖、配置或前端动效。
+- 最终门禁：`npm.cmd run typecheck`、`npm.cmd run test:focus-widget-motion`、`npm.cmd run check:rust`、`git diff --check` 全部通过；逐帧函数内 HWND/DPI 查询计数均为 0。
+- 白名单审计：`git diff --name-only` 仅含 `BLOCKED.md`、`PROGRESS.md`、动效脚本和 `focus_widget.rs`；运行时未验证已按要求写入 BLOCKED.md。
