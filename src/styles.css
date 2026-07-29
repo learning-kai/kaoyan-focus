@@ -3011,6 +3011,14 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   opacity: 0.55;
 }
 
+.foreground-toggle-visibility {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .focus-primary-hint {
   margin: -4px 0 0;
   color: var(--muted);

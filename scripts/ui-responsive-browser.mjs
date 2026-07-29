@@ -138,6 +138,10 @@ export async function runResponsiveMatrix(page, options) {
     for (const size of MAIN_SIZES) {
       await page.setViewportSize(size);
       await settleLayout();
+      if (pageCase.name === 'settings') {
+        await page.locator(pageCase.entry).scrollIntoViewIfNeeded();
+        await settleLayout();
+      }
       const label = `page/${pageCase.name}/${sizeLabel(size)}`;
       try {
         const snapshot = await overflowSnapshot(['.app-shell', '.main-panel', '.page-transition', '.main-panel .page-transition section']);

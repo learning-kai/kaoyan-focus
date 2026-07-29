@@ -131,7 +131,7 @@ export function BasicSettingsPanel({
                   <strong>学习中显示前台规则开关</strong>
                   <p>只控制专注页底部的切换入口，不会启用或关闭前台规则。</p>
                 </div>
-                <label className="settings-switch focus-whitelist-toggle">
+                <label className="settings-switch focus-whitelist-toggle foreground-toggle-visibility">
                   <input
                     aria-label="学习中显示前台规则开关"
                     checked={settings.show_foreground_rule_toggle}

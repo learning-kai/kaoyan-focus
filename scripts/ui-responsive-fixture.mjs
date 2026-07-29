@@ -202,7 +202,16 @@
   };
 
   const stateCommands = new Set(['pause_study_mode', 'resume_study_mode', 'confirm_study_break', 'skip_study_break', 'update_study_mode_subject']);
-  const voidCommands = new Set(['focus_widget_return_to_main', 'hide_focus_widget', 'show_study_reminder', 'plugin:notification|notify', 'plugin:event|unlisten']);
+  const voidCommands = new Set([
+    'auto_sync_webdav_database',
+    'sync_feishu_bridge',
+    'sync_caldav_calendar',
+    'focus_widget_return_to_main',
+    'hide_focus_widget',
+    'show_study_reminder',
+    'plugin:notification|notify',
+    'plugin:event|unlisten',
+  ]);
   const callbacks = new Map();
   let callbackId = 1;
   window.__UI_FIXTURE_UNKNOWN_COMMANDS__ = [];
