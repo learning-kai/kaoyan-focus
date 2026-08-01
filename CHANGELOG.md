@@ -487,4 +487,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - chore: release v1.19.0 (87fb65f)
 - chore: release v1.19.0 (67b8782)
 
+## v1.19.2 - 2026-08-01
+
+### Desktop
+#### Changed
+- 优化呼吸 (e88b3bb)
+
 
