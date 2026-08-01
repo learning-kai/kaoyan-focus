@@ -154,25 +154,25 @@
 @keyframes focus-background-breathe {
   0%,
   100% {
-    opacity: 0.24;
-    filter: blur(34px) saturate(0.96);
-    transform: translate3d(-50%, -50%, 0) scale(0.96);
+    opacity: 0.36;
+    filter: blur(30px) saturate(1.02);
+    transform: translate3d(-50%, -50%, 0) scale(0.92);
   }
   50% {
-    opacity: 0.42;
-    filter: blur(44px) saturate(1.08);
-    transform: translate3d(-50%, -50%, 0) scale(1.055);
+    opacity: 0.62;
+    filter: blur(42px) saturate(1.18);
+    transform: translate3d(-50%, -50%, 0) scale(1.09);
   }
 }
 
 @keyframes focus-background-tide {
   from {
-    opacity: 0.14;
-    transform: translate3d(-56%, -46%, 0) scale(0.98) rotate(-2deg);
+    opacity: 0.22;
+    transform: translate3d(-56%, -46%, 0) scale(0.94) rotate(-3deg);
   }
   to {
-    opacity: 0.26;
-    transform: translate3d(-44%, -53%, 0) scale(1.04) rotate(2deg);
+    opacity: 0.42;
+    transform: translate3d(-44%, -53%, 0) scale(1.08) rotate(3deg);
   }
 }
 
@@ -619,15 +619,15 @@
 .focus-active-bg::before {
   width: min(920px, 68vw);
   aspect-ratio: 1.42;
-  background: radial-gradient(circle, color-mix(in srgb, var(--blue) 18%, transparent), transparent 66%);
-  transform: translate3d(-50%, -50%, 0) scale(0.96);
+  background: radial-gradient(circle, color-mix(in srgb, var(--blue) 28%, transparent), transparent 66%);
+  transform: translate3d(-50%, -50%, 0) scale(0.92);
 }
 
 .focus-active-bg::after {
   width: min(780px, 58vw);
   aspect-ratio: 1.55;
-  background: radial-gradient(circle, color-mix(in srgb, var(--green) 16%, transparent), transparent 68%);
-  transform: translate3d(-56%, -46%, 0) scale(0.98) rotate(-2deg);
+  background: radial-gradient(circle, color-mix(in srgb, var(--green) 24%, transparent), transparent 68%);
+  transform: translate3d(-56%, -46%, 0) scale(0.94) rotate(-3deg);
 }
 
 .focus-active-shell.phase-focus:not(.is-paused) .focus-active-bg,
@@ -641,13 +641,13 @@
 .focus-active-shell.phase-focus:not(.is-paused) .focus-active-bg::before,
 .focus-active-shell.phase-break:not(.is-paused) .focus-active-bg::before,
 .focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-active-bg::before {
-  animation: focus-background-breathe 9200ms var(--ease-standard) 680ms infinite;
+  animation: focus-background-breathe 7600ms var(--ease-standard) 520ms infinite;
 }
 
 .focus-active-shell.phase-focus:not(.is-paused) .focus-active-bg::after,
 .focus-active-shell.phase-break:not(.is-paused) .focus-active-bg::after,
 .focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-active-bg::after {
-  animation: focus-background-tide 15000ms var(--ease-standard) 900ms infinite alternate;
+  animation: focus-background-tide 11800ms var(--ease-standard) 740ms infinite alternate;
 }
 
 html[data-study-fullscreen='true'] .focus-active-bg::before {
