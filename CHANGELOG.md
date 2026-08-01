@@ -469,6 +469,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 
 ### Desktop
 #### Fixed
+- 修复 (97dba1f)
 - 修复Command plugin:window|set_fullscreen not allowed by ACL (a735c29)
+
+#### Changed
+- chore: release v1.19.0 (67b8782)
 
 
