@@ -475,4 +475,16 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - chore: release v1.19.0 (67b8782)
 
+## v1.19.1 - 2026-08-01
+
+### Desktop
+#### Fixed
+- 修复 (97dba1f)
+- 修复Command plugin:window|set_fullscreen not allowed by ACL (a735c29)
+
+#### Changed
+- 界面背景加了点呼吸感 (8b4cc5f)
+- chore: release v1.19.0 (87fb65f)
+- chore: release v1.19.0 (67b8782)
+
 
