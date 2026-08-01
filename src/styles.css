@@ -6882,6 +6882,13 @@ html[data-theme='light'] .subject-dot {
 .focus-hud-copy > strong { color: var(--muted); font-size: 11px; font-weight: 500; }
 .focus-hud-task { min-width: 136px; }
 .focus-command-button { min-width: 132px; min-height: 44px; }
+.focus-fullscreen-button {
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+}
 
 html[data-study-fullscreen='true'] .focus-active-shell {
   height: 100dvh;

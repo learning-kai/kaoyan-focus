@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, FastForward, Gauge, Leaf, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
+import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, FastForward, Gauge, Leaf, Maximize2, Minimize2, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import LearningHub from '../components/focus/LearningHub';
 import ScheduleDrawer from '../components/ScheduleDrawer';
@@ -17,6 +17,7 @@ import { STUDY_SYNC_STATE_CHANGED_EVENT, syncConfiguredStateChange } from '../se
 import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
 import { CALDAV_SYNC_REFRESH_EVENT } from '../services/caldavApi';
 import { listenTauriEvent } from '../services/tauriEvents';
+import { setStudyFullscreen } from '../services/systemApi';
 import { isTauriRuntime } from '../services/tauriInvoke';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
 import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
@@ -237,6 +238,8 @@ export default function FocusPage() {
   const [isStartingStudy, setIsStartingStudy] = useState(false);
   const [isQuickSchedulingTask, setIsQuickSchedulingTask] = useState(false);
   const [isUpdatingForegroundRules, setIsUpdatingForegroundRules] = useState(false);
+  const [isStudyFullscreen, setIsStudyFullscreen] = useState(false);
+  const [isStudyFullscreenUpdating, setIsStudyFullscreenUpdating] = useState(false);
   const [localClockNow, setLocalClockNow] = useState(() => Date.now());
   const [pendingConfirm, setPendingConfirm] = useState<FocusConfirmRequest | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -279,6 +282,53 @@ export default function FocusPage() {
   const isPrimaryDevice = Boolean(syncDeviceId && primaryOwnerDeviceId === syncDeviceId);
   const primaryStatusLabel = isPrimaryDevice ? '当前为主端' : primaryOwnerDeviceId ? '当前非主端' : '未设置主端';
   const quietMeta = [activeModeLabel, '第 ' + studyState.cycle_index + ' 轮', '剩余 ' + formatSeconds(studyState.study_remaining_seconds), nextBreakLabel(studyState), primaryStatusLabel, latestAppCheck ? foregroundSummary(latestAppCheck) : studyState.whitelist_enabled ? '前台监控待命' : '前台规则关闭'];
+
+  useEffect(() => {
+    if (isStudyFullscreen) {
+      document.documentElement.dataset.studyFullscreen = 'true';
+    } else {
+      delete document.documentElement.dataset.studyFullscreen;
+    }
+  }, [isStudyFullscreen]);
+
+  useEffect(() => {
+    if (!active) {
+      if (!isStudyFullscreen) return undefined;
+      setIsStudyFullscreen(false);
+      void setStudyFullscreen(false).catch(() => undefined);
+      return undefined;
+    }
+
+    function handleFullscreenChange() {
+      void (async () => {
+        try {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          setIsStudyFullscreen(await getCurrentWindow().isFullscreen());
+        } catch {
+          // Browser previews do not expose the native window fullscreen state.
+        }
+      })();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && isStudyFullscreen) {
+        event.preventDefault();
+        void handleStudyFullscreenToggle();
+      }
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [active, isStudyFullscreen, isStudyFullscreenUpdating]);
+
+  useEffect(() => () => {
+    document.documentElement.removeAttribute('data-study-fullscreen');
+    void setStudyFullscreen(false).catch(() => undefined);
+  }, []);
 
   useEffect(() => { void initializePage(); }, []);
 
@@ -442,6 +492,22 @@ export default function FocusPage() {
     if (subjectId === 3) return 'math';
     if (subjectId === 4) return 'major';
     return 'general';
+  }
+
+  async function handleStudyFullscreenToggle() {
+    if (isStudyFullscreenUpdating) return;
+
+    const nextFullscreen = !isStudyFullscreen;
+    try {
+      setIsStudyFullscreenUpdating(true);
+      setError(null);
+      await setStudyFullscreen(nextFullscreen);
+      setIsStudyFullscreen(nextFullscreen);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setIsStudyFullscreenUpdating(false);
+    }
   }
 
   async function handleStart() {
@@ -885,6 +951,18 @@ export default function FocusPage() {
                   <input checked={isPrimaryDevice} disabled={!syncDeviceId} onChange={(event) => void handlePrimaryOwnerChange(event.target.checked)} role="switch" type="checkbox" />
                 </label>
                 <div className="live-badge"><span className={studyState.focus_enforcement_active ? 'live-dot on' : 'live-dot'} />{whitelistStatusLabel}</div>
+                <button
+                  aria-label={isStudyFullscreen ? '退出沉浸模式' : '进入沉浸模式'}
+                  aria-busy={isStudyFullscreenUpdating}
+                  aria-pressed={isStudyFullscreen}
+                  className={'focus-hud-card focus-fullscreen-button' + (isStudyFullscreen ? ' is-active' : '')}
+                  disabled={isStudyFullscreenUpdating}
+                  onClick={() => void handleStudyFullscreenToggle()}
+                  title={isStudyFullscreen ? '退出沉浸模式（Esc）' : '进入沉浸模式'}
+                  type="button"
+                >
+                  {isStudyFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                </button>
               </div>
             </header>
 
