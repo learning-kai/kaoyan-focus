@@ -493,4 +493,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 优化呼吸 (e88b3bb)
 
+## v1.19.3 - 2026-08-01
+
+### Desktop
+#### Changed
+- 清单多日 (c108410)
+
 
