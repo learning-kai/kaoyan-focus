@@ -151,6 +151,31 @@
   }
 }
 
+@keyframes focus-background-breathe {
+  0%,
+  100% {
+    opacity: 0.24;
+    filter: blur(34px) saturate(0.96);
+    transform: translate3d(-50%, -50%, 0) scale(0.96);
+  }
+  50% {
+    opacity: 0.42;
+    filter: blur(44px) saturate(1.08);
+    transform: translate3d(-50%, -50%, 0) scale(1.055);
+  }
+}
+
+@keyframes focus-background-tide {
+  from {
+    opacity: 0.14;
+    transform: translate3d(-56%, -46%, 0) scale(0.98) rotate(-2deg);
+  }
+  to {
+    opacity: 0.26;
+    transform: translate3d(-44%, -53%, 0) scale(1.04) rotate(2deg);
+  }
+}
+
 @keyframes timer-glow {
   0%,
   100% {
@@ -576,6 +601,33 @@
   background-size:
     100% 100%,
     100% 100%;
+  overflow: hidden;
+}
+
+.focus-active-bg::before,
+.focus-active-bg::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  content: '';
+  pointer-events: none;
+  border-radius: 999px;
+  opacity: 0;
+  will-change: opacity, filter, transform;
+}
+
+.focus-active-bg::before {
+  width: min(920px, 68vw);
+  aspect-ratio: 1.42;
+  background: radial-gradient(circle, color-mix(in srgb, var(--blue) 18%, transparent), transparent 66%);
+  transform: translate3d(-50%, -50%, 0) scale(0.96);
+}
+
+.focus-active-bg::after {
+  width: min(780px, 58vw);
+  aspect-ratio: 1.55;
+  background: radial-gradient(circle, color-mix(in srgb, var(--green) 16%, transparent), transparent 68%);
+  transform: translate3d(-56%, -46%, 0) scale(0.98) rotate(-2deg);
 }
 
 .focus-active-shell.phase-focus:not(.is-paused) .focus-active-bg,
@@ -584,6 +636,26 @@
   animation:
     compact-rise 560ms var(--ease-emphasized) backwards,
     focus-ambient-drift 16000ms var(--ease-standard) 560ms infinite alternate;
+}
+
+.focus-active-shell.phase-focus:not(.is-paused) .focus-active-bg::before,
+.focus-active-shell.phase-break:not(.is-paused) .focus-active-bg::before,
+.focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-active-bg::before {
+  animation: focus-background-breathe 9200ms var(--ease-standard) 680ms infinite;
+}
+
+.focus-active-shell.phase-focus:not(.is-paused) .focus-active-bg::after,
+.focus-active-shell.phase-break:not(.is-paused) .focus-active-bg::after,
+.focus-active-shell.phase-awaiting_break:not(.is-paused) .focus-active-bg::after {
+  animation: focus-background-tide 15000ms var(--ease-standard) 900ms infinite alternate;
+}
+
+html[data-study-fullscreen='true'] .focus-active-bg::before {
+  width: min(1180px, 76vw);
+}
+
+html[data-study-fullscreen='true'] .focus-active-bg::after {
+  width: min(980px, 64vw);
 }
 
 .focus-clock-zone {
