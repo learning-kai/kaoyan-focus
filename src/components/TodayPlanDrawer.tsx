@@ -8,6 +8,7 @@ import type { TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
 type TodayPlanDrawerProps = {
   title?: string;
   subtitle?: string;
+  itemLabel?: string;
   todayDate: string;
   items: TodayPlanItem[];
   currentSubjectLabel?: string | null;
@@ -41,19 +42,17 @@ type TodayPlanDrawerProps = {
 };
 
 function isSingleLineSubmitKey(event: KeyboardEvent<HTMLInputElement>) {
-  return event.key === 'Enter'
-    && !event.shiftKey
-    && !event.altKey
-    && !event.ctrlKey
-    && !event.metaKey
-    && !event.nativeEvent.isComposing;
+  return (
+    event.key === 'Enter' &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.nativeEvent.isComposing
+  );
 }
 
-function handleSubmitOnEnter(
-  event: KeyboardEvent<HTMLInputElement>,
-  canSubmit: boolean,
-  submit: () => void,
-) {
+function handleSubmitOnEnter(event: KeyboardEvent<HTMLInputElement>, canSubmit: boolean, submit: () => void) {
   if (!canSubmit || !isSingleLineSubmitKey(event)) {
     return;
   }
@@ -124,6 +123,7 @@ function TaskEditor({
 
 function TodayItemCardBase({
   item,
+  itemLabel = '今日任务',
   editingTodayId,
   editingTodayDraft,
   saving,
@@ -139,6 +139,7 @@ function TodayItemCardBase({
   onSaveEdit,
 }: {
   item: TodayPlanItem;
+  itemLabel?: string;
   editingTodayId: number | null;
   editingTodayDraft: TodayPlanItemDraft;
   saving: boolean;
@@ -177,21 +178,21 @@ function TodayItemCardBase({
 
         <div className="row-actions today-item-actions">
           <button
-            aria-label="编辑今日任务"
+            aria-label={`编辑${itemLabel}`}
             className="small-action icon-action"
             disabled={saving}
             onClick={() => onBeginEdit(item)}
-            title="编辑今日任务"
+            title={`编辑${itemLabel}`}
             type="button"
           >
             <Pencil size={13} />
           </button>
           <button
-            aria-label="删除今日任务"
+            aria-label={`删除${itemLabel}`}
             className="small-action icon-action danger"
             disabled={saving}
             onClick={() => onDelete(item.id)}
-            title="删除今日任务"
+            title={`删除${itemLabel}`}
             type="button"
           >
             <Trash2 size={13} />
@@ -204,10 +205,10 @@ function TodayItemCardBase({
           <TaskEditor
             draft={editingTodayDraft}
             saving={saving}
-            titleLabel="编辑今日任务"
+            titleLabel={`编辑${itemLabel}`}
             onChange={onChangeEdit}
             onSubmit={onSaveEdit}
-            submitLabel="保存今日任务"
+            submitLabel={`保存${itemLabel}`}
           />
           <button className="ghost-action" onClick={onCancelEdit} type="button">
             取消
@@ -237,7 +238,7 @@ function SortableTodayItemCard({
     <div ref={setNodeRef}>
       <TodayItemCardBase
         {...props}
-        dragHandle={(
+        dragHandle={
           <button
             aria-label="拖动排序"
             className="row-icon today-item-handle"
@@ -249,7 +250,7 @@ function SortableTodayItemCard({
           >
             <GripVertical size={13} />
           </button>
-        )}
+        }
         isDragging={isDragging}
         style={style}
       />
@@ -257,15 +258,7 @@ function SortableTodayItemCard({
   );
 }
 
-function TodayDropArea({
-  id,
-  isOver,
-  children,
-}: {
-  id: string;
-  isOver?: boolean;
-  children: ReactNode;
-}) {
+function TodayDropArea({ id, isOver, children }: { id: string; isOver?: boolean; children: ReactNode }) {
   const { setNodeRef } = useDroppable({ id });
 
   return (
@@ -278,6 +271,7 @@ function TodayDropArea({
 export default function TodayPlanDrawer({
   title = '今日任务',
   subtitle = '今日队列',
+  itemLabel = '今日任务',
   todayDate,
   items,
   currentSubjectLabel,
@@ -323,36 +317,38 @@ export default function TodayPlanDrawer({
   const isDrawerVariant = variant === 'drawer';
   const blockGlobalShortcuts = isDrawerVariant && isOpen;
   const drawerHidden = isDrawerVariant && !isOpen;
-  const content = items.length === 0 ? (
-    <div className={`empty-state empty-drop-zone${compact ? ' compact' : ''}`}>
-      <strong>{emptyTitle}</strong>
-      <p>{emptyDescription}</p>
-    </div>
-  ) : (
-    <div className={`today-plan-list${compact ? ' is-drawer' : ''}`}>
-      {items.map((item) => {
-        const sharedProps = {
-          compact,
-          editingTodayDraft,
-          editingTodayId,
-          item,
-          onBeginEdit,
-          onCancelEdit,
-          onChangeEdit,
-          onComplete,
-          onDelete,
-          onSaveEdit,
-          saving,
-        };
+  const content =
+    items.length === 0 ? (
+      <div className={`empty-state empty-drop-zone${compact ? ' compact' : ''}`}>
+        <strong>{emptyTitle}</strong>
+        <p>{emptyDescription}</p>
+      </div>
+    ) : (
+      <div className={`today-plan-list${compact ? ' is-drawer' : ''}`}>
+        {items.map((item) => {
+          const sharedProps = {
+            compact,
+            editingTodayDraft,
+            editingTodayId,
+            item,
+            itemLabel,
+            onBeginEdit,
+            onCancelEdit,
+            onChangeEdit,
+            onComplete,
+            onDelete,
+            onSaveEdit,
+            saving,
+          };
 
-        if (canSort && getItemDragId) {
-          return <SortableTodayItemCard {...sharedProps} dragId={getItemDragId(item)} key={item.id} />;
-        }
+          if (canSort && getItemDragId) {
+            return <SortableTodayItemCard {...sharedProps} dragId={getItemDragId(item)} key={item.id} />;
+          }
 
-        return <TodayItemCardBase {...sharedProps} key={item.id} />;
-      })}
-    </div>
-  );
+          return <TodayItemCardBase {...sharedProps} key={item.id} />;
+        })}
+      </div>
+    );
 
   return (
     <section
@@ -368,14 +364,35 @@ export default function TodayPlanDrawer({
         </div>
         <div className="today-drawer-tools">
           {onRefresh && (
-            <button className={isDrawerVariant ? 'focus-hud-card today-drawer-tool-card today-drawer-tool-icon' : 'small-action icon-action'} disabled={saving} onClick={onRefresh} title="刷新今日任务" type="button">
+            <button
+              className={
+                isDrawerVariant
+                  ? 'focus-hud-card today-drawer-tool-card today-drawer-tool-icon'
+                  : 'small-action icon-action'
+              }
+              disabled={saving}
+              onClick={onRefresh}
+              title="刷新今日任务"
+              type="button"
+            >
               <RefreshCw size={15} />
             </button>
           )}
-          <button className={isDrawerVariant ? 'focus-hud-card today-drawer-tool-card today-drawer-add' : 'primary-action today-drawer-add'} disabled={saving} onClick={onToggleComposer} type="button">
+          <button
+            className={
+              isDrawerVariant
+                ? 'focus-hud-card today-drawer-tool-card today-drawer-add'
+                : 'primary-action today-drawer-add'
+            }
+            disabled={saving}
+            onClick={onToggleComposer}
+            type="button"
+          >
             {isDrawerVariant ? (
               <>
-                <span className="focus-hud-icon"><Plus size={16} /></span>
+                <span className="focus-hud-icon">
+                  <Plus size={16} />
+                </span>
                 <span className="focus-hud-copy">
                   <span>{showComposer ? '收起' : '新增'}</span>
                   <strong>今日任务</strong>
@@ -389,7 +406,17 @@ export default function TodayPlanDrawer({
             )}
           </button>
           {onClose && (
-            <button aria-label="关闭今日任务" className={isDrawerVariant ? 'focus-hud-card today-drawer-tool-card today-drawer-tool-icon' : 'small-action icon-action'} onClick={onClose} title="关闭今日任务" type="button">
+            <button
+              aria-label="关闭今日任务"
+              className={
+                isDrawerVariant
+                  ? 'focus-hud-card today-drawer-tool-card today-drawer-tool-icon'
+                  : 'small-action icon-action'
+              }
+              onClick={onClose}
+              title="关闭今日任务"
+              type="button"
+            >
               <X size={15} />
             </button>
           )}

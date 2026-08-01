@@ -3,7 +3,7 @@ use crate::{
     storage::db::open_database,
     sync_package::{ensure_sync_meta_for_local_id, mark_entity_deleted},
 };
-use chrono::{Local, Utc};
+use chrono::{Local, NaiveDate, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -143,9 +143,12 @@ fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
 }
 
 #[tauri::command]
-pub fn get_checklist_page_data(app: AppHandle) -> Result<ChecklistPageData, String> {
+pub fn get_checklist_page_data(
+    app: AppHandle,
+    selected_date: Option<String>,
+) -> Result<ChecklistPageData, String> {
     let connection = open_database(&database_path(&app)?)?;
-    let today_date = today_date_string();
+    let today_date = plan_date_string(selected_date)?;
     ensure_category_buckets(&connection)?;
     let highlighted_subject_id = get_active_study_subject_id(&connection)?;
     load_checklist_page_data(&connection, &today_date, highlighted_subject_id)
@@ -322,10 +325,14 @@ pub fn complete_checklist_task(
 }
 
 #[tauri::command]
-pub fn add_task_to_today_plan(app: AppHandle, task_id: i64) -> Result<TodayPlanItem, String> {
+pub fn add_task_to_today_plan(
+    app: AppHandle,
+    task_id: i64,
+    selected_date: Option<String>,
+) -> Result<TodayPlanItem, String> {
     let connection = open_database(&database_path(&app)?)?;
     let task = get_checklist_task_by_id(&connection, task_id)?;
-    let today_date = today_date_string();
+    let today_date = plan_date_string(selected_date)?;
 
     let existing = connection
         .query_row(
@@ -401,16 +408,17 @@ pub fn add_task_to_today_plan(app: AppHandle, task_id: i64) -> Result<TodayPlanI
 pub fn create_today_plan_item(
     app: AppHandle,
     draft: TodayPlanItemDraft,
+    selected_date: Option<String>,
 ) -> Result<TodayPlanItem, String> {
     let connection = open_database(&database_path(&app)?)?;
     validate_optional_subject_id(&connection, draft.subject_id)?;
 
     let title = draft.title.trim();
     if title.is_empty() {
-        return Err("今日计划标题不能为空".to_string());
+        return Err("计划任务标题不能为空".to_string());
     }
 
-    let today_date = today_date_string();
+    let today_date = plan_date_string(selected_date)?;
     let now = Utc::now().to_rfc3339();
     let sort_order = next_sort_order(
         &connection,
@@ -940,6 +948,39 @@ fn normalize_optional_string(value: Option<String>) -> Option<String> {
 
 fn today_date_string() -> String {
     Local::now().date_naive().format("%Y-%m-%d").to_string()
+}
+
+fn plan_date_string(selected_date: Option<String>) -> Result<String, String> {
+    let Some(selected_date) = selected_date else {
+        return Ok(today_date_string());
+    };
+
+    let value = selected_date.trim();
+    if value.is_empty() {
+        return Ok(today_date_string());
+    }
+
+    NaiveDate::parse_from_str(value, "%Y-%m-%d")
+        .map(|date| date.format("%Y-%m-%d").to_string())
+        .map_err(|_| "计划日期必须使用 YYYY-MM-DD 格式".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plan_date_string;
+
+    #[test]
+    fn selected_plan_date_accepts_a_future_calendar_date() {
+        assert_eq!(
+            plan_date_string(Some("2026-08-05".to_string())),
+            Ok("2026-08-05".to_string())
+        );
+    }
+
+    #[test]
+    fn selected_plan_date_rejects_invalid_calendar_date() {
+        assert!(plan_date_string(Some("2026-02-30".to_string())).is_err());
+    }
 }
 
 fn next_sort_order<P>(connection: &Connection, sql: &str, params: P) -> Result<i64, String>

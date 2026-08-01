@@ -441,4 +441,54 @@ assert.equal(dashboard.els.metricDays.textContent, '2');
 assert.match(dashboard.els.statusLine.textContent, /2 条有效专注记录/);
 assert.doesNotMatch(dashboard.els.metricHours.textContent, /13\.5h/);
 
+function diagnosisDay(date, plannedMinutes, actualMinutes, quality = 82, extra = {}) {
+  return { date, plannedMinutes, actualMinutes, quality, ...extra };
+}
+
+const steadyDiagnosis = analytics.buildStudyDiagnosis({
+  days: [
+    diagnosisDay('2026-08-01', 120, 120),
+    diagnosisDay('2026-08-02', 120, 120),
+    diagnosisDay('2026-08-03', 120, 120),
+  ],
+  subjects: [{ subject: '数学', plannedMinutes: 360, actualMinutes: 360 }],
+});
+assert.equal(steadyDiagnosis.status, 'steady');
+assert.equal(steadyDiagnosis.label, '稳定推进');
+assert.equal(steadyDiagnosis.planRate, 1);
+
+const correctionDiagnosis = analytics.buildStudyDiagnosis({
+  days: [
+    diagnosisDay('2026-08-01', 120, 96),
+    diagnosisDay('2026-08-02', 120, 96),
+    diagnosisDay('2026-08-03', 120, 96),
+  ],
+});
+assert.equal(correctionDiagnosis.status, 'correction');
+
+const slowingDiagnosis = analytics.buildStudyDiagnosis({
+  days: [
+    diagnosisDay('2026-08-01', 120, 72),
+    diagnosisDay('2026-08-02', 120, 72),
+    diagnosisDay('2026-08-03', 120, 72),
+  ],
+});
+assert.equal(slowingDiagnosis.status, 'slowing');
+
+const hardPushDiagnosis = analytics.buildStudyDiagnosis({
+  days: [
+    diagnosisDay('2026-08-01', 120, 120, 48, { interruptionCount: 8 }),
+    diagnosisDay('2026-08-02', 120, 120, 52, { emergencyExitCount: 1 }),
+    diagnosisDay('2026-08-03', 120, 120, 50, { pausedSeconds: 30 * 60 }),
+  ],
+});
+assert.equal(hardPushDiagnosis.status, 'hard_push');
+assert.ok(hardPushDiagnosis.reasons.length >= 2);
+
+const insufficientDiagnosis = analytics.buildStudyDiagnosis({
+  days: [diagnosisDay('2026-08-01', 0, 90), diagnosisDay('2026-08-02', 0, 90)],
+});
+assert.equal(insufficientDiagnosis.status, 'insufficient');
+assert.equal(insufficientDiagnosis.action, '先连续记录 3 天，再判断学习节奏');
+
 console.log('dashboard analytics probe passed');

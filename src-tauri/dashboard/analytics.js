@@ -4,6 +4,13 @@
   const LEARNING_TREND_MIN_DAYS = 6;
   const LEARNING_TREND_LONG_WINDOW = 7;
   const LEARNING_TREND_MINUTE_THRESHOLD = 30;
+  const STUDY_STATUS_RULES = Object.freeze({
+    minimumActiveDays: 3,
+    slowdownRate: 0.7,
+    correctionRate: 0.9,
+    qualityRisk: 65,
+    interruptionRiskPerHour: 3,
+  });
 
   function clamp(value, min, max) {
     const number = Number(value);
@@ -266,6 +273,109 @@
     };
   }
 
+  function normalizeStudyDay(day) {
+    const plannedMinutes = clamp(day?.plannedMinutes ?? day?.planned_minutes, 0, 24 * 60);
+    const actualMinutes = clamp(day?.actualMinutes ?? day?.actual_minutes ?? day?.minutes, 0, 24 * 60);
+    const quality = day?.quality == null ? null : clamp(day.quality, 0, 100);
+    return {
+      date: String(day?.date ?? ''),
+      plannedMinutes,
+      actualMinutes,
+      quality,
+      interruptionCount: clamp(day?.interruptionCount ?? day?.interruption_count, 0, 1000),
+      emergencyExitCount: clamp(day?.emergencyExitCount ?? day?.emergency_exit_count, 0, 1000),
+      pausedSeconds: clamp(day?.pausedSeconds ?? day?.paused_seconds, 0, 7 * 24 * 3600),
+    };
+  }
+
+  function buildStudyDiagnosis(input = {}) {
+    const days = (Array.isArray(input.days) ? input.days : []).map(normalizeStudyDay);
+    const subjects = Array.isArray(input.subjects) ? input.subjects : [];
+    const plannedMinutes = round(days.reduce((total, day) => total + day.plannedMinutes, 0), 1);
+    const actualMinutes = round(days.reduce((total, day) => total + day.actualMinutes, 0), 1);
+    const plannedDays = days.filter((day) => day.plannedMinutes > 0).length;
+    const activeDays = days.filter((day) => day.actualMinutes > 0).length;
+    const qualityDays = days.filter((day) => day.quality != null && day.actualMinutes > 0);
+    const quality = qualityDays.length ? round(average(qualityDays.map((day) => day.quality)), 1) : null;
+    const interruptions = days.reduce((total, day) => total + day.interruptionCount, 0);
+    const emergencyExits = days.reduce((total, day) => total + day.emergencyExitCount, 0);
+    const actualHours = Math.max(actualMinutes / 60, 0.25);
+    const interruptionRate = round(interruptions / actualHours, 2);
+    const planRate = plannedMinutes > 0 ? round(actualMinutes / plannedMinutes, 3) : null;
+    const subjectGaps = subjects
+      .map((item) => {
+        const planned = clamp(item?.plannedMinutes ?? item?.planned_minutes, 0, 24 * 60);
+        const actual = clamp(item?.actualMinutes ?? item?.actual_minutes, 0, 24 * 60);
+        return {
+          subject: String(item?.subject ?? '未命名科目'),
+          plannedMinutes: planned,
+          actualMinutes: actual,
+          rate: planned > 0 ? round(actual / planned, 3) : null,
+        };
+      })
+      .filter((item) => item.plannedMinutes > 0)
+      .sort((left, right) => (left.rate ?? 0) - (right.rate ?? 0));
+    const subjectGap = subjectGaps.find((item) => item.rate < STUDY_STATUS_RULES.slowdownRate);
+    const hasQualityRisk =
+      (quality != null && quality < STUDY_STATUS_RULES.qualityRisk) ||
+      emergencyExits > 0 ||
+      interruptionRate >= STUDY_STATUS_RULES.interruptionRiskPerHour;
+
+    let status = 'insufficient';
+    if (plannedDays >= STUDY_STATUS_RULES.minimumActiveDays && activeDays >= STUDY_STATUS_RULES.minimumActiveDays) {
+      if (planRate >= STUDY_STATUS_RULES.correctionRate && hasQualityRisk) status = 'hard_push';
+      else if (planRate < STUDY_STATUS_RULES.slowdownRate) status = 'slowing';
+      else if (planRate < STUDY_STATUS_RULES.correctionRate || subjectGap || hasQualityRisk) status = 'correction';
+      else status = 'steady';
+    }
+
+    const labels = {
+      insufficient: '数据不足',
+      steady: '稳定推进',
+      correction: '需要纠偏',
+      slowing: '明显失速',
+      hard_push: '低效硬撑',
+    };
+    const reasons = [];
+    if (status === 'insufficient') {
+      reasons.push(plannedDays < STUDY_STATUS_RULES.minimumActiveDays ? '本周可用计划不足 3 天' : '本周有效学习不足 3 天');
+    } else {
+      reasons.push(`已完成计划 ${Math.round((planRate || 0) * 100)}%`);
+      if (quality != null) reasons.push(`专注质量 ${Math.round(quality)} 分`);
+      if (subjectGap) reasons.push(`${subjectGap.subject} 只完成计划的 ${Math.round(subjectGap.rate * 100)}%`);
+      if (emergencyExits > 0) reasons.push(`${emergencyExits} 次应急退出拉低稳定性`);
+      else if (interruptionRate >= STUDY_STATUS_RULES.interruptionRiskPerHour) reasons.push(`每小时约 ${interruptionRate} 次打断`);
+      if (reasons.length < 2) reasons.push(`${activeDays} 天有有效学习记录`);
+    }
+
+    let action = '先补齐计划缺口最大的科目';
+    if (status === 'insufficient') action = '先连续记录 3 天，再判断学习节奏';
+    if (status === 'steady') action = '保持当前节奏，优先守住连续性';
+    if (status === 'hard_push') action = '缩短单次目标，先降低打断和暂停';
+    if (status === 'correction' && !subjectGap) action = '下一个学习时段按计划完成，不再临时换科';
+
+    return {
+      status,
+      label: labels[status],
+      headline: `本周${labels[status]}`,
+      reasons: reasons.slice(0, 3),
+      action,
+      plannedMinutes,
+      actualMinutes,
+      planRate,
+      quality,
+      plannedDays,
+      activeDays,
+      interruptionRate,
+      subjectGaps,
+      riskTags: [
+        ...(subjectGap ? ['subject-gap'] : []),
+        ...(hasQualityRisk ? ['quality-risk'] : []),
+        ...(activeDays < plannedDays ? ['continuity-gap'] : []),
+      ],
+    };
+  }
+
   function shouldExcludeFromFocusTimeStats(record) {
     if (!record) return false;
     const status = String(record.status ?? '').trim().toLowerCase();
@@ -294,6 +404,7 @@
     buildAnnualHeatmapCalendar,
     buildEffectiveDayProgress,
     buildLearningTrend,
+    buildStudyDiagnosis,
     calculateDailyFocusScore,
     filterFocusTimeRecords,
     filterFocusTimelineRecords,
@@ -301,5 +412,6 @@
     isEffectiveDay,
     shouldExcludeFromFocusTimeStats,
     shouldExcludeFromFocusTimeline,
+    STUDY_STATUS_RULES,
   };
 })(typeof window === 'undefined' ? globalThis : window);

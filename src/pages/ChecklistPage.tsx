@@ -20,9 +20,12 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  CalendarDays,
   CalendarCheck2,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   GripVertical,
   ListPlus,
   Pencil,
@@ -58,30 +61,37 @@ import type {
   TodayPlanItemDraft,
 } from '../types/checklist';
 import type { StudyModeState } from '../types/focus';
+import { formatDateKey } from '../utils/date';
 
-type DragState =
-  | { kind: 'today'; itemId: number }
-  | { kind: 'task'; taskId: number }
-  | null;
+type DragState = { kind: 'today'; itemId: number } | { kind: 'task'; taskId: number } | null;
 
 const categoryOrder = ['politics', 'english', 'math', 'major', 'general'] as const;
 const TODAY_CONTAINER_ID = 'today-container';
 const CATEGORY_CONTAINER_ID = 'category-container';
 
-function isSingleLineSubmitKey(event: KeyboardEvent<HTMLInputElement>) {
-  return event.key === 'Enter'
-    && !event.shiftKey
-    && !event.altKey
-    && !event.ctrlKey
-    && !event.metaKey
-    && !event.nativeEvent.isComposing;
+function shiftDate(value: string, days: number) {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) {
+    return value;
+  }
+
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return formatDateKey(date);
 }
 
-function handleSubmitOnEnter(
-  event: KeyboardEvent<HTMLInputElement>,
-  canSubmit: boolean,
-  submit: () => void,
-) {
+function isSingleLineSubmitKey(event: KeyboardEvent<HTMLInputElement>) {
+  return (
+    event.key === 'Enter' &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.nativeEvent.isComposing
+  );
+}
+
+function handleSubmitOnEnter(event: KeyboardEvent<HTMLInputElement>, canSubmit: boolean, submit: () => void) {
   if (!canSubmit || !isSingleLineSubmitKey(event)) {
     return;
   }
@@ -201,6 +211,8 @@ export default function ChecklistPage() {
   const { confirm, confirmDialog } = useConfirmDialog();
   const [data, setData] = useState<ChecklistPageData | null>(null);
   const [studyState, setStudyState] = useState<StudyModeState | null>(null);
+  const [selectedPlanDate, setSelectedPlanDate] = useState(formatDateKey());
+  const [planDateDraft, setPlanDateDraft] = useState(formatDateKey());
   const [activeCategoryKey, setActiveCategoryKey] = useState<string>('politics');
   const [composerCategoryKey, setComposerCategoryKey] = useState<string | null>(null);
   const [dragState, setDragState] = useState<DragState>(null);
@@ -217,6 +229,7 @@ export default function ChecklistPage() {
   const [editingTodayDraft, setEditingTodayDraft] = useState<TodayPlanItemDraft>(emptyTodayDraft);
   const [showCompleted, setShowCompleted] = useState<Record<string, boolean>>({});
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const refreshTokenRef = useRef(0);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -240,12 +253,11 @@ export default function ChecklistPage() {
       .filter((category): category is ChecklistCategory => Boolean(category));
   }, [data]);
 
-  const activeCategory =
-    categories.find((category) => category.key === activeCategoryKey) ?? categories[0] ?? null;
+  const activeCategory = categories.find((category) => category.key === activeCategoryKey) ?? categories[0] ?? null;
   const currentSubjectId = studyState?.status === 'active' ? studyState.subject_id : null;
-  const currentSubjectLabel = currentSubjectId ? subjectNameMap[currentSubjectId] ?? '当前科目' : null;
+  const currentSubjectLabel = currentSubjectId ? (subjectNameMap[currentSubjectId] ?? '当前科目') : null;
   const highlightedCategoryKey = getCategoryKeyForSubject(currentSubjectId);
-  const todaySourceTaskIds = useMemo(() => {
+  const selectedPlanSourceTaskIds = useMemo(() => {
     const ids = new Set<number>();
     for (const item of data?.today_items ?? []) {
       if (typeof item.source_task_id === 'number') {
@@ -255,35 +267,50 @@ export default function ChecklistPage() {
     return ids;
   }, [data]);
 
+  const isTodayPlan = selectedPlanDate === formatDateKey();
+  const selectedPlanDateLabel = isTodayPlan ? '今天' : selectedPlanDate;
+  const planItemLabel = isTodayPlan ? '今日任务' : '计划任务';
+
   useEffect(() => {
-    void initializePage();
-  }, []);
+    setPlanDateDraft(selectedPlanDate);
+    setShowTodayComposer(false);
+    setEditingTodayId(null);
+    setEditingTodayDraft(emptyTodayDraft);
+    setDragState(null);
+    setDragOverId(null);
+    void initializePage(null, selectedPlanDate);
+  }, [selectedPlanDate]);
 
   useEffect(() => {
     const handleFeishuRefresh = () => {
-      void initializePage(activeCategoryKey);
+      void initializePage(activeCategoryKey, selectedPlanDate);
     };
     window.addEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
     return () => window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
-  }, [activeCategoryKey]);
+  }, [activeCategoryKey, selectedPlanDate]);
 
-  async function initializePage(preferredCategoryKey: string | null = null) {
+  async function initializePage(preferredCategoryKey: string | null = null, planDate = selectedPlanDate) {
+    const token = refreshTokenRef.current + 1;
+    refreshTokenRef.current = token;
     try {
       setLoading(true);
       setError(null);
-      const [pageData, currentStudyState] = await Promise.all([
-        getChecklistPageData(),
-        getStudyModeState(),
-      ]);
+      const [pageData, currentStudyState] = await Promise.all([getChecklistPageData(planDate), getStudyModeState()]);
 
-      setData(pageData);
-      setStudyState(currentStudyState);
-      setActiveCategoryKey(resolveActiveCategoryKey(pageData, preferredCategoryKey));
-      seedDrafts(pageData);
+      if (refreshTokenRef.current === token) {
+        setData(pageData);
+        setStudyState(currentStudyState);
+        setActiveCategoryKey(resolveActiveCategoryKey(pageData, preferredCategoryKey));
+        seedDrafts(pageData);
+      }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      if (refreshTokenRef.current === token) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
     } finally {
-      setLoading(false);
+      if (refreshTokenRef.current === token) {
+        setLoading(false);
+      }
     }
   }
 
@@ -305,7 +332,7 @@ export default function ChecklistPage() {
       setError(null);
       setMessage(null);
       await work();
-      await initializePage(preferredCategoryKey);
+      await initializePage(preferredCategoryKey, selectedPlanDate);
       if (successMessage) {
         setMessage(successMessage);
       }
@@ -356,6 +383,12 @@ export default function ChecklistPage() {
     setEditingTaskDraft(null);
   }
 
+  function commitPlanDate(value: string) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      setSelectedPlanDate(value);
+    }
+  }
+
   function toggleActiveCategoryComposer() {
     if (!activeCategory) {
       return;
@@ -387,14 +420,18 @@ export default function ChecklistPage() {
       return;
     }
 
-    await withRefresh(async () => {
-      await createChecklistTask(draft);
-      setTaskDrafts((current) => ({
-        ...current,
-        [categoryKey]: emptyTaskDraft(categoryKey),
-      }));
-      setComposerCategoryKey(categoryKey);
-    }, '待办已加入当前分类。', categoryKey);
+    await withRefresh(
+      async () => {
+        await createChecklistTask(draft);
+        setTaskDrafts((current) => ({
+          ...current,
+          [categoryKey]: emptyTaskDraft(categoryKey),
+        }));
+        setComposerCategoryKey(categoryKey);
+      },
+      '待办已加入当前分类。',
+      categoryKey,
+    );
   }
 
   async function handleSaveTaskEdit() {
@@ -402,17 +439,21 @@ export default function ChecklistPage() {
       return;
     }
 
-    await withRefresh(async () => {
-      await updateChecklistTask(editingTaskId, editingTaskDraft);
-      setEditingTaskId(null);
-      setEditingTaskDraft(null);
-    }, '待办已更新。', activeCategoryKey);
+    await withRefresh(
+      async () => {
+        await updateChecklistTask(editingTaskId, editingTaskDraft);
+        setEditingTaskId(null);
+        setEditingTaskDraft(null);
+      },
+      '待办已更新。',
+      activeCategoryKey,
+    );
   }
 
   async function handleDeleteTask(taskId: number) {
     const confirmed = await confirm({
       confirmLabel: '删除待办',
-      message: '删除后关联的今日任务实例也会一起删除，当前清单和今日任务区都会同步刷新。',
+      message: '删除后关联的计划任务实例也会一起删除，当前清单和任务区都会同步刷新。',
       title: '删除待办？',
       tone: 'danger',
     });
@@ -420,15 +461,23 @@ export default function ChecklistPage() {
       return;
     }
 
-    await withRefresh(async () => {
-      await deleteChecklistTask(taskId);
-    }, '待办已删除。', activeCategoryKey);
+    await withRefresh(
+      async () => {
+        await deleteChecklistTask(taskId);
+      },
+      '待办已删除。',
+      activeCategoryKey,
+    );
   }
 
   async function handleToggleTask(task: ChecklistTask) {
-    await withRefresh(async () => {
-      await completeChecklistTask(task.id, !task.completed);
-    }, task.completed ? '待办已恢复为未完成。' : '待办已移入已完成。', activeCategoryKey);
+    await withRefresh(
+      async () => {
+        await completeChecklistTask(task.id, !task.completed);
+      },
+      task.completed ? '待办已恢复为未完成。' : '待办已移入已完成。',
+      activeCategoryKey,
+    );
   }
 
   async function handleAddToToday(task: ChecklistTask, insertIndex?: number) {
@@ -438,22 +487,26 @@ export default function ChecklistPage() {
 
     const exists = data.today_items.some((item) => item.source_task_id === task.id);
     if (exists) {
-      setMessage('这条待办今天已经进入任务区了。');
+      setMessage(`这条待办已安排到${selectedPlanDateLabel}。`);
       setDragState(null);
       return;
     }
 
-    await withRefresh(async () => {
-      const created = await addTaskToTodayPlan(task.id);
-      const items = [...data.today_items];
-      const targetIndex = Math.max(0, Math.min(insertIndex ?? items.length, items.length));
+    await withRefresh(
+      async () => {
+        const created = await addTaskToTodayPlan(task.id, selectedPlanDate);
+        const items = [...data.today_items];
+        const targetIndex = Math.max(0, Math.min(insertIndex ?? items.length, items.length));
 
-      if (!items.some((item) => item.id === created.id)) {
-        items.splice(targetIndex, 0, created);
-      }
+        if (!items.some((item) => item.id === created.id)) {
+          items.splice(targetIndex, 0, created);
+        }
 
-      await reorderTodayPlanItems(items.map((item) => item.id));
-    }, '已加入顶部进入任务区。', activeCategoryKey);
+        await reorderTodayPlanItems(items.map((item) => item.id));
+      },
+      `已安排到${selectedPlanDateLabel}。`,
+      activeCategoryKey,
+    );
   }
 
   async function handleCreateTodayItem() {
@@ -461,11 +514,15 @@ export default function ChecklistPage() {
       return;
     }
 
-    await withRefresh(async () => {
-      await createTodayPlanItem(todayDraft);
-      setTodayDraft(emptyTodayDraft);
-      setShowTodayComposer(false);
-    }, '进入任务已添加。', activeCategoryKey);
+    await withRefresh(
+      async () => {
+        await createTodayPlanItem(todayDraft, selectedPlanDate);
+        setTodayDraft(emptyTodayDraft);
+        setShowTodayComposer(false);
+      },
+      `${selectedPlanDateLabel}的任务已添加。`,
+      activeCategoryKey,
+    );
   }
 
   async function handleSaveTodayEdit() {
@@ -473,17 +530,25 @@ export default function ChecklistPage() {
       return;
     }
 
-    await withRefresh(async () => {
-      await updateTodayPlanItem(editingTodayId, editingTodayDraft);
-      setEditingTodayId(null);
-      setEditingTodayDraft(emptyTodayDraft);
-    }, '进入任务已更新。', activeCategoryKey);
+    await withRefresh(
+      async () => {
+        await updateTodayPlanItem(editingTodayId, editingTodayDraft);
+        setEditingTodayId(null);
+        setEditingTodayDraft(emptyTodayDraft);
+      },
+      '进入任务已更新。',
+      activeCategoryKey,
+    );
   }
 
   async function handleDeleteTodayItem(itemId: number) {
-    await withRefresh(async () => {
-      await deleteTodayPlanItem(itemId);
-    }, '进入任务已删除。', activeCategoryKey);
+    await withRefresh(
+      async () => {
+        await deleteTodayPlanItem(itemId);
+      },
+      '进入任务已删除。',
+      activeCategoryKey,
+    );
   }
 
   async function handleCompleteTodayItem(item: TodayPlanItem) {
@@ -494,14 +559,18 @@ export default function ChecklistPage() {
       syncSourceCompletion = await confirm({
         cancelLabel: '只完成今日任务',
         confirmLabel: '同步完成',
-        message: '这条今日任务来自清单待办。同步完成会把源待办也移入已完成；只完成今日任务则保留源待办。',
+        message: '这条计划任务来自清单待办。同步完成会把源待办也移入已完成；只完成计划任务则保留源待办。',
         title: '同步完成源待办？',
       });
     }
 
-    await withRefresh(async () => {
-      await completeTodayPlanItem(item.id, nextCompleted, syncSourceCompletion);
-    }, nextCompleted ? '进入任务已完成。' : '进入任务已恢复为未完成。', activeCategoryKey);
+    await withRefresh(
+      async () => {
+        await completeTodayPlanItem(item.id, nextCompleted, syncSourceCompletion);
+      },
+      nextCompleted ? `${selectedPlanDateLabel}的任务已完成。` : `${selectedPlanDateLabel}的任务已恢复为未完成。`,
+      activeCategoryKey,
+    );
   }
 
   async function handleTodayListDrop(insertIndex?: number) {
@@ -530,9 +599,13 @@ export default function ChecklistPage() {
 
       items.splice(targetIndex, 0, moved);
 
-      await withRefresh(async () => {
-        await reorderTodayPlanItems(items.map((item) => item.id));
-      }, undefined, activeCategoryKey);
+      await withRefresh(
+        async () => {
+          await reorderTodayPlanItems(items.map((item) => item.id));
+        },
+        undefined,
+        activeCategoryKey,
+      );
       return;
     }
 
@@ -569,9 +642,16 @@ export default function ChecklistPage() {
 
     tasks.splice(targetIndex, 0, moved);
 
-    await withRefresh(async () => {
-      await reorderChecklistTasks(activeCategory.key, tasks.map((task) => task.id));
-    }, undefined, activeCategory.key);
+    await withRefresh(
+      async () => {
+        await reorderChecklistTasks(
+          activeCategory.key,
+          tasks.map((task) => task.id),
+        );
+      },
+      undefined,
+      activeCategory.key,
+    );
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -622,9 +702,13 @@ export default function ChecklistPage() {
       }
 
       const reordered = arrayMove(items, fromIndex, targetIndex);
-      await withRefresh(async () => {
-        await reorderTodayPlanItems(reordered.map((item) => item.id));
-      }, undefined, activeCategoryKey);
+      await withRefresh(
+        async () => {
+          await reorderTodayPlanItems(reordered.map((item) => item.id));
+        },
+        undefined,
+        activeCategoryKey,
+      );
       return;
     }
 
@@ -634,8 +718,8 @@ export default function ChecklistPage() {
     }
 
     if (overId === TODAY_CONTAINER_ID || overId.startsWith('today:')) {
-      if (todaySourceTaskIds.has(task.id)) {
-        setMessage('这条待办今天已经进入任务区了。');
+      if (selectedPlanSourceTaskIds.has(task.id)) {
+        setMessage(`这条待办已安排到${selectedPlanDateLabel}。`);
         return;
       }
 
@@ -677,9 +761,16 @@ export default function ChecklistPage() {
     }
 
     const reordered = arrayMove(tasks, fromIndex, targetIndex);
-    await withRefresh(async () => {
-      await reorderChecklistTasks(activeCategory.key, reordered.map((item) => item.id));
-    }, undefined, activeCategory.key);
+    await withRefresh(
+      async () => {
+        await reorderChecklistTasks(
+          activeCategory.key,
+          reordered.map((item) => item.id),
+        );
+      },
+      undefined,
+      activeCategory.key,
+    );
   }
 
   if (loading && data === null) {
@@ -694,191 +785,278 @@ export default function ChecklistPage() {
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => void handleDragEnd(event)} onDragOver={handleDragOver} onDragStart={handleDragStart}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={(event) => void handleDragEnd(event)}
+      onDragOver={handleDragOver}
+      onDragStart={handleDragStart}
+    >
       <section className="page-shell checklist-shell checklist-clean-shell">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">任务准备</p>
-          <h2>进入任务与分类待办</h2>
-          <p>先在政治、英语、数学、专业课、通用里整理待办，再用“加入今日”把真正要做的事项送入任务区。拖拽只是更快的整理方式。</p>
-        </div>
-        <button className="secondary-action" disabled={saving} onClick={() => void initializePage(activeCategoryKey)} type="button">
-          <RefreshCw size={17} />
-          刷新
-        </button>
-      </header>
-
-      {error && <p className="alert error" role="alert">{error}</p>}
-      {message && <p aria-live="polite" className="alert success" role="status">{message}</p>}
-      {confirmDialog}
-
-      <TodayPlanDrawer
-        dndContainerId={TODAY_CONTAINER_ID}
-        dndIsOver={dragOverId === TODAY_CONTAINER_ID}
-        currentSubjectLabel={currentSubjectLabel}
-        editingTodayDraft={editingTodayDraft}
-        editingTodayId={editingTodayId}
-        emptyDescription="从下方分类清单拖入，或者直接手动新建今天的临时任务。"
-        emptyTitle="今天还没有进入任务"
-        items={data?.today_items ?? []}
-        onBeginEdit={beginEditTodayItem}
-        onCancelEdit={() => setEditingTodayId(null)}
-        onChangeEdit={(patch) => setEditingTodayDraft((current) => ({ ...(current ?? emptyTodayDraft), ...patch }))}
-        onClose={undefined}
-        onComplete={(target) => void handleCompleteTodayItem(target)}
-        onCreate={() => void handleCreateTodayItem()}
-        onDelete={(itemId) => void handleDeleteTodayItem(itemId)}
-        onDraftChange={(patch) => setTodayDraft((current) => ({ ...current, ...patch }))}
-        onRefresh={() => void initializePage(activeCategoryKey)}
-        onSaveEdit={() => void handleSaveTodayEdit()}
-        onToggleComposer={() => setShowTodayComposer((current) => !current)}
-        saving={saving}
-        showComposer={showTodayComposer}
-        sortable
-        subtitle="今日队列"
-        title="进入任务"
-        getItemDragId={(item) => getTodaySortableId(item.id)}
-        todayDate={data?.today_date ?? ''}
-        todayDraft={todayDraft}
-      />
-
-      <section className="command-panel checklist-categories-panel">
-        <div className="panel-title">
+        <header className="page-header">
           <div>
-            <p className="eyebrow">分类清单</p>
-            <h3>五大分类</h3>
+            <p className="eyebrow">任务安排</p>
+            <h2>计划任务与分类待办</h2>
+            <p>先在政治、英语、数学、专业课、通用里整理待办，再安排到今天或之后的日期。拖拽只是更快的整理方式。</p>
           </div>
-          <span className="board-title-meta">
-            <span>固定五类</span>
-          </span>
-        </div>
-
-        <div className="checklist-category-tabs" role="tablist" aria-label="清单分类">
-          {categories.map((category) => (
+          <div className="page-header-actions checklist-date-tools" aria-label="计划日期与刷新">
+            <div className="review-date-tools">
+              <button
+                aria-label="前一天"
+                className="ghost-action icon-action"
+                disabled={saving}
+                title="前一天"
+                type="button"
+                onClick={() => setSelectedPlanDate(shiftDate(selectedPlanDate, -1))}
+              >
+                <ChevronLeft size={17} />
+              </button>
+              <label className="review-date-picker">
+                <span className="sr-only">选择计划日期</span>
+                <CalendarDays aria-hidden="true" size={16} />
+                <input
+                  className="text-input"
+                  type="date"
+                  value={planDateDraft}
+                  onBlur={(event) => commitPlanDate(event.target.value)}
+                  onChange={(event) => {
+                    setPlanDateDraft(event.target.value);
+                    commitPlanDate(event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') commitPlanDate(event.currentTarget.value);
+                  }}
+                />
+              </label>
+              <button
+                aria-label="后一天"
+                className="ghost-action icon-action"
+                disabled={saving}
+                title="后一天"
+                type="button"
+                onClick={() => setSelectedPlanDate(shiftDate(selectedPlanDate, 1))}
+              >
+                <ChevronRight size={17} />
+              </button>
+            </div>
             <button
-              aria-selected={activeCategoryKey === category.key}
-              className={
-                [
+              className="ghost-action"
+              disabled={saving || isTodayPlan}
+              type="button"
+              onClick={() => setSelectedPlanDate(formatDateKey())}
+            >
+              今天
+            </button>
+            <button
+              className="secondary-action"
+              disabled={saving}
+              onClick={() => void initializePage(activeCategoryKey, selectedPlanDate)}
+              type="button"
+            >
+              <RefreshCw size={17} />
+              刷新
+            </button>
+          </div>
+        </header>
+
+        {error && (
+          <p className="alert error" role="alert">
+            {error}
+          </p>
+        )}
+        {message && (
+          <p aria-live="polite" className="alert success" role="status">
+            {message}
+          </p>
+        )}
+        {confirmDialog}
+
+        <TodayPlanDrawer
+          dndContainerId={TODAY_CONTAINER_ID}
+          dndIsOver={dragOverId === TODAY_CONTAINER_ID}
+          currentSubjectLabel={currentSubjectLabel}
+          editingTodayDraft={editingTodayDraft}
+          editingTodayId={editingTodayId}
+          emptyDescription={`从下方分类清单拖入，或者直接手动新建${selectedPlanDateLabel}的临时任务。`}
+          emptyTitle={`${selectedPlanDateLabel}还没有${planItemLabel}`}
+          inlineTitleLabel={`新增${selectedPlanDateLabel}任务`}
+          itemLabel={planItemLabel}
+          items={data?.today_items ?? []}
+          onBeginEdit={beginEditTodayItem}
+          onCancelEdit={() => setEditingTodayId(null)}
+          onChangeEdit={(patch) => setEditingTodayDraft((current) => ({ ...(current ?? emptyTodayDraft), ...patch }))}
+          onClose={undefined}
+          onComplete={(target) => void handleCompleteTodayItem(target)}
+          onCreate={() => void handleCreateTodayItem()}
+          onDelete={(itemId) => void handleDeleteTodayItem(itemId)}
+          onDraftChange={(patch) => setTodayDraft((current) => ({ ...current, ...patch }))}
+          onRefresh={() => void initializePage(activeCategoryKey, selectedPlanDate)}
+          onSaveEdit={() => void handleSaveTodayEdit()}
+          onToggleComposer={() => setShowTodayComposer((current) => !current)}
+          saving={saving}
+          showComposer={showTodayComposer}
+          sortable
+          submitLabel={`安排到${selectedPlanDateLabel}`}
+          subtitle={isTodayPlan ? '今日队列' : '计划队列'}
+          title={isTodayPlan ? '进入任务' : `${selectedPlanDateLabel}任务`}
+          getItemDragId={(item) => getTodaySortableId(item.id)}
+          todayDate={data?.today_date ?? ''}
+          todayDraft={todayDraft}
+        />
+
+        <section className="command-panel checklist-categories-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">分类清单</p>
+              <h3>五大分类</h3>
+            </div>
+            <span className="board-title-meta">
+              <span>固定五类</span>
+            </span>
+          </div>
+
+          <div className="checklist-category-tabs" role="tablist" aria-label="清单分类">
+            {categories.map((category) => (
+              <button
+                aria-selected={activeCategoryKey === category.key}
+                className={[
                   'category-tab',
                   activeCategoryKey === category.key ? 'active' : '',
                   highlightedCategoryKey === category.key ? 'is-highlighted' : '',
                 ]
                   .filter(Boolean)
-                  .join(' ')
-              }
-              key={category.key}
-              onClick={() => handleSelectCategory(category.key)}
-              role="tab"
-              type="button"
-            >
-              <strong>{category.title}</strong>
-              <small>{category.pending_tasks.length} 项待办</small>
-            </button>
-          ))}
-        </div>
-
-        {activeCategory && (
-          <div className="checklist-category-body">
-            <div className="category-surface-head">
-              <div className="category-surface-title">
-                <p className="eyebrow">当前分类</p>
-                <h4>{activeCategory.title} 待办</h4>
-              </div>
-              <button
-                aria-label={`新增 ${activeCategory.title} 待办`}
-                className={composerCategoryKey === activeCategory.key ? 'small-action icon-action enabled' : 'small-action icon-action'}
-                onClick={toggleActiveCategoryComposer}
-                title={`新增 ${activeCategory.title} 待办`}
+                  .join(' ')}
+                key={category.key}
+                onClick={() => handleSelectCategory(category.key)}
+                role="tab"
                 type="button"
               >
-                <Plus size={16} />
+                <strong>{category.title}</strong>
+                <small>{category.pending_tasks.length} 项待办</small>
               </button>
-            </div>
-
-            {composerCategoryKey === activeCategory.key && (
-              <div className="task-composer">
-                <TaskEditor
-                  draft={taskDrafts[activeCategory.key] ?? emptyTaskDraft(activeCategory.key)}
-                  saving={saving}
-                  titleLabel={`新增 ${activeCategory.title} 待办`}
-                  onChange={(patch) => updateTaskDraft(activeCategory.key, patch)}
-                  onSubmit={() => void handleCreateTask(activeCategory.key)}
-                  submitOnEnter
-                  submitLabel="加入分类清单"
-                />
-              </div>
-            )}
-
-            <CategoryDropArea isOver={dragOverId === CATEGORY_CONTAINER_ID}>
-              {activeCategory.pending_tasks.length === 0 ? (
-                <div className="empty-state">
-                  <strong>{activeCategory.title} 还没有待办</strong>
-                  <p>先在这里一条一条写好，再点“加入今日”送入上方任务区。</p>
-                </div>
-              ) : (
-                <SortableContext items={activeCategory.pending_tasks.map((task) => getTaskSortableId(task.id))} strategy={verticalListSortingStrategy}>
-                  <div className="category-task-list">
-                    {activeCategory.pending_tasks.map((task) => (
-                      <CategoryTaskRow
-                        alreadyInToday={todaySourceTaskIds.has(task.id)}
-                        editingTaskDraft={editingTaskDraft}
-                        editingTaskId={editingTaskId}
-                        saving={saving}
-                        task={task}
-                        onAddToToday={(target) => void handleAddToToday(target)}
-                        onBeginEdit={beginEditTask}
-                        onCancelEdit={() => setEditingTaskId(null)}
-                        onChangeEdit={(patch) => setEditingTaskDraft((current) => ({ ...(current as ChecklistTaskDraft), ...patch }))}
-                        onDelete={(taskId) => void handleDeleteTask(taskId)}
-                        onSaveEdit={() => void handleSaveTaskEdit()}
-                        onToggleComplete={(target) => void handleToggleTask(target)}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              )}
-            </CategoryDropArea>
-
-            <div className="completed-section">
-              <button
-                className={`ghost-action completed-toggle${showCompleted[activeCategory.key] ? ' is-open' : ''}`}
-                onClick={() => setShowCompleted((current) => ({ ...current, [activeCategory.key]: !current[activeCategory.key] }))}
-                type="button"
-              >
-                <ChevronDown size={15} />
-                已完成 {activeCategory.completed_tasks.length} 项
-              </button>
-
-              {showCompleted[activeCategory.key] && (
-                <div className="completed-task-list">
-                  {activeCategory.completed_tasks.length === 0 ? (
-                    <div className="empty-state compact">这个分类暂时还没有已完成事项。</div>
-                  ) : (
-                    activeCategory.completed_tasks.map((task) => (
-                      <article className="category-task-row is-completed" key={task.id}>
-                        <div className="row-main">
-                          <span className="row-icon enabled">
-                            <Check size={18} />
-                          </span>
-                          <div>
-                            <strong>{task.title}</strong>
-                            <p className="category-task-meta">{buildTaskMeta(task)}</p>
-                          </div>
-                        </div>
-                        <div className="row-actions">
-                          <button className="small-action" disabled={saving} onClick={() => void handleToggleTask(task)} type="button">
-                            恢复
-                          </button>
-                        </div>
-                      </article>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
+            ))}
           </div>
-        )}
-      </section>
+
+          {activeCategory && (
+            <div className="checklist-category-body">
+              <div className="category-surface-head">
+                <div className="category-surface-title">
+                  <p className="eyebrow">当前分类</p>
+                  <h4>{activeCategory.title} 待办</h4>
+                </div>
+                <button
+                  aria-label={`新增 ${activeCategory.title} 待办`}
+                  className={
+                    composerCategoryKey === activeCategory.key
+                      ? 'small-action icon-action enabled'
+                      : 'small-action icon-action'
+                  }
+                  onClick={toggleActiveCategoryComposer}
+                  title={`新增 ${activeCategory.title} 待办`}
+                  type="button"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+
+              {composerCategoryKey === activeCategory.key && (
+                <div className="task-composer">
+                  <TaskEditor
+                    draft={taskDrafts[activeCategory.key] ?? emptyTaskDraft(activeCategory.key)}
+                    saving={saving}
+                    titleLabel={`新增 ${activeCategory.title} 待办`}
+                    onChange={(patch) => updateTaskDraft(activeCategory.key, patch)}
+                    onSubmit={() => void handleCreateTask(activeCategory.key)}
+                    submitOnEnter
+                    submitLabel="加入分类清单"
+                  />
+                </div>
+              )}
+
+              <CategoryDropArea isOver={dragOverId === CATEGORY_CONTAINER_ID}>
+                {activeCategory.pending_tasks.length === 0 ? (
+                  <div className="empty-state">
+                    <strong>{activeCategory.title} 还没有待办</strong>
+                    <p>先在这里一条一条写好，再安排到${selectedPlanDateLabel}的上方任务区。</p>
+                  </div>
+                ) : (
+                  <SortableContext
+                    items={activeCategory.pending_tasks.map((task) => getTaskSortableId(task.id))}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="category-task-list">
+                      {activeCategory.pending_tasks.map((task) => (
+                        <CategoryTaskRow
+                          alreadyInToday={selectedPlanSourceTaskIds.has(task.id)}
+                          editingTaskDraft={editingTaskDraft}
+                          editingTaskId={editingTaskId}
+                          isTodayPlan={isTodayPlan}
+                          saving={saving}
+                          selectedPlanDateLabel={selectedPlanDateLabel}
+                          task={task}
+                          onAddToToday={(target) => void handleAddToToday(target)}
+                          onBeginEdit={beginEditTask}
+                          onCancelEdit={() => setEditingTaskId(null)}
+                          onChangeEdit={(patch) =>
+                            setEditingTaskDraft((current) => ({ ...(current as ChecklistTaskDraft), ...patch }))
+                          }
+                          onDelete={(taskId) => void handleDeleteTask(taskId)}
+                          onSaveEdit={() => void handleSaveTaskEdit()}
+                          onToggleComplete={(target) => void handleToggleTask(target)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                )}
+              </CategoryDropArea>
+
+              <div className="completed-section">
+                <button
+                  className={`ghost-action completed-toggle${showCompleted[activeCategory.key] ? ' is-open' : ''}`}
+                  onClick={() =>
+                    setShowCompleted((current) => ({ ...current, [activeCategory.key]: !current[activeCategory.key] }))
+                  }
+                  type="button"
+                >
+                  <ChevronDown size={15} />
+                  已完成 {activeCategory.completed_tasks.length} 项
+                </button>
+
+                {showCompleted[activeCategory.key] && (
+                  <div className="completed-task-list">
+                    {activeCategory.completed_tasks.length === 0 ? (
+                      <div className="empty-state compact">这个分类暂时还没有已完成事项。</div>
+                    ) : (
+                      activeCategory.completed_tasks.map((task) => (
+                        <article className="category-task-row is-completed" key={task.id}>
+                          <div className="row-main">
+                            <span className="row-icon enabled">
+                              <Check size={18} />
+                            </span>
+                            <div>
+                              <strong>{task.title}</strong>
+                              <p className="category-task-meta">{buildTaskMeta(task)}</p>
+                            </div>
+                          </div>
+                          <div className="row-actions">
+                            <button
+                              className="small-action"
+                              disabled={saving}
+                              onClick={() => void handleToggleTask(task)}
+                              type="button"
+                            >
+                              恢复
+                            </button>
+                          </div>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
       </section>
     </DndContext>
   );
@@ -952,13 +1130,7 @@ function TaskEditor({
   );
 }
 
-function CategoryDropArea({
-  children,
-  isOver = false,
-}: {
-  children: React.ReactNode;
-  isOver?: boolean;
-}) {
+function CategoryDropArea({ children, isOver = false }: { children: React.ReactNode; isOver?: boolean }) {
   const { setNodeRef } = useDroppable({
     id: CATEGORY_CONTAINER_ID,
   });
@@ -970,15 +1142,7 @@ function CategoryDropArea({
   );
 }
 
-function SortableHandle({
-  id,
-  className,
-  children,
-}: {
-  id: string;
-  className: string;
-  children: React.ReactNode;
-}) {
+function SortableHandle({ id, className, children }: { id: string; className: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef } = useSortable({ id });
 
   return (
@@ -991,6 +1155,8 @@ function SortableHandle({
 function CategoryTaskRow({
   task,
   alreadyInToday,
+  isTodayPlan,
+  selectedPlanDateLabel,
   editingTaskId,
   editingTaskDraft,
   saving,
@@ -1004,6 +1170,8 @@ function CategoryTaskRow({
 }: {
   task: ChecklistTask;
   alreadyInToday: boolean;
+  isTodayPlan: boolean;
+  selectedPlanDateLabel: string;
   editingTaskId: number | null;
   editingTaskDraft: ChecklistTaskDraft | null;
   saving: boolean;
@@ -1039,11 +1207,11 @@ function CategoryTaskRow({
           className={alreadyInToday ? 'small-action is-muted' : 'small-action enabled'}
           disabled={saving || alreadyInToday}
           onClick={() => onAddToToday(task)}
-          title={alreadyInToday ? '今天已在任务区' : '加入今日任务'}
+          title={alreadyInToday ? `已安排到${selectedPlanDateLabel}` : `安排到${selectedPlanDateLabel}`}
           type="button"
         >
           <CalendarCheck2 size={15} />
-          {alreadyInToday ? '已加入今日' : '加入今日'}
+          {alreadyInToday ? '已安排' : isTodayPlan ? '加入今日' : '安排'}
         </button>
         <button className="small-action" disabled={saving} onClick={() => onToggleComplete(task)} type="button">
           <Check size={15} />

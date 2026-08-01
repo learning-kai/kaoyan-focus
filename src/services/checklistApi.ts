@@ -7,8 +7,8 @@ import type {
 } from '../types/checklist';
 import { invokeCommand } from './tauriInvoke';
 
-export function getChecklistPageData(): Promise<ChecklistPageData> {
-  return invokeCommand<ChecklistPageData>('get_checklist_page_data');
+export function getChecklistPageData(selectedDate?: string | null): Promise<ChecklistPageData> {
+  return invokeCommand<ChecklistPageData>('get_checklist_page_data', { selectedDate });
 }
 
 export function createChecklistTask(draft: ChecklistTaskDraft): Promise<ChecklistTask> {
@@ -34,12 +34,12 @@ export function completeChecklistTask(id: number, completed: boolean): Promise<C
   return invokeCommand<ChecklistTask>('complete_checklist_task', { id, completed });
 }
 
-export function addTaskToTodayPlan(taskId: number): Promise<TodayPlanItem> {
-  return invokeCommand<TodayPlanItem>('add_task_to_today_plan', { taskId });
+export function addTaskToTodayPlan(taskId: number, selectedDate?: string | null): Promise<TodayPlanItem> {
+  return invokeCommand<TodayPlanItem>('add_task_to_today_plan', { taskId, selectedDate });
 }
 
-export function createTodayPlanItem(draft: TodayPlanItemDraft): Promise<TodayPlanItem> {
-  return invokeCommand<TodayPlanItem>('create_today_plan_item', { draft });
+export function createTodayPlanItem(draft: TodayPlanItemDraft, selectedDate?: string | null): Promise<TodayPlanItem> {
+  return invokeCommand<TodayPlanItem>('create_today_plan_item', { draft, selectedDate });
 }
 
 export function updateTodayPlanItem(id: number, draft: TodayPlanItemDraft): Promise<TodayPlanItem> {
@@ -54,7 +54,11 @@ export function reorderTodayPlanItems(orderedIds: number[]): Promise<void> {
   return invokeCommand<void>('reorder_today_plan_items', { orderedIds });
 }
 
-export function completeTodayPlanItem(id: number, completed: boolean, syncSourceCompletion: boolean): Promise<TodayPlanItem> {
+export function completeTodayPlanItem(
+  id: number,
+  completed: boolean,
+  syncSourceCompletion: boolean,
+): Promise<TodayPlanItem> {
   return invokeCommand<TodayPlanItem>('complete_today_plan_item', {
     id,
     completed,

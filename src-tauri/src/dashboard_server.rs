@@ -2,6 +2,7 @@ use chrono::{DateTime, FixedOffset, Timelike, Utc};
 use rusqlite::{Connection, OpenFlags, Row};
 use serde::Serialize;
 use std::{
+    collections::BTreeMap,
     fs,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
@@ -39,6 +40,7 @@ struct StudyDataPayload {
     read_only: bool,
     source: Option<StudyDataSource>,
     records: Vec<StudyDataRecord>,
+    plans: Vec<StudyPlanDay>,
     generated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
@@ -78,12 +80,23 @@ struct StudyDataRecord {
     status: String,
 }
 
-#[derive(Debug, Clone)]
-struct TaskBucket {
+#[derive(Debug, Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct StudyPlanSubject {
+    subject: String,
+    planned_minutes: i64,
+    tasks_done: i64,
+    tasks_total: i64,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct StudyPlanDay {
     date: String,
-    subject_id: Option<i64>,
-    done: i64,
-    total: i64,
+    planned_minutes: i64,
+    tasks_done: i64,
+    tasks_total: i64,
+    subjects: Vec<StudyPlanSubject>,
 }
 
 pub fn ensure_running(app: AppHandle) -> Result<DashboardLaunch, String> {
@@ -258,6 +271,7 @@ fn handle_get(
                             read_only: true,
                             source: None,
                             records: Vec::new(),
+                            plans: Vec::new(),
                             generated_at: now_local_rfc3339(),
                             error: Some(error),
                         },
@@ -342,6 +356,7 @@ fn build_payload(app: &AppHandle) -> Result<StudyDataPayload, String> {
     let metadata = fs::metadata(&database_path).map_err(|error| error.to_string())?;
     let connection = open_readonly_database(&database_path)?;
     let records = load_records(&connection)?;
+    let plans = load_plan_days(&connection)?;
     let subject_count: i64 = connection
         .query_row("SELECT COUNT(*) FROM subjects", [], |row| row.get(0))
         .unwrap_or(0);
@@ -365,6 +380,7 @@ fn build_payload(app: &AppHandle) -> Result<StudyDataPayload, String> {
             task_count,
         }),
         records,
+        plans,
         generated_at: now_local_rfc3339(),
         error: None,
     })
@@ -387,40 +403,97 @@ fn open_readonly_database(path: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn load_task_buckets(connection: &Connection) -> Result<Vec<TaskBucket>, String> {
+fn load_plan_days(connection: &Connection) -> Result<Vec<StudyPlanDay>, String> {
+    let mut days: BTreeMap<String, BTreeMap<String, StudyPlanSubject>> = BTreeMap::new();
     let mut statement = connection
         .prepare(
             "
-            SELECT today_date,
-                   subject_id,
-                   COUNT(*) AS total,
-                   SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) AS done
-            FROM today_plan_items
-            GROUP BY today_date, subject_id
+            SELECT sb.schedule_date,
+                   COALESCE(NULLIF(TRIM(s.name), ''), '未命名科目') AS subject,
+                   SUM(CASE WHEN sb.end_minute > sb.start_minute
+                            THEN sb.end_minute - sb.start_minute ELSE 0 END) AS planned_minutes
+            FROM schedule_blocks sb
+            LEFT JOIN subjects s ON s.id = sb.subject_id
+            GROUP BY sb.schedule_date, subject
             ",
         )
         .map_err(|error| error.to_string())?;
 
     let rows = statement
         .query_map([], |row| {
-            Ok(TaskBucket {
-                date: row.get(0)?,
-                subject_id: row.get(1)?,
-                total: row.get(2)?,
-                done: row.get(3)?,
-            })
+            let date: String = row.get(0)?;
+            let subject: String = row.get(1)?;
+            let planned_minutes: i64 = row.get(2)?;
+            Ok((date, subject, planned_minutes.max(0)))
         })
         .map_err(|error| error.to_string())?;
 
-    let mut buckets = Vec::new();
     for row in rows {
-        buckets.push(row.map_err(|error| error.to_string())?);
+        let (date, subject, planned_minutes) = row.map_err(|error| error.to_string())?;
+        let bucket = days
+            .entry(date)
+            .or_default()
+            .entry(subject.clone())
+            .or_insert_with(|| StudyPlanSubject {
+                subject,
+                ..StudyPlanSubject::default()
+            });
+        bucket.planned_minutes += planned_minutes;
     }
-    Ok(buckets)
+
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT tp.today_date,
+                   COALESCE(NULLIF(TRIM(s.name), ''), '未命名科目') AS subject,
+                   SUM(CASE WHEN tp.completed = 1 THEN 1 ELSE 0 END) AS tasks_done,
+                   COUNT(*) AS tasks_total
+            FROM today_plan_items tp
+            LEFT JOIN subjects s ON s.id = tp.subject_id
+            GROUP BY tp.today_date, subject
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            let date: String = row.get(0)?;
+            let subject: String = row.get(1)?;
+            let tasks_done: i64 = row.get(2)?;
+            let tasks_total: i64 = row.get(3)?;
+            Ok((date, subject, tasks_done.max(0), tasks_total.max(0)))
+        })
+        .map_err(|error| error.to_string())?;
+
+    for row in rows {
+        let (date, subject, tasks_done, tasks_total) = row.map_err(|error| error.to_string())?;
+        let bucket = days
+            .entry(date)
+            .or_default()
+            .entry(subject.clone())
+            .or_insert_with(|| StudyPlanSubject {
+                subject,
+                ..StudyPlanSubject::default()
+            });
+        bucket.tasks_done += tasks_done.min(tasks_total);
+        bucket.tasks_total += tasks_total;
+    }
+
+    Ok(days
+        .into_iter()
+        .map(|(date, subjects)| {
+            let subjects: Vec<StudyPlanSubject> = subjects.into_values().collect();
+            StudyPlanDay {
+                date,
+                planned_minutes: subjects.iter().map(|item| item.planned_minutes).sum(),
+                tasks_done: subjects.iter().map(|item| item.tasks_done).sum(),
+                tasks_total: subjects.iter().map(|item| item.tasks_total).sum(),
+                subjects,
+            }
+        })
+        .collect())
 }
 
 fn load_records(connection: &Connection) -> Result<Vec<StudyDataRecord>, String> {
-    let task_buckets = load_task_buckets(connection)?;
     let mut statement = connection
         .prepare(
             "
@@ -450,7 +523,7 @@ fn load_records(connection: &Connection) -> Result<Vec<StudyDataRecord>, String>
         .map_err(|error| error.to_string())?;
 
     let rows = statement
-        .query_map([], |row| map_focus_session(row, &task_buckets))
+        .query_map([], map_focus_session)
         .map_err(|error| error.to_string())?;
 
     let mut records = Vec::new();
@@ -463,12 +536,9 @@ fn load_records(connection: &Connection) -> Result<Vec<StudyDataRecord>, String>
     Ok(records)
 }
 
-fn map_focus_session(
-    row: &Row<'_>,
-    task_buckets: &[TaskBucket],
-) -> rusqlite::Result<StudyDataRecord> {
+fn map_focus_session(row: &Row<'_>) -> rusqlite::Result<StudyDataRecord> {
     let id: i64 = row.get(0)?;
-    let subject_id: Option<i64> = row.get(1)?;
+    let _subject_id: Option<i64> = row.get(1)?;
     let subject: String = row.get(2)?;
     let planned_seconds: i64 = row.get(3)?;
     let recorded_actual_seconds: i64 = row.get(4)?;
@@ -498,9 +568,6 @@ fn map_focus_session(
         minutes
     };
     let date = started.date_naive().to_string();
-    let session_finished = status == "finished" || end_reason.as_deref() == Some("completed");
-    let (tasks_done, tasks_total) =
-        resolve_task_bucket(task_buckets, &date, subject_id, session_finished);
 
     Ok(StudyDataRecord {
         id: format!("focus-session:{id}"),
@@ -516,8 +583,8 @@ fn map_focus_session(
             emergency_exit_count,
             paused_seconds,
         ),
-        tasks_done,
-        tasks_total,
+        tasks_done: 0,
+        tasks_total: 0,
         start_hour: started.time().hour(),
         actual_seconds,
         planned_seconds,
@@ -557,27 +624,6 @@ fn effective_focus_seconds(
     } else {
         wall_seconds
     }
-}
-
-fn resolve_task_bucket(
-    buckets: &[TaskBucket],
-    date: &str,
-    subject_id: Option<i64>,
-    session_finished: bool,
-) -> (i64, i64) {
-    if let Some(bucket) = buckets
-        .iter()
-        .find(|bucket| bucket.date == date && bucket.subject_id == subject_id && bucket.total > 0)
-        .or_else(|| {
-            buckets.iter().find(|bucket| {
-                bucket.date == date && bucket.subject_id.is_none() && bucket.total > 0
-            })
-        })
-    {
-        return (bucket.done, bucket.total);
-    }
-
-    (if session_finished { 1 } else { 0 }, 1)
 }
 
 fn focus_score(
@@ -669,7 +715,7 @@ fn local_offset() -> FixedOffset {
 
 #[cfg(test)]
 mod tests {
-    use super::{focus_score, load_records};
+    use super::{focus_score, load_plan_days, load_records};
     use rusqlite::{params, Connection};
 
     fn setup_dashboard_test_database() -> Connection {
@@ -687,6 +733,15 @@ mod tests {
                   today_date TEXT NOT NULL,
                   subject_id INTEGER,
                   completed INTEGER NOT NULL DEFAULT 0
+                );
+
+                CREATE TABLE schedule_blocks (
+                  id INTEGER PRIMARY KEY,
+                  schedule_date TEXT NOT NULL,
+                  subject_id INTEGER,
+                  start_minute INTEGER NOT NULL,
+                  end_minute INTEGER NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'planned'
                 );
 
                 CREATE TABLE focus_sessions (
@@ -707,6 +762,41 @@ mod tests {
             )
             .expect("create dashboard test schema");
         connection
+    }
+
+    #[test]
+    fn load_plan_days_merges_schedule_and_counts_tasks_once() {
+        let connection = setup_dashboard_test_database();
+        connection
+            .execute("INSERT INTO subjects (id, name) VALUES (1, '数学')", [])
+            .expect("insert subject");
+        connection
+            .execute(
+                "
+                INSERT INTO schedule_blocks (id, schedule_date, subject_id, start_minute, end_minute)
+                VALUES (1, '2026-08-01', 1, 480, 540), (2, '2026-08-01', 1, 600, 615)
+                ",
+                [],
+            )
+            .expect("insert schedule blocks");
+        connection
+            .execute(
+                "
+                INSERT INTO today_plan_items (id, today_date, subject_id, completed)
+                VALUES (1, '2026-08-01', 1, 1), (2, '2026-08-01', 1, 0)
+                ",
+                [],
+            )
+            .expect("insert plan items");
+
+        let plans = load_plan_days(&connection).expect("load plan days");
+
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].planned_minutes, 75);
+        assert_eq!(plans[0].tasks_done, 1);
+        assert_eq!(plans[0].tasks_total, 2);
+        assert_eq!(plans[0].subjects.len(), 1);
+        assert_eq!(plans[0].subjects[0].planned_minutes, 75);
     }
 
     #[test]
