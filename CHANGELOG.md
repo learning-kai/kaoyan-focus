@@ -465,4 +465,12 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 增强设置面板样式，调整前台规则控制开关样式 (5c65aef)
 
+## v1.19.0 - 2026-08-01
+
+### Desktop
+#### Changed
+- 加了个沉浸模式的功能 (5cf59be)
+- chore: release v1.18.9 (d0775e6)
+- 增强设置面板样式，调整前台规则控制开关样式 (5c65aef)
+
 
