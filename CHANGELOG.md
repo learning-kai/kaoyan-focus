@@ -499,4 +499,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 清单多日 (c108410)
 
+## v1.19.4 - 2026-08-04
+
+### Desktop
+#### Fixed
+- 修复日历无法删除周重复 (19ecb38)
+
 
