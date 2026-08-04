@@ -3797,6 +3797,17 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   grid-template-columns: minmax(160px, 1.3fr) 150px 110px 110px minmax(220px, 1fr) auto;
 }
 
+.schedule-time-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.schedule-time-field span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .weekday-pills {
   flex-wrap: wrap;
 }

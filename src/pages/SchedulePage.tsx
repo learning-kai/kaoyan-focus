@@ -1201,8 +1201,26 @@ export default function SchedulePage() {
             <option value="">未指定科目</option>
             {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
           </select>
-          <input type="time" value={formatMinute(templateDraft.startMinute)} onChange={(event) => setTemplateDraft({ ...templateDraft, startMinute: parseTime(event.target.value) })} />
-          <input type="time" value={formatMinute(templateDraft.endMinute)} onChange={(event) => setTemplateDraft({ ...templateDraft, endMinute: parseTime(event.target.value) })} />
+          <label className="schedule-time-field">
+            <span>开始时间</span>
+            <input
+              aria-label="周重复开始时间"
+              step={900}
+              type="time"
+              value={formatMinute(templateDraft.startMinute)}
+              onChange={(event) => setTemplateDraft({ ...templateDraft, startMinute: parseTime(event.target.value) })}
+            />
+          </label>
+          <label className="schedule-time-field">
+            <span>结束时间</span>
+            <input
+              aria-label="周重复结束时间"
+              step={900}
+              type="time"
+              value={formatMinute(templateDraft.endMinute)}
+              onChange={(event) => setTemplateDraft({ ...templateDraft, endMinute: parseTime(event.target.value) })}
+            />
+          </label>
           <div className="weekday-pills">
             {weekdays.map((label, index) => {
               const day = index + 1;

@@ -372,38 +372,70 @@ pub fn update_schedule_template(
     id: i64,
     draft: ScheduleTemplateDraft,
 ) -> Result<ScheduleTemplate, String> {
-    let connection = open_database(&database_path(&app)?)?;
+    let mut connection = open_database(&database_path(&app)?)?;
     validate_template_draft(&connection, &draft)?;
     let now = Utc::now().to_rfc3339();
-    connection
-        .execute(
-            "
-            UPDATE schedule_templates
-            SET title = ?1,
-                note = ?2,
-                category_key = ?3,
-                subject_id = ?4,
-                weekdays = ?5,
-                start_minute = ?6,
-                end_minute = ?7,
-                enabled = ?8,
-                updated_at = ?9
-            WHERE id = ?10
-            ",
-            params![
-                draft.title.trim(),
-                normalize_optional_string(draft.note),
-                normalize_category_key(&draft.category_key),
-                draft.subject_id,
-                weekdays_to_json(&draft.weekdays)?,
-                draft.start_minute,
-                draft.end_minute,
-                if draft.enabled { 1 } else { 0 },
-                now,
-                id
-            ],
-        )
-        .map_err(|error| error.to_string())?;
+    {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "
+                UPDATE schedule_templates
+                SET title = ?1,
+                    note = ?2,
+                    category_key = ?3,
+                    subject_id = ?4,
+                    weekdays = ?5,
+                    start_minute = ?6,
+                    end_minute = ?7,
+                    enabled = ?8,
+                    updated_at = ?9
+                WHERE id = ?10
+                ",
+                params![
+                    draft.title.trim(),
+                    normalize_optional_string(draft.note.clone()),
+                    normalize_category_key(&draft.category_key),
+                    draft.subject_id,
+                    weekdays_to_json(&draft.weekdays)?,
+                    draft.start_minute,
+                    draft.end_minute,
+                    if draft.enabled { 1 } else { 0 },
+                    now,
+                    id
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "
+                UPDATE schedule_blocks
+                SET title = ?1,
+                    note = ?2,
+                    category_key = ?3,
+                    subject_id = ?4,
+                    start_minute = ?5,
+                    end_minute = ?6,
+                    updated_at = ?7
+                WHERE template_id = ?8
+                  AND status = 'planned'
+                ",
+                params![
+                    draft.title.trim(),
+                    normalize_optional_string(draft.note),
+                    normalize_category_key(&draft.category_key),
+                    draft.subject_id,
+                    draft.start_minute,
+                    draft.end_minute,
+                    now,
+                    id
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
 
     let template = get_schedule_template_by_id(&connection, id)?;
     trigger_shared_sync(&app, "schedule_change");
@@ -412,12 +444,36 @@ pub fn update_schedule_template(
 
 #[tauri::command]
 pub fn delete_schedule_template(app: AppHandle, id: i64) -> Result<(), String> {
-    let connection = open_database(&database_path(&app)?)?;
+    let mut connection = open_database(&database_path(&app)?)?;
     let now = Utc::now().timestamp_millis();
-    mark_entity_deleted(&connection, ENTITY_SCHEDULE_TEMPLATE, id, now)?;
-    connection
-        .execute("DELETE FROM schedule_templates WHERE id = ?1", params![id])
-        .map_err(|error| error.to_string())?;
+    {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        mark_entity_deleted(&transaction, ENTITY_SCHEDULE_TEMPLATE, id, now)?;
+
+        let generated_block_ids = {
+            let mut statement = transaction
+                .prepare("SELECT id FROM schedule_blocks WHERE template_id = ?1")
+                .map_err(|error| error.to_string())?;
+            let rows = statement
+                .query_map(params![id], |row| row.get::<_, i64>(0))
+                .map_err(|error| error.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| error.to_string())?;
+            rows
+        };
+        for block_id in generated_block_ids {
+            mark_entity_deleted(&transaction, ENTITY_SCHEDULE_BLOCK, block_id, now)?;
+        }
+        transaction
+            .execute("DELETE FROM schedule_blocks WHERE template_id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute("DELETE FROM schedule_templates WHERE id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     trigger_shared_sync(&app, "schedule_change");
     Ok(())
 }
