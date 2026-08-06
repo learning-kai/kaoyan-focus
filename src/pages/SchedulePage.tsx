@@ -293,6 +293,7 @@ export default function SchedulePage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [selectedDate, setSelectedDate] = useState(formatDateKey());
   const [dateDraft, setDateDraft] = useState(formatDateKey());
+  const [nowMinute, setNowMinute] = useState(() => currentMinuteOfDay());
   const [view, setView] = useState<'day' | 'week'>('day');
   const [blockDraft, setBlockDraft] = useState<ScheduleBlockDraft>(() => emptyBlockDraft(formatDateKey()));
   const [templateDraft, setTemplateDraft] = useState<ScheduleTemplateDraft>(emptyTemplateDraft);
@@ -349,6 +350,26 @@ export default function SchedulePage() {
       window.removeEventListener(CALDAV_SYNC_REFRESH_EVENT, handleCalendarRefresh);
     };
   }, [selectedDate]);
+
+  useEffect(() => {
+    let intervalId: number | undefined;
+    const syncNow = () => setNowMinute(currentMinuteOfDay());
+    const now = new Date();
+    const msToNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds() + 250;
+    const timeoutId = window.setTimeout(() => {
+      syncNow();
+      intervalId = window.setInterval(syncNow, 60_000);
+    }, msToNextMinute);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') syncNow();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (!data || view !== 'day') return;
@@ -479,8 +500,8 @@ export default function SchedulePage() {
 
   const currentMinute = useMemo(() => {
     if (selectedDate !== formatDateKey()) return null;
-    return currentMinuteOfDay();
-  }, [selectedDate]);
+    return nowMinute;
+  }, [nowMinute, selectedDate]);
 
   async function initialize() {
     try {

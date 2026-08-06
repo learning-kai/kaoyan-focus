@@ -179,6 +179,15 @@ export async function runResponsiveMatrix(page, options) {
             && Math.min(compactBlockLayout[0].bottom, compactBlockLayout[1].bottom) - Math.max(compactBlockLayout[0].top, compactBlockLayout[1].top) > 1;
           check(compactBlockLayout.every((block) => block.titleVisible), `${label} compact schedule title hidden`, JSON.stringify(compactBlockLayout));
           check(!compactBlocksOverlap, `${label} compact schedule blocks overlap`, JSON.stringify(compactBlockLayout));
+          const compactQuickActions = await compactBlocks.evaluateAll((blocks) => blocks.map((block) => {
+            const toggle = block.querySelector('.schedule-block-actions .is-complete-toggle');
+            const remove = block.querySelector('.schedule-block-actions .is-delete-action');
+            return {
+              toggleVisible: Boolean(toggle && toggle.getBoundingClientRect().width > 0 && toggle.getBoundingClientRect().height > 0),
+              deleteVisible: Boolean(remove && remove.getBoundingClientRect().width > 0 && remove.getBoundingClientRect().height > 0),
+            };
+          }));
+          check(compactQuickActions.every((item) => item.toggleVisible && item.deleteVisible), `${label} compact schedule quick actions hidden`, JSON.stringify(compactQuickActions));
           await compactBlocks.first().click();
           check(await page.locator('.schedule-block-detail').count() === 1, `${label} schedule detail did not open`);
           check(await page.locator('.schedule-block-detail').getByText('短时背单词', { exact: true }).count() === 1, `${label} schedule detail title missing`);

@@ -3960,7 +3960,7 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
   gap: 12px;
-  height: clamp(520px, 68vh, 760px);
+  height: clamp(560px, calc(100dvh - 180px), 960px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -4086,7 +4086,7 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 }
 
 .schedule-block.is-compact {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 72px;
   padding: 8px 10px;
 }
@@ -4096,6 +4096,10 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 }
 
 .schedule-block.is-compact .schedule-block-actions {
+  display: flex;
+}
+
+.schedule-block.is-compact .schedule-block-actions button:not(.is-complete-toggle):not(.is-delete-action) {
   display: none;
 }
 
