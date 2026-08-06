@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   DragEvent as ReactDragEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -57,8 +58,9 @@ const dayEnd = 24 * 60;
 const slotMinutes = 15;
 const minBlockMinutes = 15;
 const defaultBlockMinutes = 60;
-const minimumReadableBlockPercent = 5;
-const minimumReadableBlockMinutes = ((dayEnd - dayStart) * minimumReadableBlockPercent) / 100;
+const timelineHourHeight = 80;
+const timelineHeight = ((dayEnd - dayStart) / 60) * timelineHourHeight;
+const minimumReadableBlockMinutes = 54;
 const calendarDragActivationDistance = 8;
 const todayItemDragType = 'application/x-schedule-today-item';
 const quickScheduleSlots = [
@@ -120,7 +122,10 @@ function timelinePercent(minute: number) {
 function rangeTimelineStyle(startMinute: number, endMinute: number) {
   const visibleStart = Math.max(dayStart, Math.min(dayEnd, startMinute));
   const visibleEnd = Math.max(visibleStart + minBlockMinutes, Math.min(dayEnd, endMinute));
-  const height = Math.max(minimumReadableBlockPercent, ((visibleEnd - visibleStart) / (dayEnd - dayStart)) * 100);
+  const height = Math.max(
+    (minimumReadableBlockMinutes / (dayEnd - dayStart)) * 100,
+    ((visibleEnd - visibleStart) / (dayEnd - dayStart)) * 100,
+  );
   return {
     top: `${timelinePercent(visibleStart)}%`,
     height: `${height}%`,
@@ -162,6 +167,11 @@ type PendingBlockDragState = {
   originClientX: number;
   originClientY: number;
   pointerId: number;
+};
+
+type ScheduleBlockDetail = {
+  anchor: Pick<DOMRect, 'bottom' | 'left' | 'right' | 'top'>;
+  block: ScheduleBlock;
 };
 
 function layoutScheduleBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlock[] {
@@ -300,10 +310,15 @@ export default function SchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [dragState, setDragState] = useState<CalendarDragState | null>(null);
   const [pendingBlockDrag, setPendingBlockDrag] = useState<PendingBlockDragState | null>(null);
+  const [selectedBlockDetail, setSelectedBlockDetail] = useState<ScheduleBlockDetail | null>(null);
   const refreshTokenRef = useRef(0);
   const laneRef = useRef<HTMLDivElement | null>(null);
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const detailRef = useRef<HTMLElement | null>(null);
+  const detailTriggerRef = useRef<HTMLElement | null>(null);
   const dragStateRef = useRef<CalendarDragState | null>(null);
   const pendingBlockDragRef = useRef<PendingBlockDragState | null>(null);
+  const suppressBlockClickRef = useRef(false);
   const blockedTodayItemDragRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const pendingDragClientYRef = useRef<number | null>(null);
@@ -320,6 +335,7 @@ export default function SchedulePage() {
     void refresh(selectedDate);
     setDateDraft(selectedDate);
     setBlockDraft((draft) => ({ ...draft, scheduleDate: selectedDate }));
+    setSelectedBlockDetail(null);
   }, [selectedDate]);
 
   useEffect(() => {
@@ -333,6 +349,53 @@ export default function SchedulePage() {
       window.removeEventListener(CALDAV_SYNC_REFRESH_EVENT, handleCalendarRefresh);
     };
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (!data || view !== 'day') return;
+    const scrollContainer = timelineScrollRef.current;
+    if (!scrollContainer) return;
+    const nowMinute = currentMinuteOfDay();
+    const firstBlockMinute = data.day_blocks.reduce<number | null>(
+      (first, block) => first === null || block.start_minute < first ? block.start_minute : first,
+      null,
+    );
+    const targetMinute = selectedDate === data.today_date
+      ? nowMinute - 2 * 60
+      : firstBlockMinute === null ? 7 * 60 : firstBlockMinute - 60;
+    const scrollTop = Math.max(0, ((targetMinute - dayStart) / 60) * timelineHourHeight);
+    const frame = window.requestAnimationFrame(() => {
+      scrollContainer.scrollTop = scrollTop;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [data, selectedDate, view]);
+
+  useEffect(() => {
+    if (!selectedBlockDetail) return;
+    const closeDetail = () => setSelectedBlockDetail(null);
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!detailRef.current?.contains(target) && !detailTriggerRef.current?.contains(target)) {
+        closeDetail();
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeDetail();
+    };
+    const scrollContainer = timelineScrollRef.current;
+    const focusFrame = window.requestAnimationFrame(() => detailRef.current?.focus());
+    window.addEventListener('resize', closeDetail);
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('pointerdown', handlePointerDown);
+    scrollContainer?.addEventListener('scroll', closeDetail, { passive: true });
+    return () => {
+      window.removeEventListener('resize', closeDetail);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('pointerdown', handlePointerDown);
+      scrollContainer?.removeEventListener('scroll', closeDetail);
+      window.cancelAnimationFrame(focusFrame);
+      if (detailTriggerRef.current?.isConnected) detailTriggerRef.current.focus();
+    };
+  }, [selectedBlockDetail]);
 
   function setCalendarDragState(next: CalendarDragState | null) {
     dragStateRef.current = next;
@@ -360,6 +423,7 @@ export default function SchedulePage() {
         if (distance < calendarDragActivationDistance) return;
 
         event.preventDefault();
+        suppressBlockClickRef.current = true;
         setPendingBlockDragState(null);
         startBlockDrag(pendingDrag.block, 'move', pendingDrag.originClientY);
         updateDragPreview(event.clientY);
@@ -725,6 +789,22 @@ export default function SchedulePage() {
     });
   }
 
+  function openBlockDetail(block: ScheduleBlock, trigger: HTMLElement) {
+    detailTriggerRef.current = trigger;
+    const { bottom, left, right, top } = trigger.getBoundingClientRect();
+    setSelectedBlockDetail({ block, anchor: { bottom, left, right, top } });
+  }
+
+  function handleBlockClick(event: React.MouseEvent<HTMLElement>, block: ScheduleBlock) {
+    if (suppressBlockClickRef.current) {
+      suppressBlockClickRef.current = false;
+      return;
+    }
+    if (editingBlockId === block.id || isInteractiveElement(event.target)) return;
+    if (pendingBlockDragRef.current || dragStateRef.current) return;
+    openBlockDetail(block, event.currentTarget);
+  }
+
   function handleResizePointerDown(
     event: ReactPointerEvent<HTMLButtonElement>,
     block: ScheduleBlock,
@@ -1057,6 +1137,7 @@ export default function SchedulePage() {
   }
 
   function beginEditBlock(block: ScheduleBlock) {
+    setSelectedBlockDetail(null);
     setEditingBlockId(block.id);
     setEditingBlockDraft({
       scheduleDate: block.schedule_date,
@@ -1081,6 +1162,7 @@ export default function SchedulePage() {
   }
 
   async function handleStart(block: ScheduleBlock) {
+    setSelectedBlockDetail(null);
     const appSettings = settings ?? await getAppSettings();
     await withSave(async () => {
       await startStudyModeFromScheduleBlock(
@@ -1095,6 +1177,51 @@ export default function SchedulePage() {
       requestAppNavigation('focus');
     }, '已从日程开始专注。', 'focus_state_change');
   }
+
+  const blockDetail = selectedBlockDetail && typeof document !== 'undefined' ? (() => {
+    const { block, anchor } = selectedBlockDetail;
+    const blockCompleted = isScheduleBlockCompleted(block, data?.today_items ?? []);
+    const detailWidth = 320;
+    const left = Math.max(12, Math.min(window.innerWidth - detailWidth - 12, anchor.left));
+    const showAbove = anchor.bottom + 260 > window.innerHeight && anchor.top > 272;
+    const top = showAbove ? Math.max(12, anchor.top - 12) : Math.min(window.innerHeight - 12, anchor.bottom + 8);
+    return createPortal(
+      <section
+        aria-label={`${block.title} 日程详情`}
+        className={`schedule-block-detail${showAbove ? ' is-above' : ''}`}
+        ref={detailRef}
+        role="dialog"
+        style={{ left, top }}
+        tabIndex={-1}
+      >
+        <div className="schedule-block-detail-head">
+          <div>
+            <span>{block.schedule_date} · {formatMinute(block.start_minute)}-{formatMinute(block.end_minute)}</span>
+            <h3>{block.title}</h3>
+          </div>
+          <button aria-label="关闭日程详情" className="icon-button" type="button" onClick={() => setSelectedBlockDetail(null)}>×</button>
+        </div>
+        <div className="schedule-block-detail-meta">
+          <span>{categoryLabel(block.category_key)}</span>
+          <span>{subjectName(subjects, block.subject_id)}</span>
+          <span>{blockCompleted ? '已完成' : block.status === 'running' ? '进行中' : '待开始'}</span>
+        </div>
+        {block.note && <p className="schedule-block-detail-note">{block.note}</p>}
+        <div className="schedule-block-detail-actions">
+          <button disabled={saving || block.status === 'running'} type="button" onClick={() => void handleCompleteScheduleBlock(block, blockCompleted)}>
+            <Check size={15} />{blockCompleted ? '恢复未完成' : '标记完成'}
+          </button>
+          <button type="button" onClick={() => void handleStart(block)}><Play size={15} />开始专注</button>
+          <button type="button" onClick={() => beginEditBlock(block)}><PencilLine size={15} />编辑</button>
+          <button className="danger" type="button" onClick={() => {
+            setSelectedBlockDetail(null);
+            void withSave(() => deleteScheduleBlock(block.id), '日程已删除。');
+          }}><Trash2 size={15} />删除</button>
+        </div>
+      </section>,
+      document.body,
+    );
+  })() : null;
 
   return (
     loadingSchedule && data === null ? (
@@ -1136,6 +1263,7 @@ export default function SchedulePage() {
       )}
 
       {confirmDialog}
+      {blockDetail}
 
       <section className="schedule-toolbar soft-panel">
         <div className="segmented-control">
@@ -1317,22 +1445,24 @@ export default function SchedulePage() {
 
         {view === 'day' ? (
           <section className="schedule-timeline soft-panel">
-            <div className="schedule-time-column">
-              {Array.from({ length: (dayEnd - dayStart) / 60 + 1 }, (_, index) => {
-                const minute = dayStart + index * 60;
-                return (
-                  <span key={minute} style={{ top: `${timelinePercent(minute)}%` }}>
-                    {formatMinute(minute)}
-                  </span>
-                );
-              })}
-            </div>
-            <div
-              className={`schedule-lane${pendingTodayItemId !== null || dragState ? ' picking' : ''}${dragState ? ' dragging' : ''}`}
-              onDragOver={handleLaneDragOver}
-              onDrop={handleLaneDrop}
-              ref={laneRef}
-            >
+            <div className="schedule-timeline-scroll" ref={timelineScrollRef}>
+              <div className="schedule-time-column" style={{ height: timelineHeight }}>
+                {Array.from({ length: (dayEnd - dayStart) / 60 + 1 }, (_, index) => {
+                  const minute = dayStart + index * 60;
+                  return (
+                    <span key={minute} style={{ top: `${timelinePercent(minute)}%` }}>
+                      {formatMinute(minute)}
+                    </span>
+                  );
+                })}
+              </div>
+              <div
+                className={`schedule-lane${pendingTodayItemId !== null || dragState ? ' picking' : ''}${dragState ? ' dragging' : ''}`}
+                onDragOver={handleLaneDragOver}
+                onDrop={handleLaneDrop}
+                ref={laneRef}
+                style={{ height: timelineHeight }}
+              >
               {Array.from({ length: (dayEnd - dayStart) / slotMinutes }, (_, index) => {
                 const startMinute = dayStart + index * slotMinutes;
                 return (
@@ -1364,6 +1494,7 @@ export default function SchedulePage() {
                   aria-keyshortcuts="Enter Delete ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"
                   className={`schedule-block category-${block.category_key}${compact ? ' is-compact' : ''}${editingBlockId === block.id ? ' is-editing' : ''}${block.has_conflict ? ' conflict' : ''}${scheduleBlockStatusClass(block, data?.today_items ?? [])}${dragState?.blockId === block.id ? ' is-dragging' : ''}`}
                   key={block.id}
+                  onClick={(event) => handleBlockClick(event, block)}
                   onKeyDown={(event) => handleBlockKeyDown(event, block)}
                   onPointerDown={(event) => handleBlockPointerDown(event, block)}
                   style={positionedBlockTimelineStyle({ block, columnCount, columnIndex })}
@@ -1449,7 +1580,7 @@ export default function SchedulePage() {
                 </article>
                 );
               })}
-              {dragState && (
+                {dragState && (
                 <div
                   className={`schedule-drag-preview is-${dragState.mode}`}
                   style={rangeTimelineStyle(dragState.startMinute, dragState.endMinute)}
@@ -1458,7 +1589,7 @@ export default function SchedulePage() {
                   <span>{formatMinute(dragState.startMinute)}-{formatMinute(dragState.endMinute)}</span>
                 </div>
               )}
-              {quickAddDraft && (
+                {quickAddDraft && (
                 <div
                   className={`schedule-quick-add${timelinePercent(quickAddDraft.startMinute) > 62 ? ' is-above' : ''}`}
                   style={{
@@ -1502,7 +1633,8 @@ export default function SchedulePage() {
                   </button>
                 </div>
               )}
-              {!data?.day_blocks.length && !quickAddDraft && <div className="schedule-empty"><CalendarDays size={28} />点击时间格添加今天的安排。</div>}
+                {!data?.day_blocks.length && !quickAddDraft && <div className="schedule-empty"><CalendarDays size={28} />点击时间格添加今天的安排。</div>}
+              </div>
             </div>
           </section>
         ) : (

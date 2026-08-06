@@ -3952,16 +3952,23 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 }
 
 .schedule-timeline {
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  gap: 12px;
   padding: 14px;
   overflow: hidden;
 }
 
+.schedule-timeline-scroll {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  height: clamp(520px, 68vh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .schedule-time-column {
   position: relative;
-  min-height: 720px;
+  height: 1440px;
   color: var(--muted);
   font-size: 11px;
   text-align: right;
@@ -3976,7 +3983,7 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 .schedule-lane {
   position: relative;
   min-width: 0;
-  min-height: 720px;
+  height: 1440px;
   border: 1px solid var(--line);
   border-radius: 14px;
   overflow: hidden;
@@ -4005,7 +4012,7 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-height: 28px;
+  min-height: 0;
   border: 0;
   border-bottom: 1px solid rgba(145, 167, 199, 0.08);
   padding: 0 12px;
@@ -4079,38 +4086,127 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 }
 
 .schedule-block.is-compact {
-  grid-template-columns: minmax(0, 1fr) 28px;
-  gap: 6px;
-  min-height: 36px;
-  padding: 4px 8px;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 72px;
+  padding: 8px 10px;
 }
 
 .schedule-block.is-compact .schedule-block-content {
-  align-content: center;
-}
-
-.schedule-block.is-compact .schedule-block-content small,
-.schedule-block.is-compact .schedule-completed-badge,
-.schedule-block.is-compact .schedule-conflict-badge,
-.schedule-block.is-compact .schedule-block-actions > button:not(.is-edit-action) {
-  display: none;
+  align-content: start;
 }
 
 .schedule-block.is-compact .schedule-block-actions {
-  align-self: center;
-}
-
-.schedule-block.is-compact .schedule-block-actions .is-edit-action {
-  width: 28px !important;
-  min-width: 28px !important;
-  padding: 0 !important;
-  font-size: 0;
+  display: none;
 }
 
 .schedule-block.is-editing {
   z-index: 7;
   height: auto !important;
   min-height: 44px;
+}
+
+.schedule-block-detail {
+  position: fixed;
+  z-index: 30;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(360px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, white);
+  border-radius: 16px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-strong) 90%, transparent);
+  box-shadow: 0 22px 54px rgba(2, 6, 17, 0.28);
+  backdrop-filter: blur(22px) saturate(150%);
+  transform-origin: top left;
+  animation: schedule-detail-enter 160ms ease-out both;
+}
+
+.schedule-block-detail.is-above {
+  transform: translateY(-100%);
+  transform-origin: bottom left;
+}
+
+.schedule-block-detail-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.schedule-block-detail-head h3,
+.schedule-block-detail-head span,
+.schedule-block-detail-note {
+  margin: 0;
+}
+
+.schedule-block-detail-head h3 {
+  margin-top: 3px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.schedule-block-detail-head span,
+.schedule-block-detail-meta,
+.schedule-block-detail-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.schedule-block-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.schedule-block-detail-meta span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 58%, transparent);
+}
+
+.schedule-block-detail-note {
+  margin-top: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.schedule-block-detail-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.schedule-block-detail-actions button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-card) 84%, transparent);
+}
+
+.schedule-block-detail-actions button.danger {
+  color: var(--red);
+}
+
+@keyframes schedule-detail-enter {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.schedule-block-detail.is-above {
+  animation-name: schedule-detail-enter-above;
+}
+
+@keyframes schedule-detail-enter-above {
+  from { opacity: 0; transform: translateY(calc(-100% + 4px)) scale(0.98); }
+  to { opacity: 1; transform: translateY(-100%) scale(1); }
 }
 
 .schedule-block strong {

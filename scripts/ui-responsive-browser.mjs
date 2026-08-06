@@ -10,7 +10,7 @@ const MAIN_SIZES = [
 const MAIN_PAGES = [
   { name: 'focus', entry: '.start-ritual-button' },
   { name: 'checklist', entry: '.checklist-categories-panel, .today-plan-panel' },
-  { name: 'schedule', entry: '.schedule-grid-shell, .schedule-toolbar' },
+  { name: 'schedule', entry: '.schedule-toolbar, .schedule-grid-shell' },
   { name: 'whitelist', entry: '.whitelist-tabs' },
   { name: 'review', entry: '.review-mode-toggle' },
   { name: 'stats', entry: '.stats-hero-grid, .stats-toolbar-grid' },
@@ -138,8 +138,8 @@ export async function runResponsiveMatrix(page, options) {
     for (const size of MAIN_SIZES) {
       await page.setViewportSize(size);
       await settleLayout();
-      if (pageCase.name === 'settings') {
-        await page.locator(pageCase.entry).scrollIntoViewIfNeeded();
+      if (pageCase.name === 'settings' || pageCase.name === 'schedule') {
+        await page.locator(pageCase.entry).first().scrollIntoViewIfNeeded();
         await settleLayout();
       }
       const label = `page/${pageCase.name}/${sizeLabel(size)}`;
@@ -156,6 +156,13 @@ export async function runResponsiveMatrix(page, options) {
         if (pageCase.name === 'schedule') {
           const compactBlocks = page.locator('.schedule-block.is-compact');
           check(await compactBlocks.count() === 2, `${label} compact schedule block count`, `actual=${await compactBlocks.count()}`);
+          const timelineMetrics = await page.locator('.schedule-timeline-scroll').evaluate((element) => ({
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+            laneHeight: element.querySelector('.schedule-lane')?.getBoundingClientRect().height ?? 0,
+          }));
+          check(timelineMetrics.scrollHeight >= 1440, `${label} timeline height`, JSON.stringify(timelineMetrics));
+          check(timelineMetrics.scrollHeight > timelineMetrics.clientHeight, `${label} timeline must scroll`, JSON.stringify(timelineMetrics));
           const compactBlockLayout = await compactBlocks.evaluateAll((blocks) => blocks.map((block) => {
             const blockRect = block.getBoundingClientRect();
             const titleRect = block.querySelector('strong')?.getBoundingClientRect();
@@ -172,6 +179,11 @@ export async function runResponsiveMatrix(page, options) {
             && Math.min(compactBlockLayout[0].bottom, compactBlockLayout[1].bottom) - Math.max(compactBlockLayout[0].top, compactBlockLayout[1].top) > 1;
           check(compactBlockLayout.every((block) => block.titleVisible), `${label} compact schedule title hidden`, JSON.stringify(compactBlockLayout));
           check(!compactBlocksOverlap, `${label} compact schedule blocks overlap`, JSON.stringify(compactBlockLayout));
+          await compactBlocks.first().click();
+          check(await page.locator('.schedule-block-detail').count() === 1, `${label} schedule detail did not open`);
+          check(await page.locator('.schedule-block-detail').getByText('短时背单词', { exact: true }).count() === 1, `${label} schedule detail title missing`);
+          await page.keyboard.press('Escape');
+          check(await page.locator('.schedule-block-detail').count() === 0, `${label} schedule detail did not close`);
         }
         if (pageCase.name === 'settings') {
           const switchContainerStyle = await page.locator(pageCase.entry).evaluate((input) => {
