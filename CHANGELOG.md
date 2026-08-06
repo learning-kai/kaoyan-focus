@@ -517,4 +517,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 日历模仿苹果 (7a7f2cf)
 
+## v1.19.7 - 2026-08-07
+
+### Desktop
+#### Fixed
+- 修复部分问题 (19f7b4e)
+
 
