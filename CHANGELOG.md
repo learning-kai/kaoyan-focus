@@ -511,4 +511,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - 修复日历重叠 (35d1037)
 
+## v1.19.6 - 2026-08-06
+
+### Desktop
+#### Changed
+- 日历模仿苹果 (7a7f2cf)
+
 
