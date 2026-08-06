@@ -505,4 +505,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - 修复日历无法删除周重复 (19ecb38)
 
+## v1.19.5 - 2026-08-06
+
+### Desktop
+#### Fixed
+- 修复日历重叠 (35d1037)
+
 
