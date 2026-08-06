@@ -153,6 +153,26 @@ export async function runResponsiveMatrix(page, options) {
         check(await nav.count() === 8, `${label} navigation count`, `actual=${await nav.count()}`);
         check(await page.locator(`.nav-item[aria-current="page"]`).count() === 1, `${label} active navigation marker`);
         check(await boxIsInViewport(pageCase.entry), `${label} primary work entry not visible`, pageCase.entry);
+        if (pageCase.name === 'schedule') {
+          const compactBlocks = page.locator('.schedule-block.is-compact');
+          check(await compactBlocks.count() === 2, `${label} compact schedule block count`, `actual=${await compactBlocks.count()}`);
+          const compactBlockLayout = await compactBlocks.evaluateAll((blocks) => blocks.map((block) => {
+            const blockRect = block.getBoundingClientRect();
+            const titleRect = block.querySelector('strong')?.getBoundingClientRect();
+            return {
+              left: blockRect.left,
+              right: blockRect.right,
+              top: blockRect.top,
+              bottom: blockRect.bottom,
+              titleVisible: Boolean(titleRect && titleRect.width > 0 && titleRect.height > 0),
+            };
+          }));
+          const compactBlocksOverlap = compactBlockLayout.length === 2
+            && Math.min(compactBlockLayout[0].right, compactBlockLayout[1].right) - Math.max(compactBlockLayout[0].left, compactBlockLayout[1].left) > 1
+            && Math.min(compactBlockLayout[0].bottom, compactBlockLayout[1].bottom) - Math.max(compactBlockLayout[0].top, compactBlockLayout[1].top) > 1;
+          check(compactBlockLayout.every((block) => block.titleVisible), `${label} compact schedule title hidden`, JSON.stringify(compactBlockLayout));
+          check(!compactBlocksOverlap, `${label} compact schedule blocks overlap`, JSON.stringify(compactBlockLayout));
+        }
         if (pageCase.name === 'settings') {
           const switchContainerStyle = await page.locator(pageCase.entry).evaluate((input) => {
             const style = getComputedStyle(input.closest('label'));

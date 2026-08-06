@@ -57,6 +57,8 @@ const dayEnd = 24 * 60;
 const slotMinutes = 15;
 const minBlockMinutes = 15;
 const defaultBlockMinutes = 60;
+const minimumReadableBlockPercent = 5;
+const minimumReadableBlockMinutes = ((dayEnd - dayStart) * minimumReadableBlockPercent) / 100;
 const calendarDragActivationDistance = 8;
 const todayItemDragType = 'application/x-schedule-today-item';
 const quickScheduleSlots = [
@@ -118,7 +120,7 @@ function timelinePercent(minute: number) {
 function rangeTimelineStyle(startMinute: number, endMinute: number) {
   const visibleStart = Math.max(dayStart, Math.min(dayEnd, startMinute));
   const visibleEnd = Math.max(visibleStart + minBlockMinutes, Math.min(dayEnd, endMinute));
-  const height = Math.max(5, ((visibleEnd - visibleStart) / (dayEnd - dayStart)) * 100);
+  const height = Math.max(minimumReadableBlockPercent, ((visibleEnd - visibleStart) / (dayEnd - dayStart)) * 100);
   return {
     top: `${timelinePercent(visibleStart)}%`,
     height: `${height}%`,
@@ -173,13 +175,14 @@ function layoutScheduleBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlock[
   let activeGroupEnd = Number.NEGATIVE_INFINITY;
 
   for (const block of ordered) {
+    const visualEndMinute = Math.max(block.end_minute, block.start_minute + minimumReadableBlockMinutes);
     if (!activeGroup.length || block.start_minute < activeGroupEnd) {
       activeGroup.push(block);
-      activeGroupEnd = Math.max(activeGroupEnd, block.end_minute);
+      activeGroupEnd = Math.max(activeGroupEnd, visualEndMinute);
     } else {
       groups.push(activeGroup);
       activeGroup = [block];
-      activeGroupEnd = block.end_minute;
+      activeGroupEnd = visualEndMinute;
     }
   }
   if (activeGroup.length) groups.push(activeGroup);
@@ -189,7 +192,7 @@ function layoutScheduleBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlock[
     const assigned = group.map((block) => {
       const reusableColumn = columnEnds.findIndex((endMinute) => endMinute <= block.start_minute);
       const columnIndex = reusableColumn >= 0 ? reusableColumn : columnEnds.length;
-      columnEnds[columnIndex] = block.end_minute;
+      columnEnds[columnIndex] = Math.max(block.end_minute, block.start_minute + minimumReadableBlockMinutes);
       return { block, columnIndex };
     });
     const columnCount = Math.max(1, columnEnds.length);
@@ -1354,11 +1357,12 @@ export default function SchedulePage() {
               {positionedDayBlocks.map(({ block, columnCount, columnIndex }) => {
                 const blockCompleted = isScheduleBlockCompleted(block, data?.today_items ?? []);
                 const statusLabel = scheduleBlockStatusLabel(block, data?.today_items ?? []);
+                const compact = block.end_minute - block.start_minute < minimumReadableBlockMinutes;
                 return (
                 <article
-                  aria-label={`${block.title}，${formatMinute(block.start_minute)} 到 ${formatMinute(block.end_minute)}，${statusLabel ? `${statusLabel}，` : ''}${columnCount > 1 ? '时间冲突，' : ''}按 Enter 编辑，方向键每次移动 15 分钟，Shift 加方向键调整开始或结束时间，Delete 删除`}
+                  aria-label={`${block.title}，${formatMinute(block.start_minute)} 到 ${formatMinute(block.end_minute)}，${statusLabel ? `${statusLabel}，` : ''}${block.has_conflict ? '时间冲突，' : ''}按 Enter 编辑，方向键每次移动 15 分钟，Shift 加方向键调整开始或结束时间，Delete 删除`}
                   aria-keyshortcuts="Enter Delete ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"
-                  className={`schedule-block category-${block.category_key}${columnCount > 1 ? ' conflict' : ''}${scheduleBlockStatusClass(block, data?.today_items ?? [])}${dragState?.blockId === block.id ? ' is-dragging' : ''}`}
+                  className={`schedule-block category-${block.category_key}${compact ? ' is-compact' : ''}${editingBlockId === block.id ? ' is-editing' : ''}${block.has_conflict ? ' conflict' : ''}${scheduleBlockStatusClass(block, data?.today_items ?? [])}${dragState?.blockId === block.id ? ' is-dragging' : ''}`}
                   key={block.id}
                   onKeyDown={(event) => handleBlockKeyDown(event, block)}
                   onPointerDown={(event) => handleBlockPointerDown(event, block)}
@@ -1388,12 +1392,12 @@ export default function SchedulePage() {
                         onPointerDown={(event) => handleResizePointerDown(event, block, 'resize-start')}
                         type="button"
                       />
-                      <div onDoubleClick={() => beginEditBlock(block)}>
+                      <div className="schedule-block-content" onDoubleClick={() => beginEditBlock(block)}>
                         <span>{formatMinute(block.start_minute)}-{formatMinute(block.end_minute)} · {categoryLabel(block.category_key)}{statusLabel ? ` · ${statusLabel}` : ''}</span>
                         <strong>{block.title}</strong>
                         <small>{subjectName(subjects, block.subject_id)}</small>
                         {blockCompleted && <span className="schedule-completed-badge">✓ 完成</span>}
-                        {columnCount > 1 && <span className="schedule-conflict-badge">时间冲突，点击编辑解决</span>}
+                        {block.has_conflict && <span className="schedule-conflict-badge">时间冲突，点击编辑解决</span>}
                       </div>
                       <div className="schedule-block-actions">
                         <button
@@ -1413,6 +1417,7 @@ export default function SchedulePage() {
                         <button aria-label="开始专注" type="button" onClick={() => void handleStart(block)}><Play size={14} /></button>
                         <button
                           aria-label={`编辑 ${block.title}`}
+                          className="is-edit-action"
                           style={{ minWidth: '56px', width: 'auto', padding: '0 8px' }}
                           type="button"
                           onClick={() => beginEditBlock(block)}

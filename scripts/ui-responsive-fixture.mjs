@@ -129,6 +129,8 @@
   const dayBlocks = [
     { id: 5, schedule_date: '2026-07-29', title: '数学强化与错题复盘', note: null, category_key: 'math', subject_id: 3, source_today_item_id: 1, template_id: null, start_minute: 570, end_minute: 630, status: active ? 'running' : 'planned', linked_study_mode_id: active ? 42 : null, linked_focus_session_id: active ? 99 : null, has_conflict: false, created_at: iso(), updated_at: iso() },
     { id: 6, schedule_date: '2026-07-29', title: '英语阅读与长难句', note: null, category_key: 'english', subject_id: 2, source_today_item_id: null, template_id: null, start_minute: 660, end_minute: 720, status: 'planned', linked_study_mode_id: null, linked_focus_session_id: null, has_conflict: false, created_at: iso(), updated_at: iso() },
+    { id: 7, schedule_date: '2026-07-29', title: '短时背单词', note: null, category_key: 'english', subject_id: 2, source_today_item_id: null, template_id: null, start_minute: 780, end_minute: 795, status: 'planned', linked_study_mode_id: null, linked_focus_session_id: null, has_conflict: false, created_at: iso(), updated_at: iso() },
+    { id: 8, schedule_date: '2026-07-29', title: '短时公式复习', note: null, category_key: 'math', subject_id: 3, source_today_item_id: null, template_id: null, start_minute: 795, end_minute: 810, status: 'planned', linked_study_mode_id: null, linked_focus_session_id: null, has_conflict: false, created_at: iso(), updated_at: iso() },
   ];
 
   const weekDates = ['2026-07-27', '2026-07-28', '2026-07-29', '2026-07-30', '2026-07-31', '2026-08-01', '2026-08-02'];
@@ -137,7 +139,7 @@
     today_date: '2026-07-29',
     week_start_date: '2026-07-27',
     day_blocks: dayBlocks,
-    week_days: weekDates.map((date, weekday) => ({ date, weekday, blocks: date === '2026-07-29' ? dayBlocks : [], planned_minutes: date === '2026-07-29' ? 120 : 0 })),
+    week_days: weekDates.map((date, weekday) => ({ date, weekday, blocks: date === '2026-07-29' ? dayBlocks : [], planned_minutes: date === '2026-07-29' ? 150 : 0 })),
     today_items: todayItems,
     templates: [],
   };

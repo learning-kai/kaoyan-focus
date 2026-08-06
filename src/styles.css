@@ -4072,10 +4072,45 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   transition: opacity 160ms ease, transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
-.schedule-block > div:first-child {
+.schedule-block-content {
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+
+.schedule-block.is-compact {
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 8px;
+}
+
+.schedule-block.is-compact .schedule-block-content {
+  align-content: center;
+}
+
+.schedule-block.is-compact .schedule-block-content small,
+.schedule-block.is-compact .schedule-completed-badge,
+.schedule-block.is-compact .schedule-conflict-badge,
+.schedule-block.is-compact .schedule-block-actions > button:not(.is-edit-action) {
+  display: none;
+}
+
+.schedule-block.is-compact .schedule-block-actions {
+  align-self: center;
+}
+
+.schedule-block.is-compact .schedule-block-actions .is-edit-action {
+  width: 28px !important;
+  min-width: 28px !important;
+  padding: 0 !important;
+  font-size: 0;
+}
+
+.schedule-block.is-editing {
+  z-index: 7;
+  height: auto !important;
+  min-height: 44px;
 }
 
 .schedule-block strong {
