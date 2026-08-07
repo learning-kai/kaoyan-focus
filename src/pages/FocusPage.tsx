@@ -33,6 +33,7 @@ const breakPresetMinutes = [5, 10, 15, 20];
 const longBreakPresetMinutes = [10, 15, 20, 30];
 const longBreakIntervalPresets = [2, 3, 4, 6];
 const ACTIVE_STATE_CALIBRATION_INTERVAL_MS = 15 * 1000;
+const FOCUS_UI_IDLE_DELAY_MS = 3200;
 const FOCUS_TODAY_CONTAINER_ID = 'focus-today-container';
 const QUICK_SCHEDULE_DAY_START = 6 * 60;
 const QUICK_SCHEDULE_DAY_END = 24 * 60;
@@ -239,6 +240,7 @@ export default function FocusPage() {
   const [isQuickSchedulingTask, setIsQuickSchedulingTask] = useState(false);
   const [isUpdatingForegroundRules, setIsUpdatingForegroundRules] = useState(false);
   const [isStudyFullscreen, setIsStudyFullscreen] = useState(false);
+  const [isFocusUiHidden, setIsFocusUiHidden] = useState(false);
   const [isStudyFullscreenUpdating, setIsStudyFullscreenUpdating] = useState(false);
   const [localClockNow, setLocalClockNow] = useState(() => Date.now());
   const [pendingConfirm, setPendingConfirm] = useState<FocusConfirmRequest | null>(null);
@@ -290,6 +292,37 @@ export default function FocusPage() {
       delete document.documentElement.dataset.studyFullscreen;
     }
   }, [isStudyFullscreen]);
+
+  useEffect(() => {
+    if (!active || !isStudyFullscreen || isChecklistDrawerOpen || isScheduleDrawerOpen) {
+      setIsFocusUiHidden(false);
+      return undefined;
+    }
+
+    let idleTimer: number | undefined;
+    const armIdleTimer = () => {
+      if (idleTimer !== undefined) window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => setIsFocusUiHidden(true), FOCUS_UI_IDLE_DELAY_MS);
+    };
+    const handleActivity = () => {
+      setIsFocusUiHidden(false);
+      armIdleTimer();
+    };
+
+    armIdleTimer();
+    window.addEventListener('pointermove', handleActivity, { passive: true });
+    window.addEventListener('pointerdown', handleActivity, { passive: true });
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('touchstart', handleActivity, { passive: true });
+
+    return () => {
+      if (idleTimer !== undefined) window.clearTimeout(idleTimer);
+      window.removeEventListener('pointermove', handleActivity);
+      window.removeEventListener('pointerdown', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+    };
+  }, [active, isChecklistDrawerOpen, isScheduleDrawerOpen, isStudyFullscreen]);
 
   useEffect(() => {
     if (!active) {
@@ -920,7 +953,7 @@ export default function FocusPage() {
     return (
       <DndContext collisionDetection={closestCenter} onDragEnd={(event) => void handleTodayDrawerDragEnd(event)} sensors={sensors}>
         <>
-          <section className={'focus-active-shell phase-' + studyState.phase + (studyState.is_paused ? ' is-paused' : '') + ((isChecklistDrawerOpen || isScheduleDrawerOpen) ? ' is-drawer-open' : '')}>
+          <section className={'focus-active-shell phase-' + studyState.phase + (studyState.is_paused ? ' is-paused' : '') + ((isChecklistDrawerOpen || isScheduleDrawerOpen) ? ' is-drawer-open' : '') + (isFocusUiHidden ? ' is-ui-hidden' : '')}>
             <div className="focus-active-bg" aria-hidden="true" />
             <header className="focus-active-header">
               <span className="focus-minimal-status">{studyState.is_paused ? '计时暂停' : phaseLabel[studyState.phase]}</span>

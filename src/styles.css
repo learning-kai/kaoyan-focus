@@ -6792,9 +6792,44 @@ html[data-theme='light'] .subject-dot {
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
   background:
-    radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--blue) 10%, transparent), transparent 26%),
-    radial-gradient(circle at 80% 24%, color-mix(in srgb, var(--green) 8%, transparent), transparent 24%);
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--blue) 7%, transparent), transparent 38%),
+    radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--blue) 10%, transparent), transparent 28%),
+    radial-gradient(circle at 80% 24%, color-mix(in srgb, var(--green) 8%, transparent), transparent 26%);
+}
+
+.focus-active-bg::before,
+.focus-active-bg::after {
+  position: absolute;
+  inset: -18%;
+  content: '';
+  pointer-events: none;
+  border-radius: 50%;
+  filter: blur(18px);
+  opacity: 0.68;
+  transform: scale(0.94);
+  will-change: transform, opacity;
+}
+
+.focus-active-bg::before {
+  background: radial-gradient(ellipse at 38% 48%, color-mix(in srgb, var(--blue) 15%, transparent), transparent 42%);
+  animation: focus-background-breathe 12s ease-in-out infinite;
+}
+
+.focus-active-bg::after {
+  background: radial-gradient(ellipse at 66% 58%, color-mix(in srgb, var(--green) 11%, transparent), transparent 40%);
+  animation: focus-background-drift 17s ease-in-out infinite;
+}
+
+@keyframes focus-background-breathe {
+  0%, 100% { opacity: 0.46; transform: scale(0.92); }
+  50% { opacity: 0.82; transform: scale(1.08); }
+}
+
+@keyframes focus-background-drift {
+  0%, 100% { opacity: 0.34; transform: translate3d(-2%, 1%, 0) scale(0.96); }
+  50% { opacity: 0.7; transform: translate3d(3%, -2%, 0) scale(1.06); }
 }
 
 .focus-active-shell > *:not(.focus-active-bg):not(.today-plan-drawer) {
@@ -7034,6 +7069,33 @@ html[data-theme='light'] .subject-dot {
   min-width: 44px;
   min-height: 44px;
   padding: 0;
+}
+
+.focus-active-shell.is-ui-hidden .focus-active-header,
+.focus-active-shell.is-ui-hidden .focus-active-footer {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-10px);
+}
+
+.focus-active-shell.is-ui-hidden .focus-active-footer {
+  transform: translateY(10px);
+}
+
+.focus-active-shell.is-ui-hidden .focus-clock-zone > :not(strong) {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+}
+
+.focus-active-shell.is-ui-hidden .focus-clock-zone strong {
+  text-shadow: 0 0 34px color-mix(in srgb, var(--blue) 18%, transparent);
+}
+
+.focus-active-shell .focus-active-header,
+.focus-active-shell .focus-active-footer,
+.focus-active-shell .focus-clock-zone > * {
+  transition: opacity 360ms ease, transform 360ms ease;
 }
 
 html[data-study-fullscreen='true'] .focus-active-shell {
