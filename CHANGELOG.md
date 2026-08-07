@@ -532,4 +532,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - Merge branch 'codex/沉浸式修复' (928ec15)
 
+## v1.19.9 - 2026-08-07
+
+### Desktop
+#### Changed
+- 单机实例 (b51010b)
+
 
