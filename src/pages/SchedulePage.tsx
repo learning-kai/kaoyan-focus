@@ -888,7 +888,7 @@ export default function SchedulePage() {
     if (event.key === 'Enter') {
       event.preventDefault();
       event.stopPropagation();
-      beginEditBlock(block);
+      openBlockDetail(block, event.currentTarget);
       return;
     }
 
@@ -1511,7 +1511,7 @@ export default function SchedulePage() {
                 const compact = block.end_minute - block.start_minute < minimumReadableBlockMinutes;
                 return (
                 <article
-                  aria-label={`${block.title}，${formatMinute(block.start_minute)} 到 ${formatMinute(block.end_minute)}，${statusLabel ? `${statusLabel}，` : ''}${block.has_conflict ? '时间冲突，' : ''}按 Enter 编辑，方向键每次移动 15 分钟，Shift 加方向键调整开始或结束时间，Delete 删除`}
+                  aria-label={`${block.title}，${formatMinute(block.start_minute)} 到 ${formatMinute(block.end_minute)}，${statusLabel ? `${statusLabel}，` : ''}${block.has_conflict ? '时间冲突，' : ''}单击或按 Enter 打开详情，方向键每次移动 15 分钟，Shift 加方向键调整开始或结束时间，Delete 删除`}
                   aria-keyshortcuts="Enter Delete ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"
                   className={`schedule-block category-${block.category_key}${compact ? ' is-compact' : ''}${editingBlockId === block.id ? ' is-editing' : ''}${block.has_conflict ? ' conflict' : ''}${scheduleBlockStatusClass(block, data?.today_items ?? [])}${dragState?.blockId === block.id ? ' is-dragging' : ''}`}
                   key={block.id}
@@ -1544,12 +1544,12 @@ export default function SchedulePage() {
                         onPointerDown={(event) => handleResizePointerDown(event, block, 'resize-start')}
                         type="button"
                       />
-                      <div className="schedule-block-content" onDoubleClick={() => beginEditBlock(block)}>
+                      <div className="schedule-block-content">
                         <span>{formatMinute(block.start_minute)}-{formatMinute(block.end_minute)} · {categoryLabel(block.category_key)}{statusLabel ? ` · ${statusLabel}` : ''}</span>
                         <strong>{block.title}</strong>
                         <small>{subjectName(subjects, block.subject_id)}</small>
                         {blockCompleted && <span className="schedule-completed-badge">✓ 完成</span>}
-                        {block.has_conflict && <span className="schedule-conflict-badge">时间冲突，点击编辑解决</span>}
+                        {block.has_conflict && <span className="schedule-conflict-badge">时间冲突，点击详情解决</span>}
                       </div>
                       <div className="schedule-block-actions">
                         <button
@@ -1565,16 +1565,6 @@ export default function SchedulePage() {
                           }}
                         >
                           <Check size={14} />
-                        </button>
-                        <button aria-label="开始专注" type="button" onClick={() => void handleStart(block)}><Play size={14} /></button>
-                        <button
-                          aria-label={`编辑 ${block.title}`}
-                          className="is-edit-action"
-                          style={{ minWidth: '56px', width: 'auto', padding: '0 8px' }}
-                          type="button"
-                          onClick={() => beginEditBlock(block)}
-                        >
-                          <PencilLine size={14} /> 编辑
                         </button>
                         <button
                           aria-label={`删除 ${block.title}`}

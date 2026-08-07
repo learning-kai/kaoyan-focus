@@ -4109,6 +4109,15 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   min-height: 44px;
 }
 
+.schedule-block.is-compact.is-editing .schedule-block-editor {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.schedule-block.is-compact.is-editing .schedule-block-editor input:first-child {
+  grid-column: 1 / -1;
+}
+
 .schedule-block-detail {
   position: fixed;
   z-index: 30;
@@ -4330,6 +4339,7 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 }
 
 .schedule-block-editor input {
+  min-width: 0;
   width: 100%;
   min-height: 28px;
   border: 1px solid var(--line);
@@ -4341,6 +4351,8 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 }
 
 .schedule-block-editor button {
+  width: 100%;
+  min-width: 0;
   min-height: 28px;
   padding: 4px 8px;
   font-size: 12px;
