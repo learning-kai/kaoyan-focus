@@ -523,4 +523,13 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - 修复部分问题 (19f7b4e)
 
+## v1.19.8 - 2026-08-07
+
+### Desktop
+#### Added
+- Add idle UI hiding and ambient focus background animation (4fd0789)
+
+#### Fixed
+- Merge branch 'codex/沉浸式修复' (928ec15)
+
 
