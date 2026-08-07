@@ -344,6 +344,11 @@ fn wide_null(value: &str) -> Vec<u16> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Err(error) = show_main_window(app) {
+                eprintln!("Failed to activate the existing main window: {error}");
+            }
+        }))
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
