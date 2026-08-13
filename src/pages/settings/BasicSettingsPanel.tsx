@@ -194,7 +194,7 @@ export function BasicSettingsPanel({
               <div>
                 <span>Automation</span>
                 <h4>自动化与提醒策略</h4>
-                <p className="panel-copy">把高频动作交给应用处理：休息确认、日程提前提醒、夜间静音都可以在这里统一控制。</p>
+                <p className="panel-copy">把高频动作交给应用处理：休息确认、日历铃声、夜间静音都可以在这里统一控制。</p>
               </div>
               <BellRing size={20} />
             </div>
@@ -213,8 +213,8 @@ export function BasicSettingsPanel({
 
               <div className="setting-row mode-setting">
                 <div>
-                  <strong>日程提前提醒</strong>
-                  <p>今日日历开始前提前通知，关闭后只保留闹钟和专注阶段提醒。</p>
+                  <strong>日历铃声</strong>
+                  <p>日历事项开始前播放提醒铃声并弹出通知（默认提前 5 分钟）。关闭后日历到点不再响铃，只保留闹钟和专注阶段提醒。</p>
                 </div>
                 <div className="segmented-control">
                   <button className={settings.schedule_reminder_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ schedule_reminder_enabled: true })} type="button"><BellRing size={15} />开启</button>
@@ -224,11 +224,11 @@ export function BasicSettingsPanel({
 
               <SettingNumber
                 disabled={settingsLocked || !settings.schedule_reminder_enabled}
-                label="日程提醒提前量"
+                label="日历铃声提前量"
                 max={60}
                 min={0}
                 onChange={(value) => updateSettings({ schedule_reminder_lead_minutes: value })}
-                text="0 表示到点提醒；建议 5-10 分钟，足够收尾并切换状态。"
+                text="0 表示到点提醒；默认 5 分钟，建议 5-10 分钟，足够收尾并切换到下一项。"
                 value={settings.schedule_reminder_lead_minutes}
               />
 
@@ -344,12 +344,23 @@ export function BasicSettingsPanel({
               <div>
                 <span>Reminder Sound</span>
                 <h4>提醒音效</h4>
-                <p className="panel-copy">当前：{currentReminderSoundSourceOption.label} · {currentReminderSoundOption.label}。可试听内置音色，也可上传自己的提醒音频。</p>
+                <p className="panel-copy">当前：{currentReminderSoundSourceOption.label} · {currentReminderSoundOption.label}。此音效同时用于专注阶段提醒、闹钟和日历铃声。</p>
               </div>
               <button className="secondary-action" disabled={reminderSoundActionDisabled} onClick={() => void handlePreviewReminderSound()} type="button">
                 <Play size={17} />
                 {reminderSoundBusy ? '处理中' : '试听'}
               </button>
+            </div>
+
+            <div className="setting-row mode-setting">
+              <div>
+                <strong>日历铃声</strong>
+                <p>日历事项开始前播放提醒铃声（默认提前 {settings.schedule_reminder_lead_minutes} 分钟）。音色、音量与上方提醒音效共用。</p>
+              </div>
+              <div className="segmented-control">
+                <button className={settings.schedule_reminder_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ schedule_reminder_enabled: true })} type="button"><BellRing size={15} />开启</button>
+                <button className={!settings.schedule_reminder_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ schedule_reminder_enabled: false })} type="button">关闭</button>
+              </div>
             </div>
 
             <div className="segmented-control secondary-segmented">

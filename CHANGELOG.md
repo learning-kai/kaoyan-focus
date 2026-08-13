@@ -13,6 +13,7 @@ All notable changes to `考研专注` will be documented here. The public deskto
 - Added a public screenshot and demo asset policy under `docs/assets/`.
 
 ### Changed
+- Clarified the calendar ringtone setting as 「日历铃声」 in Settings, with the existing schedule-reminder switch also exposed under the sound tab for easier discovery.
 
 - Allowed foreground rules to be toggled while a normal study session is running, while keeping them locked on in strict mode.
 - Added a setting to show or hide the foreground-rule toggle during an active study session.
