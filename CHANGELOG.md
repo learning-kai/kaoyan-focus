@@ -545,4 +545,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - 修复部分bug (eab7570)
 
+## v1.20.1 - 2026-08-13
+
+### Desktop
+#### Changed
+- 铃声加控制按钮 (6b68d0c)
+
 
