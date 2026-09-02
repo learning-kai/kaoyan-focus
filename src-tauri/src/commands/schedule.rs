@@ -467,7 +467,10 @@ pub fn delete_schedule_template(app: AppHandle, id: i64) -> Result<(), String> {
             mark_entity_deleted(&transaction, ENTITY_SCHEDULE_BLOCK, block_id, now)?;
         }
         transaction
-            .execute("DELETE FROM schedule_blocks WHERE template_id = ?1", params![id])
+            .execute(
+                "DELETE FROM schedule_blocks WHERE template_id = ?1",
+                params![id],
+            )
             .map_err(|error| error.to_string())?;
         transaction
             .execute("DELETE FROM schedule_templates WHERE id = ?1", params![id])

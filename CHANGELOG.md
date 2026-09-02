@@ -6,6 +6,9 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ### Added
 
+- Added a configurable pomodoro focus duration on the focus page, with quick presets (15/25/45/60/90 分钟) and a custom 1-120 分钟 input validated before starting a session.
+- Added a 「记住番茄专注时长」 preference (front-end setting + persisted Rust settings key) so the chosen duration becomes the next session default; disabling it keeps the selection session-only.
+- Added test coverage and a `test:focus-duration-preference` npm script asserting the validation rules and the full preference-saving wiring.
 - Added a foreground rule mode setting with allowlist and blocklist semantics, reusing existing software, website and PotPlayer rules.
 - Added hash-aware main navigation with `Alt+1` through `Alt+8` shortcuts and smoke coverage for keyboard routing.
 - Added GitHub Actions CI for frontend type checking, frontend builds, Rust formatting, Clippy and Rust tests.

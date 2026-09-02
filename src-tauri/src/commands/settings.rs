@@ -27,6 +27,7 @@ const FOCUS_WIDGET_HEIGHT_KEY: &str = "focus_widget_height";
 const BREAK_MINUTES_KEY: &str = "break_minutes";
 const LONG_BREAK_MINUTES_KEY: &str = "long_break_minutes";
 const LONG_BREAK_INTERVAL_KEY: &str = "long_break_interval";
+const REMEMBER_FOCUS_DURATION_KEY: &str = "remember_focus_duration";
 const EMERGENCY_COOLDOWN_SECONDS_KEY: &str = "emergency_cooldown_seconds";
 const CHECKLIST_CATEGORY_NAMES_KEY: &str = "checklist_category_names";
 const SYNC_BACKEND_KEY: &str = "sync_backend";
@@ -55,6 +56,9 @@ pub struct AppSettings {
     pub break_minutes: i64,
     pub long_break_minutes: i64,
     pub long_break_interval: i64,
+    /// 是否把专注页选择的番茄时长写回 default_focus_minutes，作为下次默认。
+    #[serde(default = "default_remember_focus_duration")]
+    pub remember_focus_duration: bool,
     pub default_focus_mode: String,
     pub whitelist_mode: String,
     pub ui_theme: String,
@@ -110,6 +114,11 @@ pub struct ReminderSoundData {
     pub bytes: Vec<u8>,
 }
 
+/// 旧版本前端缓存里没有 remember_focus_duration 字段，缺失时按“记住”处理。
+fn default_remember_focus_duration() -> bool {
+    true
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -118,6 +127,7 @@ impl Default for AppSettings {
             break_minutes: 5,
             long_break_minutes: 15,
             long_break_interval: 4,
+            remember_focus_duration: true,
             default_focus_mode: "normal".to_string(),
             whitelist_mode: "allowlist".to_string(),
             ui_theme: "dark".to_string(),
@@ -189,6 +199,11 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             defaults.long_break_interval,
         )?
         .clamp(1, 12),
+        remember_focus_duration: get_bool_setting(
+            &connection,
+            REMEMBER_FOCUS_DURATION_KEY,
+            defaults.remember_focus_duration,
+        )?,
         default_focus_mode: normalize_mode(&get_string_setting(
             &connection,
             DEFAULT_FOCUS_MODE_KEY,
@@ -359,6 +374,7 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         break_minutes: settings.break_minutes.clamp(1, 60),
         long_break_minutes: settings.long_break_minutes.clamp(1, 120),
         long_break_interval: settings.long_break_interval.clamp(1, 12),
+        remember_focus_duration: settings.remember_focus_duration,
         default_focus_mode: normalize_mode(&settings.default_focus_mode),
         whitelist_mode: normalize_whitelist_mode(&settings.whitelist_mode),
         ui_theme: normalize_theme(&settings.ui_theme),
@@ -440,6 +456,16 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         LONG_BREAK_INTERVAL_KEY,
         &normalized.long_break_interval.to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        REMEMBER_FOCUS_DURATION_KEY,
+        if normalized.remember_focus_duration {
+            "1"
+        } else {
+            "0"
+        },
         &now,
     )?;
     set_setting(

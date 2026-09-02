@@ -7261,3 +7261,179 @@ html[data-study-fullscreen='true'] .focus-clock-zone strong {
   border-color: rgba(255, 125, 115, 0.42);
   box-shadow: inset 3px 0 0 rgba(92, 196, 152, 0.78), 0 0 0 1px rgba(255, 125, 115, 0.14), 0 14px 30px rgba(2, 6, 17, 0.28);
 }
+
+/* ---------- 番茄专注时长选择区 ---------- */
+.focus-duration-picker {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 12px);
+  background: var(--surface-soft);
+}
+
+.focus-duration-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.focus-duration-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.focus-duration-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.focus-duration-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.focus-duration-head strong {
+  flex: 0 0 auto;
+  color: var(--blue);
+  font-size: 15px;
+  font-weight: 720;
+}
+
+.focus-duration-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.focus-duration-chip {
+  display: grid;
+  gap: 1px;
+  justify-items: center;
+  min-width: 64px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control, 10px);
+  background: var(--surface-strong);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.focus-duration-chip b {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.focus-duration-chip small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.focus-duration-chip:hover {
+  border-color: var(--line-strong);
+  background: var(--bg-elevated);
+}
+
+.focus-duration-chip.active {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 62%, var(--surface-strong));
+  color: var(--blue);
+}
+
+.focus-duration-chip.active small {
+  color: color-mix(in srgb, var(--blue) 72%, var(--muted));
+}
+
+.focus-duration-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.focus-duration-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.focus-duration-input-row > label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.focus-duration-input {
+  position: relative;
+  flex: 0 0 auto;
+  width: 132px;
+}
+
+.focus-duration-input .text-input {
+  min-height: 38px;
+  padding-right: 46px;
+}
+
+.focus-duration-input > span {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.focus-duration-input .text-input[aria-invalid='true'] {
+  border-color: color-mix(in srgb, var(--red) 45%, var(--line));
+  background: var(--red-soft);
+}
+
+.focus-duration-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 12px;
+}
+
+.focus-duration-remember {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.focus-duration-remember span {
+  font-weight: 600;
+}
+
+.focus-duration-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .focus-duration-head {
+    flex-direction: column;
+  }
+
+  .focus-duration-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .focus-duration-input {
+    width: 100%;
+  }
+}

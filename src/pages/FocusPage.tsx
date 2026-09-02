@@ -3,6 +3,7 @@ import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type D
 import { arrayMove } from '@dnd-kit/sortable';
 import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, FastForward, Gauge, Leaf, Maximize2, Minimize2, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
+import FocusDurationPicker from '../components/focus/FocusDurationPicker';
 import LearningHub from '../components/focus/LearningHub';
 import ScheduleDrawer from '../components/ScheduleDrawer';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
@@ -25,10 +26,10 @@ import type { FocusAppCheck } from '../types/monitor';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData } from '../types/schedule';
 import type { AppSettings } from '../types/settings';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
+import { clampFocusMinutes, formatFocusDurationLabel, validateFocusMinutes } from '../utils/focusDuration';
 import { recommendScheduleBlock, type ScheduleRecommendation } from '../utils/scheduleRecommendation';
 
 const studyPresetMinutes = [60, 120, 180, 240];
-const focusPresetMinutes = [25, 45, 60, 90];
 const breakPresetMinutes = [5, 10, 15, 20];
 const longBreakPresetMinutes = [10, 15, 20, 30];
 const longBreakIntervalPresets = [2, 3, 4, 6];
@@ -210,6 +211,8 @@ function shouldSilentlyMarkInitialReminderSeen(studyState: StudyModeState) {
 export default function FocusPage() {
   const [studyMinutes, setStudyMinutes] = useState(120);
   const [focusMinutes, setFocusMinutes] = useState(25);
+  /** 是否把专注页选择的番茄时长写入 default_focus_minutes，作为下次默认值。 */
+  const [rememberFocusDuration, setRememberFocusDuration] = useState(true);
   const [breakMinutes, setBreakMinutes] = useState(5);
   const [longBreakMinutes, setLongBreakMinutes] = useState(15);
   const [longBreakInterval, setLongBreakInterval] = useState(4);
@@ -249,6 +252,7 @@ export default function FocusPage() {
   const [monitorError, setMonitorError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const studyStateRequestRef = useRef(0);
+  const focusPreferenceSeqRef = useRef(0);
   const suppressNextReminderRef = useRef(false);
   const activeReminderScopeRef = useRef<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -431,7 +435,9 @@ export default function FocusPage() {
     try {
       const [settings, subjectsData, stateData, deviceId] = await Promise.all([getAppSettings(), listSubjects(), getStudyModeState(), getSyncDeviceId()]);
       setStudyMinutes(settings.default_study_minutes);
-      setFocusMinutes(settings.default_focus_minutes);
+      // 历史数据可能被外部改坏，读回时统一收敛到合法区间再作为默认值。
+      setFocusMinutes(clampFocusMinutes(settings.default_focus_minutes));
+      setRememberFocusDuration(settings.remember_focus_duration);
       setBreakMinutes(settings.break_minutes);
       setLongBreakMinutes(settings.long_break_minutes);
       setLongBreakInterval(settings.long_break_interval);
@@ -543,13 +549,69 @@ export default function FocusPage() {
     }
   }
 
+  /**
+   * 把番茄时长偏好写回设置，作为下次开始专注的默认值。
+   * nextMinutes 为 null 表示只更新「是否记住」本身，不动已保存的时长。
+   */
+  async function persistFocusPreference(nextMinutes: number | null, remember: boolean) {
+    const requestSeq = focusPreferenceSeqRef.current + 1;
+    focusPreferenceSeqRef.current = requestSeq;
+    try {
+      const settings = await getAppSettings();
+      // 期间又有新的选择，直接丢弃这次写入，避免慢请求覆盖最新值。
+      if (requestSeq !== focusPreferenceSeqRef.current) return;
+      const nextDefault = nextMinutes === null ? settings.default_focus_minutes : clampFocusMinutes(nextMinutes);
+      if (settings.remember_focus_duration === remember && settings.default_focus_minutes === nextDefault) return;
+      await saveAppSettings({
+        ...settings,
+        default_focus_minutes: nextDefault,
+        remember_focus_duration: remember,
+      });
+    } catch (reason) {
+      setError('番茄时长已生效，但没能保存为默认：' + (reason instanceof Error ? reason.message : String(reason)));
+    }
+  }
+
+  function handleFocusMinutesChange(nextMinutes: number) {
+    const result = validateFocusMinutes(nextMinutes);
+    if (!result.ok) {
+      setNotice(null);
+      setError(result.message);
+      return;
+    }
+    setError(null);
+    setFocusMinutes(result.value);
+    if (rememberFocusDuration) {
+      void persistFocusPreference(result.value, rememberFocusDuration);
+    }
+  }
+
+  function handleRememberFocusDurationChange(remember: boolean) {
+    setRememberFocusDuration(remember);
+    // 开启时顺手把当前时长记为默认；关闭时保留设置里已有的默认时长。
+    void persistFocusPreference(remember ? focusMinutes : null, remember);
+  }
+
+  /** 统一取出当前合法的番茄时长；不合法时给出提示并返回 null，供各入口守卫使用。 */
+  function resolveFocusMinutes() {
+    const result = validateFocusMinutes(focusMinutes);
+    if (!result.ok) {
+      setNotice(null);
+      setError(result.message);
+      return null;
+    }
+    return result.value;
+  }
+
   async function handleStart() {
     if (isStartingStudy) return;
+    const effectiveFocusMinutes = resolveFocusMinutes();
+    if (effectiveFocusMinutes === null) return;
     try {
       setIsStartingStudy(true);
       setError(null); setMonitorError(null); setLatestAppCheck(null); setNotice(null);
       const requestId = beginStudyStateRequest();
-      const nextState = await startStudyMode(studyMinutes * 60, focusMinutes * 60, breakMinutes * 60, longBreakMinutes * 60, longBreakInterval, mode, selectedSubjectId, mode === 'strict' ? true : normalWhitelistEnabled);
+      const nextState = await startStudyMode(studyMinutes * 60, effectiveFocusMinutes * 60, breakMinutes * 60, longBreakMinutes * 60, longBreakInterval, mode, selectedSubjectId, mode === 'strict' ? true : normalWhitelistEnabled);
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setNotice('学习已开始');
       resetStudyReminderScope(nextState, activeReminderScopeRef);
@@ -802,7 +864,8 @@ export default function FocusPage() {
   }
 
   async function handleQuickScheduleNextTask() {
-    if (!nextTodayTask || isQuickSchedulingTask) return;
+    const effectiveFocusMinutes = resolveFocusMinutes();
+    if (!nextTodayTask || isQuickSchedulingTask || effectiveFocusMinutes === null) return;
     try {
       setIsQuickSchedulingTask(true);
       setError(null);
@@ -813,11 +876,11 @@ export default function FocusPage() {
       const slot = findNextAvailableScheduleSlot(
         latestScheduleData.day_blocks,
         currentMinuteOfDay(new Date(localClockNow)),
-        focusMinutes,
+        effectiveFocusMinutes,
       );
 
       if (!slot) {
-        setError(`今天没有足够的 ${formatDuration(focusMinutes * 60)} 空档，请打开今日日历手动调整。`);
+        setError(`今天没有足够的 ${formatDuration(effectiveFocusMinutes * 60)} 空档，请打开今日日历手动调整。`);
         setIsChecklistDrawerOpen(false);
         setIsScheduleDrawerOpen(true);
         return;
@@ -846,22 +909,25 @@ export default function FocusPage() {
 
   async function handleStartScheduleBlock(block: ScheduleBlock) {
     if (isStartingStudy) return;
+    const effectiveFocusMinutes = resolveFocusMinutes();
+    if (effectiveFocusMinutes === null) return;
     try {
       setIsStartingStudy(true);
       setError(null); setMonitorError(null); setLatestAppCheck(null); setNotice(null);
       const settings = await getAppSettings();
       const requestId = beginStudyStateRequest();
+      // 番茄时长沿用专注页当前选择，其余节奏参数仍取设置里的默认值。
       const nextState = await startStudyModeFromScheduleBlock(
         block.id,
         settings.default_study_minutes * 60,
-        settings.default_focus_minutes * 60,
+        effectiveFocusMinutes * 60,
         settings.break_minutes * 60,
         settings.long_break_minutes * 60,
         settings.long_break_interval,
         settings.default_focus_mode,
       );
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
-      setNotice('已从日程开始专注。');
+      setNotice(`已从日程开始专注，本轮番茄 ${formatFocusDurationLabel(effectiveFocusMinutes)}。`);
       setIsScheduleDrawerOpen(false);
       await refreshDashboard();
       queueConfiguredSync();
@@ -1094,9 +1160,14 @@ export default function FocusPage() {
         </section>
         <aside className="control-panel">
           <div className="panel-title"><div><p className="eyebrow">Plan</p><h3>本次节奏</h3></div><BookOpen size={20} /></div>
+          <FocusDurationPicker
+            onChange={handleFocusMinutesChange}
+            onRememberDefaultChange={handleRememberFocusDurationChange}
+            rememberDefault={rememberFocusDuration}
+            value={focusMinutes}
+          />
           <div className="preset-grid">
             <PresetSelect label="学习模式" items={studyPresetMinutes} selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} />
-            <PresetSelect label="番茄时长" items={focusPresetMinutes} selected={focusMinutes} suffix="m" onSelect={setFocusMinutes} />
             <PresetSelect label="短休时长" items={breakPresetMinutes} selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} />
             <PresetSelect label="长休时长" items={longBreakPresetMinutes} selected={longBreakMinutes} suffix="m" onSelect={setLongBreakMinutes} />
             <PresetSelect label="长休间隔" items={longBreakIntervalPresets} selected={longBreakInterval} suffix="轮" onSelect={setLongBreakInterval} />

@@ -99,7 +99,25 @@ export function BasicSettingsPanel({
 
             <div className="rhythm-grid">
               <SettingNumber label="学习模式时长" max={720} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_study_minutes: value })} text="进入学习模式后的总约束时间。" value={settings.default_study_minutes} />
-              <SettingNumber label="番茄专注时长" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_focus_minutes: value })} text="学习模式内每轮番茄钟的专注分钟数。" value={settings.default_focus_minutes} />
+              <SettingNumber label="番茄专注时长" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_focus_minutes: value })} text="学习模式内每轮番茄钟的专注分钟数，也是专注页的默认时长。" value={settings.default_focus_minutes} />
+
+              <div className="setting-row mode-setting">
+                <div>
+                  <strong>记住番茄专注时长</strong>
+                  <p>开启后，在专注页选择的时长会写回「番茄专注时长」，下次开始专注直接沿用；关闭则只对当前这一个番茄钟生效。</p>
+                </div>
+                <label className="settings-switch focus-whitelist-toggle foreground-toggle-visibility">
+                  <input
+                    aria-label="记住番茄专注时长"
+                    checked={settings.remember_focus_duration}
+                    disabled={settingsLocked}
+                    onChange={(event) => updateSettings({ remember_focus_duration: event.target.checked })}
+                    role="switch"
+                    type="checkbox"
+                  />
+                  <span>{settings.remember_focus_duration ? '记住' : '仅本次'}</span>
+                </label>
+              </div>
               <SettingNumber label="短休" max={60} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ break_minutes: value })} text="普通番茄轮次结束后的休息分钟数。" value={settings.break_minutes} />
               <SettingNumber label="长休" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_minutes: value })} text="达到长休息轮次后的休息分钟数。" value={settings.long_break_minutes} />
               <SettingNumber label="长休间隔" max={12} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_interval: value })} text="每几个番茄钟进入一次长休息。" value={settings.long_break_interval} unit="轮" />

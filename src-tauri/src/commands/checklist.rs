@@ -965,6 +965,23 @@ fn plan_date_string(selected_date: Option<String>) -> Result<String, String> {
         .map_err(|_| "计划日期必须使用 YYYY-MM-DD 格式".to_string())
 }
 
+fn next_sort_order<P>(connection: &Connection, sql: &str, params: P) -> Result<i64, String>
+where
+    P: rusqlite::Params,
+{
+    connection
+        .query_row(sql, params, |row| row.get(0))
+        .map_err(|error| error.to_string())
+}
+
+fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("kaoyan-focus.sqlite3"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::plan_date_string;
@@ -981,21 +998,4 @@ mod tests {
     fn selected_plan_date_rejects_invalid_calendar_date() {
         assert!(plan_date_string(Some("2026-02-30".to_string())).is_err());
     }
-}
-
-fn next_sort_order<P>(connection: &Connection, sql: &str, params: P) -> Result<i64, String>
-where
-    P: rusqlite::Params,
-{
-    connection
-        .query_row(sql, params, |row| row.get(0))
-        .map_err(|error| error.to_string())
-}
-
-fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?
-        .join("kaoyan-focus.sqlite3"))
 }

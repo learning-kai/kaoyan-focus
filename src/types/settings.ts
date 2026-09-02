@@ -12,6 +12,8 @@ export type AppSettings = {
   break_minutes: number;
   long_break_minutes: number;
   long_break_interval: number;
+  /** 是否把专注页选择的番茄时长保存为下次默认（写入 default_focus_minutes）。 */
+  remember_focus_duration: boolean;
   default_focus_mode: FocusMode;
   whitelist_mode: 'allowlist' | 'blocklist';
   ui_theme: AppTheme;
