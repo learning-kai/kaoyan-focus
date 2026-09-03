@@ -4182,21 +4182,21 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   }
 }
 
-/* 已暂停的专注色带：停止呼吸动画，压暗并叠加斜纹，提示“暂停后不再计入专注”。 */
+/* 暂停段：中性石板灰 + 斜纹，刻意区别于科目专注色（含薄荷绿兜底）与计时页的休息绿。 */
 .schedule-focus-band.is-paused .schedule-focus-band-fill {
-  opacity: 0.14;
+  opacity: 0.5;
   animation: none;
   background-image: repeating-linear-gradient(
     45deg,
-    rgba(255, 255, 255, 0.4) 0,
-    rgba(255, 255, 255, 0.4) 1px,
-    transparent 1px,
-    transparent 7px
+    rgba(255, 255, 255, 0.55) 0,
+    rgba(255, 255, 255, 0.55) 1.5px,
+    transparent 1.5px,
+    transparent 8px
   );
 }
 
 .schedule-focus-band.is-paused::before {
-  opacity: 0.5;
+  opacity: 0.9;
 }
 
 .schedule-focus-band-pause-mark {
@@ -4206,9 +4206,9 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   transform: translateY(-50%);
   width: 4px;
   height: 10px;
-  border-left: 2px solid var(--focus-band-color, #4fd0a1);
-  border-right: 2px solid var(--focus-band-color, #4fd0a1);
-  opacity: 0.7;
+  border-left: 2px solid var(--focus-band-color, #7c869c);
+  border-right: 2px solid var(--focus-band-color, #7c869c);
+  opacity: 0.85;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6556,11 +6556,11 @@ html[data-theme='light'] .subject-dot {
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band.is-paused .schedule-focus-band-fill {
-  opacity: 0.12;
+  opacity: 0.4;
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band.is-paused::before {
-  opacity: 0.5;
+  opacity: 0.9;
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band-label {
