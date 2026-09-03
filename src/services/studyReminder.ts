@@ -46,7 +46,15 @@ export function isStaleFinishedStudyReminder(studyState: StudyModeState, now = D
 }
 
 export function buildStudyReminder(studyState: StudyModeState): StudyReminderPayload | null {
+  const countup = studyState.timer_kind === 'countup';
+
   if (studyState.status === 'active' && studyState.phase === 'focus') {
+    if (countup) {
+      return {
+        title: '正计时专注中',
+        body: '已专注 ' + formatStudyDuration(studyState.phase_elapsed_seconds) + '，随时可以结束本轮并休息。',
+      };
+    }
     return {
       title: studyState.cycle_index > 1 ? '下一轮番茄钟开始' : '番茄钟开始',
       body: '第 ' + studyState.cycle_index + ' 轮开始，专注 ' + formatStudyDuration(studyState.focus_seconds) + '。',
@@ -55,16 +63,16 @@ export function buildStudyReminder(studyState: StudyModeState): StudyReminderPay
 
   if (studyState.status === 'active' && studyState.phase === 'awaiting_break') {
     return {
-      title: '番茄钟结束',
-      body: '本轮已经到点。确认后进入 ' + nextStudyBreakLabel(studyState) + '；未确认前学习时间继续累计。',
+      title: countup ? '本轮专注结束' : '番茄钟结束',
+      body: '本轮已经结束。确认后进入 ' + nextStudyBreakLabel(studyState) + '；未确认前学习时间继续累计。',
       wakeWindow: true,
     };
   }
 
   if (studyState.status === 'active' && studyState.phase === 'break') {
     return {
-      title: studyBreakKindLabel(studyState.break_kind) + '开始',
-      body: formatStudyDuration(studyState.effective_break_seconds) + ' 后自动进入下一轮番茄钟。',
+      title: countup ? '休息开始' : studyBreakKindLabel(studyState.break_kind) + '开始',
+      body: formatStudyDuration(studyState.effective_break_seconds) + (countup ? ' 后自动开始下一轮正计时专注。' : ' 后自动进入下一轮番茄钟。'),
     };
   }
 
@@ -118,7 +126,7 @@ function studyReminderScope(studyState: StudyModeState) {
 }
 
 function studyReminderKey(studyState: StudyModeState, deviceId?: string | null) {
-  return [deviceId ?? 'local', studyState.id ?? 'idle', studyState.phase, studyState.cycle_index, studyState.break_kind].join(':');
+  return [deviceId ?? 'local', studyState.id ?? 'idle', studyState.phase, studyState.cycle_index, studyState.break_kind, studyState.timer_kind ?? 'pomodoro'].join(':');
 }
 
 function loadStudyReminderKeys() {

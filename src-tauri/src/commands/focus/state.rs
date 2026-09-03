@@ -17,10 +17,15 @@
 
     match record.phase.as_str() {
         "focus" => {
+            let planned_for_new_session = if is_countup(&record) {
+                0
+            } else {
+                record.focus_seconds
+            };
             if record.current_session_id.is_none() {
                 let session = insert_focus_session(
                     &connection,
-                    record.focus_seconds,
+                    planned_for_new_session,
                     &record.mode,
                     record.subject_id,
                     &now.to_rfc3339(),
@@ -46,58 +51,71 @@
                 return Ok(next_state);
             }
 
-            let phase_elapsed_seconds = phase_elapsed_seconds(&record, now)?;
-            let focus_run_seconds = record.focus_seconds.min(
-                record
-                    .planned_seconds
-                    .saturating_sub(record.accumulated_study_seconds)
-                    .max(0),
-            );
-            if focus_run_seconds <= 0 {
-                complete_study_mode_record(&connection, state, &record, now, "completed")?;
-                let next_state = load_study_mode_state_by_id(&connection, record.id, now)?;
-                sync_focus_widget_for_state(app, &next_state);
-                return Ok(next_state);
-            }
-            if phase_elapsed_seconds >= focus_run_seconds {
-                let focus_end =
-                    parse_rfc3339(&record.phase_started_at)? + Duration::seconds(focus_run_seconds);
-                let next_accumulated = (record.accumulated_study_seconds + focus_run_seconds)
-                    .min(record.planned_seconds);
-                if next_accumulated >= record.planned_seconds {
-                    complete_study_mode_record_at(
-                        &connection,
-                        state,
-                        &record,
-                        focus_end,
-                        "completed",
-                        Some(next_accumulated),
-                    )?;
+            if is_countup(&record) {
+                // 正计时：无每轮上限，不自动进入等待确认；仅受总计划时长约束（planned>0 时）。
+                if record.planned_seconds > 0 {
+                    let elapsed_total = study_elapsed_seconds(&record, now)?;
+                    if elapsed_total >= record.planned_seconds {
+                        complete_study_mode_record(&connection, state, &record, now, "completed")?;
+                        let next_state = load_study_mode_state_by_id(&connection, record.id, now)?;
+                        sync_focus_widget_for_state(app, &next_state);
+                        return Ok(next_state);
+                    }
+                }
+            } else {
+                let phase_elapsed_seconds = phase_elapsed_seconds(&record, now)?;
+                let focus_run_seconds = record.focus_seconds.min(
+                    record
+                        .planned_seconds
+                        .saturating_sub(record.accumulated_study_seconds)
+                        .max(0),
+                );
+                if focus_run_seconds <= 0 {
+                    complete_study_mode_record(&connection, state, &record, now, "completed")?;
                     let next_state = load_study_mode_state_by_id(&connection, record.id, now)?;
                     sync_focus_widget_for_state(app, &next_state);
                     return Ok(next_state);
                 }
-                connection
-                    .execute(
-                        "
-                        UPDATE study_modes
-                        SET phase = 'awaiting_break',
-                            state_revision = state_revision + 1,
-                            phase_started_at = ?1,
-                            accumulated_study_seconds = ?2,
-                            phase_paused_seconds = 0,
-                            paused_stage_elapsed_seconds = 0,
-                            updated_at = ?3
-                        WHERE id = ?4 AND status = 'active'
-                        ",
-                        params![
-                            focus_end.to_rfc3339(),
-                            next_accumulated,
-                            now.to_rfc3339(),
-                            record.id
-                        ],
-                    )
-                    .map_err(|error| error.to_string())?;
+                if phase_elapsed_seconds >= focus_run_seconds {
+                    let focus_end = parse_rfc3339(&record.phase_started_at)?
+                        + Duration::seconds(focus_run_seconds);
+                    let next_accumulated = (record.accumulated_study_seconds + focus_run_seconds)
+                        .min(record.planned_seconds);
+                    if next_accumulated >= record.planned_seconds {
+                        complete_study_mode_record_at(
+                            &connection,
+                            state,
+                            &record,
+                            focus_end,
+                            "completed",
+                            Some(next_accumulated),
+                        )?;
+                        let next_state = load_study_mode_state_by_id(&connection, record.id, now)?;
+                        sync_focus_widget_for_state(app, &next_state);
+                        return Ok(next_state);
+                    }
+                    connection
+                        .execute(
+                            "
+                            UPDATE study_modes
+                            SET phase = 'awaiting_break',
+                                state_revision = state_revision + 1,
+                                phase_started_at = ?1,
+                                accumulated_study_seconds = ?2,
+                                phase_paused_seconds = 0,
+                                paused_stage_elapsed_seconds = 0,
+                                updated_at = ?3
+                            WHERE id = ?4 AND status = 'active'
+                            ",
+                            params![
+                                focus_end.to_rfc3339(),
+                                next_accumulated,
+                                now.to_rfc3339(),
+                                record.id
+                            ],
+                        )
+                        .map_err(|error| error.to_string())?;
+                }
             }
         }
         "awaiting_break" => {
@@ -129,7 +147,7 @@
                     + Duration::seconds(effective_break_seconds(&record));
                 let session = insert_focus_session(
                     &connection,
-                    record.focus_seconds,
+                    if is_countup(&record) { 0 } else { record.focus_seconds },
                     &record.mode,
                     record.subject_id,
                     &next_started_at.to_rfc3339(),
@@ -233,11 +251,17 @@ fn complete_study_mode_record_at(
             params![
                 finish_reason,
                 now.to_rfc3339(),
-                accumulated_override
-                    .unwrap_or_else(|| study_elapsed_seconds(record, now)
-                        .unwrap_or(record.accumulated_study_seconds))
-                    .min(record.planned_seconds)
-                    .max(0),
+                {
+                    let raw = accumulated_override
+                        .unwrap_or_else(|| study_elapsed_seconds(record, now)
+                            .unwrap_or(record.accumulated_study_seconds));
+                    if record.planned_seconds > 0 {
+                        raw.min(record.planned_seconds)
+                    } else {
+                        raw
+                    }
+                    .max(0)
+                },
                 record.id
             ],
         )
@@ -277,6 +301,7 @@ fn idle_study_mode_state() -> StudyModeState {
         phase: "idle".to_string(),
         status: "idle".to_string(),
         mode: "normal".to_string(),
+        timer_kind: TIMER_KIND_POMODORO.to_string(),
         subject_id: None,
         planned_seconds: 0,
         focus_seconds: 0,
@@ -321,14 +346,23 @@ fn study_mode_record_to_state(
     };
     let break_kind = break_kind_for_cycle(record.cycle_index, record.long_break_interval);
     let effective_break_seconds = effective_break_seconds(record);
-    let focus_run_seconds = record.focus_seconds.min(
-        record
-            .planned_seconds
-            .saturating_sub(record.accumulated_study_seconds)
-            .max(0),
-    );
+    let remaining_total = record
+        .planned_seconds
+        .saturating_sub(record.accumulated_study_seconds)
+        .max(0);
     let phase_remaining_seconds = match record.phase.as_str() {
-        "focus" => (focus_run_seconds - phase_elapsed_seconds).max(0),
+        "focus" => {
+            if is_countup(record) {
+                if record.planned_seconds > 0 {
+                    (remaining_total - phase_elapsed_seconds).max(0)
+                } else {
+                    // 正计时不限总时长：无剩余概念，前端展示正计时。
+                    0
+                }
+            } else {
+                (record.focus_seconds.min(remaining_total) - phase_elapsed_seconds).max(0)
+            }
+        }
         "awaiting_break" => 0,
         "break" => (effective_break_seconds - phase_elapsed_seconds).max(0),
         _ => 0,
@@ -344,6 +378,7 @@ fn study_mode_record_to_state(
         phase: record.phase.clone(),
         status: record.status.clone(),
         mode: record.mode.clone(),
+        timer_kind: record.timer_kind.clone(),
         subject_id: record.subject_id,
         planned_seconds: record.planned_seconds,
         focus_seconds: record.focus_seconds,
@@ -379,7 +414,8 @@ fn get_active_study_mode_record(
                    phase, cycle_index, started_at, phase_started_at, paused_at,
                    total_paused_seconds, phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at,
-                   current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status
+                   current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status,
+                   timer_kind
             FROM study_modes
             WHERE status = 'active'
             ORDER BY state_revision DESC, updated_at DESC, id DESC
@@ -403,7 +439,8 @@ fn get_latest_study_mode_record(
                    phase, cycle_index, started_at, phase_started_at, paused_at,
                    total_paused_seconds, phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at,
-                   current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status
+                   current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status,
+                   timer_kind
             FROM study_modes
             ORDER BY state_revision DESC, updated_at DESC, id DESC
             LIMIT 1
@@ -427,7 +464,8 @@ fn get_study_mode_record_by_id(
                    phase, cycle_index, started_at, phase_started_at, paused_at,
                    total_paused_seconds, phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at,
-                   current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status
+                   current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status,
+                   timer_kind
             FROM study_modes
             WHERE id = ?1
             ",

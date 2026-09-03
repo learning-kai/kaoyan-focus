@@ -9,6 +9,8 @@ use tauri::{AppHandle, Manager};
 const DEFAULT_FOCUS_MINUTES_KEY: &str = "default_focus_minutes";
 const DEFAULT_STUDY_MINUTES_KEY: &str = "default_study_minutes";
 const DEFAULT_FOCUS_MODE_KEY: &str = "default_focus_mode";
+const DEFAULT_TIMER_KIND_KEY: &str = "default_timer_kind";
+const COUNTUP_BREAK_MINUTES_KEY: &str = "countup_break_minutes";
 const WHITELIST_MODE_KEY: &str = "whitelist_mode";
 const UI_THEME_KEY: &str = "ui_theme";
 const LAUNCH_AT_STARTUP_KEY: &str = "launch_at_startup";
@@ -60,6 +62,8 @@ pub struct AppSettings {
     #[serde(default = "default_remember_focus_duration")]
     pub remember_focus_duration: bool,
     pub default_focus_mode: String,
+    pub default_timer_kind: String,
+    pub countup_break_minutes: i64,
     pub whitelist_mode: String,
     pub ui_theme: String,
     pub launch_at_startup: bool,
@@ -129,6 +133,8 @@ impl Default for AppSettings {
             long_break_interval: 4,
             remember_focus_duration: true,
             default_focus_mode: "normal".to_string(),
+            default_timer_kind: "pomodoro".to_string(),
+            countup_break_minutes: 5,
             whitelist_mode: "allowlist".to_string(),
             ui_theme: "dark".to_string(),
             launch_at_startup: false,
@@ -209,6 +215,17 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             DEFAULT_FOCUS_MODE_KEY,
             &defaults.default_focus_mode,
         )?),
+        default_timer_kind: normalize_timer_kind(&get_string_setting(
+            &connection,
+            DEFAULT_TIMER_KIND_KEY,
+            &defaults.default_timer_kind,
+        )?),
+        countup_break_minutes: get_i64_setting(
+            &connection,
+            COUNTUP_BREAK_MINUTES_KEY,
+            defaults.countup_break_minutes,
+        )?
+        .clamp(1, 60),
         whitelist_mode: normalize_whitelist_mode(&get_string_setting(
             &connection,
             WHITELIST_MODE_KEY,
@@ -376,6 +393,8 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         long_break_interval: settings.long_break_interval.clamp(1, 12),
         remember_focus_duration: settings.remember_focus_duration,
         default_focus_mode: normalize_mode(&settings.default_focus_mode),
+        default_timer_kind: normalize_timer_kind(&settings.default_timer_kind),
+        countup_break_minutes: settings.countup_break_minutes.clamp(1, 60),
         whitelist_mode: normalize_whitelist_mode(&settings.whitelist_mode),
         ui_theme: normalize_theme(&settings.ui_theme),
         launch_at_startup: settings.launch_at_startup,
@@ -472,6 +491,18 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         DEFAULT_FOCUS_MODE_KEY,
         &normalized.default_focus_mode,
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        DEFAULT_TIMER_KIND_KEY,
+        &normalized.default_timer_kind,
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        COUNTUP_BREAK_MINUTES_KEY,
+        &normalized.countup_break_minutes.to_string(),
         &now,
     )?;
     set_setting(
@@ -1033,6 +1064,14 @@ fn normalize_mode(mode: &str) -> String {
         "strict".to_string()
     } else {
         "normal".to_string()
+    }
+}
+
+fn normalize_timer_kind(kind: &str) -> String {
+    if kind == "countup" {
+        "countup".to_string()
+    } else {
+        "pomodoro".to_string()
     }
 }
 

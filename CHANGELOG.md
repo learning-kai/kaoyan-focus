@@ -14,6 +14,8 @@ All notable changes to `考研专注` will be documented here. The public deskto
 - Added GitHub Actions CI for frontend type checking, frontend builds, Rust formatting, Clippy and Rust tests.
 - Added repository hygiene files for editor defaults, dependency updates, toolchain hints, support, conduct, ownership and asset attribution.
 - Added a public screenshot and demo asset policy under `docs/assets/`.
+- Added focus-time bands behind the calendar timeline: real focus sessions for the selected day are drawn on the timeline background, tinted by subject colour, with a 「隐藏/显示专注底色」 toggle and a daily focus total in the timeline header.
+- Added a `list_focus_sessions_in_range` Rust command that returns focus sessions overlapping a UTC time range, including the session that is still running.
 
 ### Changed
 - Clarified the calendar ringtone setting as 「日历铃声」 in Settings, with the existing schedule-reminder switch also exposed under the sound tab for easier discovery.

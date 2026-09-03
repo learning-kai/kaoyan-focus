@@ -193,6 +193,7 @@ fn import_study_modes(connection: &Connection, items: &[SharedStudyMode]) -> Res
             &item.sync_id,
             item.state_revision.unwrap_or(1).max(1),
             mode,
+            item.timer_kind.as_deref().unwrap_or("pomodoro"),
             subject_id,
             item.planned_seconds.unwrap_or(0),
             item.focus_seconds.unwrap_or(0),

@@ -6,6 +6,7 @@ src-tauri/updater/tauri-update.key
 .claude/
 .codex-tmp/
 .playwright-mcp/
+.workbuddy/
 .DS_Store
 *.log
 theme-check-*.png

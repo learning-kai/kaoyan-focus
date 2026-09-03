@@ -982,6 +982,8 @@ fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
         .join("kaoyan-focus.sqlite3"))
 }
 
+// 部分辅助函数有意位于测试模块之后；clippy 新版本默认告警 items_after_test_module，此处显式允许以保持仓库结构。
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::plan_date_string;

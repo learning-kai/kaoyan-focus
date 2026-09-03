@@ -38,6 +38,7 @@ mod tests {
             sync_id: sync_id.to_string(),
             state_revision: Some(round_number.max(1)),
             mode: Some("normal".to_string()),
+            timer_kind: Some("pomodoro".to_string()),
             subject_sync_id: None,
             planned_seconds: Some(3600),
             focus_seconds: Some(1500),

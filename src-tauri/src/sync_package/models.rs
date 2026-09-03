@@ -89,6 +89,8 @@ pub struct SharedStudyMode {
     #[serde(default)]
     pub state_revision: Option<i64>,
     pub mode: Option<String>,
+    #[serde(default)]
+    pub timer_kind: Option<String>,
     pub subject_sync_id: Option<String>,
     pub planned_seconds: Option<i64>,
     pub focus_seconds: Option<i64>,
@@ -291,6 +293,7 @@ struct DesktopStudyModeRow {
     id: i64,
     state_revision: i64,
     mode: String,
+    timer_kind: String,
     subject_id: Option<i64>,
     planned_seconds: i64,
     focus_seconds: i64,

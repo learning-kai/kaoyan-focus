@@ -63,6 +63,7 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
             CREATE TABLE IF NOT EXISTS study_modes (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               mode TEXT NOT NULL DEFAULT 'normal',
+              timer_kind TEXT NOT NULL DEFAULT 'pomodoro',
               subject_id INTEGER,
               planned_seconds INTEGER NOT NULL,
               focus_seconds INTEGER NOT NULL,
@@ -366,6 +367,12 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "study_modes",
         "long_break_seconds",
         "INTEGER NOT NULL DEFAULT 900",
+    )?;
+    add_column_if_missing(
+        connection,
+        "study_modes",
+        "timer_kind",
+        "TEXT NOT NULL DEFAULT 'pomodoro'",
     )?;
     add_column_if_missing(
         connection,

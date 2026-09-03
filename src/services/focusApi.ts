@@ -1,4 +1,4 @@
-import type { FocusMode, FocusSession, FocusSessionRecovery, FocusStatsSummary, StudyModeState, Subject } from '../types/focus';
+import type { FocusMode, FocusSession, FocusSessionRecovery, FocusStatsSummary, FocusTimerKind, StudyModeState, Subject } from '../types/focus';
 import { invokeCommand } from './tauriInvoke';
 
 export function startFocusSession(plannedSeconds: number, mode: FocusMode, subjectId?: number | null): Promise<FocusSession> {
@@ -28,6 +28,45 @@ export function startStudyMode(
     mode,
     subjectId,
     whitelistEnabled,
+  });
+}
+
+export function startCountupStudyMode(
+  breakSeconds: number,
+  mode: FocusMode,
+  subjectId?: number | null,
+  whitelistEnabled?: boolean | null,
+): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('start_countup_study_mode', {
+    breakSeconds,
+    mode,
+    subjectId,
+    whitelistEnabled,
+  });
+}
+
+export function takeManualBreak(breakSeconds: number): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('take_manual_break', {
+    breakSeconds,
+  });
+}
+
+export type SwitchTimerKindOptions = {
+  plannedSeconds?: number;
+  focusSeconds?: number;
+  breakSeconds?: number;
+  longBreakSeconds?: number;
+  longBreakInterval?: number;
+};
+
+export function switchStudyTimerKind(kind: FocusTimerKind, options?: SwitchTimerKindOptions): Promise<StudyModeState> {
+  return invokeCommand<StudyModeState>('switch_study_timer_kind', {
+    kind,
+    plannedSeconds: options?.plannedSeconds,
+    focusSeconds: options?.focusSeconds,
+    breakSeconds: options?.breakSeconds,
+    longBreakSeconds: options?.longBreakSeconds,
+    longBreakInterval: options?.longBreakInterval,
   });
 }
 
@@ -94,6 +133,17 @@ export function recoverActiveFocusSession(): Promise<FocusSessionRecovery | null
 
 export function listFocusSessions(limit?: number): Promise<FocusSession[]> {
   return invokeCommand<FocusSession[]>('list_focus_sessions', typeof limit === 'number' ? { limit } : undefined);
+}
+
+/**
+ * 取出与 [startAt, endAt) 有交集的专注记录，包含仍在进行的那一次。
+ * 参数是完整时间戳（UTC），调用方负责按本地时区算出当天起止。
+ */
+export function listFocusSessionsInRange(startAt: string, endAt: string): Promise<FocusSession[]> {
+  return invokeCommand<FocusSession[]>('list_focus_sessions_in_range', {
+    startAt,
+    endAt,
+  });
 }
 
 export function deleteFocusSession(sessionId: number): Promise<void> {

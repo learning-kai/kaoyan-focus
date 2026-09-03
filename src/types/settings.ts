@@ -1,4 +1,4 @@
-import type { FocusMode } from './focus';
+import type { FocusMode, FocusTimerKind } from './focus';
 
 export type AppTheme = 'dark' | 'light' | 'mono' | 'dawn' | 'forest' | 'sakura';
 export type SyncBackend = 'webdav' | 'object_storage';
@@ -15,6 +15,8 @@ export type AppSettings = {
   /** 是否把专注页选择的番茄时长保存为下次默认（写入 default_focus_minutes）。 */
   remember_focus_duration: boolean;
   default_focus_mode: FocusMode;
+  default_timer_kind: FocusTimerKind;
+  countup_break_minutes: number;
   whitelist_mode: 'allowlist' | 'blocklist';
   ui_theme: AppTheme;
   launch_at_startup: boolean;

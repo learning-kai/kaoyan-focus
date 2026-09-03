@@ -154,7 +154,7 @@ fn active_sort_key(mode: &SharedStudyMode) -> (i64, i64) {
     )
 }
 
-const ACTIVE_CONTROL_ACTIONS: [&str; 7] = [
+const ACTIVE_CONTROL_ACTIONS: [&str; 9] = [
     "pause",
     "resume",
     "confirm_break",
@@ -162,6 +162,8 @@ const ACTIVE_CONTROL_ACTIONS: [&str; 7] = [
     "finish",
     "emergency_exit",
     "switch_subject",
+    "manual_break",
+    "switch_timer_kind",
 ];
 
 #[derive(Debug, Clone, Copy)]
@@ -435,6 +437,13 @@ fn control_action_matches_state(
                 || remote_phase == "emergency_exited"
         }
         "switch_subject" => local.subject_sync_id != remote.subject_sync_id,
+        "manual_break" => {
+            matches!(local_phase, "focus" | "awaiting_break") && remote_phase == "break"
+        }
+        "switch_timer_kind" => {
+            local.timer_kind.as_deref().unwrap_or("pomodoro")
+                != remote.timer_kind.as_deref().unwrap_or("pomodoro")
+        }
         _ => false,
     }
 }
@@ -469,20 +478,37 @@ fn active_logical_position(mode: &SharedStudyMode, now_millis: i64) -> ActiveLog
     let accumulated = mode.accumulated_study_seconds.unwrap_or(0).max(0);
     let planned = mode.planned_seconds.unwrap_or(i64::MAX / 4).max(0);
     let remaining = planned.saturating_sub(accumulated);
+    let is_countup = mode.timer_kind.as_deref().unwrap_or("pomodoro") == "countup";
     let current_focus_seconds = if phase == "focus" {
-        let focus_seconds = mode.focus_seconds.unwrap_or(remaining).max(0);
-        phase_elapsed_seconds(mode, now_millis)
-            .min(focus_seconds)
-            .min(remaining)
-            .max(0)
+        if is_countup {
+            // 正计时：每轮无上限；planned=0 时不封顶，否则按剩余计划封顶。
+            if planned > 0 {
+                phase_elapsed_seconds(mode, now_millis).min(remaining).max(0)
+            } else {
+                phase_elapsed_seconds(mode, now_millis).max(0)
+            }
+        } else {
+            let focus_seconds = mode.focus_seconds.unwrap_or(remaining).max(0);
+            phase_elapsed_seconds(mode, now_millis)
+                .min(focus_seconds)
+                .min(remaining)
+                .max(0)
+        }
     } else {
         0
+    };
+
+    let progress = accumulated.saturating_add(current_focus_seconds);
+    let progress_seconds = if is_countup && planned == 0 {
+        progress
+    } else {
+        progress.min(planned)
     };
 
     ActiveLogicalPosition {
         round,
         phase_rank,
-        progress_seconds: (accumulated + current_focus_seconds).min(planned).max(0),
+        progress_seconds: progress_seconds.max(0),
     }
 }
 
@@ -822,7 +848,7 @@ fn load_study_mode_rows(connection: &Connection) -> Result<Vec<DesktopStudyModeR
                    phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at, current_session_id, status,
                    finish_reason, created_at, updated_at, schedule_block_id, today_plan_item_id,
-                   last_control_device_id, last_control_action, last_control_at
+                   last_control_device_id, last_control_action, last_control_at, timer_kind
             FROM study_modes
             ORDER BY id ASC
             ",
@@ -861,6 +887,7 @@ fn load_study_mode_rows(connection: &Connection) -> Result<Vec<DesktopStudyModeR
                 last_control_device_id: row.get(26)?,
                 last_control_action: row.get(27)?,
                 last_control_at: row.get(28)?,
+                timer_kind: row.get(29)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -1268,6 +1295,7 @@ fn upsert_study_mode_row(
     sync_id: &str,
     state_revision: i64,
     mode: &str,
+    timer_kind: &str,
     subject_id: Option<i64>,
     planned_seconds: i64,
     focus_seconds: i64,
@@ -1385,8 +1413,9 @@ fn upsert_study_mode_row(
                     last_control_action = ?24,
                     last_control_at = ?25,
                     created_at = ?26,
-                    updated_at = ?27
-                WHERE id = ?28
+                    updated_at = ?27,
+                    timer_kind = ?28
+                WHERE id = ?29
                 ",
                 params![
                     state_revision.max(1),
@@ -1416,6 +1445,7 @@ fn upsert_study_mode_row(
                     last_control_at,
                     created_at,
                     updated_at,
+                    timer_kind,
                     local_id
                 ],
             )
@@ -1441,8 +1471,8 @@ fn upsert_study_mode_row(
               total_paused_seconds, phase_paused_seconds, paused_stage_elapsed_seconds,
               ended_at, current_session_id, schedule_block_id,
               today_plan_item_id, status, finish_reason, last_control_device_id,
-              last_control_action, last_control_at, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)
+              last_control_action, last_control_at, created_at, updated_at, timer_kind
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)
             ",
             params![
                 state_revision.max(1),
@@ -1472,7 +1502,8 @@ fn upsert_study_mode_row(
                 last_control_action,
                 last_control_at,
                 created_at,
-                updated_at
+                updated_at,
+                timer_kind
             ],
         )
         .map_err(|error| error.to_string())?;
@@ -1545,6 +1576,7 @@ fn db_progress_to_shared_mode(progress: &DbStudyModeProgress) -> SharedStudyMode
         sync_id: String::new(),
         state_revision: None,
         mode: None,
+        timer_kind: None,
         subject_sync_id: None,
         planned_seconds: Some(i64::MAX / 4),
         focus_seconds: None,

@@ -240,7 +240,7 @@ pub fn confirm_study_break(
 
     let now = Utc::now();
     let device_id = load_or_create_device_id(&connection)?;
-    if study_elapsed_seconds(&record, now)? >= record.planned_seconds {
+    if record.planned_seconds > 0 && study_elapsed_seconds(&record, now)? >= record.planned_seconds {
         complete_study_mode_record(&connection, state.inner(), &record, now, "completed")?;
         let next_state = load_current_study_mode_state(&connection, now)?;
         sync_focus_widget_for_state(&app, &next_state);
@@ -320,7 +320,7 @@ pub fn skip_study_break(
     let device_id = load_or_create_device_id(&connection)?;
     let next_accumulated = if record.phase == "awaiting_break" {
         let accumulated = study_elapsed_seconds(&record, now)?;
-        if accumulated >= record.planned_seconds {
+        if record.planned_seconds > 0 && accumulated >= record.planned_seconds {
             complete_study_mode_record(&connection, state.inner(), &record, now, "completed")?;
             return load_current_study_mode_state(&connection, now);
         }
@@ -330,7 +330,11 @@ pub fn skip_study_break(
                 session_id,
                 focus_session_actual_seconds(&record, now)?,
                 now,
-                "pomodoro_completed",
+                if is_countup(&record) {
+                    "manual_break"
+                } else {
+                    "pomodoro_completed"
+                },
             )?;
         }
         accumulated
@@ -339,7 +343,7 @@ pub fn skip_study_break(
     };
     let session = insert_focus_session(
         &connection,
-        record.focus_seconds,
+        if is_countup(&record) { 0 } else { record.focus_seconds },
         &record.mode,
         record.subject_id,
         &now.to_rfc3339(),
@@ -631,9 +635,15 @@ pub fn emergency_exit_study_mode(
             ",
             params![
                 now.to_rfc3339(),
-                study_elapsed_seconds(&record, now)?
-                    .min(record.planned_seconds)
-                    .max(0),
+                {
+                    let raw = study_elapsed_seconds(&record, now)?;
+                    if record.planned_seconds > 0 {
+                        raw.min(record.planned_seconds)
+                    } else {
+                        raw
+                    }
+                    .max(0)
+                },
                 device_id,
                 CONTROL_EMERGENCY_EXIT,
                 now.timestamp_millis(),
@@ -692,9 +702,15 @@ pub fn reset_study_mode(
                 ",
                 params![
                     now.to_rfc3339(),
-                    study_elapsed_seconds(&record, now)?
-                        .min(record.planned_seconds)
-                        .max(0),
+                    {
+                        let raw = study_elapsed_seconds(&record, now)?;
+                        if record.planned_seconds > 0 {
+                            raw.min(record.planned_seconds)
+                        } else {
+                            raw
+                        }
+                        .max(0)
+                    },
                     device_id,
                     CONTROL_FINISH,
                     now.timestamp_millis(),
@@ -706,6 +722,302 @@ pub fn reset_study_mode(
 
     set_runtime_state(state.inner(), false, None)?;
     let next_state = idle_study_mode_state();
+    sync_focus_widget_for_state(&app, &next_state);
+    trigger_shared_sync(&app, "focus_state_change");
+    Ok(next_state)
+}
+
+fn validate_countup_break_seconds(break_seconds: i64) -> Result<(), String> {
+    if !(COUNTUP_BREAK_MIN_SECONDS..=COUNTUP_BREAK_MAX_SECONDS).contains(&break_seconds) {
+        return Err(format!(
+            "休息时长需在 {} 到 {} 分钟之间",
+            COUNTUP_BREAK_MIN_SECONDS / 60,
+            COUNTUP_BREAK_MAX_SECONDS / 60
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn start_countup_study_mode(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    break_seconds: i64,
+    mode: String,
+    subject_id: Option<i64>,
+    whitelist_enabled: Option<bool>,
+) -> Result<StudyModeState, String> {
+    validate_countup_break_seconds(break_seconds)?;
+    if mode != "normal" && mode != "strict" {
+        return Err("未知的专注模式".to_string());
+    }
+
+    let whitelist_enabled = mode == "strict" || whitelist_enabled.unwrap_or(true);
+    let mut connection = open_database(&database_path(&app)?)?;
+    ensure_current_device_can_start_study_mode(&connection)?;
+    if get_active_study_mode_record(&connection)?.is_some() {
+        return Err("已有学习模式正在进行中".to_string());
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let session_id = {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let session = insert_focus_session(&transaction, 0, &mode, subject_id, &now)?;
+        transaction
+            .execute(
+                "
+                INSERT INTO study_modes (
+                  mode,
+                  timer_kind,
+                  subject_id,
+                  planned_seconds,
+                  focus_seconds,
+                  break_seconds,
+                  long_break_seconds,
+                  long_break_interval,
+                  state_revision,
+                  phase,
+                  cycle_index,
+                  started_at,
+                  phase_started_at,
+                  accumulated_study_seconds,
+                  current_session_id,
+                  whitelist_enabled,
+                  status,
+                  created_at,
+                  updated_at
+                ) VALUES (?1, ?2, ?3, 0, 0, ?4, 900, 4, 1, 'focus', 1, ?5, ?5, 0, ?6, ?7, 'active', ?5, ?5)
+                ",
+                params![
+                    mode,
+                    TIMER_KIND_COUNTUP,
+                    subject_id,
+                    break_seconds,
+                    now,
+                    session.id,
+                    whitelist_enabled
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        session.id
+    };
+
+    set_runtime_state(state.inner(), true, Some(session_id))?;
+    let next_state = load_current_study_mode_state(&connection, Utc::now())?;
+    sync_focus_widget_for_state(&app, &next_state);
+    trigger_shared_sync(&app, "focus_state_change");
+    Ok(next_state)
+}
+
+#[tauri::command]
+pub fn take_manual_break(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    break_seconds: i64,
+) -> Result<StudyModeState, String> {
+    validate_countup_break_seconds(break_seconds)?;
+    let current_state = advance_study_mode(&app, state.inner())?;
+    if current_state.status != "active" {
+        sync_focus_widget_for_state(&app, &current_state);
+        return Ok(current_state);
+    }
+    if current_state.timer_kind != TIMER_KIND_COUNTUP {
+        return Err("只有正计时模式支持手动开始休息".to_string());
+    }
+    if !matches!(current_state.phase.as_str(), "focus" | "awaiting_break") {
+        return Err("当前阶段不能开始休息".to_string());
+    }
+
+    let connection = open_database(&database_path(&app)?)?;
+    let Some(record) = get_active_study_mode_record(&connection)? else {
+        set_runtime_state(state.inner(), false, None)?;
+        let next_state = idle_study_mode_state();
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
+    };
+    if record.paused_at.is_some() {
+        return Err("学习模式暂停中，请先继续再开始休息".to_string());
+    }
+
+    let now = Utc::now();
+    let device_id = load_or_create_device_id(&connection)?;
+    // 统一按已学时长累计：focus 计入本轮全部 elapsed，awaiting_break 再叠加等待期超时，与确认休息语义一致。
+    let accumulated = study_elapsed_seconds(&record, now)?;
+
+    if let Some(session_id) = record.current_session_id {
+        let actual_seconds = focus_session_actual_seconds(&record, now)?;
+        finish_running_focus_session(&connection, session_id, actual_seconds, now, "manual_break")?;
+    }
+
+    connection
+        .execute(
+            "
+            UPDATE study_modes
+            SET phase = 'break',
+                state_revision = state_revision + 1,
+                phase_started_at = ?1,
+                phase_paused_seconds = 0,
+                paused_stage_elapsed_seconds = 0,
+                paused_at = NULL,
+                break_seconds = ?2,
+                accumulated_study_seconds = ?3,
+                current_session_id = NULL,
+                last_control_device_id = ?4,
+                last_control_action = ?5,
+                last_control_at = ?6,
+                updated_at = ?1
+            WHERE id = ?7 AND status = 'active'
+            ",
+            params![
+                now.to_rfc3339(),
+                break_seconds,
+                accumulated,
+                device_id,
+                CONTROL_MANUAL_BREAK,
+                now.timestamp_millis(),
+                record.id
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    set_runtime_state(state.inner(), true, None)?;
+    let next_state = load_current_study_mode_state(&connection, now)?;
+    sync_focus_widget_for_state(&app, &next_state);
+    trigger_shared_sync(&app, "focus_state_change");
+    Ok(next_state)
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn switch_study_timer_kind(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    kind: String,
+    planned_seconds: Option<i64>,
+    focus_seconds: Option<i64>,
+    break_seconds: Option<i64>,
+    long_break_seconds: Option<i64>,
+    long_break_interval: Option<i64>,
+) -> Result<StudyModeState, String> {
+    let current_state = advance_study_mode(&app, state.inner())?;
+    if current_state.status != "active" {
+        sync_focus_widget_for_state(&app, &current_state);
+        return Ok(current_state);
+    }
+    if !matches!(current_state.phase.as_str(), "focus" | "awaiting_break") {
+        return Err("休息与结束阶段不能切换计时模式".to_string());
+    }
+
+    let connection = open_database(&database_path(&app)?)?;
+    let Some(record) = get_active_study_mode_record(&connection)? else {
+        set_runtime_state(state.inner(), false, None)?;
+        let next_state = idle_study_mode_state();
+        sync_focus_widget_for_state(&app, &next_state);
+        return Ok(next_state);
+    };
+
+    let now = Utc::now();
+    let now_text = now.to_rfc3339();
+    let device_id = load_or_create_device_id(&connection)?;
+
+    if kind == TIMER_KIND_COUNTUP {
+        connection
+            .execute(
+                "
+                UPDATE study_modes
+                SET timer_kind = ?1,
+                    state_revision = state_revision + 1,
+                    last_control_device_id = ?2,
+                    last_control_action = ?3,
+                    last_control_at = ?4,
+                    updated_at = ?5
+                WHERE id = ?6 AND status = 'active'
+                ",
+                params![
+                    TIMER_KIND_COUNTUP,
+                    device_id,
+                    CONTROL_SWITCH_TIMER_KIND,
+                    now.timestamp_millis(),
+                    now_text,
+                    record.id
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        if let Some(session_id) = record.current_session_id {
+            let _ = connection.execute(
+                "UPDATE focus_sessions SET planned_seconds = 0, updated_at = ?1 WHERE id = ?2 AND status = 'running'",
+                params![now_text, session_id],
+            );
+        }
+    } else if kind == TIMER_KIND_POMODORO {
+        let planned = planned_seconds.unwrap_or(0);
+        let focus = focus_seconds.unwrap_or(0);
+        let short_break = break_seconds.unwrap_or(0);
+        let long_break = long_break_seconds.unwrap_or(0);
+        let interval = long_break_interval.unwrap_or(0);
+        if focus <= 0 {
+            return Err("番茄钟时长必须大于 0 秒".to_string());
+        }
+        if short_break <= 0 {
+            return Err("短休息时长必须大于 0 秒".to_string());
+        }
+        if long_break <= 0 {
+            return Err("长休息时长必须大于 0 秒".to_string());
+        }
+        if interval <= 0 {
+            return Err("长休息间隔必须大于 0".to_string());
+        }
+        let elapsed = study_elapsed_seconds(&record, now)?;
+        if planned <= elapsed {
+            return Err("总时长必须大于已累计学习时间".to_string());
+        }
+        connection
+            .execute(
+                "
+                UPDATE study_modes
+                SET timer_kind = ?1,
+                    planned_seconds = ?2,
+                    focus_seconds = ?3,
+                    break_seconds = ?4,
+                    long_break_seconds = ?5,
+                    long_break_interval = ?6,
+                    state_revision = state_revision + 1,
+                    last_control_device_id = ?7,
+                    last_control_action = ?8,
+                    last_control_at = ?9,
+                    updated_at = ?10
+                WHERE id = ?11 AND status = 'active'
+                ",
+                params![
+                    TIMER_KIND_POMODORO,
+                    planned,
+                    focus,
+                    short_break,
+                    long_break,
+                    interval,
+                    device_id,
+                    CONTROL_SWITCH_TIMER_KIND,
+                    now.timestamp_millis(),
+                    now_text,
+                    record.id
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        if let Some(session_id) = record.current_session_id {
+            let _ = connection.execute(
+                "UPDATE focus_sessions SET planned_seconds = ?1, updated_at = ?2 WHERE id = ?3 AND status = 'running'",
+                params![focus, now_text, session_id],
+            );
+        }
+    } else {
+        return Err("未知的计时模式".to_string());
+    }
+
+    set_runtime_state(state.inner(), true, record.current_session_id)?;
+    let next_state = load_current_study_mode_state(&connection, now)?;
     sync_focus_widget_for_state(&app, &next_state);
     trigger_shared_sync(&app, "focus_state_change");
     Ok(next_state)

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
+  CSSProperties,
   DragEvent as ReactDragEvent,
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -37,9 +38,9 @@ import {
   updateScheduleBlock,
   updateScheduleTemplate,
 } from '../services/scheduleApi';
-import { listSubjects } from '../services/focusApi';
+import { listFocusSessionsInRange, listSubjects } from '../services/focusApi';
 import type { AppSettings } from '../types/settings';
-import type { Subject } from '../types/focus';
+import type { FocusSession, Subject } from '../types/focus';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData, ScheduleTemplate, ScheduleTemplateDraft } from '../types/schedule';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
 import { requestAppNavigation } from '../navigationEvents';
@@ -60,6 +61,8 @@ const minBlockMinutes = 15;
 const defaultBlockMinutes = 60;
 const timelineHourHeight = 80;
 const timelineHeight = ((dayEnd - dayStart) / 60) * timelineHourHeight;
+const timelineSpanMinutes = dayEnd - dayStart;
+const focusBandFallbackColor = '#4fd0a1';
 const minimumReadableBlockMinutes = 54;
 const calendarDragActivationDistance = 8;
 const todayItemDragType = 'application/x-schedule-today-item';
@@ -148,6 +151,18 @@ type PositionedScheduleBlock = {
   block: ScheduleBlock;
   columnIndex: number;
   columnCount: number;
+};
+
+type FocusBand = {
+  id: number;
+  topPercent: number;
+  heightPercent: number;
+  color: string;
+  subjectLabel: string;
+  durationMinutes: number;
+  startLabel: string;
+  endLabel: string;
+  running: boolean;
 };
 
 type CalendarDragState = {
@@ -257,6 +272,47 @@ function scheduleBlockStatusLabel(
   return null;
 }
 
+function formatDurationLabel(minutes: number) {
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  if (hours <= 0) return `${rest} 分钟`;
+  return rest === 0 ? `${hours} 小时` : `${hours} 小时 ${rest} 分钟`;
+}
+
+function dateKeyToParts(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return { year, month, day };
+}
+
+/**
+ * 把一段真实的专注记录投影到时间轴上。
+ * 用时间戳差值而不是“当日第几分钟”计算，跨零点的长记录也能正确裁剪到可视范围。
+ */
+function projectSessionToLane(
+  session: FocusSession,
+  windowStartTs: number,
+  windowEndTs: number,
+  nowTs: number,
+): { startMinute: number; endMinute: number; fullMinutes: number } | null {
+  const startedTs = new Date(session.started_at).getTime();
+  if (!Number.isFinite(startedTs)) return null;
+  const running = session.status === 'running';
+  const endedTs = running
+    ? nowTs
+    : session.ended_at
+      ? new Date(session.ended_at).getTime()
+      : startedTs + Math.max(0, session.actual_seconds) * 1000;
+
+  if (endedTs <= windowStartTs || startedTs >= windowEndTs) return null;
+
+  const startMinute = (Math.max(startedTs, windowStartTs) - windowStartTs) / 60_000;
+  const endMinute = (Math.min(endedTs, windowEndTs) - windowStartTs) / 60_000;
+  const fullMinutes = Math.max(0, (endedTs - startedTs) / 60_000);
+  return { startMinute, endMinute, fullMinutes };
+}
+
 function categoryLabel(key: string) {
   return categories.find((item) => item.key === key)?.label ?? '通用';
 }
@@ -294,6 +350,9 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState(formatDateKey());
   const [dateDraft, setDateDraft] = useState(formatDateKey());
   const [nowMinute, setNowMinute] = useState(() => currentMinuteOfDay());
+  const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
+  const [focusSessions, setFocusSessions] = useState<FocusSession[]>([]);
+  const [focusBandsVisible, setFocusBandsVisible] = useState(true);
   const [view, setView] = useState<'day' | 'week'>('day');
   const [blockDraft, setBlockDraft] = useState<ScheduleBlockDraft>(() => emptyBlockDraft(formatDateKey()));
   const [templateDraft, setTemplateDraft] = useState<ScheduleTemplateDraft>(emptyTemplateDraft);
@@ -313,6 +372,7 @@ export default function SchedulePage() {
   const [pendingBlockDrag, setPendingBlockDrag] = useState<PendingBlockDragState | null>(null);
   const [selectedBlockDetail, setSelectedBlockDetail] = useState<ScheduleBlockDetail | null>(null);
   const refreshTokenRef = useRef(0);
+  const focusTokenRef = useRef(0);
   const laneRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
@@ -334,10 +394,17 @@ export default function SchedulePage() {
 
   useEffect(() => {
     void refresh(selectedDate);
+    void loadFocusSessions(selectedDate);
     setDateDraft(selectedDate);
     setBlockDraft((draft) => ({ ...draft, scheduleDate: selectedDate }));
     setSelectedBlockDetail(null);
   }, [selectedDate]);
+
+  // 看今天时每分钟重取一次，让进行中的专注和刚开始的专注都能及时出现。
+  useEffect(() => {
+    if (selectedDate !== formatDateKey()) return;
+    void loadFocusSessions(selectedDate);
+  }, [selectedDate, nowMinute]);
 
   useEffect(() => {
     const handleCalendarRefresh = () => {
@@ -353,7 +420,10 @@ export default function SchedulePage() {
 
   useEffect(() => {
     let intervalId: number | undefined;
-    const syncNow = () => setNowMinute(currentMinuteOfDay());
+    const syncNow = () => {
+      setNowMinute(currentMinuteOfDay());
+      setNowTimestamp(Date.now());
+    };
     const now = new Date();
     const msToNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds() + 250;
     const timeoutId = window.setTimeout(() => {
@@ -498,6 +568,46 @@ export default function SchedulePage() {
     [data?.day_blocks],
   );
 
+  const focusBands = useMemo<FocusBand[]>(() => {
+    const parts = dateKeyToParts(selectedDate);
+    if (!parts) return [];
+    const windowStartTs = new Date(parts.year, parts.month - 1, parts.day, 6, 0, 0, 0).getTime();
+    const windowEndTs = new Date(parts.year, parts.month - 1, parts.day + 1, 0, 0, 0, 0).getTime();
+    if (windowEndTs <= windowStartTs) return [];
+
+    return focusSessions
+      .map((session) => {
+        const projected = projectSessionToLane(session, windowStartTs, windowEndTs, nowTimestamp);
+        if (!projected) return null;
+        const visibleMinutes = Math.max(0, projected.endMinute - projected.startMinute);
+        // 极短的专注也要留下可见痕迹，否则用户会以为没记录上。
+        const renderEndMinute = Math.max(projected.endMinute, projected.startMinute + 4);
+        const subject = subjects.find((item) => item.id === session.subject_id);
+        return {
+          id: session.id,
+          topPercent: (projected.startMinute / timelineSpanMinutes) * 100,
+          heightPercent: ((renderEndMinute - projected.startMinute) / timelineSpanMinutes) * 100,
+          color: subject?.color?.trim() || focusBandFallbackColor,
+          subjectLabel: subject?.name ?? '未指定科目',
+          durationMinutes: visibleMinutes,
+          startLabel: formatMinute(projected.startMinute + dayStart),
+          endLabel: formatMinute(projected.endMinute + dayStart),
+          running: session.status === 'running',
+        } satisfies FocusBand;
+      })
+      .filter((band): band is FocusBand => band !== null);
+  }, [focusSessions, nowTimestamp, selectedDate, subjects]);
+
+  const focusTotalMinutes = useMemo(
+    () => focusBands.reduce((total, band) => total + band.durationMinutes, 0),
+    [focusBands],
+  );
+
+  const focusRunningBand = useMemo(
+    () => focusBands.find((band) => band.running) ?? null,
+    [focusBands],
+  );
+
   const currentMinute = useMemo(() => {
     if (selectedDate !== formatDateKey()) return null;
     return nowMinute;
@@ -536,6 +646,30 @@ export default function SchedulePage() {
   function commitDate(value: string) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
       setSelectedDate(value);
+    }
+  }
+
+  /** 读取某一天实际发生的专注记录，用于在时间轴上铺底色。 */
+  async function loadFocusSessions(date = selectedDate) {
+    const parts = dateKeyToParts(date);
+    if (!parts) {
+      setFocusSessions([]);
+      return;
+    }
+    const token = focusTokenRef.current + 1;
+    focusTokenRef.current = token;
+    const dayStartTs = new Date(parts.year, parts.month - 1, parts.day, 0, 0, 0, 0);
+    const nextDayTs = new Date(parts.year, parts.month - 1, parts.day + 1, 0, 0, 0, 0);
+    try {
+      const sessions = await listFocusSessionsInRange(dayStartTs.toISOString(), nextDayTs.toISOString());
+      if (focusTokenRef.current === token) {
+        setFocusSessions(sessions);
+      }
+    } catch {
+      // 专注底色只是辅助信息，读不到就静默降级为空。
+      if (focusTokenRef.current === token) {
+        setFocusSessions([]);
+      }
     }
   }
 
@@ -1466,6 +1600,28 @@ export default function SchedulePage() {
 
         {view === 'day' ? (
           <section className="schedule-timeline soft-panel">
+            <div className="schedule-timeline-head">
+              <div className="schedule-focus-summary">
+                <span aria-hidden="true" className="schedule-focus-swatch" />
+                <strong>{formatDurationLabel(focusTotalMinutes)}</strong>
+                <span>
+                  {focusRunningBand
+                    ? `专注中 · 共 ${focusBands.length} 段`
+                    : focusBands.length
+                      ? `当天专注 · ${focusBands.length} 段`
+                      : '当天还没有专注记录'}
+                </span>
+              </div>
+              <button
+                aria-pressed={focusBandsVisible}
+                className={`schedule-focus-toggle${focusBandsVisible ? ' is-on' : ''}`}
+                disabled={!focusBands.length}
+                onClick={() => setFocusBandsVisible((value) => !value)}
+                type="button"
+              >
+                {focusBandsVisible ? '隐藏专注底色' : '显示专注底色'}
+              </button>
+            </div>
             <div className="schedule-timeline-scroll" ref={timelineScrollRef}>
               <div className="schedule-time-column" style={{ height: timelineHeight }}>
                 {Array.from({ length: (dayEnd - dayStart) / 60 + 1 }, (_, index) => {
@@ -1502,6 +1658,30 @@ export default function SchedulePage() {
                   </button>
                 );
               })}
+              {focusBandsVisible && focusBands.length > 0 && (
+                <div className="schedule-focus-bands" aria-hidden="true">
+                  {focusBands.map((band) => (
+                    <div
+                      className={`schedule-focus-band${band.running ? ' is-running' : ''}`}
+                      key={band.id}
+                      style={{
+                        top: `${band.topPercent}%`,
+                        height: `${band.heightPercent}%`,
+                        '--focus-band-color': band.color,
+                      } as CSSProperties}
+                      title={`${band.subjectLabel} ${band.startLabel}-${band.endLabel} 专注 ${formatDurationLabel(band.durationMinutes)}${band.running ? '（进行中）' : ''}`}
+                    >
+                      <i className="schedule-focus-band-fill" />
+                      {band.heightPercent >= 1.4 && (
+                        <span className="schedule-focus-band-label">
+                          {band.subjectLabel} · {formatDurationLabel(band.durationMinutes)}
+                          {band.running ? ' · 进行中' : ''}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               {currentMinute !== null && currentMinute >= dayStart && currentMinute <= dayEnd && (
                 <div className="schedule-now-line" style={{ top: `${timelinePercent(currentMinute)}%` }} />
               )}

@@ -238,6 +238,74 @@ pub fn list_focus_sessions(app: AppHandle, limit: Option<i64>) -> Result<Vec<Foc
     Ok(sessions)
 }
 
+/// 返回与 [start_at, end_at) 有交集的专注记录，包含进行中的一次。
+/// 入参是前端按本地时区换算出的 UTC 时间点，避免后端硬编码时区。
+#[tauri::command]
+pub fn list_focus_sessions_in_range(
+    app: AppHandle,
+    start_at: String,
+    end_at: String,
+) -> Result<Vec<FocusSession>, String> {
+    let range_start = parse_rfc3339(&start_at)?;
+    let range_end = parse_rfc3339(&end_at)?;
+    if range_end <= range_start {
+        return Err("结束时间必须晚于开始时间。".to_string());
+    }
+
+    let connection = open_database(&database_path(&app)?)?;
+
+    // 先用字符串比较做一次粗筛（前后各放宽两天），再用解析后的时间做精确判断，
+    // 这样既不会全表扫，也不受 RFC3339 小数位长度不同的影响。
+    let coarse_start = (range_start - Duration::days(2)).to_rfc3339();
+    let coarse_end = (range_end + Duration::days(2)).to_rfc3339();
+
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT id, mode, subject_id, planned_seconds, actual_seconds, started_at, ended_at,
+                   status, end_reason, interruption_count, emergency_exit_count,
+                   created_at, updated_at
+            FROM focus_sessions
+            WHERE started_at < ?2
+              AND (ended_at IS NULL OR ended_at > ?1)
+            ORDER BY started_at ASC
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map(params![coarse_start, coarse_end], row_to_focus_session)
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    let now = Utc::now();
+    let mut sessions = Vec::new();
+    for session in rows {
+        let interval_start = parse_rfc3339(&session.started_at)?;
+        let interval_end = if session.status == "running" {
+            now
+        } else if let Some(ended_at) = session.ended_at.as_deref() {
+            parse_rfc3339(ended_at)?
+        } else {
+            interval_start + Duration::seconds(session.actual_seconds.max(0))
+        };
+
+        if interval_end <= range_start || interval_start >= range_end {
+            continue;
+        }
+        if session.status != "running" && session.actual_seconds < MIN_RECORDED_FOCUS_SECONDS {
+            continue;
+        }
+        sessions.push(session);
+        if sessions.len() >= MAX_FOCUS_SESSIONS_IN_RANGE {
+            break;
+        }
+    }
+
+    Ok(sessions)
+}
+
 #[tauri::command]
 pub fn delete_focus_session(app: AppHandle, session_id: i64) -> Result<(), String> {
     let mut connection = open_database(&database_path(&app)?)?;

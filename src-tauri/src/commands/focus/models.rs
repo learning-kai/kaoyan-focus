@@ -11,6 +11,8 @@ use std::thread;
 use tauri::{AppHandle, Manager, State};
 
 const MIN_RECORDED_FOCUS_SECONDS: i64 = 60;
+/// 日历时间轴一次最多渲染的专注色带条数，防止异常数据把界面撑爆。
+const MAX_FOCUS_SESSIONS_IN_RANGE: usize = 500;
 const CONTROL_PAUSE: &str = "pause";
 const CONTROL_RESUME: &str = "resume";
 const CONTROL_CONFIRM_BREAK: &str = "confirm_break";
@@ -18,7 +20,16 @@ const CONTROL_SKIP_BREAK: &str = "skip_break";
 const CONTROL_FINISH: &str = "finish";
 const CONTROL_EMERGENCY_EXIT: &str = "emergency_exit";
 const CONTROL_SWITCH_SUBJECT: &str = "switch_subject";
+const CONTROL_SWITCH_TIMER_KIND: &str = "switch_timer_kind";
+const CONTROL_MANUAL_BREAK: &str = "manual_break";
 const PRIMARY_OWNER_DEVICE_ID_KEY: &str = "primary_owner_device_id";
+
+pub(crate) const TIMER_KIND_POMODORO: &str = "pomodoro";
+pub(crate) const TIMER_KIND_COUNTUP: &str = "countup";
+
+/// 正计时模式休息时长允许范围：1–60 分钟（含预设 5/10/15/20 与手动填写）。
+pub(crate) const COUNTUP_BREAK_MIN_SECONDS: i64 = 60;
+pub(crate) const COUNTUP_BREAK_MAX_SECONDS: i64 = 3600;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FocusStatsSummary {
@@ -56,6 +67,7 @@ pub struct StudyModeState {
     pub phase: String,
     pub status: String,
     pub mode: String,
+    pub timer_kind: String,
     pub subject_id: Option<i64>,
     pub planned_seconds: i64,
     pub focus_seconds: i64,
@@ -90,6 +102,7 @@ struct StudyRuntimeSyncMarker {
     paused_at: Option<String>,
     current_session_id: Option<i64>,
     break_kind: String,
+    timer_kind: String,
 }
 
 #[derive(Debug, Clone)]
@@ -97,6 +110,7 @@ struct StudyModeRecord {
     id: i64,
     state_revision: i64,
     mode: String,
+    timer_kind: String,
     subject_id: Option<i64>,
     planned_seconds: i64,
     focus_seconds: i64,

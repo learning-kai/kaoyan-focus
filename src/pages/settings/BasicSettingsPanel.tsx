@@ -99,7 +99,16 @@ export function BasicSettingsPanel({
 
             <div className="rhythm-grid">
               <SettingNumber label="学习模式时长" max={720} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_study_minutes: value })} text="进入学习模式后的总约束时间。" value={settings.default_study_minutes} />
-              <SettingNumber label="番茄专注时长" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_focus_minutes: value })} text="学习模式内每轮番茄钟的专注分钟数，也是专注页的默认时长。" value={settings.default_focus_minutes} />
+              <div className="setting-row mode-setting">
+                <div>
+                  <strong>默认计时方式</strong>
+                  <p>番茄钟按固定时长自动轮换；正计时不设上限，由你手动触发休息。</p>
+                </div>
+                <div className="segmented-control">
+                  <button className={settings.default_timer_kind === 'pomodoro' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ default_timer_kind: 'pomodoro' })} type="button">番茄钟</button>
+                  <button className={settings.default_timer_kind === 'countup' ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ default_timer_kind: 'countup' })} type="button">正计时</button>
+                </div>
+              </div>
 
               <div className="setting-row mode-setting">
                 <div>
@@ -118,9 +127,19 @@ export function BasicSettingsPanel({
                   <span>{settings.remember_focus_duration ? '记住' : '仅本次'}</span>
                 </label>
               </div>
-              <SettingNumber label="短休" max={60} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ break_minutes: value })} text="普通番茄轮次结束后的休息分钟数。" value={settings.break_minutes} />
-              <SettingNumber label="长休" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_minutes: value })} text="达到长休息轮次后的休息分钟数。" value={settings.long_break_minutes} />
-              <SettingNumber label="长休间隔" max={12} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_interval: value })} text="每几个番茄钟进入一次长休息。" value={settings.long_break_interval} unit="轮" />
+
+              {settings.default_timer_kind === 'pomodoro' && (
+                <>
+                  <SettingNumber label="番茄专注时长" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ default_focus_minutes: value })} text="学习模式内每轮番茄钟的专注分钟数，也是专注页的默认时长。" value={settings.default_focus_minutes} />
+                  <SettingNumber label="短休" max={60} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ break_minutes: value })} text="普通番茄轮次结束后的休息分钟数。" value={settings.break_minutes} />
+                  <SettingNumber label="长休" max={120} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_minutes: value })} text="达到长休息轮次后的休息分钟数。" value={settings.long_break_minutes} />
+                  <SettingNumber label="长休间隔" max={12} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ long_break_interval: value })} text="每几个番茄钟进入一次长休息。" value={settings.long_break_interval} unit="轮" />
+                </>
+              )}
+
+              {settings.default_timer_kind === 'countup' && (
+                <SettingNumber label="正计时默认休息" max={60} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ countup_break_minutes: value })} text="正计时模式下手动开始休息时的默认时长，可在休息时临时调整。" value={settings.countup_break_minutes} unit="分钟" />
+              )}
 
               <div className="setting-row mode-setting">
                 <div>

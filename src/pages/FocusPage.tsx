@@ -1,14 +1,14 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, FastForward, Gauge, Leaf, Maximize2, Minimize2, Pause, Play, ShieldCheck, Square, Timer } from 'lucide-react';
+import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee, FastForward, Gauge, Leaf, Maximize2, Minimize2, Pause, Play, Repeat, ShieldCheck, Square, Timer } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import FocusDurationPicker from '../components/focus/FocusDurationPicker';
 import LearningHub from '../components/focus/LearningHub';
 import ScheduleDrawer from '../components/ScheduleDrawer';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
 import { completeTodayPlanItem, createTodayPlanItem, deleteTodayPlanItem, getChecklistPageData, reorderTodayPlanItems, updateTodayPlanItem } from '../services/checklistApi';
-import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSessions, listSubjects, pauseStudyMode, resetStudyMode, resumeStudyMode, skipStudyBreak, startStudyMode, updateStudyModeSubject, updateStudyModeWhitelist } from '../services/focusApi';
+import { confirmStudyBreak, getFocusStatsSummary, getStudyModeState, listFocusSessions, listSubjects, pauseStudyMode, resetStudyMode, resumeStudyMode, skipStudyBreak, startCountupStudyMode, startStudyMode, switchStudyTimerKind, takeManualBreak, updateStudyModeSubject, updateStudyModeWhitelist } from '../services/focusApi';
 import { notifyStudyReminder } from '../services/alertApi';
 import { checkFocusForegroundApp } from '../services/monitorApi';
 import { createScheduleBlock, createScheduleBlockFromTodayItem, deleteScheduleBlock, getSchedulePageData, startStudyModeFromScheduleBlock } from '../services/scheduleApi';
@@ -21,7 +21,7 @@ import { listenTauriEvent } from '../services/tauriEvents';
 import { setStudyFullscreen } from '../services/systemApi';
 import { isTauriRuntime } from '../services/tauriInvoke';
 import type { ChecklistPageData, TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
-import type { FocusMode, FocusSession, FocusStatsSummary, StudyModePhase, StudyModeState, Subject } from '../types/focus';
+import type { FocusMode, FocusSession, FocusStatsSummary, FocusTimerKind, StudyModePhase, StudyModeState, Subject } from '../types/focus';
 import type { FocusAppCheck } from '../types/monitor';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData } from '../types/schedule';
 import type { AppSettings } from '../types/settings';
@@ -32,6 +32,7 @@ import { recommendScheduleBlock, type ScheduleRecommendation } from '../utils/sc
 const studyPresetMinutes = [60, 120, 180, 240];
 const breakPresetMinutes = [5, 10, 15, 20];
 const longBreakPresetMinutes = [10, 15, 20, 30];
+const focusPresetMinutes = [15, 25, 45, 60, 90];
 const longBreakIntervalPresets = [2, 3, 4, 6];
 const ACTIVE_STATE_CALIBRATION_INTERVAL_MS = 15 * 1000;
 const FOCUS_UI_IDLE_DELAY_MS = 3200;
@@ -40,7 +41,12 @@ const QUICK_SCHEDULE_DAY_START = 6 * 60;
 const QUICK_SCHEDULE_DAY_END = 24 * 60;
 const QUICK_SCHEDULE_SLOT_MINUTES = 15;
 const emptyTodayDraft: TodayPlanItemDraft = { title: '', note: '', dueDate: '', subjectId: null };
-type FocusConfirmRequest = { kind: 'normalExit' } | { kind: 'syncSourceCompletion'; item: TodayPlanItem };
+type FocusConfirmRequest =
+  | { kind: 'normalExit' }
+  | { kind: 'syncSourceCompletion'; item: TodayPlanItem }
+  | { kind: 'manualBreak' }
+  | { kind: 'switchToCountup' }
+  | { kind: 'switchToPomodoro' };
 const emptyScheduleDraft = (date: string): ScheduleBlockDraft => ({
   scheduleDate: date,
   title: '',
@@ -57,6 +63,7 @@ const idleStudyState: StudyModeState = {
   phase: 'idle',
   status: 'idle',
   mode: 'normal',
+  timer_kind: 'pomodoro',
   subject_id: null,
   planned_seconds: 0,
   focus_seconds: 0,
@@ -165,20 +172,27 @@ function secondsSince(value: string | null, now: number) {
 }
 
 function localPhaseSeconds(studyState: StudyModeState, now: number) {
+  const countup = studyState.timer_kind === 'countup';
   if (studyState.is_paused || studyState.status !== 'active') {
+    if (countup && studyState.phase === 'focus') return studyState.phase_elapsed_seconds;
     return studyState.phase === 'awaiting_break'
       ? studyState.phase_elapsed_seconds
       : studyState.phase_remaining_seconds;
   }
 
+  const elapsed = secondsSince(studyState.phase_started_at, now);
+
   if (studyState.phase === 'awaiting_break') {
-    return Math.max(studyState.phase_elapsed_seconds, secondsSince(studyState.phase_started_at, now));
+    return Math.max(studyState.phase_elapsed_seconds, elapsed);
+  }
+
+  if (studyState.phase === 'focus' && countup) {
+    return Math.max(studyState.phase_elapsed_seconds, elapsed);
   }
 
   const phaseDuration = studyState.phase === 'break'
     ? studyState.effective_break_seconds || studyState.break_seconds
     : studyState.focus_seconds;
-  const elapsed = secondsSince(studyState.phase_started_at, now);
   return Math.max(0, phaseDuration - elapsed);
 }
 
@@ -217,6 +231,11 @@ export default function FocusPage() {
   const [longBreakMinutes, setLongBreakMinutes] = useState(15);
   const [longBreakInterval, setLongBreakInterval] = useState(4);
   const [mode, setMode] = useState<FocusMode>('normal');
+  const [timerKind, setTimerKind] = useState<FocusTimerKind>('pomodoro');
+  const [countupBreakMinutes, setCountupBreakMinutes] = useState(5);
+  const [manualBreakMinutes, setManualBreakMinutes] = useState(5);
+  const [switchPlannedMinutes, setSwitchPlannedMinutes] = useState(120);
+  const [isSwitchingKind, setIsSwitchingKind] = useState(false);
   const [whitelistMode, setWhitelistMode] = useState<AppSettings['whitelist_mode']>('allowlist');
   const [autoStartBreakAfterFocus, setAutoStartBreakAfterFocus] = useState(false);
   const [showForegroundRuleToggle, setShowForegroundRuleToggle] = useState(true);
@@ -258,6 +277,10 @@ export default function FocusPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const active = studyState.status === 'active';
+  const isCountupActive = active && studyState.timer_kind === 'countup';
+  const canManualBreak = isCountupActive && (studyState.phase === 'focus' || studyState.phase === 'awaiting_break');
+  const canSwitchKind = active && (studyState.phase === 'focus' || studyState.phase === 'awaiting_break');
+  const countupUnbounded = isCountupActive && studyState.planned_seconds <= 0;
   const canPause = active && (studyState.phase === 'focus' || studyState.phase === 'awaiting_break');
   const canTogglePause = canPause || (active && studyState.is_paused);
   const canExitNormally = active && studyState.mode === 'normal';
@@ -278,8 +301,14 @@ export default function FocusPage() {
   const scheduleRecommendationMeta = describeScheduleRecommendation(scheduleRecommendation, subjectNameMap);
   const desktopReady = isTauriRuntime();
   const quickScheduleDisabled = checklistSaving || isQuickSchedulingTask || !nextTodayTask;
-  const timerValue = studyState.phase === 'idle' ? formatSeconds(focusMinutes * 60) : formatSeconds(localPhaseSeconds(studyState, localClockNow));
-  const activeClockLabel = studyState.is_paused ? '暂停中' : studyState.phase === 'awaiting_break' ? '等待确认休息' : phaseLabel[studyState.phase];
+  const timerValue = studyState.phase === 'idle'
+    ? formatSeconds(timerKind === 'countup' ? 0 : focusMinutes * 60)
+    : formatSeconds(localPhaseSeconds(studyState, localClockNow));
+  const activeClockLabel = studyState.is_paused
+    ? '暂停中'
+    : studyState.phase === 'focus' && isCountupActive
+      ? '正计时专注中'
+      : studyState.phase === 'awaiting_break' ? '等待休息确认' : phaseLabel[studyState.phase];
   const ruleModeLabel = whitelistMode === 'blocklist' ? '黑名单' : '白名单';
   const ruleActionLabel = whitelistMode === 'blocklist' ? '拦截命中规则' : '拦截未命中规则';
   const whitelistStatusLabel = studyState.focus_enforcement_active ? `${ruleModeLabel}执行中` : active && studyState.phase !== 'break' && !studyState.whitelist_enabled ? '前台规则已关闭' : '休息阶段';
@@ -287,7 +316,14 @@ export default function FocusPage() {
   const activeModeMessage = buildActiveModeMessage(studyState, ruleModeLabel);
   const isPrimaryDevice = Boolean(syncDeviceId && primaryOwnerDeviceId === syncDeviceId);
   const primaryStatusLabel = isPrimaryDevice ? '当前为主端' : primaryOwnerDeviceId ? '当前非主端' : '未设置主端';
-  const quietMeta = [activeModeLabel, '第 ' + studyState.cycle_index + ' 轮', '剩余 ' + formatSeconds(studyState.study_remaining_seconds), nextBreakLabel(studyState), primaryStatusLabel, latestAppCheck ? foregroundSummary(latestAppCheck) : studyState.whitelist_enabled ? '前台监控待命' : '前台规则关闭'];
+  const quietMeta = [
+    activeModeLabel,
+    '第 ' + studyState.cycle_index + ' 轮',
+    countupUnbounded ? '总时长不限' : '剩余 ' + formatSeconds(studyState.study_remaining_seconds),
+    isCountupActive ? '休息 ' + formatDuration(studyState.effective_break_seconds || studyState.break_seconds) : nextBreakLabel(studyState),
+    primaryStatusLabel,
+    latestAppCheck ? foregroundSummary(latestAppCheck) : studyState.whitelist_enabled ? '前台监控待命' : '前台规则关闭',
+  ];
 
   useEffect(() => {
     if (isStudyFullscreen) {
@@ -442,6 +478,8 @@ export default function FocusPage() {
       setLongBreakMinutes(settings.long_break_minutes);
       setLongBreakInterval(settings.long_break_interval);
       setMode(settings.default_focus_mode);
+      setTimerKind(settings.default_timer_kind ?? 'pomodoro');
+      setCountupBreakMinutes(settings.countup_break_minutes ?? 5);
       setWhitelistMode(settings.whitelist_mode);
       setAutoStartBreakAfterFocus(settings.auto_start_break_after_focus);
       setShowForegroundRuleToggle(settings.show_foreground_rule_toggle);
@@ -611,12 +649,16 @@ export default function FocusPage() {
       setIsStartingStudy(true);
       setError(null); setMonitorError(null); setLatestAppCheck(null); setNotice(null);
       const requestId = beginStudyStateRequest();
-      const nextState = await startStudyMode(studyMinutes * 60, effectiveFocusMinutes * 60, breakMinutes * 60, longBreakMinutes * 60, longBreakInterval, mode, selectedSubjectId, mode === 'strict' ? true : normalWhitelistEnabled);
+      const nextState = timerKind === 'countup'
+        ? await startCountupStudyMode(countupBreakMinutes * 60, mode, selectedSubjectId, mode === 'strict' ? true : normalWhitelistEnabled)
+        : await startStudyMode(studyMinutes * 60, effectiveFocusMinutes * 60, breakMinutes * 60, longBreakMinutes * 60, longBreakInterval, mode, selectedSubjectId, mode === 'strict' ? true : normalWhitelistEnabled);
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
-      setNotice('学习已开始');
+      setNotice(nextState.timer_kind === 'countup' ? '正计时专注已开始，随时可以结束本轮并休息。' : '学习已开始');
       resetStudyReminderScope(nextState, activeReminderScopeRef);
       markStudyReminderSeen(nextState, syncDeviceId);
-      void notifyStudyReminder({ title: '学习模式已开始', body: '第 ' + nextState.cycle_index + ' 轮番茄钟开始，专注 ' + formatDuration(nextState.focus_seconds) + '。' });
+      void notifyStudyReminder(nextState.timer_kind === 'countup'
+        ? { title: '正计时专注已开始', body: '本次不设上限，随时可以结束本轮并选择休息时长。' }
+        : { title: '学习模式已开始', body: '第 ' + nextState.cycle_index + ' 轮番茄钟开始，专注 ' + formatDuration(nextState.focus_seconds) + '。' });
       await refreshDashboard();
       queueConfiguredSync();
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
@@ -648,6 +690,72 @@ export default function FocusPage() {
       await refreshDashboard();
       queueConfiguredSync();
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+  }
+
+  function openManualBreak() {
+    const fallback = countupBreakMinutes || 5;
+    setManualBreakMinutes(Math.min(60, Math.max(1, fallback)));
+    setPendingConfirm({ kind: 'manualBreak' });
+  }
+
+  async function handleManualBreak() {
+    const minutes = Math.min(60, Math.max(1, Math.floor(manualBreakMinutes || 0)));
+    if (!minutes) {
+      setError('休息时长需在 1 到 60 分钟之间。');
+      return;
+    }
+    try {
+      setError(null);
+      const requestId = beginStudyStateRequest();
+      const nextState = await takeManualBreak(minutes * 60);
+      if (!applyStudyStateIfCurrent(nextState, requestId)) return;
+      setPendingConfirm(null);
+      setNotice('休息 ' + formatDuration(nextState.effective_break_seconds) + ' 已开始，结束后自动开始下一轮正计时。');
+      markStudyReminderSeen(nextState, syncDeviceId);
+      void notifyStudyReminder({ title: '休息开始', body: '休息 ' + formatDuration(nextState.effective_break_seconds) + '，结束后自动开始下一轮正计时专注。' });
+      await refreshDashboard();
+      queueConfiguredSync();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+  }
+
+  function requestSwitchToCountup() {
+    setPendingConfirm({ kind: 'switchToCountup' });
+  }
+
+  function requestSwitchToPomodoro() {
+    setSwitchPlannedMinutes(Math.max(studyMinutes, Math.ceil(studyState.study_elapsed_seconds / 60) + 15));
+    setPendingConfirm({ kind: 'switchToPomodoro' });
+  }
+
+  async function confirmSwitchKind(kind: 'countup' | 'pomodoro') {
+    if (!pendingConfirm || (pendingConfirm.kind !== 'switchToCountup' && pendingConfirm.kind !== 'switchToPomodoro')) return;
+    try {
+      setIsSwitchingKind(true);
+      setConfirmLoading(true);
+      setError(null);
+      const plannedSeconds = Math.max(1, Math.floor(switchPlannedMinutes || 0)) * 60;
+      if (kind === 'pomodoro' && plannedSeconds <= studyState.study_elapsed_seconds) {
+        setError('总时长必须大于已累计学习时间（' + formatDuration(studyState.study_elapsed_seconds) + '）。');
+        return;
+      }
+      const requestId = beginStudyStateRequest();
+      const nextState = await switchStudyTimerKind(kind, kind === 'pomodoro' ? {
+        plannedSeconds,
+        focusSeconds: focusMinutes * 60,
+        breakSeconds: breakMinutes * 60,
+        longBreakSeconds: longBreakMinutes * 60,
+        longBreakInterval,
+      } : undefined);
+      if (!applyStudyStateIfCurrent(nextState, requestId)) return;
+      setPendingConfirm(null);
+      setNotice(kind === 'countup' ? '已切换为正计时：每轮不设上限，可随时手动休息。' : '已切换为番茄钟：按固定节奏自动轮换。');
+      markStudyReminderSeen(nextState, syncDeviceId);
+      queueConfiguredSync();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally {
+      setIsSwitchingKind(false);
+      setConfirmLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -962,6 +1070,75 @@ export default function FocusPage() {
     >
       <p>仅完成今日任务不会修改源待办，适合今天只是阶段性推进。</p>
     </ConfirmDialog>
+  ) : pendingConfirm?.kind === 'manualBreak' ? (
+    <ConfirmDialog
+      cancelLabel="取消"
+      confirmLabel="开始休息"
+      loading={confirmLoading}
+      message="结束本轮正计时并开始休息；休息结束后自动开始下一轮正计时专注。"
+      onCancel={() => setPendingConfirm(null)}
+      onConfirm={() => void handleManualBreak()}
+      open
+      title="开始休息？"
+    >
+      <div className="segmented-control">
+        {breakPresetMinutes.map((value) => (
+          <button className={manualBreakMinutes === value ? 'active' : ''} key={'manual-break-' + value} onClick={() => setManualBreakMinutes(value)} type="button">{value} 分钟</button>
+        ))}
+      </div>
+      <label className="field-block">
+        <span>自定义休息时长（1-60 分钟）</span>
+        <input
+          className="number-input"
+          max={60}
+          min={1}
+          onChange={(event) => setManualBreakMinutes(Number(event.target.value) || 0)}
+          type="number"
+          value={manualBreakMinutes}
+        />
+      </label>
+    </ConfirmDialog>
+  ) : pendingConfirm?.kind === 'switchToCountup' ? (
+    <ConfirmDialog
+      cancelLabel="取消"
+      confirmLabel="切换为正计时"
+      loading={confirmLoading || isSwitchingKind}
+      message="当前专注会无缝转为正计时，计时不中断；之后可随时手动触发休息。"
+      onCancel={() => setPendingConfirm(null)}
+      onConfirm={() => void confirmSwitchKind('countup')}
+      open
+      title="切换为正计时？"
+    >
+      <p>总时长计划保持不变（{countupUnbounded ? '本次不限总时长' : '剩余 ' + formatSeconds(studyState.study_remaining_seconds) + '，到点仍会自动完成'}）。</p>
+    </ConfirmDialog>
+  ) : pendingConfirm?.kind === 'switchToPomodoro' ? (
+    <ConfirmDialog
+      cancelLabel="取消"
+      confirmLabel="切换为番茄钟"
+      loading={confirmLoading || isSwitchingKind}
+      message="切换为番茄钟节奏需要设置总时长与每轮参数；当前轮已专注时长会保留。"
+      onCancel={() => setPendingConfirm(null)}
+      onConfirm={() => void confirmSwitchKind('pomodoro')}
+      open
+      title="切换为番茄钟？"
+    >
+      <label className="field-block">
+        <span>总时长（分钟，需大于已累计 {formatDuration(studyState.study_elapsed_seconds)}）</span>
+        <input
+          className="number-input"
+          min={1}
+          onChange={(event) => setSwitchPlannedMinutes(Number(event.target.value) || 1)}
+          type="number"
+          value={switchPlannedMinutes}
+        />
+      </label>
+      <div className="preset-grid">
+        <PresetSelect label="番茄时长" items={focusPresetMinutes} selected={focusMinutes} suffix="m" onSelect={setFocusMinutes} />
+        <PresetSelect label="短休时长" items={breakPresetMinutes} selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} />
+        <PresetSelect label="长休时长" items={longBreakPresetMinutes} selected={longBreakMinutes} suffix="m" onSelect={setLongBreakMinutes} />
+        <PresetSelect label="长休间隔" items={longBreakIntervalPresets} selected={longBreakInterval} suffix="轮" onSelect={setLongBreakInterval} />
+      </div>
+    </ConfirmDialog>
   ) : null;
 
   const todayDrawer = (
@@ -1073,8 +1250,10 @@ export default function FocusPage() {
               <span>{activeModeMessage}</span>
               <div className="focus-round-controls">
                 {canTogglePause && <button aria-label={studyState.is_paused ? '继续计时' : '暂停计时'} className={studyState.is_paused ? 'focus-round-button primary' : 'focus-round-button'} onClick={handleTogglePause} title={studyState.is_paused ? '继续计时' : '暂停'} type="button">{studyState.is_paused ? <Play size={28} /> : <Pause size={28} />}</button>}
-                {studyState.phase === 'awaiting_break' && <button aria-label={'确认开始' + breakKindLabel(studyState.break_kind)} className="focus-round-button secondary" disabled={studyState.is_paused} onClick={handleConfirmBreak} title={'确认开始' + breakKindLabel(studyState.break_kind)} type="button"><Coffee size={26} /></button>}
-                {(studyState.phase === 'awaiting_break' || studyState.phase === 'break') && <button aria-label="跳过休息，开始下一轮专注" className="focus-round-button secondary" disabled={studyState.is_paused} onClick={handleSkipBreak} title="跳过休息，开始下一轮专注" type="button"><FastForward size={24} /></button>}
+                {canManualBreak && !studyState.is_paused && <button aria-label="结束本轮并休息" className="focus-round-button secondary" onClick={openManualBreak} title="结束本轮并休息" type="button"><Coffee size={26} /></button>}
+                {!isCountupActive && studyState.phase === 'awaiting_break' && <button aria-label={'确认开始' + breakKindLabel(studyState.break_kind)} className="focus-round-button secondary" disabled={studyState.is_paused} onClick={handleConfirmBreak} title={'确认开始' + breakKindLabel(studyState.break_kind)} type="button"><Coffee size={26} /></button>}
+                {!isCountupActive && (studyState.phase === 'awaiting_break' || studyState.phase === 'break') && <button aria-label="跳过休息，开始下一轮专注" className="focus-round-button secondary" disabled={studyState.is_paused} onClick={handleSkipBreak} title="跳过休息，开始下一轮专注" type="button"><FastForward size={24} /></button>}
+                {isCountupActive && studyState.phase === 'break' && !studyState.is_paused && <button aria-label="跳过休息，开始下一轮正计时" className="focus-round-button secondary" onClick={handleSkipBreak} title="跳过休息，开始下一轮正计时" type="button"><FastForward size={24} /></button>}
               </div>
             </main>
 
@@ -1096,6 +1275,15 @@ export default function FocusPage() {
                       type="checkbox"
                     />
                   </label>
+                )}
+                {canSwitchKind && (
+                  <button aria-label={isCountupActive ? '切换为番茄钟节奏' : '切换为正计时节奏'} className="focus-hud-card focus-command-button" onClick={isCountupActive ? requestSwitchToPomodoro : requestSwitchToCountup} title={isCountupActive ? '切换为番茄钟节奏' : '切换为正计时节奏'} type="button">
+                    <span className="focus-hud-icon"><Repeat size={14} /></span>
+                    <span className="focus-hud-copy">
+                      <span>切换计时方式</span>
+                      <strong>{isCountupActive ? '切到番茄钟' : '切到正计时'}</strong>
+                    </span>
+                  </button>
                 )}
                 <button aria-label="刷新前台状态" className="focus-hud-card focus-command-button" onClick={() => void handleCheckForeground()} title="刷新前台状态" type="button">
                   <span className="focus-hud-icon"><Gauge size={14} /></span>
@@ -1130,7 +1318,7 @@ export default function FocusPage() {
       <>
     <section className={'page-shell focus-prepare-shell' + ((isChecklistDrawerOpen || isScheduleDrawerOpen) ? ' is-drawer-open' : '')}>
       <header className="page-header prepare-header">
-        <div><p className="eyebrow">Focus Ritual</p><h2>进入学习模式</h2><p>设定本次学习长度、番茄节奏和休息规则。开始后界面会切换为极简番茄钟，配置入口自动锁定。</p></div>
+        <div><p className="eyebrow">Focus Ritual</p><h2>进入学习模式</h2><p>选择番茄钟固定节奏或正计时自由节奏，并设定休息规则。开始后界面会切换为极简时钟，配置入口自动锁定。</p></div>
         <div className={'phase-badge phase-' + studyState.phase}><span>{phaseLabel[studyState.phase]}</span><strong>{studyState.phase === 'finished' ? '已收束' : '待命'}</strong></div>
       </header>
       {error && <p className="alert error" role="alert">{error}</p>}{notice && <p aria-live="polite" className="alert success" role="status">{notice}</p>}{monitorError && <p className="alert error" role="alert">前台检测失败：{monitorError}</p>}
@@ -1151,27 +1339,51 @@ export default function FocusPage() {
       />
       <div className="prepare-grid">
         <section className="start-console">
-          <div className="timer-orbit"><span>下一轮专注</span><strong>{formatSeconds(focusMinutes * 60)}</strong><p>{selectedSubjectName ?? '未指定科目'} / {mode === 'strict' ? '强制模式' : '普通模式'}</p></div>
-          <div className="console-facts"><CoreFact label="学习模式" value={formatDuration(studyMinutes * 60)} /><CoreFact label="番茄时长" value={formatDuration(focusMinutes * 60)} /><CoreFact label="短休息" value={formatDuration(breakMinutes * 60)} /><CoreFact label="长休息" value={formatDuration(longBreakMinutes * 60) + ' / ' + longBreakInterval + ' 轮'} /></div>
+          <div className="timer-orbit">
+            <span>{timerKind === 'countup' ? '正计时 · 不设上限' : '下一轮专注'}</span>
+            <strong>{formatSeconds(timerKind === 'countup' ? 0 : focusMinutes * 60)}</strong>
+            <p>{timerKind === 'countup' ? '专注时长自由 · 手动触发休息' : (selectedSubjectName ?? '未指定科目') + ' / ' + (mode === 'strict' ? '强制模式' : '普通模式')}</p>
+          </div>
+          {timerKind === 'countup'
+            ? (
+              <div className="console-facts"><CoreFact label="计时方式" value="正计时" /><CoreFact label="专注上限" value="不限" /><CoreFact label="默认休息" value={formatDuration(countupBreakMinutes * 60)} /><CoreFact label="休息选择" value="5/10/15/20 或自定义" /></div>
+            )
+            : (
+              <div className="console-facts"><CoreFact label="学习模式" value={formatDuration(studyMinutes * 60)} /><CoreFact label="番茄时长" value={formatDuration(focusMinutes * 60)} /><CoreFact label="短休息" value={formatDuration(breakMinutes * 60)} /><CoreFact label="长休息" value={formatDuration(longBreakMinutes * 60) + ' / ' + longBreakInterval + ' 轮'} /></div>
+            )}
           <button aria-busy={isStartingStudy} className="start-ritual-button" disabled={isStartingStudy} onClick={handleStart} type="button">
             <Play size={22} />
-            {isStartingStudy ? '正在开始' : '开始学习'}
+            {isStartingStudy ? '正在开始' : timerKind === 'countup' ? '开始正计时' : '开始学习'}
           </button>
         </section>
         <aside className="control-panel">
           <div className="panel-title"><div><p className="eyebrow">Plan</p><h3>本次节奏</h3></div><BookOpen size={20} /></div>
-          <FocusDurationPicker
-            onChange={handleFocusMinutesChange}
-            onRememberDefaultChange={handleRememberFocusDurationChange}
-            rememberDefault={rememberFocusDuration}
-            value={focusMinutes}
-          />
-          <div className="preset-grid">
-            <PresetSelect label="学习模式" items={studyPresetMinutes} selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} />
-            <PresetSelect label="短休时长" items={breakPresetMinutes} selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} />
-            <PresetSelect label="长休时长" items={longBreakPresetMinutes} selected={longBreakMinutes} suffix="m" onSelect={setLongBreakMinutes} />
-            <PresetSelect label="长休间隔" items={longBreakIntervalPresets} selected={longBreakInterval} suffix="轮" onSelect={setLongBreakInterval} />
-          </div>
+          <div className="segmented-control"><button className={timerKind === 'pomodoro' ? 'active' : ''} onClick={() => setTimerKind('pomodoro')} type="button">番茄钟</button><button className={timerKind === 'countup' ? 'active' : ''} onClick={() => setTimerKind('countup')} type="button">正计时</button></div>
+          <p className="focus-primary-hint">{timerKind === 'pomodoro' ? '每轮固定时长，到点后自动进入休息节奏。' : '每轮不设上限，专注中可手动触发休息；休息时长可选 5/10/15/20 分钟或自定义（1-60 分钟）。'}</p>
+          {timerKind === 'pomodoro' && (
+            <>
+              <FocusDurationPicker
+                onChange={handleFocusMinutesChange}
+                onRememberDefaultChange={handleRememberFocusDurationChange}
+                rememberDefault={rememberFocusDuration}
+                value={focusMinutes}
+              />
+              <div className="preset-grid">
+                <PresetSelect label="学习模式" items={studyPresetMinutes} selected={studyMinutes} suffix="m" onSelect={setStudyMinutes} />
+                <PresetSelect label="短休时长" items={breakPresetMinutes} selected={breakMinutes} suffix="m" onSelect={setBreakMinutes} />
+                <PresetSelect label="长休时长" items={longBreakPresetMinutes} selected={longBreakMinutes} suffix="m" onSelect={setLongBreakMinutes} />
+                <PresetSelect label="长休间隔" items={longBreakIntervalPresets} selected={longBreakInterval} suffix="轮" onSelect={setLongBreakInterval} />
+              </div>
+            </>
+          )}
+          {timerKind === 'countup' && (
+            <div className="preset-grid">
+              <PresetSelect label="默认休息" items={breakPresetMinutes} selected={countupBreakMinutes} suffix=" 分钟" onSelect={setCountupBreakMinutes} />
+            </div>
+          )}
+          {timerKind === 'countup' && (
+            <NumberField label="自定义默认休息（1-60 分钟）" onChange={(value) => setCountupBreakMinutes(Math.min(60, Math.max(1, value)))} value={countupBreakMinutes} />
+          )}
           <label className="field-block"><span>科目</span><select className="select-input" disabled={subjects.length === 0} onChange={(event) => setSelectedSubjectId(event.target.value ? Number(event.target.value) : null)} value={selectedSubjectId ?? ''}><option value="">不指定</option>{subjects.map((subject) => <option disabled={!subject.enabled} key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
           <div className="segmented-control"><button className={mode === 'normal' ? 'active' : ''} onClick={() => setMode('normal')} type="button">普通模式</button><button className={mode === 'strict' ? 'active' : ''} onClick={() => setMode('strict')} type="button">强制模式</button></div>
           <label className="capability-row focus-whitelist-toggle focus-primary-toggle">
@@ -1204,10 +1416,23 @@ export default function FocusPage() {
 function breakKindLabel(kind: StudyModeState['break_kind']) { return studyBreakKindLabel(kind); }
 function nextBreakLabel(studyState: StudyModeState) { return nextStudyBreakLabel(studyState); }
 function buildPhaseMessage(studyState: StudyModeState) {
+  const countup = studyState.timer_kind === 'countup';
   if (studyState.is_paused) return studyState.focus_enforcement_active ? '计时暂停，前台规则仍在强制执行' : '计时暂停，前台规则已关闭';
-  if (studyState.phase === 'focus') return '第 ' + studyState.cycle_index + ' 轮番茄钟进行中';
-  if (studyState.phase === 'awaiting_break') return '本轮已到点，确认后进入 ' + nextBreakLabel(studyState);
-  if (studyState.phase === 'break') return breakKindLabel(studyState.break_kind) + '进行中';
+  if (studyState.phase === 'focus') {
+    return countup
+      ? '正计时专注中，随时可以结束本轮并休息'
+      : '第 ' + studyState.cycle_index + ' 轮番茄钟进行中';
+  }
+  if (studyState.phase === 'awaiting_break') {
+    return countup
+      ? '本轮已结束，选择休息时长后开始休息'
+      : '本轮已到点，确认后进入 ' + nextBreakLabel(studyState);
+  }
+  if (studyState.phase === 'break') {
+    return countup
+      ? '休息进行中，结束后自动开始下一轮正计时'
+      : breakKindLabel(studyState.break_kind) + '进行中';
+  }
   if (studyState.phase === 'finished') return '学习模式已完成';
   if (studyState.phase === 'emergency_exited') return '历史退出状态';
   return '设置节奏后开始';

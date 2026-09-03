@@ -96,6 +96,8 @@ const defaultSettings: AppSettings = {
   long_break_interval: 4,
   remember_focus_duration: true,
   default_focus_mode: 'normal',
+  default_timer_kind: 'pomodoro',
+  countup_break_minutes: 5,
   whitelist_mode: 'allowlist',
   ui_theme: 'light',
   launch_at_startup: false,

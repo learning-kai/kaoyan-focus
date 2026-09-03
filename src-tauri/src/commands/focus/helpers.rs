@@ -3,9 +3,35 @@
         "focus" | "awaiting_break" => phase_elapsed_seconds(record, now)?,
         _ => 0,
     };
-    Ok((record.accumulated_study_seconds + current_phase_seconds)
-        .min(record.planned_seconds)
-        .max(0))
+    let total = (record.accumulated_study_seconds + current_phase_seconds).max(0);
+    // 正计时（或历史上没有计划时长）不按 planned_seconds 封顶。
+    if record.planned_seconds > 0 {
+        Ok(total.min(record.planned_seconds))
+    } else {
+        Ok(total)
+    }
+}
+
+fn is_countup(record: &StudyModeRecord) -> bool {
+    record.timer_kind == TIMER_KIND_COUNTUP
+}
+
+/// 本轮 focus 的实际计入时长上限：番茄钟为每轮 focus_seconds（且不超过剩余计划），
+/// 正计时为不封顶（由 planned>0 时统一封顶）。
+fn focus_run_seconds(record: &StudyModeRecord) -> i64 {
+    let remaining_total = record
+        .planned_seconds
+        .saturating_sub(record.accumulated_study_seconds)
+        .max(0);
+    if is_countup(record) {
+        if record.planned_seconds > 0 {
+            remaining_total
+        } else {
+            i64::MAX
+        }
+    } else {
+        record.focus_seconds.min(remaining_total).max(0)
+    }
 }
 
 fn phase_elapsed_seconds(record: &StudyModeRecord, now: DateTime<Utc>) -> Result<i64, String> {
@@ -25,8 +51,16 @@ fn focus_session_actual_seconds(
         .max(0);
     let phase_elapsed = phase_elapsed_seconds(record, now)?;
     let actual_seconds = match record.phase.as_str() {
+        // awaiting_break 只会由番茄钟流程进入（含切换前的等待确认），沿用番茄公式。
         "awaiting_break" => record.focus_seconds + phase_elapsed.min(remaining_total),
-        _ => phase_elapsed.min(record.focus_seconds).min(remaining_total),
+        _ => {
+            let run_cap = focus_run_seconds(record);
+            if run_cap == i64::MAX {
+                phase_elapsed
+            } else {
+                phase_elapsed.min(run_cap)
+            }
+        }
     };
     Ok(actual_seconds.max(0))
 }
@@ -99,6 +133,10 @@ fn break_kind_for_cycle(cycle_index: i64, long_break_interval: i64) -> &'static 
 }
 
 fn effective_break_seconds(record: &StudyModeRecord) -> i64 {
+    // 正计时模式的休息时长即手动触发/启动时所选的 break_seconds，不分长短休。
+    if is_countup(record) {
+        return record.break_seconds.max(0);
+    }
     if break_kind_for_cycle(record.cycle_index, record.long_break_interval) == "long" {
         record.long_break_seconds
     } else {
@@ -111,6 +149,7 @@ fn row_to_study_mode_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<StudyMo
         id: row.get(0)?,
         state_revision: row.get(1)?,
         mode: row.get(2)?,
+        timer_kind: row.get(24)?,
         subject_id: row.get(3)?,
         planned_seconds: row.get(4)?,
         focus_seconds: row.get(5)?,

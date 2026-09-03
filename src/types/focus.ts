@@ -2,6 +2,8 @@ export type FocusStatus = 'idle' | 'running' | 'finished' | 'interrupted' | 'eme
 
 export type FocusMode = 'normal' | 'strict';
 
+export type FocusTimerKind = 'pomodoro' | 'countup';
+
 export type FocusSession = {
   id: number;
   mode: FocusMode;
@@ -56,6 +58,7 @@ export type StudyModeState = {
   phase: StudyModePhase;
   status: StudyModeStatus;
   mode: FocusMode;
+  timer_kind: FocusTimerKind;
   subject_id: number | null;
   planned_seconds: number;
   focus_seconds: number;

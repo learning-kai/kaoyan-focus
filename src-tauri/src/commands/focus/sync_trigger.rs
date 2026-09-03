@@ -44,6 +44,7 @@ fn study_runtime_marker(state: &StudyModeState) -> Option<StudyRuntimeSyncMarker
         paused_at: state.paused_at.clone(),
         current_session_id: state.current_session.as_ref().map(|session| session.id),
         break_kind: state.break_kind.clone(),
+        timer_kind: state.timer_kind.clone(),
     })
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftToLine, Coffee, EyeOff, FastForward, Pause, Pin, PinOff, Play } from 'lucide-react';
-import { confirmStudyBreak, getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode, skipStudyBreak } from '../services/focusApi';
+import { confirmStudyBreak, getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode, skipStudyBreak, takeManualBreak } from '../services/focusApi';
 import {
   collapseFocusWidgetToEdge,
   defaultFocusWidgetDockState,
@@ -15,6 +15,7 @@ import {
   type FocusWidgetDockEdge,
 } from '../services/focusWidgetApi';
 import { STUDY_SYNC_STATE_CHANGED_EVENT } from '../services/syncApi';
+import { getAppSettings } from '../services/settingsApi';
 import { listenTauriEvent } from '../services/tauriEvents';
 import { isTauriRuntime } from '../services/tauriInvoke';
 import type { StudyModePhase, StudyModeState, Subject } from '../types/focus';
@@ -33,6 +34,7 @@ const idleState: StudyModeState = {
   phase: 'idle',
   status: 'idle',
   mode: 'normal',
+  timer_kind: 'pomodoro',
   subject_id: null,
   planned_seconds: 0,
   focus_seconds: 0,
@@ -253,7 +255,13 @@ export default function FocusWidgetPage() {
     };
   }, [canInteract]);
 
-  const remainingSeconds = studyState.phase_remaining_seconds;
+  const countupActive = studyState.status === 'active' && studyState.timer_kind === 'countup';
+  const countupFocus = countupActive && studyState.phase === 'focus';
+  const unlimited = countupActive && studyState.planned_seconds <= 0;
+  const remainingSeconds = countupFocus
+    ? studyState.phase_elapsed_seconds
+    : studyState.phase_remaining_seconds;
+  const timeWord = studyState.phase === 'idle' || studyState.phase === 'finished' || studyState.phase === 'emergency_exited' ? '时长' : (countupFocus ? '已专注' : '剩余');
   const progressPercent = studyState.planned_seconds > 0
     ? Math.max(0, Math.min(100, Math.round((studyState.study_elapsed_seconds / studyState.planned_seconds) * 100)))
     : 0;
@@ -263,10 +271,15 @@ export default function FocusWidgetPage() {
     }
     return subjects.find((subject) => subject.id === studyState.subject_id)?.name ?? `科目 #${studyState.subject_id}`;
   }, [studyState.subject_id, subjects]);
-  const stageLabel = studyState.is_paused ? `暂停中 · ${phaseLabel[studyState.phase]}` : phaseLabel[studyState.phase];
+  const stageLabel = studyState.is_paused
+    ? `暂停中 · ${countupFocus ? '正计时专注' : phaseLabel[studyState.phase]}`
+    : countupFocus
+      ? '正计时专注中'
+      : phaseLabel[studyState.phase];
+  const collapsedStage = countupFocus ? '正计时' : collapsedPhaseLabel[studyState.phase];
   const roundLabel = `第 ${Math.max(studyState.cycle_index, 1)} 轮`;
   const combinedLabel = `${subjectName} / ${roundLabel}`;
-  const progressLabel = `${progressPercent}%`;
+  const progressLabel = unlimited ? '不限' : `${progressPercent}%`;
   const elapsedLabel = formatCompactDuration(studyState.study_elapsed_seconds);
 
   const returnToMain = useCallback(async () => {
@@ -338,6 +351,23 @@ export default function FocusWidgetPage() {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   }, [canInteract, studyState.is_paused, studyState.phase]);
+
+  const handleManualBreak = useCallback(async () => {
+    if (!canInteract || studyState.is_paused) return;
+    try {
+      let minutes = 5;
+      try {
+        const settings = await getAppSettings();
+        minutes = Math.min(60, Math.max(1, settings.countup_break_minutes || 5));
+      } catch {
+        // Fall back to the default 5 minutes when settings are unavailable.
+      }
+      setStudyState(await takeManualBreak(minutes * 60));
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [canInteract, studyState.is_paused]);
 
   const peekFromEdge = useCallback(async (interruptRetraction = false) => {
     const startsFromCollapsed = dockModeRef.current === 'collapsed';
@@ -524,7 +554,7 @@ export default function FocusWidgetPage() {
     return (
       <section
         ref={shellRef}
-        aria-label={`${stageLabel}，剩余 ${formatWidgetSeconds(remainingSeconds)}，${combinedLabel}`}
+        aria-label={`${stageLabel}，${timeWord} ${formatWidgetSeconds(remainingSeconds)}，${combinedLabel}`}
         className={`focus-widget-shell is-collapsed edge-${edge}`}
         onMouseEnter={() => void handleCollapsedMouseEnter()}
         onMouseLeave={handleCollapsedMouseLeave}
@@ -538,7 +568,7 @@ export default function FocusWidgetPage() {
         >
           <span className="focus-widget-dot" />
           <strong>{formatCollapsedSeconds(remainingSeconds, edge)}</strong>
-          <span>{collapsedPhaseLabel[studyState.phase]}</span>
+          <span>{collapsedStage}</span>
         </button>
       </section>
     );
@@ -601,6 +631,18 @@ export default function FocusWidgetPage() {
             >
               {studyState.is_paused ? <Play size={15} /> : <Pause size={15} />}
             </button>
+            {countupFocus && !studyState.is_paused && (
+              <button
+                aria-label="结束本轮并休息"
+                className="focus-widget-icon-button"
+                disabled={!canInteract}
+                onClick={() => void handleManualBreak()}
+                title="结束本轮并休息"
+                type="button"
+              >
+                <Coffee size={15} />
+              </button>
+            )}
             <button
               aria-label={`确认开始${studyState.break_kind === 'long' ? '长' : '短'}休息`}
               className="focus-widget-icon-button"
@@ -631,15 +673,17 @@ export default function FocusWidgetPage() {
         <div className="focus-widget-progress" aria-label={`总进度 ${progressLabel}`}>
           <div className="focus-widget-meta-row" aria-hidden="true">
             <span>已进行 {elapsedLabel}</span>
-            <span>{roundLabel}</span>
+            <span>{unlimited ? '正计时' : roundLabel}</span>
           </div>
           <div className="focus-widget-progress-row">
-            <span>总进度</span>
-            <strong>{progressLabel}</strong>
+            <span>{unlimited ? '本轮时长' : '总进度'}</span>
+            <strong>{unlimited ? '不限' : progressLabel}</strong>
           </div>
-          <div className="focus-widget-bar" aria-hidden="true">
-            <div className="focus-widget-bar-fill" style={{ width: `${progressPercent}%` }} />
-          </div>
+          {!unlimited && (
+            <div className="focus-widget-bar" aria-hidden="true">
+              <div className="focus-widget-bar-fill" style={{ width: `${progressPercent}%` }} />
+            </div>
+          )}
         </div>
 
         {error && (

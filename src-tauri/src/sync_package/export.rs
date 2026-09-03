@@ -59,6 +59,7 @@ fn export_study_modes(connection: &Connection) -> Result<Vec<SharedStudyMode>, S
             sync_id,
             state_revision: Some(row.state_revision.max(1)),
             mode: Some(row.mode),
+            timer_kind: Some(row.timer_kind),
             subject_sync_id: row.subject_id.and_then(|subject_id| {
                 resolve_existing_sync_id_by_local_id(connection, ENTITY_SUBJECT, Some(subject_id))
                     .ok()
@@ -550,6 +551,7 @@ impl From<DeletedPayload> for SharedStudyMode {
             sync_id: value.sync_id,
             state_revision: None,
             mode: None,
+            timer_kind: None,
             subject_sync_id: None,
             planned_seconds: None,
             focus_seconds: None,
