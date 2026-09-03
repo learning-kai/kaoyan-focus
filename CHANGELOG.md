@@ -586,4 +586,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - refactor: 统一科目配色为唯一真源并消除跨语义色值冲突 (58ec950)
 
+## v1.21.5 - 2026-09-03
+
+### Desktop
+#### Fixed
+- fix(calendar): 暂停区间不再单独着色，与休息期一致显示为无颜色 (b365f2c)
+
 
