@@ -162,7 +162,10 @@ type FocusBand = {
   heightPercent: number;
   color: string;
   subjectLabel: string;
+  /** 实际专注时长（分钟），不含暂停，与统计页口径一致。 */
   durationMinutes: number;
+  /** 色带覆盖的墙钟时间里属于暂停的部分（分钟），用于在悬浮提示中说明色带比专注更长的原因。 */
+  pausedMinutes: number;
   startLabel: string;
   endLabel: string;
   running: boolean;
@@ -613,13 +616,30 @@ export default function SchedulePage() {
         // 极短的专注也要留下可见痕迹，否则用户会以为没记录上。
         const renderEndMinute = Math.max(projected.endMinute, projected.startMinute + 4);
         const subject = subjects.find((item) => item.id === session.subject_id);
+        // 汇总口径与统计页保持一致：只算实际专注时长，不含暂停。
+        // 已结束的记录直接用 actual_seconds（后端写入时已剔除暂停）；
+        // 进行中的记录色带已冻结在暂停时刻，墙上时间即近似实际专注。
+        // 跨窗口边界（跨零点或早于 6 点）的记录按可见墙钟占比折算，
+        // 与后端统计 window 折算逻辑（session_seconds_in_window）一致。
+        const wallMinutes = Math.max(projected.fullMinutes, 1e-6);
+        const actualFullMinutes =
+          session.status === 'running'
+            ? wallMinutes
+            : Math.max(0, session.actual_seconds) / 60;
+        const actualMinutes =
+          actualFullMinutes >= wallMinutes
+            ? visibleMinutes
+            : actualFullMinutes * (visibleMinutes / wallMinutes);
+        // 色带按真实钟点绘制，中途暂停过的记录色带会比实际专注更长，把差值单独标出。
+        const pausedMinutes = Math.max(0, visibleMinutes - actualMinutes);
         return {
           id: session.id,
           topPercent: (projected.startMinute / timelineSpanMinutes) * 100,
           heightPercent: ((renderEndMinute - projected.startMinute) / timelineSpanMinutes) * 100,
           color: subject?.color?.trim() || focusBandFallbackColor,
           subjectLabel: subject?.name ?? '未指定科目',
-          durationMinutes: visibleMinutes,
+          durationMinutes: actualMinutes,
+          pausedMinutes: Math.round(pausedMinutes),
           startLabel: formatMinute(projected.startMinute + dayStart),
           endLabel: formatMinute(projected.endMinute + dayStart),
           running: session.status === 'running' && session.paused_at == null,
@@ -652,6 +672,7 @@ export default function SchedulePage() {
             color: pauseBandColor,
             subjectLabel: '暂停',
             durationMinutes: visibleMinutes,
+            pausedMinutes: 0,
             startLabel: formatMinute(projected.startMinute + dayStart),
             endLabel: formatMinute(projected.endMinute + dayStart),
             running: false,
@@ -1732,7 +1753,7 @@ export default function SchedulePage() {
                         height: `${band.heightPercent}%`,
                         '--focus-band-color': band.color,
                       } as CSSProperties}
-                      title={`${band.subjectLabel} ${band.startLabel}-${band.endLabel} 专注 ${formatDurationLabel(band.durationMinutes)}${band.running ? '（进行中）' : ''}${band.paused ? '（已暂停）' : ''}`}
+                      title={`${band.subjectLabel} ${band.startLabel}-${band.endLabel} 专注 ${formatDurationLabel(band.durationMinutes)}${band.pausedMinutes > 0 ? `（含暂停 ${formatDurationLabel(band.pausedMinutes)}）` : ''}${band.running ? '（进行中）' : ''}${band.paused ? '（已暂停）' : ''}`}
                     >
                       <i className="schedule-focus-band-fill" />
                       {band.paused && <i className="schedule-focus-band-pause-mark" aria-hidden="true" />}
