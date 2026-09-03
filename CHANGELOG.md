@@ -575,4 +575,14 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - fix(calendar): 暂停专注时冻结色带在暂停时刻，暂停区间保持空白 (f417c93)
 
+## v1.21.4 - 2026-09-03
+
+### Desktop
+#### Fixed
+- 修复 (d6d9efd)
+- fix(calendar): 暂停区间改为中性灰独立色带，区别于专注色与休息绿 (859554d)
+
+#### Changed
+- refactor: 统一科目配色为唯一真源并消除跨语义色值冲突 (58ec950)
+
 
