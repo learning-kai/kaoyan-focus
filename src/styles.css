@@ -34,6 +34,18 @@
   --amber-soft: rgba(255, 149, 0, 0.12);
   --red: #ff3b30;
   --red-soft: rgba(255, 59, 48, 0.12);
+  /* 科目配色：全站唯一真源。
+     日程分类块、主题变体、专注色带兜底色全部从这里派生，避免同一科目出现多套色值。
+     选色刻意避开 --green（休息）与 --amber（等待休息）所在的色域：
+       政治=红 / 英语=天蓝 / 数学=深琥珀 / 专业课=紫 / 通用=石板灰。
+     修改时请同步 src-tauri/src/storage/db.rs 的 DEFAULT_SUBJECTS 与 src/palette.ts。 */
+  --subject-politics: #e5484d;
+  --subject-english: #0ea5e9;
+  --subject-math: #b45309;
+  --subject-major: #a855f7;
+  --subject-general: #94a3b8;
+  /* 暂停段用深石板灰：与「通用/无科目」的浅石板灰拉开明度，也完全区别于科目色与休息绿。 */
+  --focus-band-pause: #5f6b7f;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04);
   --shadow-strong: 0 8px 28px rgba(0, 0, 0, 0.1);
@@ -2499,8 +2511,10 @@ html[data-study-fullscreen='true'] body {
   background: rgba(9, 15, 25, 0.82);
 }
 
+/* 进度条走琥珀→明黄的暖色渐变，刻意不选红/珊瑚色系：
+   那会与科目色「政治 #e5484d」以及 .alert.error 撞色（ΔE 仅 18）。 */
 .progress-track.accent i {
-  background: linear-gradient(90deg, #f2b56b, #ff7d73);
+  background: linear-gradient(90deg, #facc15, #fde047);
 }
 
 .progress-label {
@@ -4101,13 +4115,13 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 
 .schedule-focus-toggle:hover:not(:disabled) {
   color: var(--ink);
-  border-color: rgba(79, 208, 161, 0.42);
+  border-color: color-mix(in srgb, var(--green) 42%, transparent);
 }
 
 .schedule-focus-toggle.is-on {
-  color: var(--green, #4fd0a1);
-  border-color: rgba(79, 208, 161, 0.42);
-  background: rgba(79, 208, 161, 0.1);
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 42%, transparent);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
 }
 
 .schedule-focus-toggle:disabled {
@@ -4141,14 +4155,14 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   bottom: 0;
   left: 0;
   width: 3px;
-  background: var(--focus-band-color, #4fd0a1);
+  background: var(--focus-band-color, var(--subject-general));
   opacity: 0.92;
 }
 
 .schedule-focus-band-fill {
   position: absolute;
   inset: 0;
-  background: var(--focus-band-color, #4fd0a1);
+  background: var(--focus-band-color, var(--subject-general));
   opacity: 0.2;
 }
 
@@ -4182,7 +4196,7 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   }
 }
 
-/* 暂停段：中性石板灰 + 斜纹，刻意区别于科目专注色（含薄荷绿兜底）与计时页的休息绿。 */
+/* 暂停段：深石板灰 + 斜纹，刻意区别于科目专注色（含石板灰兜底，明度更浅）与计时页的休息绿。 */
 .schedule-focus-band.is-paused .schedule-focus-band-fill {
   opacity: 0.5;
   animation: none;
@@ -4206,8 +4220,8 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   transform: translateY(-50%);
   width: 4px;
   height: 10px;
-  border-left: 2px solid var(--focus-band-color, #7c869c);
-  border-right: 2px solid var(--focus-band-color, #7c869c);
+  border-left: 2px solid var(--focus-band-color, var(--focus-band-pause));
+  border-right: 2px solid var(--focus-band-color, var(--focus-band-pause));
   opacity: 0.85;
 }
 
@@ -4530,28 +4544,46 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   padding: 0;
 }
 
+/* 日程分类色统一从 --subject-* 派生（深色 / 默认主题），不再写死色值。
+   数学（深琥珀）明度偏低，故透明度比其余科目略高，保证深色底上仍清晰。 */
 .category-politics {
-  border-color: rgba(242, 181, 107, 0.38);
-  background: linear-gradient(135deg, rgba(242, 181, 107, 0.2), rgba(22, 34, 54, 0.88));
+  border-color: color-mix(in srgb, var(--subject-politics) 38%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-politics) 20%, transparent),
+    rgba(22, 34, 54, 0.88)
+  );
 }
 
 .category-english {
-  border-color: rgba(121, 167, 255, 0.4);
-  background: linear-gradient(135deg, rgba(121, 167, 255, 0.2), rgba(22, 34, 54, 0.88));
+  border-color: color-mix(in srgb, var(--subject-english) 40%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-english) 20%, transparent),
+    rgba(22, 34, 54, 0.88)
+  );
 }
 
 .category-math {
-  border-color: rgba(79, 208, 161, 0.4);
-  background: linear-gradient(135deg, rgba(79, 208, 161, 0.18), rgba(22, 34, 54, 0.88));
+  border-color: color-mix(in srgb, var(--subject-math) 52%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-math) 28%, transparent),
+    rgba(22, 34, 54, 0.88)
+  );
 }
 
 .category-major {
-  border-color: rgba(255, 125, 115, 0.34);
-  background: linear-gradient(135deg, rgba(255, 125, 115, 0.16), rgba(22, 34, 54, 0.88));
+  border-color: color-mix(in srgb, var(--subject-major) 34%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-major) 16%, transparent),
+    rgba(22, 34, 54, 0.88)
+  );
 }
 
 .category-general {
-  border-color: rgba(145, 167, 199, 0.28);
+  border-color: color-mix(in srgb, var(--subject-general) 28%, transparent);
 }
 
 .schedule-empty {
@@ -5730,23 +5762,39 @@ html[data-theme='light'] .schedule-drawer-block {
 }
 
 html[data-theme='light'] .schedule-drawer-block.category-politics {
-  border-color: rgba(213, 146, 61, 0.24);
-  background: linear-gradient(135deg, rgba(255, 245, 230, 0.94), rgba(244, 248, 255, 0.78));
+  border-color: color-mix(in srgb, var(--subject-politics) 24%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-politics) 9%, #ffffff),
+    rgba(244, 248, 255, 0.78)
+  );
 }
 
 html[data-theme='light'] .schedule-drawer-block.category-english {
-  border-color: rgba(0, 122, 255, 0.22);
-  background: linear-gradient(135deg, rgba(238, 244, 255, 0.96), rgba(244, 248, 255, 0.8));
+  border-color: color-mix(in srgb, var(--subject-english) 22%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-english) 9%, #ffffff),
+    rgba(244, 248, 255, 0.78)
+  );
 }
 
 html[data-theme='light'] .schedule-drawer-block.category-math {
-  border-color: rgba(44, 181, 139, 0.22);
-  background: linear-gradient(135deg, rgba(235, 251, 245, 0.96), rgba(244, 248, 255, 0.8));
+  border-color: color-mix(in srgb, var(--subject-math) 24%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-math) 9%, #ffffff),
+    rgba(244, 248, 255, 0.78)
+  );
 }
 
 html[data-theme='light'] .schedule-drawer-block.category-major {
-  border-color: rgba(217, 110, 103, 0.22);
-  background: linear-gradient(135deg, rgba(255, 240, 239, 0.96), rgba(244, 248, 255, 0.8));
+  border-color: color-mix(in srgb, var(--subject-major) 22%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-major) 8%, #ffffff),
+    rgba(244, 248, 255, 0.78)
+  );
 }
 
 html[data-theme='light'] .schedule-drawer-actions button {
@@ -5958,27 +6006,43 @@ html[data-theme='light'] .week-block {
 }
 
 html[data-theme='light'] .schedule-block.category-politics {
-  border-color: rgba(213, 146, 61, 0.24);
-  background: linear-gradient(135deg, rgba(255, 245, 230, 0.94), rgba(244, 248, 255, 0.78));
+  border-color: color-mix(in srgb, var(--subject-politics) 24%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-politics) 10%, #ffffff),
+    rgba(244, 248, 255, 0.8)
+  );
 }
 
 html[data-theme='light'] .schedule-block.category-english {
-  border-color: rgba(0, 122, 255, 0.22);
-  background: linear-gradient(135deg, rgba(238, 244, 255, 0.96), rgba(244, 248, 255, 0.8));
+  border-color: color-mix(in srgb, var(--subject-english) 22%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-english) 9%, #ffffff),
+    rgba(244, 248, 255, 0.8)
+  );
 }
 
 html[data-theme='light'] .schedule-block.category-math {
-  border-color: rgba(44, 181, 139, 0.22);
-  background: linear-gradient(135deg, rgba(235, 251, 245, 0.96), rgba(244, 248, 255, 0.8));
+  border-color: color-mix(in srgb, var(--subject-math) 26%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-math) 10%, #ffffff),
+    rgba(244, 248, 255, 0.8)
+  );
 }
 
 html[data-theme='light'] .schedule-block.category-major {
-  border-color: rgba(217, 110, 103, 0.22);
-  background: linear-gradient(135deg, rgba(255, 240, 239, 0.96), rgba(244, 248, 255, 0.8));
+  border-color: color-mix(in srgb, var(--subject-major) 22%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--subject-major) 8%, #ffffff),
+    rgba(244, 248, 255, 0.8)
+  );
 }
 
 html[data-theme='light'] .schedule-block.category-general {
-  border-color: rgba(112, 131, 159, 0.18);
+  border-color: color-mix(in srgb, var(--subject-general) 18%, var(--line));
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(244, 248, 255, 0.74));
 }
 
@@ -6041,23 +6105,23 @@ html[data-theme='light'] .week-block {
 }
 
 html[data-theme='light'] .week-block.category-politics {
-  border-color: rgba(213, 146, 61, 0.24);
+  border-color: color-mix(in srgb, var(--subject-politics) 24%, var(--line));
 }
 
 html[data-theme='light'] .week-block.category-english {
-  border-color: rgba(0, 122, 255, 0.22);
+  border-color: color-mix(in srgb, var(--subject-english) 22%, var(--line));
 }
 
 html[data-theme='light'] .week-block.category-math {
-  border-color: rgba(44, 181, 139, 0.22);
+  border-color: color-mix(in srgb, var(--subject-math) 26%, var(--line));
 }
 
 html[data-theme='light'] .week-block.category-major {
-  border-color: rgba(217, 110, 103, 0.22);
+  border-color: color-mix(in srgb, var(--subject-major) 22%, var(--line));
 }
 
 html[data-theme='light'] .week-block.category-general {
-  border-color: rgba(112, 131, 159, 0.18);
+  border-color: color-mix(in srgb, var(--subject-general) 18%, var(--line));
 }
 
 html[data-theme='light'] .schedule-page .ghost-button,
@@ -6508,29 +6572,29 @@ html[data-theme='light'] .subject-dot {
 :is(html[data-theme='light'], html:not([data-theme])) .category-politics,
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-block.category-politics,
 :is(html[data-theme='light'], html:not([data-theme])) .week-block.category-politics {
-  border-color: rgba(191, 124, 39, 0.26);
-  background: #fff8ed;
+  border-color: color-mix(in srgb, var(--subject-politics) 26%, transparent);
+  background: color-mix(in srgb, var(--subject-politics) 7%, #ffffff);
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .category-english,
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-block.category-english,
 :is(html[data-theme='light'], html:not([data-theme])) .week-block.category-english {
-  border-color: rgba(0, 122, 255, 0.24);
-  background: #f0f5ff;
+  border-color: color-mix(in srgb, var(--subject-english) 24%, transparent);
+  background: color-mix(in srgb, var(--subject-english) 7%, #ffffff);
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .category-math,
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-block.category-math,
 :is(html[data-theme='light'], html:not([data-theme])) .week-block.category-math {
-  border-color: rgba(38, 155, 118, 0.24);
-  background: #eefaf6;
+  border-color: color-mix(in srgb, var(--subject-math) 26%, transparent);
+  background: color-mix(in srgb, var(--subject-math) 7%, #ffffff);
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .category-major,
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-block.category-major,
 :is(html[data-theme='light'], html:not([data-theme])) .week-block.category-major {
-  border-color: rgba(199, 82, 77, 0.22);
-  background: #fff2f1;
+  border-color: color-mix(in srgb, var(--subject-major) 22%, transparent);
+  background: color-mix(in srgb, var(--subject-major) 6%, #ffffff);
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-summary strong {

@@ -1,10 +1,13 @@
 use rusqlite::{params, Connection};
 use std::{fs, path::Path};
 
+// 科目默认配色是全站唯一真源之一：src/styles.css 的 `--subject-*` 变量必须与这里保持一致，
+// 否则同一科目会在「日历色带」与「日程分类块」上显示成两种颜色。
+// 选色刻意避开 --green（休息）与 --amber（等待休息）所在的色域，避免语义混淆。
 const DEFAULT_SUBJECTS: [(&str, &str, &str, &str); 4] = [
-    ("subject-1", "subject-politics", "政治", "#ef4444"),
-    ("subject-2", "subject-english", "英语", "#3b82f6"),
-    ("subject-3", "subject-math", "数学", "#16a34a"),
+    ("subject-1", "subject-politics", "政治", "#e5484d"),
+    ("subject-2", "subject-english", "英语", "#0ea5e9"),
+    ("subject-3", "subject-math", "数学", "#b45309"),
     ("subject-4", "subject-major", "专业课", "#a855f7"),
 ];
 
@@ -817,10 +820,11 @@ fn seed_default_subjects(connection: &Connection) -> Result<(), String> {
     }
 
     let now = chrono::Utc::now().to_rfc3339();
+    // 与 DEFAULT_SUBJECTS 保持一致，仅供空库首次写入使用。
     let defaults = [
-        ("政治", "#ef4444"),
-        ("英语", "#3b82f6"),
-        ("数学", "#16a34a"),
+        ("政治", "#e5484d"),
+        ("英语", "#0ea5e9"),
+        ("数学", "#b45309"),
         ("专业课", "#a855f7"),
     ];
 

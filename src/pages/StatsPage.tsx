@@ -29,6 +29,7 @@ import type { InterruptionSummary } from '../types/monitor';
 import { copyTextToClipboard } from '../utils/clipboard';
 import { downloadTextFile } from '../utils/fileDownload';
 import { formatDateKey } from '../utils/date';
+import { FOCUS_BAND_FALLBACK_COLOR } from '../palette';
 
 const RECENT_SESSION_LIMIT = 100;
 type SessionStatusFilter = 'all' | FocusStatus;
@@ -535,16 +536,17 @@ export default function StatsPage() {
             <div className="subject-bars">
               {stats.subjects.map((item) => {
                 const width = Math.max(6, (item.total_seconds / maxSubjectSeconds) * 100);
+                const subjectColor = item.subject.color?.trim() || FOCUS_BAND_FALLBACK_COLOR;
 
                 return (
                   <article className="subject-stat-row" key={item.subject.id}>
                     <div>
-                      <span className="subject-dot" style={{ backgroundColor: item.subject.color ?? '#8fb5ff' }} />
+                      <span className="subject-dot" style={{ backgroundColor: subjectColor }} />
                       <strong>{item.subject.name}</strong>
                       <small>{item.subject.enabled ? '已启用' : '已停用'}</small>
                     </div>
                     <div className="subject-bar">
-                      <i style={{ width: `${width}%`, backgroundColor: item.subject.color ?? '#8fb5ff' }} />
+                      <i style={{ width: `${width}%`, backgroundColor: subjectColor }} />
                     </div>
                     <strong>{formatStudyTime(item.total_seconds)}</strong>
                   </article>

@@ -1035,10 +1035,10 @@ html[data-theme='dawn'] .week-block.category-politics,
 html[data-theme='sakura'] .category-politics,
 html[data-theme='sakura'] .schedule-block.category-politics,
 html[data-theme='sakura'] .week-block.category-politics {
-  border-color: color-mix(in srgb, var(--red) 26%, var(--line));
+  border-color: color-mix(in srgb, var(--subject-politics) 26%, var(--line));
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--red-soft) 70%, white),
+    color-mix(in srgb, var(--subject-politics) 10%, white),
     color-mix(in srgb, var(--surface-strong) 72%, transparent)
   );
 }
@@ -1049,10 +1049,10 @@ html[data-theme='dawn'] .week-block.category-english,
 html[data-theme='sakura'] .category-english,
 html[data-theme='sakura'] .schedule-block.category-english,
 html[data-theme='sakura'] .week-block.category-english {
-  border-color: color-mix(in srgb, var(--blue) 24%, var(--line));
+  border-color: color-mix(in srgb, var(--subject-english) 24%, var(--line));
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--blue-soft) 70%, white),
+    color-mix(in srgb, var(--subject-english) 10%, white),
     color-mix(in srgb, var(--surface-strong) 72%, transparent)
   );
 }
@@ -1063,10 +1063,10 @@ html[data-theme='dawn'] .week-block.category-math,
 html[data-theme='sakura'] .category-math,
 html[data-theme='sakura'] .schedule-block.category-math,
 html[data-theme='sakura'] .week-block.category-math {
-  border-color: color-mix(in srgb, var(--amber) 28%, var(--line));
+  border-color: color-mix(in srgb, var(--subject-math) 28%, var(--line));
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--amber-soft) 74%, white),
+    color-mix(in srgb, var(--subject-math) 13%, white),
     color-mix(in srgb, var(--surface-strong) 72%, transparent)
   );
 }
@@ -1077,10 +1077,10 @@ html[data-theme='dawn'] .week-block.category-major,
 html[data-theme='sakura'] .category-major,
 html[data-theme='sakura'] .schedule-block.category-major,
 html[data-theme='sakura'] .week-block.category-major {
-  border-color: color-mix(in srgb, var(--green) 26%, var(--line));
+  border-color: color-mix(in srgb, var(--subject-major) 26%, var(--line));
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--green-soft) 72%, white),
+    color-mix(in srgb, var(--subject-major) 10%, white),
     color-mix(in srgb, var(--surface-strong) 72%, transparent)
   );
 }
@@ -1088,10 +1088,10 @@ html[data-theme='sakura'] .week-block.category-major {
 html[data-theme='forest'] .category-politics,
 html[data-theme='forest'] .schedule-block.category-politics,
 html[data-theme='forest'] .week-block.category-politics {
-  border-color: color-mix(in srgb, var(--red) 26%, var(--line));
+  border-color: color-mix(in srgb, var(--subject-politics) 26%, var(--line));
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--red-soft) 70%, white),
+    color-mix(in srgb, var(--subject-politics) 10%, white),
     color-mix(in srgb, var(--surface-strong) 72%, transparent)
   );
 }
@@ -1099,10 +1099,10 @@ html[data-theme='forest'] .week-block.category-politics {
 html[data-theme='forest'] .category-english,
 html[data-theme='forest'] .schedule-block.category-english,
 html[data-theme='forest'] .week-block.category-english {
-  border-color: color-mix(in srgb, var(--blue) 24%, var(--line));
+  border-color: color-mix(in srgb, var(--subject-english) 24%, var(--line));
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--blue-soft) 70%, white),
+    color-mix(in srgb, var(--subject-english) 10%, white),
     color-mix(in srgb, var(--surface-strong) 72%, transparent)
   );
 }
@@ -1110,10 +1110,10 @@ html[data-theme='forest'] .week-block.category-english {
 html[data-theme='forest'] .category-math,
 html[data-theme='forest'] .schedule-block.category-math,
 html[data-theme='forest'] .week-block.category-math {
-  border-color: color-mix(in srgb, var(--amber) 28%, var(--line));
+  border-color: color-mix(in srgb, var(--subject-math) 28%, var(--line));
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--amber-soft) 74%, white),
+    color-mix(in srgb, var(--subject-math) 13%, white),
     color-mix(in srgb, var(--surface-strong) 72%, transparent)
   );
 }
@@ -1121,10 +1121,10 @@ html[data-theme='forest'] .week-block.category-math {
 html[data-theme='forest'] .category-major,
 html[data-theme='forest'] .schedule-block.category-major,
 html[data-theme='forest'] .week-block.category-major {
-  border-color: color-mix(in srgb, var(--green) 26%, var(--line));
+  border-color: color-mix(in srgb, var(--subject-major) 26%, var(--line));
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--green-soft) 72%, white),
+    color-mix(in srgb, var(--subject-major) 10%, white),
     color-mix(in srgb, var(--surface-strong) 72%, transparent)
   );
 }

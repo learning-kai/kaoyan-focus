@@ -44,6 +44,7 @@ import type { FocusSession, Subject } from '../types/focus';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData, ScheduleTemplate, ScheduleTemplateDraft } from '../types/schedule';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
 import { requestAppNavigation } from '../navigationEvents';
+import { FOCUS_BAND_FALLBACK_COLOR, PAUSE_BAND_COLOR } from '../palette';
 
 const categories = [
   { key: 'politics', label: '政治' },
@@ -62,9 +63,9 @@ const defaultBlockMinutes = 60;
 const timelineHourHeight = 80;
 const timelineHeight = ((dayEnd - dayStart) / 60) * timelineHourHeight;
 const timelineSpanMinutes = dayEnd - dayStart;
-const focusBandFallbackColor = '#4fd0a1';
-// 暂停段用中性石板灰，刻意区别于科目专注色（含无科目时的薄荷绿兜底）与计时页的休息绿。
-const pauseBandColor = '#7c869c';
+const focusBandFallbackColor = FOCUS_BAND_FALLBACK_COLOR;
+// 暂停段用深石板灰，刻意区别于科目专注色（含无科目时的石板灰兜底）与计时页的休息绿。
+const pauseBandColor = PAUSE_BAND_COLOR;
 const minimumReadableBlockMinutes = 54;
 const calendarDragActivationDistance = 8;
 const todayItemDragType = 'application/x-schedule-today-item';

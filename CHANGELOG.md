@@ -19,6 +19,10 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ### Changed
 - Clarified the calendar ringtone setting as 「日历铃声」 in Settings, with the existing schedule-reminder switch also exposed under the sound tab for easier discovery.
+- Unified the subject palette behind a single source of truth: `--subject-*` variables in `src/styles.css`, `SUBJECT_PALETTE` in `src/palette.ts` and `DEFAULT_SUBJECTS` in `src-tauri/src/storage/db.rs`. Calendar category blocks, theme variants (dawn/sakura/forest) and focus bands now all derive from the same values, so a subject no longer renders in three different colours.
+- Re-coloured the default subjects to remove semantic clashes: 政治 `#e5484d`, 英语 `#0ea5e9`, 数学 `#b45309`, 专业课 `#a855f7`. 数学 deliberately leaves the green family (the old `#16a34a` sat only ΔE 15.8 from the break green `#34c759`, which made focus blocks look like breaks).
+- Changed the no-subject focus-band fallback from mint green `#4fd0a1` to the neutral slate `#94a3b8`, and the pause band from `#7c869c` to the deeper slate `#5f6b7f`, so 「专注 / 暂停 / 休息」 no longer share a hue.
+- Retinted the focus-page progress accent from amber→coral to amber→yellow so it no longer collides with the 政治 red (ΔE was 18).
 
 - Allowed foreground rules to be toggled while a normal study session is running, while keeping them locked on in strict mode.
 - Added a setting to show or hide the foreground-rule toggle during an active study session.
