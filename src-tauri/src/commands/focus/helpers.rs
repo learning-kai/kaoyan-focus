@@ -189,6 +189,28 @@ fn row_to_focus_session(row: &rusqlite::Row<'_>) -> rusqlite::Result<FocusSessio
         emergency_exit_count: row.get(10)?,
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
+        paused_at: None,
+    })
+}
+
+/// 与 `row_to_focus_session` 相同，但会在第 13 列（0 基）读取 study_modes.paused_at，
+/// 用于「时间范围内的专注记录」查询，使前端能冻结暂停那一刻的色带。
+fn row_to_focus_session_with_paused(row: &rusqlite::Row<'_>) -> rusqlite::Result<FocusSession> {
+    Ok(FocusSession {
+        id: row.get(0)?,
+        mode: row.get(1)?,
+        subject_id: row.get(2)?,
+        planned_seconds: row.get(3)?,
+        actual_seconds: row.get(4)?,
+        started_at: row.get(5)?,
+        ended_at: row.get(6)?,
+        status: row.get(7)?,
+        end_reason: row.get(8)?,
+        interruption_count: row.get(9)?,
+        emergency_exit_count: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
+        paused_at: row.get(13)?,
     })
 }
 

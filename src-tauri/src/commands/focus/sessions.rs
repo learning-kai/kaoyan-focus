@@ -262,19 +262,20 @@ pub fn list_focus_sessions_in_range(
     let mut statement = connection
         .prepare(
             "
-            SELECT id, mode, subject_id, planned_seconds, actual_seconds, started_at, ended_at,
-                   status, end_reason, interruption_count, emergency_exit_count,
-                   created_at, updated_at
-            FROM focus_sessions
-            WHERE started_at < ?2
-              AND (ended_at IS NULL OR ended_at > ?1)
-            ORDER BY started_at ASC
+            SELECT fs.id, fs.mode, fs.subject_id, fs.planned_seconds, fs.actual_seconds,
+                   fs.started_at, fs.ended_at, fs.status, fs.end_reason,
+                   fs.interruption_count, fs.emergency_exit_count, fs.created_at, fs.updated_at,
+                   (SELECT sm.paused_at FROM study_modes sm WHERE sm.current_session_id = fs.id LIMIT 1)
+            FROM focus_sessions fs
+            WHERE fs.started_at < ?2
+              AND (fs.ended_at IS NULL OR fs.ended_at > ?1)
+            ORDER BY fs.started_at ASC
             ",
         )
         .map_err(|error| error.to_string())?;
 
     let rows = statement
-        .query_map(params![coarse_start, coarse_end], row_to_focus_session)
+        .query_map(params![coarse_start, coarse_end], row_to_focus_session_with_paused)
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;

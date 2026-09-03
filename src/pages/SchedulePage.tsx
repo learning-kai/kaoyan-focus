@@ -163,6 +163,7 @@ type FocusBand = {
   startLabel: string;
   endLabel: string;
   running: boolean;
+  paused: boolean;
 };
 
 type CalendarDragState = {
@@ -299,8 +300,12 @@ function projectSessionToLane(
   const startedTs = new Date(session.started_at).getTime();
   if (!Number.isFinite(startedTs)) return null;
   const running = session.status === 'running';
+  // 进行中且被暂停：色带冻结在暂停那一刻，暂停之后的区间保持空白（不再计入专注）。
+  const pausedAtTs = session.paused_at ? new Date(session.paused_at).getTime() : Number.NaN;
   const endedTs = running
-    ? nowTs
+    ? Number.isFinite(pausedAtTs)
+      ? pausedAtTs
+      : nowTs
     : session.ended_at
       ? new Date(session.ended_at).getTime()
       : startedTs + Math.max(0, session.actual_seconds) * 1000;
@@ -592,7 +597,8 @@ export default function SchedulePage() {
           durationMinutes: visibleMinutes,
           startLabel: formatMinute(projected.startMinute + dayStart),
           endLabel: formatMinute(projected.endMinute + dayStart),
-          running: session.status === 'running',
+          running: session.status === 'running' && session.paused_at == null,
+          paused: session.status === 'running' && session.paused_at != null,
         } satisfies FocusBand;
       })
       .filter((band): band is FocusBand => band !== null);
@@ -1662,20 +1668,22 @@ export default function SchedulePage() {
                 <div className="schedule-focus-bands" aria-hidden="true">
                   {focusBands.map((band) => (
                     <div
-                      className={`schedule-focus-band${band.running ? ' is-running' : ''}`}
+                      className={`schedule-focus-band${band.running ? ' is-running' : ''}${band.paused ? ' is-paused' : ''}`}
                       key={band.id}
                       style={{
                         top: `${band.topPercent}%`,
                         height: `${band.heightPercent}%`,
                         '--focus-band-color': band.color,
                       } as CSSProperties}
-                      title={`${band.subjectLabel} ${band.startLabel}-${band.endLabel} 专注 ${formatDurationLabel(band.durationMinutes)}${band.running ? '（进行中）' : ''}`}
+                      title={`${band.subjectLabel} ${band.startLabel}-${band.endLabel} 专注 ${formatDurationLabel(band.durationMinutes)}${band.running ? '（进行中）' : ''}${band.paused ? '（已暂停）' : ''}`}
                     >
                       <i className="schedule-focus-band-fill" />
+                      {band.paused && <i className="schedule-focus-band-pause-mark" aria-hidden="true" />}
                       {band.heightPercent >= 1.4 && (
                         <span className="schedule-focus-band-label">
                           {band.subjectLabel} · {formatDurationLabel(band.durationMinutes)}
                           {band.running ? ' · 进行中' : ''}
+                          {band.paused ? ' · 已暂停' : ''}
                         </span>
                       )}
                     </div>

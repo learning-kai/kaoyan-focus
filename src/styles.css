@@ -4182,6 +4182,35 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   }
 }
 
+/* 已暂停的专注色带：停止呼吸动画，压暗并叠加斜纹，提示“暂停后不再计入专注”。 */
+.schedule-focus-band.is-paused .schedule-focus-band-fill {
+  opacity: 0.14;
+  animation: none;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.4) 0,
+    rgba(255, 255, 255, 0.4) 1px,
+    transparent 1px,
+    transparent 7px
+  );
+}
+
+.schedule-focus-band.is-paused::before {
+  opacity: 0.5;
+}
+
+.schedule-focus-band-pause-mark {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 10px;
+  border-left: 2px solid var(--focus-band-color, #4fd0a1);
+  border-right: 2px solid var(--focus-band-color, #4fd0a1);
+  opacity: 0.7;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .schedule-focus-band.is-running .schedule-focus-band-fill {
     animation: none;
@@ -6524,6 +6553,14 @@ html[data-theme='light'] .subject-dot {
 
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band.is-running .schedule-focus-band-fill {
   opacity: 0.24;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band.is-paused .schedule-focus-band-fill {
+  opacity: 0.12;
+}
+
+:is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band.is-paused::before {
+  opacity: 0.5;
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band-label {

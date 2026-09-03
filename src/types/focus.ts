@@ -18,6 +18,8 @@ export type FocusSession = {
   emergency_exit_count: number;
   created_at: string;
   updated_at: string;
+  /** 进行中且被暂停时记录暂停时刻（RFC3339），否则为 null。前端据此把色带冻结在暂停那一刻。 */
+  paused_at: string | null;
 };
 
 export type Subject = {
