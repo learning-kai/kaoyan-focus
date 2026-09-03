@@ -565,4 +565,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - recover working tree: 正计时专注模式 + 日历专注色带 (5f60bd4)
 
+## v1.21.2 - 2026-09-03
+
+### Desktop
+#### Fixed
+- fix(calendar): 暂停专注时冻结色带在暂停时刻，暂停区间保持空白 (f417c93)
+
 
