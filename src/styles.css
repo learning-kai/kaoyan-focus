@@ -44,8 +44,6 @@
   --subject-math: #b45309;
   --subject-major: #a855f7;
   --subject-general: #94a3b8;
-  /* 暂停段用深石板灰：与「通用/无科目」的浅石板灰拉开明度，也完全区别于科目色与休息绿。 */
-  --focus-band-pause: #5f6b7f;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04);
   --shadow-strong: 0 8px 28px rgba(0, 0, 0, 0.1);
@@ -4196,35 +4194,6 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   }
 }
 
-/* 暂停段：深石板灰 + 斜纹，刻意区别于科目专注色（含石板灰兜底，明度更浅）与计时页的休息绿。 */
-.schedule-focus-band.is-paused .schedule-focus-band-fill {
-  opacity: 0.5;
-  animation: none;
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.55) 0,
-    rgba(255, 255, 255, 0.55) 1.5px,
-    transparent 1.5px,
-    transparent 8px
-  );
-}
-
-.schedule-focus-band.is-paused::before {
-  opacity: 0.9;
-}
-
-.schedule-focus-band-pause-mark {
-  position: absolute;
-  right: 2px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 10px;
-  border-left: 2px solid var(--focus-band-color, var(--focus-band-pause));
-  border-right: 2px solid var(--focus-band-color, var(--focus-band-pause));
-  opacity: 0.85;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .schedule-focus-band.is-running .schedule-focus-band-fill {
     animation: none;
@@ -6617,14 +6586,6 @@ html[data-theme='light'] .subject-dot {
 
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band.is-running .schedule-focus-band-fill {
   opacity: 0.24;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band.is-paused .schedule-focus-band-fill {
-  opacity: 0.4;
-}
-
-:is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band.is-paused::before {
-  opacity: 0.9;
 }
 
 :is(html[data-theme='light'], html:not([data-theme])) .schedule-focus-band-label {

@@ -24,8 +24,5 @@ export const SUBJECT_PALETTE = {
 /** 无科目会话的专注色带兜底色：中性石板灰，不再使用容易被误读成「休息」的薄荷绿。 */
 export const FOCUS_BAND_FALLBACK_COLOR = SUBJECT_PALETTE.general;
 
-/** 暂停区间的色带颜色：比通用灰更深（ΔE≈22），且与科目色、休息绿完全区分。 */
-export const PAUSE_BAND_COLOR = '#5f6b7f';
-
 export type SubjectPalette = typeof SUBJECT_PALETTE;
 export type SubjectPaletteKey = keyof SubjectPalette;

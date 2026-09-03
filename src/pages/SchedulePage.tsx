@@ -44,7 +44,7 @@ import type { FocusSession, Subject } from '../types/focus';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData, ScheduleTemplate, ScheduleTemplateDraft } from '../types/schedule';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
 import { requestAppNavigation } from '../navigationEvents';
-import { FOCUS_BAND_FALLBACK_COLOR, PAUSE_BAND_COLOR } from '../palette';
+import { FOCUS_BAND_FALLBACK_COLOR } from '../palette';
 
 const categories = [
   { key: 'politics', label: '政治' },
@@ -64,8 +64,6 @@ const timelineHourHeight = 80;
 const timelineHeight = ((dayEnd - dayStart) / 60) * timelineHourHeight;
 const timelineSpanMinutes = dayEnd - dayStart;
 const focusBandFallbackColor = FOCUS_BAND_FALLBACK_COLOR;
-// 暂停段用深石板灰，刻意区别于科目专注色（含无科目时的石板灰兜底）与计时页的休息绿。
-const pauseBandColor = PAUSE_BAND_COLOR;
 const minimumReadableBlockMinutes = 54;
 const calendarDragActivationDistance = 8;
 const todayItemDragType = 'application/x-schedule-today-item';
@@ -169,7 +167,6 @@ type FocusBand = {
   startLabel: string;
   endLabel: string;
   running: boolean;
-  paused: boolean;
 };
 
 type CalendarDragState = {
@@ -321,28 +318,6 @@ function projectSessionToLane(
   const startMinute = (Math.max(startedTs, windowStartTs) - windowStartTs) / 60_000;
   const endMinute = (Math.min(endedTs, windowEndTs) - windowStartTs) / 60_000;
   const fullMinutes = Math.max(0, (endedTs - startedTs) / 60_000);
-  return { startMinute, endMinute, fullMinutes };
-}
-
-/**
- * 把“进行中且已暂停”的会话的暂停区间 [paused_at, 当前时刻] 投影到时间轴上，
- * 单独成段，用中性灰着色，避免和科目专注色/休息绿混淆。
- */
-function projectPauseInterval(
-  session: FocusSession,
-  windowStartTs: number,
-  windowEndTs: number,
-  nowTs: number,
-): { startMinute: number; endMinute: number; fullMinutes: number } | null {
-  const pausedAtTs = new Date(session.paused_at ?? '').getTime();
-  if (!Number.isFinite(pausedAtTs)) return null;
-  if (pausedAtTs >= windowEndTs || nowTs <= windowStartTs) return null;
-  const startTs = Math.max(pausedAtTs, windowStartTs);
-  const endTs = Math.min(nowTs, windowEndTs);
-  if (endTs <= startTs) return null;
-  const startMinute = (startTs - windowStartTs) / 60_000;
-  const endMinute = (endTs - windowStartTs) / 60_000;
-  const fullMinutes = Math.max(0, (endTs - startTs) / 60_000);
   return { startMinute, endMinute, fullMinutes };
 }
 
@@ -643,44 +618,10 @@ export default function SchedulePage() {
           startLabel: formatMinute(projected.startMinute + dayStart),
           endLabel: formatMinute(projected.endMinute + dayStart),
           running: session.status === 'running' && session.paused_at == null,
-          paused: false as boolean,
         } satisfies FocusBand;
       })
       .filter((band): band is FocusBand => band !== null);
   }, [focusSessions, nowTimestamp, selectedDate, subjects]);
-
-  // 进行中且已暂停的会话，把“暂停区间”单独投影成中性灰的一段，便于与专注/休息区分。
-  const pauseBands = useMemo<FocusBand[]>(() => {
-    const parts = dateKeyToParts(selectedDate);
-    if (!parts) return [];
-    const windowStartTs = new Date(parts.year, parts.month - 1, parts.day, 6, 0, 0, 0).getTime();
-    const windowEndTs = new Date(parts.year, parts.month - 1, parts.day + 1, 0, 0, 0, 0).getTime();
-    if (windowEndTs <= windowStartTs) return [];
-
-    return focusSessions
-      .filter((session) => session.status === 'running' && session.paused_at != null)
-      .flatMap((session) => {
-        const projected = projectPauseInterval(session, windowStartTs, windowEndTs, nowTimestamp);
-        if (!projected) return [];
-        const visibleMinutes = Math.max(0, projected.endMinute - projected.startMinute);
-        const renderEndMinute = Math.max(projected.endMinute, projected.startMinute + 4);
-        return [
-          {
-            id: `pause-${session.id}`,
-            topPercent: (projected.startMinute / timelineSpanMinutes) * 100,
-            heightPercent: ((renderEndMinute - projected.startMinute) / timelineSpanMinutes) * 100,
-            color: pauseBandColor,
-            subjectLabel: '暂停',
-            durationMinutes: visibleMinutes,
-            pausedMinutes: 0,
-            startLabel: formatMinute(projected.startMinute + dayStart),
-            endLabel: formatMinute(projected.endMinute + dayStart),
-            running: false,
-            paused: true,
-          } satisfies FocusBand,
-        ];
-      });
-  }, [focusSessions, nowTimestamp, selectedDate]);
 
   const focusTotalMinutes = useMemo(
     () => focusBands.reduce((total, band) => total + band.durationMinutes, 0),
@@ -1742,26 +1683,24 @@ export default function SchedulePage() {
                   </button>
                 );
               })}
-              {focusBandsVisible && (focusBands.length > 0 || pauseBands.length > 0) && (
+              {focusBandsVisible && focusBands.length > 0 && (
                 <div className="schedule-focus-bands" aria-hidden="true">
-                  {[...focusBands, ...pauseBands].map((band) => (
+                  {focusBands.map((band) => (
                     <div
-                      className={`schedule-focus-band${band.running ? ' is-running' : ''}${band.paused ? ' is-paused' : ''}`}
+                      className={`schedule-focus-band${band.running ? ' is-running' : ''}`}
                       key={band.id}
                       style={{
                         top: `${band.topPercent}%`,
                         height: `${band.heightPercent}%`,
                         '--focus-band-color': band.color,
                       } as CSSProperties}
-                      title={`${band.subjectLabel} ${band.startLabel}-${band.endLabel} 专注 ${formatDurationLabel(band.durationMinutes)}${band.pausedMinutes > 0 ? `（含暂停 ${formatDurationLabel(band.pausedMinutes)}）` : ''}${band.running ? '（进行中）' : ''}${band.paused ? '（已暂停）' : ''}`}
+                      title={`${band.subjectLabel} ${band.startLabel}-${band.endLabel} 专注 ${formatDurationLabel(band.durationMinutes)}${band.pausedMinutes > 0 ? `（含暂停 ${formatDurationLabel(band.pausedMinutes)}）` : ''}${band.running ? '（进行中）' : ''}`}
                     >
                       <i className="schedule-focus-band-fill" />
-                      {band.paused && <i className="schedule-focus-band-pause-mark" aria-hidden="true" />}
                       {band.heightPercent >= 1.4 && (
                         <span className="schedule-focus-band-label">
                           {band.subjectLabel} · {formatDurationLabel(band.durationMinutes)}
                           {band.running ? ' · 进行中' : ''}
-                          {band.paused ? ' · 已暂停' : ''}
                         </span>
                       )}
                     </div>
