@@ -556,4 +556,13 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 铃声加控制按钮 (6b68d0c)
 
+## v1.21.1 - 2026-09-03
+
+### Desktop
+#### Added
+- feat: add configurable focus duration with persistence option (6608c07)
+
+#### Changed
+- recover working tree: 正计时专注模式 + 日历专注色带 (5f60bd4)
+
 
