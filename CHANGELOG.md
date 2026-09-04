@@ -24,6 +24,7 @@ All notable changes to `考研专注` will be documented here. The public deskto
 - Changed the no-subject focus-band fallback from mint green `#4fd0a1` to the neutral slate `#94a3b8`.
 - Retinted the focus-page progress accent from amber→coral to amber→yellow so it no longer collides with the 政治 red (ΔE was 18).
 - Reworked the calendar pause band: a paused session's focus band still freezes at the pause moment, but the paused interval afterwards is now rendered with **no colour at all** (matching how break periods look on the timeline), instead of a separate slate-grey band. Removed the dedicated pause band, its hatching/pause-mark and the `--focus-band-pause` token, so 「专注 / 休息」 no longer share a hue on the timeline.
+- Made the live study-mode state (`get_study_mode_state`) the authority for where a running focus band ends on the calendar timeline. Previously the band only honoured the `paused_at` carried on the session row, so any gap in that lookup let the band keep growing into the pause. Now a band freezes at `paused_at` when the current mode is paused and at `phase_started_at` during 休息 / 等待休息, and it no longer gets the 4-minute minimum height once frozen, so no colour spills into a non-focus interval. The state refreshes together with the per-minute focus-session refresh.
 
 - Allowed foreground rules to be toggled while a normal study session is running, while keeping them locked on in strict mode.
 - Added a setting to show or hide the foreground-rule toggle during an active study session.

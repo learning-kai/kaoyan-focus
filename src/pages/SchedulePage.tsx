@@ -38,9 +38,9 @@ import {
   updateScheduleBlock,
   updateScheduleTemplate,
 } from '../services/scheduleApi';
-import { listFocusSessionsInRange, listSubjects } from '../services/focusApi';
+import { getStudyModeState, listFocusSessionsInRange, listSubjects } from '../services/focusApi';
 import type { AppSettings } from '../types/settings';
-import type { FocusSession, Subject } from '../types/focus';
+import type { FocusSession, StudyModeState, Subject } from '../types/focus';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData, ScheduleTemplate, ScheduleTemplateDraft } from '../types/schedule';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
 import { requestAppNavigation } from '../navigationEvents';
@@ -299,15 +299,21 @@ function projectSessionToLane(
   windowStartTs: number,
   windowEndTs: number,
   nowTs: number,
+  freezeTs: number | null = null,
 ): { startMinute: number; endMinute: number; fullMinutes: number } | null {
   const startedTs = new Date(session.started_at).getTime();
   if (!Number.isFinite(startedTs)) return null;
   const running = session.status === 'running';
-  // 进行中且被暂停：色带冻结在暂停那一刻，暂停之后的区间保持空白（不再计入专注）。
-  const pausedAtTs = session.paused_at ? new Date(session.paused_at).getTime() : Number.NaN;
+  // 进行中会话的色带终点按优先级收敛：
+  // 1) 会话自带的 paused_at（后端关联 study_modes 查出）；
+  // 2) 学习模式实时状态给出的冻结时刻（暂停中 / 非专注阶段）。
+  // 两者取更早的那个，保证暂停期间与休息期间都不会继续铺色；都没有时才延伸到当前时刻。
+  const sessionPauseTs = session.paused_at ? new Date(session.paused_at).getTime() : Number.NaN;
+  const candidates = [sessionPauseTs, freezeTs ?? Number.NaN].filter((ts) => Number.isFinite(ts));
+  const frozenTs = candidates.length > 0 ? Math.min(...candidates) : Number.NaN;
   const endedTs = running
-    ? Number.isFinite(pausedAtTs)
-      ? pausedAtTs
+    ? Number.isFinite(frozenTs)
+      ? Math.max(frozenTs, startedTs)
       : nowTs
     : session.ended_at
       ? new Date(session.ended_at).getTime()
@@ -360,6 +366,9 @@ export default function SchedulePage() {
   const [nowMinute, setNowMinute] = useState(() => currentMinuteOfDay());
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
   const [focusSessions, setFocusSessions] = useState<FocusSession[]>([]);
+  // 学习模式的实时状态。专注色带的“该画到哪里”以它为准：
+  // 暂停时冻结在 paused_at，休息/等待休息阶段冻结在休息开始时刻，只有真正在专注时才延伸到当前时刻。
+  const [studyMode, setStudyMode] = useState<StudyModeState | null>(null);
   const [focusBandsVisible, setFocusBandsVisible] = useState(true);
   const [view, setView] = useState<'day' | 'week'>('day');
   const [blockDraft, setBlockDraft] = useState<ScheduleBlockDraft>(() => emptyBlockDraft(formatDateKey()));
@@ -403,15 +412,18 @@ export default function SchedulePage() {
   useEffect(() => {
     void refresh(selectedDate);
     void loadFocusSessions(selectedDate);
+    void loadStudyMode();
     setDateDraft(selectedDate);
     setBlockDraft((draft) => ({ ...draft, scheduleDate: selectedDate }));
     setSelectedBlockDetail(null);
   }, [selectedDate]);
 
   // 看今天时每分钟重取一次，让进行中的专注和刚开始的专注都能及时出现。
+  // 学习模式状态也一起刷新，暂停/休息能在最多一分钟内反映到色带上。
   useEffect(() => {
     if (selectedDate !== formatDateKey()) return;
     void loadFocusSessions(selectedDate);
+    void loadStudyMode();
   }, [selectedDate, nowMinute]);
 
   useEffect(() => {
@@ -583,13 +595,35 @@ export default function SchedulePage() {
     const windowEndTs = new Date(parts.year, parts.month - 1, parts.day + 1, 0, 0, 0, 0).getTime();
     if (windowEndTs <= windowStartTs) return [];
 
+    // 学习模式的实时状态决定「进行中」的色带该画到哪一刻：
+    // 暂停中 → 冻结在暂停那一刻；休息 / 等待休息 → 冻结在该阶段开始时刻（休息不算专注）。
+    // 只有当前学习模式确实关联到这条会话时才生效，避免误伤其他记录。
+    const freezeTsFor = (session: FocusSession): number | null => {
+      const state = studyMode;
+      if (!state || state.status !== 'active') return null;
+      if (state.current_session?.id !== session.id) return null;
+      const toTs = (value: string | null) => {
+        if (!value) return null;
+        const ts = new Date(value).getTime();
+        return Number.isFinite(ts) ? ts : null;
+      };
+      if (state.is_paused) return toTs(state.paused_at);
+      if (state.phase !== 'focus') return toTs(state.phase_started_at);
+      return null;
+    };
+
     return focusSessions
       .map((session): FocusBand | null => {
-        const projected = projectSessionToLane(session, windowStartTs, windowEndTs, nowTimestamp);
+        const freezeTs = freezeTsFor(session);
+        const projected = projectSessionToLane(session, windowStartTs, windowEndTs, nowTimestamp, freezeTs);
         if (!projected) return null;
         const visibleMinutes = Math.max(0, projected.endMinute - projected.startMinute);
         // 极短的专注也要留下可见痕迹，否则用户会以为没记录上。
-        const renderEndMinute = Math.max(projected.endMinute, projected.startMinute + 4);
+        // 但被冻结的段（暂停 / 休息）按真实长度画，避免在「没有专注」的区间多铺颜色。
+        const renderEndMinute =
+          freezeTs === null
+            ? Math.max(projected.endMinute, projected.startMinute + 4)
+            : projected.endMinute;
         const subject = subjects.find((item) => item.id === session.subject_id);
         // 汇总口径与统计页保持一致：只算实际专注时长，不含暂停。
         // 已结束的记录直接用 actual_seconds（后端写入时已剔除暂停）；
@@ -617,11 +651,11 @@ export default function SchedulePage() {
           pausedMinutes: Math.round(pausedMinutes),
           startLabel: formatMinute(projected.startMinute + dayStart),
           endLabel: formatMinute(projected.endMinute + dayStart),
-          running: session.status === 'running' && session.paused_at == null,
+          running: session.status === 'running' && session.paused_at == null && freezeTs === null,
         } satisfies FocusBand;
       })
       .filter((band): band is FocusBand => band !== null);
-  }, [focusSessions, nowTimestamp, selectedDate, subjects]);
+  }, [focusSessions, nowTimestamp, selectedDate, subjects, studyMode]);
 
   const focusTotalMinutes = useMemo(
     () => focusBands.reduce((total, band) => total + band.durationMinutes, 0),
@@ -695,6 +729,15 @@ export default function SchedulePage() {
       if (focusTokenRef.current === token) {
         setFocusSessions([]);
       }
+    }
+  }
+
+  /** 读取学习模式的实时状态，用于决定进行中的专注色带该画到哪一刻。 */
+  async function loadStudyMode() {
+    try {
+      setStudyMode(await getStudyModeState());
+    } catch {
+      // 拿不到就退化为只依赖会话自带的 paused_at，不影响日历其余功能。
     }
   }
 
