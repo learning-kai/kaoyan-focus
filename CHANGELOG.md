@@ -593,4 +593,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - fix(calendar): 暂停区间不再单独着色，与休息期一致显示为无颜色 (b365f2c)
 
+## v1.21.6 - 2026-09-04
+
+### Desktop
+#### Fixed
+- fix(calendar): 以学习模式实时状态为准冻结进行中的专注色带 (7e82209)
+
 
