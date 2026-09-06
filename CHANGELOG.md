@@ -601,4 +601,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - fix(calendar): 以学习模式实时状态为准冻结进行中的专注色带 (7e82209)
 
+## v1.21.7 - 2026-09-06
+
+### Desktop
+#### Fixed
+- fix (5472b00)
+
 
