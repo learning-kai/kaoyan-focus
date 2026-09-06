@@ -26,7 +26,7 @@ import type { FocusAppCheck } from '../types/monitor';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData } from '../types/schedule';
 import type { AppSettings } from '../types/settings';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
-import { clampFocusMinutes, formatFocusDurationLabel, validateFocusMinutes } from '../utils/focusDuration';
+import { clampCountupBreakMinutes, clampFocusMinutes, COUNTUP_BREAK_MINUTES_MAX, COUNTUP_BREAK_MINUTES_MIN, COUNTUP_BREAK_PRESET_MINUTES, COUNTUP_BREAK_RANGE_LABEL, formatFocusDurationLabel, validateFocusMinutes } from '../utils/focusDuration';
 import { recommendScheduleBlock, type ScheduleRecommendation } from '../utils/scheduleRecommendation';
 
 const studyPresetMinutes = [60, 120, 180, 240];
@@ -694,14 +694,14 @@ export default function FocusPage() {
 
   function openManualBreak() {
     const fallback = countupBreakMinutes || 5;
-    setManualBreakMinutes(Math.min(60, Math.max(1, fallback)));
+    setManualBreakMinutes(clampCountupBreakMinutes(fallback));
     setPendingConfirm({ kind: 'manualBreak' });
   }
 
   async function handleManualBreak() {
-    const minutes = Math.min(60, Math.max(1, Math.floor(manualBreakMinutes || 0)));
+    const minutes = clampCountupBreakMinutes(manualBreakMinutes || 0);
     if (!minutes) {
-      setError('休息时长需在 1 到 60 分钟之间。');
+      setError(`休息时长需在 ${COUNTUP_BREAK_MINUTES_MIN} 到 ${COUNTUP_BREAK_MINUTES_MAX} 分钟之间。`);
       return;
     }
     try {
@@ -1087,11 +1087,11 @@ export default function FocusPage() {
         ))}
       </div>
       <label className="field-block">
-        <span>自定义休息时长（1-60 分钟）</span>
+        <span>自定义休息时长（{COUNTUP_BREAK_RANGE_LABEL}）</span>
         <input
           className="number-input"
-          max={60}
-          min={1}
+          max={COUNTUP_BREAK_MINUTES_MAX}
+          min={COUNTUP_BREAK_MINUTES_MIN}
           onChange={(event) => setManualBreakMinutes(Number(event.target.value) || 0)}
           type="number"
           value={manualBreakMinutes}
@@ -1346,7 +1346,7 @@ export default function FocusPage() {
           </div>
           {timerKind === 'countup'
             ? (
-              <div className="console-facts"><CoreFact label="计时方式" value="正计时" /><CoreFact label="专注上限" value="不限" /><CoreFact label="默认休息" value={formatDuration(countupBreakMinutes * 60)} /><CoreFact label="休息选择" value="5/10/15/20 或自定义" /></div>
+              <div className="console-facts"><CoreFact label="计时方式" value="正计时" /><CoreFact label="专注上限" value="不限" /><CoreFact label="默认休息" value={formatDuration(countupBreakMinutes * 60)} /><CoreFact label="休息选择" value="5 分钟起 · 最长 12 小时" /></div>
             )
             : (
               <div className="console-facts"><CoreFact label="学习模式" value={formatDuration(studyMinutes * 60)} /><CoreFact label="番茄时长" value={formatDuration(focusMinutes * 60)} /><CoreFact label="短休息" value={formatDuration(breakMinutes * 60)} /><CoreFact label="长休息" value={formatDuration(longBreakMinutes * 60) + ' / ' + longBreakInterval + ' 轮'} /></div>
@@ -1359,7 +1359,7 @@ export default function FocusPage() {
         <aside className="control-panel">
           <div className="panel-title"><div><p className="eyebrow">Plan</p><h3>本次节奏</h3></div><BookOpen size={20} /></div>
           <div className="segmented-control"><button className={timerKind === 'pomodoro' ? 'active' : ''} onClick={() => setTimerKind('pomodoro')} type="button">番茄钟</button><button className={timerKind === 'countup' ? 'active' : ''} onClick={() => setTimerKind('countup')} type="button">正计时</button></div>
-          <p className="focus-primary-hint">{timerKind === 'pomodoro' ? '每轮固定时长，到点后自动进入休息节奏。' : '每轮不设上限，专注中可手动触发休息；休息时长可选 5/10/15/20 分钟或自定义（1-60 分钟）。'}</p>
+          <p className="focus-primary-hint">{timerKind === 'pomodoro' ? '每轮固定时长，到点后自动进入休息节奏。' : '每轮不设上限，专注中可手动触发休息；默认休息可选 5 分钟到 12 小时，也支持自定义。'}</p>
           {timerKind === 'pomodoro' && (
             <>
               <FocusDurationPicker
@@ -1378,11 +1378,11 @@ export default function FocusPage() {
           )}
           {timerKind === 'countup' && (
             <div className="preset-grid">
-              <PresetSelect label="默认休息" items={breakPresetMinutes} selected={countupBreakMinutes} suffix=" 分钟" onSelect={setCountupBreakMinutes} />
+              <PresetSelect label="默认休息" items={COUNTUP_BREAK_PRESET_MINUTES} selected={countupBreakMinutes} suffix=" 分钟" onSelect={setCountupBreakMinutes} />
             </div>
           )}
           {timerKind === 'countup' && (
-            <NumberField label="自定义默认休息（1-60 分钟）" onChange={(value) => setCountupBreakMinutes(Math.min(60, Math.max(1, value)))} value={countupBreakMinutes} />
+            <NumberField label={`自定义默认休息（${COUNTUP_BREAK_RANGE_LABEL}）`} max={COUNTUP_BREAK_MINUTES_MAX} min={COUNTUP_BREAK_MINUTES_MIN} onChange={(value) => setCountupBreakMinutes(clampCountupBreakMinutes(value))} value={countupBreakMinutes} />
           )}
           <label className="field-block"><span>科目</span><select className="select-input" disabled={subjects.length === 0} onChange={(event) => setSelectedSubjectId(event.target.value ? Number(event.target.value) : null)} value={selectedSubjectId ?? ''}><option value="">不指定</option>{subjects.map((subject) => <option disabled={!subject.enabled} key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
           <div className="segmented-control"><button className={mode === 'normal' ? 'active' : ''} onClick={() => setMode('normal')} type="button">普通模式</button><button className={mode === 'strict' ? 'active' : ''} onClick={() => setMode('strict')} type="button">强制模式</button></div>
@@ -1450,13 +1450,15 @@ function foregroundSummary(check: FocusAppCheck) {
 function getTodaySortableId(itemId: number) { return 'today:' + itemId; }
 function Metric({ icon: Icon, label, value }: { icon: typeof Timer; label: string; value: string }) { return <article className="metric-card"><Icon size={18} /><span>{label}</span><strong>{value}</strong></article>; }
 function CoreFact({ label, value }: { label: string; value: string }) { return <article className="core-fact"><span>{label}</span><strong>{value}</strong></article>; }
-function NumberField({ label, onChange, value }: { label: string; onChange: (value: number) => void; value: number }) { return <label className="field-block"><span>{label}</span><input className="number-input" min={1} onChange={(event) => onChange(Number(event.target.value) || 1)} type="number" value={value} /></label>; }
+function NumberField({ label, max, min, onChange, value }: { label: string; max?: number; min?: number; onChange: (value: number) => void; value: number }) { return <label className="field-block"><span>{label}</span><input className="number-input" max={max} min={min ?? 1} onChange={(event) => onChange(Number(event.target.value) || 1)} type="number" value={value} /></label>; }
 function PresetSelect({ label, items, onSelect, selected, suffix }: { label: string; items: number[]; onSelect: (value: number) => void; selected: number; suffix: string }) {
+  // 自定义值可能不在预设里，补一个当前值选项，避免下拉框显示为空。
+  const options = items.includes(selected) ? items : [...items, selected].sort((a, b) => a - b);
   return (
     <label className="preset-row">
       <span>{label}</span>
       <select className="select-input preset-select" onChange={(event) => onSelect(Number(event.target.value) || items[0] || 0)} value={selected}>
-        {items.map((value) => (
+        {options.map((value) => (
           <option key={`${label}-${value}`} value={value}>
             {value}
             {suffix}

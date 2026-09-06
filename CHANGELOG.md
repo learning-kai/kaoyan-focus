@@ -31,6 +31,8 @@ All notable changes to `考研专注` will be documented here. The public deskto
 - Changed Feishu task conflict resolution to use local and remote content fingerprints before timestamp arbitration, so local edits are not overwritten just because Feishu reports a newer remote timestamp.
 - Standardized local check scripts so contributors can use cross-shell npm commands instead of Windows-only `npm.cmd` inside package scripts.
 - Clarified that desktop releases are the default public path and Android release syncing is opt-in for maintainers.
+- Raised the count-up (正计时) custom break limit from 60 分钟 to 720 分钟 (12 小时), across the focus page default, the manual-break dialog, the floating widget and the Rust validation range, so long rests such as overnight breaks no longer get clamped.
+- Gave the count-up default break its own preset list (5/10/15/20/30/60/120/240/360/720 分钟) instead of reusing the pomodoro short-break presets, and made the settings stepper move 15 分钟 per click while direct input stays exact.
 
 ### Security
 

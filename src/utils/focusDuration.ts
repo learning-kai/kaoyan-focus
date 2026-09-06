@@ -14,6 +14,30 @@ export const FOCUS_MINUTES_MAX = 120;
 /** 没有历史偏好时回落的默认番茄时长（分钟）。 */
 export const FOCUS_MINUTES_FALLBACK = 25;
 
+/** 正计时休息时长下限（分钟）。 */
+export const COUNTUP_BREAK_MINUTES_MIN = 1;
+
+/** 正计时休息时长上限（分钟），12 小时，与后端 COUNTUP_BREAK_MAX_SECONDS 保持一致。 */
+export const COUNTUP_BREAK_MINUTES_MAX = 720;
+
+/** 正计时休息时长的快捷预设（分钟），短休息到整段长休息都覆盖。 */
+export const COUNTUP_BREAK_PRESET_MINUTES = [5, 10, 15, 20, 30, 60, 120, 240, 360, 720];
+
+/** 设置里用加减按钮调整正计时休息时长时的步长（分钟）。区间已到 12 小时，逐分钟太慢。 */
+export const COUNTUP_BREAK_STEP_MINUTES = 15;
+
+/** 正计时休息时长合法区间的提示文案。 */
+export const COUNTUP_BREAK_RANGE_LABEL = `${COUNTUP_BREAK_MINUTES_MIN}-${COUNTUP_BREAK_MINUTES_MAX} 分钟（最长 12 小时）`;
+
+/** 把任意输入收敛到正计时休息时长的合法区间，永不返回 NaN。 */
+export function clampCountupBreakMinutes(value: number): number {
+  if (!Number.isFinite(value)) return 5;
+  const floored = Math.floor(value);
+  if (floored < COUNTUP_BREAK_MINUTES_MIN) return COUNTUP_BREAK_MINUTES_MIN;
+  if (floored > COUNTUP_BREAK_MINUTES_MAX) return COUNTUP_BREAK_MINUTES_MAX;
+  return floored;
+}
+
 /** 开始专注页提供的快捷预设（分钟），覆盖短冲刺到深度学习几种常见节奏。 */
 export const FOCUS_PRESET_MINUTES = [15, 25, 45, 60, 90] as const;
 

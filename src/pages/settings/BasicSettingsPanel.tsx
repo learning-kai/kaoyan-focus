@@ -4,6 +4,7 @@ import { BellRing, Coffee, MonitorUp, Music2, Play, Power, RotateCcw, Save, Sett
 import type { AppSettings, AppTheme, ReminderSoundId, ReminderSoundSource } from '../../types/settings';
 import { APP_THEME_OPTIONS } from '../../theme';
 import { SettingNumber } from './SettingsPrimitives';
+import { COUNTUP_BREAK_MINUTES_MAX, COUNTUP_BREAK_MINUTES_MIN, COUNTUP_BREAK_STEP_MINUTES } from '../../utils/focusDuration';
 
 type SettingsTab = 'rhythm' | 'automation' | 'widget' | 'sound';
 
@@ -138,7 +139,7 @@ export function BasicSettingsPanel({
               )}
 
               {settings.default_timer_kind === 'countup' && (
-                <SettingNumber label="正计时默认休息" max={60} min={1} disabled={settingsLocked} onChange={(value) => updateSettings({ countup_break_minutes: value })} text="正计时模式下手动开始休息时的默认时长，可在休息时临时调整。" value={settings.countup_break_minutes} unit="分钟" />
+                <SettingNumber label="正计时默认休息" max={COUNTUP_BREAK_MINUTES_MAX} min={COUNTUP_BREAK_MINUTES_MIN} step={COUNTUP_BREAK_STEP_MINUTES} disabled={settingsLocked} onChange={(value) => updateSettings({ countup_break_minutes: value })} text={`正计时模式下手动开始休息时的默认时长，可在休息时临时调整，最长 ${COUNTUP_BREAK_MINUTES_MAX} 分钟（12 小时）；加减按钮每次 ${COUNTUP_BREAK_STEP_MINUTES} 分钟，也可直接填写。`} value={settings.countup_break_minutes} unit="分钟" />
               )}
 
               <div className="setting-row mode-setting">

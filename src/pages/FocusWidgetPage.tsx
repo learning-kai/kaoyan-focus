@@ -16,6 +16,7 @@ import {
 } from '../services/focusWidgetApi';
 import { STUDY_SYNC_STATE_CHANGED_EVENT } from '../services/syncApi';
 import { getAppSettings } from '../services/settingsApi';
+import { clampCountupBreakMinutes } from '../utils/focusDuration';
 import { listenTauriEvent } from '../services/tauriEvents';
 import { isTauriRuntime } from '../services/tauriInvoke';
 import type { StudyModePhase, StudyModeState, Subject } from '../types/focus';
@@ -358,7 +359,7 @@ export default function FocusWidgetPage() {
       let minutes = 5;
       try {
         const settings = await getAppSettings();
-        minutes = Math.min(60, Math.max(1, settings.countup_break_minutes || 5));
+        minutes = clampCountupBreakMinutes(settings.countup_break_minutes || 5);
       } catch {
         // Fall back to the default 5 minutes when settings are unavailable.
       }

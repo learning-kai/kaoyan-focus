@@ -18,6 +18,7 @@ export function SettingNumber({
   max,
   min,
   onChange,
+  step = 1,
   text,
   unit = '分钟',
   value,
@@ -27,12 +28,14 @@ export function SettingNumber({
   max: number;
   min: number;
   onChange: (value: number) => void;
+  /** 加减按钮的单次步长，默认 1；区间很大时（如 1-720 分钟）可传更大的值。 */
+  step?: number;
   text: string;
   unit?: string;
   value: number;
 }) {
-  function step(delta: number) {
-    onChange(Math.min(max, Math.max(min, value + delta)));
+  function applyStep(delta: number) {
+    onChange(Math.min(max, Math.max(min, value + delta * step)));
   }
 
   return (
@@ -42,7 +45,7 @@ export function SettingNumber({
         <p>{text}</p>
       </div>
       <div className="stepper-control">
-        <button aria-label={`${label}减少`} disabled={disabled || value <= min} onClick={() => step(-1)} type="button">-</button>
+        <button aria-label={`${label}减少${step}`} disabled={disabled || value <= min} onClick={() => applyStep(-1)} type="button">-</button>
         <label>
           <input
             className="number-input"
@@ -55,7 +58,7 @@ export function SettingNumber({
           />
           <span>{unit}</span>
         </label>
-        <button aria-label={`${label}增加`} disabled={disabled || value >= max} onClick={() => step(1)} type="button">+</button>
+        <button aria-label={`${label}增加${step}`} disabled={disabled || value >= max} onClick={() => applyStep(1)} type="button">+</button>
       </div>
     </div>
   );

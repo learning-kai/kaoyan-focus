@@ -27,9 +27,9 @@ const PRIMARY_OWNER_DEVICE_ID_KEY: &str = "primary_owner_device_id";
 pub(crate) const TIMER_KIND_POMODORO: &str = "pomodoro";
 pub(crate) const TIMER_KIND_COUNTUP: &str = "countup";
 
-/// 正计时模式休息时长允许范围：1–60 分钟（含预设 5/10/15/20 与手动填写）。
+/// 正计时模式休息时长允许范围：1–720 分钟（12 小时），含预设 5/10/15/20 与手动填写。
 pub(crate) const COUNTUP_BREAK_MIN_SECONDS: i64 = 60;
-pub(crate) const COUNTUP_BREAK_MAX_SECONDS: i64 = 3600;
+pub(crate) const COUNTUP_BREAK_MAX_SECONDS: i64 = 43200;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FocusStatsSummary {
