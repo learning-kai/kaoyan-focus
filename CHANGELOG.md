@@ -857,4 +857,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - 完成自动ai日程 (8c4130f)
 - merge: AI 智能日程规划 1.22.1 并入 master (6e584af)
 
+## v1.3.2 - 2026-09-26
+
+### Desktop
+#### Fixed
+- 修复bug (38b30c8)
+
 
