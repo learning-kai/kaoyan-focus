@@ -845,4 +845,16 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - This build supersedes `v1.22.0`, which was packaged but never published and still contained the API-key defect.
 - The AI planner is still being delivered in stages. Real model scheduling, draft preview, apply and discard now work end to end. Drag-adjustment of a draft and one-click re-planning of affected windows after a task changes land in follow-up builds.
 
+## v1.3.1 - 2026-09-26
+
+### Desktop
+#### Added
+- feat: miniapp-sync 小程序实时同步通道（Node 中继 + Python PC agent + 小程序） (ab58a82)
+- feat: AI 智能日程规划（真模型排期 + 预览写入闭环），发布 1.22.1 (6b97daf)
+
+#### Changed
+- 11 (6000d89)
+- 完成自动ai日程 (8c4130f)
+- merge: AI 智能日程规划 1.22.1 并入 master (6e584af)
+
 
