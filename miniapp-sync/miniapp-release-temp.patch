@@ -1,0 +1,562 @@
+diff --git a/app.wxss b/app.wxss
+index 43d1adf..0cf1df7 100644
+--- a/app.wxss
++++ b/app.wxss
+@@ -202,3 +202,60 @@ page {
+   font-size: 24rpx;
+   color: #8a5a1a;
+ }
++
++/* 连接诊断：真机排查时要把原始 errMsg 完整露出来，因此允许换行 */
++.diag-url {
++  max-width: 60%;
++  text-align: right;
++  word-break: break-all;
++  font-size: 22rpx;
++  color: #5b616b;
++}
++
++.diag-box {
++  background: #fef2f2;
++  border: 2rpx solid #fbd5d5;
++  border-radius: 12rpx;
++  padding: 20rpx;
++  margin-top: 8rpx;
++}
++
++.diag-title {
++  font-size: 24rpx;
++  color: #b42318;
++  font-weight: 600;
++  margin-bottom: 12rpx;
++}
++
++.diag-raw {
++  font-size: 24rpx;
++  color: #1c1f23;
++  word-break: break-all;
++  line-height: 1.5;
++  margin-bottom: 12rpx;
++  font-family: 'SF Mono', Menlo, Consolas, monospace;
++}
++
++.diag-hint {
++  font-size: 24rpx;
++  color: #8a5a1a;
++  line-height: 1.6;
++}
++
++/* 首页的同步异常提示：连不上时必须说清原因，不能只显示「连接中」 */
++.sync-hint {
++  background: #fff7ed;
++  border-radius: 12rpx;
++  padding: 18rpx;
++  font-size: 24rpx;
++  color: #8a5a1a;
++  line-height: 1.6;
++  margin-bottom: 16rpx;
++}
++
++.sync-hint-link {
++  display: block;
++  margin-top: 12rpx;
++  color: #2f6bff;
++  font-size: 24rpx;
++}
+diff --git a/config.js b/config.js
+index 0b33579..b509e37 100644
+--- a/config.js
++++ b/config.js
+@@ -5,6 +5,18 @@
+  *   1. server.wsUrl / server.restUrl —— 换成你自己的已备案域名（必须 https/wss）
+  *   2. server.token                  —— 与服务端 config.js、PC 端 config.json 保持一致
+  *   3. 微信公众平台后台 → 开发管理 → 服务器域名 → socket 合法域名，加上同一个域名
++ *
++ * ⚠ 「socket 合法域名」填写格式（填错会报「域名协议头非法」，且不提示哪部分违规）：
++ *     ✅ api.skyhold.cloud          —— 只填纯域名主体
++ *     ❌ wss://api.skyhold.cloud    —— 不能带协议头
++ *     ❌ api.skyhold.cloud:443      —— 默认端口不用写；非 443 才写 host:port
++ *     ❌ api.skyhold.cloud/sync/ws  —— 不能带路径
++ *   前置硬条件：域名已 ICP 备案 + wss 加密 + TLS ≥ 1.2 + 证书链完整（可信 CA 签发）。
++ *
++ * ⚠ 真机与模拟器的关键差异（这是「模拟器能连、真机不能连」的唯一原因）：
++ *   微信开发者工具里的「不校验合法域名」以及 project.config.json 的 "urlCheck": false
++ *   **只对开发者工具生效**，真机（预览 / 体验版 / 正式版）一律强制校验域名白名单。
++ *   所以模拟器连得上 ≠ 真机连得上，白名单没配好时真机一定失败。
+  */
+ module.exports = {
+   server: {
+@@ -19,6 +31,10 @@ module.exports = {
+   timing: {
+     // 多久没收到服务端消息就认为连接已死
+     heartbeatTimeoutMs: 45000,
++    // 握手看门狗：发起连接后这么久还没 onOpen，就判定失败并重连。
++    // 真机上域名被拦时 socket 可能既不 open 也不 error，没有这个兜底
++    // 界面会永远停在「连接中」，且看不到任何原因。
++    connectWatchdogMs: 15000,
+     reconnectBaseMs: 1000,
+     reconnectMaxMs: 30000,
+     // 周期性一致性校验；下拉刷新会额外触发一次
+diff --git a/pages/mine/index.js b/pages/mine/index.js
+index b2e933e..a066a2b 100644
+--- a/pages/mine/index.js
++++ b/pages/mine/index.js
+@@ -17,7 +17,12 @@ Page({
+     outboxCount: 0,
+     counts: [],
+     conflicts: [],
+-    digestText: '尚未校验'
++    digestText: '尚未校验',
++    targetUrl: '',
++    errorRaw: '',
++    errorHint: '',
++    errorTime: '',
++    showDiagnostic: false
+   },
+ 
+   onLoad: function () {
+@@ -25,6 +30,10 @@ Page({
+     this._onSync = function (event) {
+       if (event.type === 'status') {
+         self.setData({ status: event.status, statusText: STATUS_TEXT[event.status] || event.status });
++        self.refreshDiagnostic();
++      }
++      if (event.type === 'error') {
++        self.refreshDiagnostic();
+       }
+       if (event.type === 'digest') {
+         self.setData({
+@@ -41,6 +50,30 @@ Page({
+ 
+   onShow: function () {
+     this.refreshStats();
++    this.refreshDiagnostic();
++  },
++
++  /**
++   * 真机排查入口：把「连接中」背后的真实原因摊开。
++   * 没有这段，用户只能看到一个永远转圈的状态，无从下手。
++   */
++  refreshDiagnostic: function () {
++    const error = sync.lastErrorInfo();
++    const offline = sync.statusOf() !== 'online';
++    this.setData({
++      targetUrl: sync.targetUrl(),
++      errorRaw: error ? error.raw : '',
++      errorHint: error ? error.hint : '',
++      errorTime: error && error.at ? this.formatTime(error.at) + ':' + this.formatSeconds(error.at) : '',
++      // 已连上就不必再刺激用户，但保留最近一次错误供随时回看
++      showDiagnostic: !!error && offline
++    });
++  },
++
++  formatSeconds: function (ms) {
++    const date = new Date(ms);
++    const pad = (n) => (n < 10 ? '0' + n : String(n));
++    return pad(date.getSeconds());
+   },
+ 
+   refreshStats: function () {
+diff --git a/pages/mine/index.wxml b/pages/mine/index.wxml
+index ad47bfe..0cdcdb0 100644
+--- a/pages/mine/index.wxml
++++ b/pages/mine/index.wxml
+@@ -17,6 +17,23 @@
+     </view>
+   </view>
+ 
++  <view class="card">
++    <view class="card-title"><text>连接诊断</text><text class="muted">真机排查用</text></view>
++    <view class="kv"><text class="muted">连接地址</text><text class="diag-url">{{targetUrl}}</text></view>
++    <block wx:if="{{showDiagnostic}}">
++      <view class="diag-box">
++        <view class="diag-title">最近一次连接失败（{{errorTime}}）</view>
++        <view class="diag-raw">{{errorRaw}}</view>
++        <view class="diag-hint">{{errorHint}}</view>
++      </view>
++    </block>
++    <view wx:else class="empty">连接正常，暂无错误</view>
++    <view class="muted" style="margin-top: 16rpx; line-height: 1.6;">
++      模拟器与真机不同：开发者工具的「不校验合法域名」（project.config.json 的 urlCheck）
++      只对工具生效，真机一律强制校验「socket 合法域名」白名单。
++    </view>
++  </view>
++
+   <view class="card">
+     <view class="card-title"><text>本地缓存</text><text class="muted">共 {{counts.length}} 类</text></view>
+     <view wx:for="{{counts}}" wx:key="key" class="kv">
+diff --git a/pages/today/index.js b/pages/today/index.js
+index 6042056..c720a15 100644
+--- a/pages/today/index.js
++++ b/pages/today/index.js
+@@ -38,6 +38,7 @@ Page({
+   data: {
+     syncStatus: 'offline',
+     syncStatusText: '离线',
++    syncHint: '',
+     phaseText: '未开始',
+     phaseClass: 'phase-idle',
+     subjectName: '',
+@@ -58,14 +59,30 @@ Page({
+           syncStatus: event.status,
+           syncStatusText: STATUS_TEXT[event.status] || event.status
+         });
++        self.refreshSyncHint();
+       }
++      if (event.type === 'error') self.refreshSyncHint();
+       if (event.type === 'change') self.refresh();
+     };
+     sync.on(this._onSync);
+   },
+ 
++  /**
++   * 真机上连不上时，光显示「连接中」等于什么都没说。
++   * 这里把最近一次失败原因直接摊在首页，用户不用翻到「我的」页也能知道该改什么。
++   */
++  refreshSyncHint: function () {
++    if (sync.statusOf() === 'online') {
++      this.setData({ syncHint: '' });
++      return;
++    }
++    const error = sync.lastErrorInfo();
++    this.setData({ syncHint: error ? error.hint : '' });
++  },
++
+   onShow: function () {
+     this.refresh();
++    this.refreshSyncHint();
+     const self = this;
+     this._timer = setInterval(function () {
+       self.updateCountdown();
+@@ -87,6 +104,10 @@ Page({
+     }, 1500);
+   },
+ 
++  onOpenDiagnostic: function () {
++    wx.switchTab({ url: '/pages/mine/index' });
++  },
++
+   refresh: function () {
+     const mode = store.activeStudyMode();
+     const today = store.todayDate(0);
+diff --git a/pages/today/index.wxml b/pages/today/index.wxml
+index e3aa05e..9cc845f 100644
+--- a/pages/today/index.wxml
++++ b/pages/today/index.wxml
+@@ -8,6 +8,11 @@
+       </view>
+     </view>
+ 
++    <view wx:if="{{syncHint}}" class="sync-hint">
++      <text>{{syncHint}}</text>
++      <text class="sync-hint-link" bindtap="onOpenDiagnostic">查看诊断 ›</text>
++    </view>
++
+     <view wx:if="{{phaseText === '未开始'}}" class="empty">电脑端当前没有运行中的学习模式</view>
+     <view wx:else>
+       <view class="row" style="margin-bottom: 18rpx;">
+diff --git a/services/sync-service.js b/services/sync-service.js
+index 0cde8db..3b9d86d 100644
+--- a/services/sync-service.js
++++ b/services/sync-service.js
+@@ -15,6 +15,11 @@ let lastMessageAt = 0;
+ let reconnectDelay = config.timing.reconnectBaseMs;
+ let reconnectTimer = null;
+ let heartbeatTimer = null;
++// 握手看门狗：真机上域名被微信拦掉时，socket 可能既不 onOpen 也不 onError，
++// 界面就会永远停在「连接中」。这个定时器把「永远连不上」变成可诊断的失败。
++let connectWatchdog = null;
++// 最近一次连接失败。真机排查全靠它——没有这段信息，用户只能看到「连接中」。
++let lastError = null;
+ // 摘要校验连续不一致的次数。单次不一致多半是读写时机错位，连续两次才升级为拉全量。
+ let digestMismatchStreak = 0;
+ let digestTimer = null;
+@@ -51,6 +56,111 @@ function socketUrl() {
+ 
+ /* ------------------------------------------------------------------ 连接管理 */
+ 
++/**
++ * 把 socket 的原始 errMsg 翻译成一句人话。
++ *
++ * 真机失败的报错都极简（例如 "url not in domain list"），不翻译的话
++ * 用户根本判断不出是白名单、证书还是网络问题。
++ */
++function hintFor(raw) {
++  const text = String(raw || '').toLowerCase();
++  if (text.indexOf('domain') >= 0 || text.indexOf('域名') >= 0) {
++    return '该域名不在微信后台的「socket 合法域名」里。真机会强制校验，开发者工具不校验——'
++      + '请到 微信公众平台 → 开发管理 → 服务器域名 → socket 合法域名 添加「api.skyhold.cloud」'
++      + '（只填纯域名，不要带 wss:// 前缀或路径），且域名必须已 ICP 备案。';
++  }
++  if (text.indexOf('cert') >= 0 || text.indexOf('证书') >= 0 || text.indexOf('tls') >= 0) {
++    return '证书或 TLS 校验未通过。微信要求可信 CA 签发、证书链完整、TLS ≥ 1.2。';
++  }
++  if (text.indexOf('401') >= 0 || text.indexOf('unauthorized') >= 0) {
++    return '服务端返回 401：token 不匹配。请核对小程序 config.js 的 token 与服务端一致。';
++  }
++  if (text.indexOf('500') >= 0 || text.indexOf('502') >= 0 || text.indexOf('503') >= 0) {
++    return '服务端异常（5xx）：检查服务器上的 kaoyan-sync.service 与 Caddy 是否正常。';
++  }
++  if (text.indexOf('timeout') >= 0 || text.indexOf('超时') >= 0) {
++    return '握手超时：手机网络到该域名不通。部分校园网/内网会拦 WSS，换 4G/5G 再试。';
++  }
++  if (text.indexOf('connection') >= 0 || text.indexOf('refused') >= 0 || text.indexOf('fail') >= 0) {
++    return '网络不可达：确认手机能打开 https://api.skyhold.cloud/sync/health，且没走需要认证的代理。';
++  }
++  return '未知原因，请对照 README「真机连接不上」一节逐项排查。';
++}
++
++function maskUrl(url) {
++  // 令牌不能出现在界面上，也不能进日志
++  return String(url || '').replace(/token=[^&]*/i, 'token=***');
++}
++
++function recordError(error, source, hintOverride) {
++  const raw = (error && (error.errMsg || error.message)) || String(error || '未知错误');
++  lastError = {
++    raw: raw,
++    source: source,
++    hint: hintOverride || hintFor(raw),
++    at: Date.now(),
++    url: maskUrl(socketUrl())
++  };
++  console.warn('[sync] ' + source + ': ' + raw);
++  emit({ type: 'error', message: raw, source: source, hint: lastError.hint });
++  return lastError;
++}
++
++function lastErrorInfo() {
++  return lastError;
++}
++
++/**
++ * 取 URL 的 host（去掉端口）。小程序运行时没有 URL 对象，只能手写解析。
++ */
++function urlHost(url) {
++  const matched = /^wss?:\/\/([^/?#]+)/i.exec(String(url || ''));
++  if (!matched) return '';
++  return matched[1].replace(/:\d+$/, '').toLowerCase();
++}
++
++function isLocalHost(host) {
++  if (!host) return false;
++  if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]') return true;
++  if (/^10\./.test(host)) return true;
++  if (/^192\.168\./.test(host)) return true;
++  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
++  return false;
++}
++
++/**
++ * 配置自检：拦掉真机**必然**连不上的地址。
++ *
++ * 只对公网地址严格：本机/内网地址（ws://127.0.0.1:8788）在开发者工具里是合法的，
++ * 本地联调正是这么用的，不能一并拦死；真机则一律要求 wss + 已备案域名。
++ */
++function urlSchemeProblem() {
++  const wsUrl = String(config.server.wsUrl || '');
++  if (!/^wss?:\/\//i.test(wsUrl)) {
++    return 'wsUrl 必须以 wss:// 开头（当前「' + wsUrl + '」）。';
++  }
++  const host = urlHost(wsUrl);
++  if (!host) {
++    return 'wsUrl 格式不正确（当前「' + wsUrl + '」），应形如 wss://域名/路径。';
++  }
++  if (isLocalHost(host)) return null; // 本地联调：交给开发者工具，不做真机约束
++
++  if (wsUrl.indexOf('wss://') !== 0) {
++    return '真机不允许明文 ws://，必须用 wss://（当前「' + wsUrl + '」）。';
++  }
++  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
++    return 'wsUrl 不能是 IP 地址，真机只接受已 ICP 备案的域名（当前「' + wsUrl + '」）。';
++  }
++  return null;
++}
++
++function clearWatchdog() {
++  if (connectWatchdog) {
++    clearTimeout(connectWatchdog);
++    connectWatchdog = null;
++  }
++}
++
+ function connect(reason) {
+   if (manualClosed) return;
+   if (socketTask && status === 'online') return;
+@@ -59,19 +169,82 @@ function connect(reason) {
+     reconnectTimer = null;
+   }
+ 
++  const schemeProblem = urlSchemeProblem();
++  if (schemeProblem) {
++    status = 'offline';
++    recordError({ errMsg: schemeProblem }, 'config');
++    emit({ type: 'status', status: status, reason: 'config-error' });
++    return;
++  }
++
++  clearWatchdog();
++
++  // 手动重连时把退避重置回初始值，否则用户点了按钮还要等最多 30 秒
++  if (reason === 'manual') reconnectDelay = config.timing.reconnectBaseMs;
++
++  // 旧连接先作废：下面每个回调都会用 socketTask !== task 判断自己是否已过期，
++  // 过期回调直接 return，避免旧 socket 的 close/error 把新连接的状态改乱。
++  if (socketTask) {
++    const stale = socketTask;
++    socketTask = null;
++    try {
++      stale.close({ code: 4002, reason: 'superseded' });
++    } catch (error) {
++      /* 已经失效，忽略 */
++    }
++  }
++
+   status = 'connecting';
+   emit({ type: 'status', status: status, reason: reason || 'manual' });
+ 
+-  const task = wx.connectSocket({
+-    url: socketUrl(),
+-    fail: function (error) {
+-      console.warn('[sync] 连接失败', error);
+-      scheduleReconnect('connect-fail');
+-    }
+-  });
++  let task = null;
++  try {
++    task = wx.connectSocket({
++      url: socketUrl(),
++      fail: function (error) {
++        if (socketTask !== task) return;
++        clearWatchdog();
++        recordError(error, 'connect-fail');
++        status = 'offline';
++        emit({ type: 'status', status: status, reason: 'connect-fail' });
++        scheduleReconnect('connect-fail');
++      }
++    });
++  } catch (error) {
++    status = 'offline';
++    recordError(error, 'connect-throw');
++    emit({ type: 'status', status: status, reason: 'connect-throw' });
++    scheduleReconnect('connect-throw');
++    return;
++  }
++
+   socketTask = task;
+ 
++  connectWatchdog = setTimeout(function () {
++    connectWatchdog = null;
++    if (socketTask !== task) return;
++    if (status !== 'connecting') return;
++    recordError(
++      { errMsg: 'connect-timeout: ' + config.timing.connectWatchdogMs + 'ms 内未完成握手' },
++      'connect-timeout',
++      '握手一直没完成。真机上最常见的原因是域名没进「socket 合法域名」白名单'
++        + '（开发者工具不校验、真机强制校验），其次才是手机网络不通。'
++        + '请先检查 微信公众平台 → 开发管理 → 服务器域名 → socket 合法域名。'
++    );
++    socketTask = null;
++    try {
++      task.close({ code: 4001, reason: 'watchdog' });
++    } catch (error) {
++      /* 忽略 */
++    }
++    status = 'offline';
++    emit({ type: 'status', status: status, reason: 'connect-timeout' });
++    scheduleReconnect('connect-timeout');
++  }, config.timing.connectWatchdogMs);
++
+   task.onOpen(function () {
++    if (socketTask !== task) return;
++    clearWatchdog();
+     status = 'online';
+     reconnectDelay = config.timing.reconnectBaseMs;
+     lastMessageAt = Date.now();
+@@ -87,6 +260,7 @@ function connect(reason) {
+   });
+ 
+   task.onMessage(function (res) {
++    if (socketTask !== task) return;
+     lastMessageAt = Date.now();
+     let message = null;
+     try {
+@@ -98,12 +272,19 @@ function connect(reason) {
+   });
+ 
+   task.onError(function (error) {
+-    console.warn('[sync] socket 错误', error);
+-    emit({ type: 'error', message: (error && error.errMsg) || 'socket error' });
++    if (socketTask !== task) return;
++    recordError(error, 'socket-error');
++    // onError 之后不保证一定会有 onClose，这里直接安排重连（scheduleReconnect 自带去重）
++    clearWatchdog();
++    status = 'offline';
++    emit({ type: 'status', status: status, reason: 'socket-error' });
++    scheduleReconnect('socket-error');
+   });
+ 
+   task.onClose(function () {
++    if (socketTask !== task) return;
+     socketTask = null;
++    clearWatchdog();
+     status = 'offline';
+     emit({ type: 'status', status: status, reason: 'close' });
+     scheduleReconnect('close');
+@@ -113,6 +294,7 @@ function connect(reason) {
+ function scheduleReconnect(reason) {
+   if (manualClosed) return;
+   if (reconnectTimer) return;
++  clearWatchdog();
+   const wait = reconnectDelay;
+   reconnectDelay = Math.min(reconnectDelay * 2, config.timing.reconnectMaxMs);
+   emit({ type: 'status', status: 'reconnecting', reason: reason, waitMs: wait });
+@@ -124,13 +306,15 @@ function scheduleReconnect(reason) {
+ 
+ function disconnect() {
+   manualClosed = true;
++  clearWatchdog();
+   if (reconnectTimer) {
+     clearTimeout(reconnectTimer);
+     reconnectTimer = null;
+   }
+   if (socketTask) {
+-    socketTask.close({ code: 1000 });
++    const task = socketTask;
+     socketTask = null;
++    task.close({ code: 1000 });
+   }
+   status = 'offline';
+   emit({ type: 'status', status: status, reason: 'manual-close' });
+@@ -138,9 +322,12 @@ function disconnect() {
+ 
+ function send(payload) {
+   if (!socketTask || status !== 'online') return false;
+-  socketTask.send({
++  const task = socketTask;
++  task.send({
+     data: JSON.stringify(payload),
+-    fail: function () {
++    fail: function (error) {
++      if (socketTask !== task) return;
++      recordError(error, 'send-fail');
+       scheduleReconnect('send-fail');
+     }
+   });
+@@ -439,6 +626,7 @@ function forcePull() {
+ 
+ function start() {
+   manualClosed = false;
++  lastError = null;
+   store.init();
+   connect('start');
+ 
+@@ -486,6 +674,8 @@ module.exports = {
+   ensureConnected: ensureConnected,
+   on: on,
+   statusOf: statusOf,
++  lastErrorInfo: lastErrorInfo,
++  targetUrl: function () { return maskUrl(socketUrl()); },
+   mutate: mutate,
+   create: create,
+   remove: remove,
