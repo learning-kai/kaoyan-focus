@@ -31,8 +31,10 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
+import { openAiPlanDrawer, onAiPlanApplied } from '../services/aiPlanBus';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import {
@@ -50,8 +52,11 @@ import {
   updateTodayPlanItem,
 } from '../services/checklistApi';
 import { getStudyModeState } from '../services/focusApi';
+import { getAiSchedulerSettings } from '../services/aiSchedulerApi';
 import { syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT } from '../services/feishuApi';
+import { CHECKLIST_PRIORITY_OPTIONS } from '../types/checklist';
+import type { AiSchedulerSettings } from '../types/aiScheduler';
 import type {
   ChecklistCategory,
   ChecklistPageData,
@@ -112,6 +117,8 @@ const emptyTodayDraft: TodayPlanItemDraft = {
   note: '',
   dueDate: '',
   subjectId: null,
+  priority: 'medium',
+  estimatedMinutes: 0,
 };
 
 const emptyTaskDraft = (categoryKey: string): ChecklistTaskDraft => ({
@@ -119,7 +126,36 @@ const emptyTaskDraft = (categoryKey: string): ChecklistTaskDraft => ({
   title: '',
   note: '',
   dueDate: '',
+  priority: 'medium',
+  estimatedMinutes: 0,
 });
+
+const PRIORITY_LABEL: Record<string, string> = {
+  high: '高优先',
+  medium: '中优先',
+  low: '低优先',
+};
+
+/** 把分钟数折成人类可读文案；返回 null 表示未估时。 */
+function formatEstimatedMinutes(minutes: number | null | undefined): string | null {
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes <= 0) {
+    return null;
+  }
+
+  if (minutes < 60) {
+    return `${minutes} 分钟`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} 小时` : `${hours} 小时 ${rest} 分`;
+}
+
+/** AI 排期依据的元信息片段：优先级 + 预计耗时。 */
+function buildSchedulingMeta(priority: string, estimatedMinutes: number): string[] {
+  const duration = formatEstimatedMinutes(estimatedMinutes);
+  return [PRIORITY_LABEL[priority] ?? PRIORITY_LABEL.medium, duration ? `预计 ${duration}` : '未估时'];
+}
 
 function summarizeText(value: string | null | undefined, fallback: string, maxLength = 18) {
   const text = value?.trim();
@@ -138,6 +174,7 @@ function buildTodayMeta(item: TodayPlanItem) {
   if (item.due_date) {
     parts.push(`截止 ${item.due_date}`);
   }
+  parts.push(...buildSchedulingMeta(item.priority, item.estimated_minutes));
 
   return parts.length > 0 ? parts.join(' · ') : '无备注';
 }
@@ -150,6 +187,7 @@ function buildTaskMeta(task: ChecklistTask) {
   if (task.due_date) {
     parts.push(`截止 ${task.due_date}`);
   }
+  parts.push(...buildSchedulingMeta(task.priority, task.estimated_minutes));
 
   return parts.length > 0 ? parts.join(' · ') : '未设置备注或截止日期';
 }
@@ -229,6 +267,7 @@ export default function ChecklistPage() {
   const [editingTodayDraft, setEditingTodayDraft] = useState<TodayPlanItemDraft>(emptyTodayDraft);
   const [showCompleted, setShowCompleted] = useState<Record<string, boolean>>({});
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [aiSettings, setAiSettings] = useState<AiSchedulerSettings | null>(null);
   const refreshTokenRef = useRef(0);
 
   const sensors = useSensors(
@@ -251,6 +290,15 @@ export default function ChecklistPage() {
     return categoryOrder
       .map((key) => byKey.get(key))
       .filter((category): category is ChecklistCategory => Boolean(category));
+  }, [data]);
+
+  /** 分类显示名，供 AI 草案把 category_key 渲染成中文。 */
+  const categoryLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const category of data?.categories ?? []) {
+      map[category.key] = category.title;
+    }
+    return map;
   }, [data]);
 
   const activeCategory = categories.find((category) => category.key === activeCategoryKey) ?? categories[0] ?? null;
@@ -287,6 +335,36 @@ export default function ChecklistPage() {
     };
     window.addEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
     return () => window.removeEventListener(FEISHU_SYNC_REFRESH_EVENT, handleFeishuRefresh);
+  }, [activeCategoryKey, selectedPlanDate]);
+
+  // AI 排期入口的显隐只取决于设置，失败时静默隐藏即可，不该让清单页报错。
+  useEffect(() => {
+    let active = true;
+    void getAiSchedulerSettings()
+      .then((settings) => {
+        if (active) {
+          setAiSettings(settings);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAiSettings(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const aiPlanEnabled = Boolean(aiSettings?.enabled && aiSettings?.privacy_acknowledged);
+
+  // 抽屉已提升为 App 级单例：这里只订阅「写入成功」刷新当前计划视图。
+  useEffect(() => {
+    return onAiPlanApplied(() => {
+      void initializePage(activeCategoryKey, selectedPlanDate);
+    });
+    // initializePage 每次渲染都是新引用，依赖实际字段即可。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategoryKey, selectedPlanDate]);
 
   async function initializePage(preferredCategoryKey: string | null = null, planDate = selectedPlanDate) {
@@ -362,6 +440,8 @@ export default function ChecklistPage() {
       title: task.title,
       note: task.note ?? '',
       dueDate: task.due_date ?? '',
+      priority: task.priority,
+      estimatedMinutes: task.estimated_minutes,
     });
     setComposerCategoryKey(null);
   }
@@ -373,6 +453,8 @@ export default function ChecklistPage() {
       note: item.note ?? '',
       dueDate: item.due_date ?? '',
       subjectId: item.subject_id,
+      priority: item.priority,
+      estimatedMinutes: item.estimated_minutes,
     });
   }
 
@@ -856,6 +938,18 @@ export default function ChecklistPage() {
               <RefreshCw size={17} />
               刷新
             </button>
+            {aiPlanEnabled && (
+              <button
+                className="secondary-action ai-plan-entry"
+                disabled={saving}
+                onClick={() => openAiPlanDrawer(selectedPlanDate, categoryLabels)}
+                title={`让 AI 为 ${selectedPlanDateLabel} 排一份日程草案`}
+                type="button"
+              >
+                <Sparkles size={17} />
+                AI 排期
+              </button>
+            )}
           </div>
         </header>
 
@@ -1109,6 +1203,39 @@ function TaskEditor({
           onChange={(event) => onChange({ dueDate: event.target.value })}
           type="date"
           value={draft.dueDate ?? ''}
+        />
+      </label>
+
+      <label className="field-block">
+        <span>优先级</span>
+        <select
+          className="text-input compact-input"
+          onChange={(event) => onChange({ priority: event.target.value })}
+          title="AI 排期据此决定先后顺序与高效时段占用"
+          value={draft.priority ?? 'medium'}
+        >
+          {CHECKLIST_PRIORITY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="field-block">
+        <span>预计耗时</span>
+        <input
+          className="text-input compact-input"
+          min={0}
+          onChange={(event) => {
+            const parsed = Number.parseInt(event.target.value, 10);
+            onChange({ estimatedMinutes: Number.isFinite(parsed) && parsed > 0 ? parsed : 0 });
+          }}
+          placeholder="分钟（未估）"
+          step={5}
+          title="留空表示未估时，AI 排期会回落到默认时长"
+          type="number"
+          value={draft.estimatedMinutes && draft.estimatedMinutes > 0 ? String(draft.estimatedMinutes) : ''}
         />
       </label>
 

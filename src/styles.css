@@ -3119,6 +3119,29 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   gap: 12px;
 }
 
+/* AI 排期设置里用 <details> 折叠「请求参数与容量」。 */
+details.details-card > summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+}
+
+details.details-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.details-card > summary::before {
+  content: '▸';
+  margin-right: 6px;
+  color: var(--muted);
+}
+
+details.details-card[open] > summary::before {
+  content: '▾';
+}
+
 .details-card strong {
   word-break: break-word;
 }
@@ -3433,9 +3456,19 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   gap: 10px;
 }
 
+/* 列顺序：标题 | 截止日期 | 优先级 | 预计耗时 | 备注 | 提交 */
 .task-editor-grid.compact {
-  grid-template-columns: minmax(0, 1.2fr) 146px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.25fr) 140px 92px 118px minmax(0, 1fr) auto;
   align-items: end;
+}
+
+/* 今日任务抽屉（FocusPage）固定 360px 宽，容不下 6 列，退化为两列并把按钮铺满。 */
+.today-plan-drawer .task-editor-grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.today-plan-drawer .task-editor-grid.compact > .primary-action {
+  grid-column: 1 / -1;
 }
 
 .textarea-input {
@@ -7658,4 +7691,326 @@ html[data-study-fullscreen='true'] .focus-clock-zone strong {
   .focus-duration-input {
     width: 100%;
   }
+}
+
+/* ── AI 排期抽屉（S3 只读版）──
+   复用 .schedule-drawer 的定位 / 动效 / 主题外壳，这里只补内部结构。
+   刻意用 flex 而非继承 grid-template-rows：告警区块的数量是可变的，
+   固定行数一旦对不上，「体内容器滚动、按钮贴底」就会失效。 */
+.ai-plan-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(430px, calc(100vw - 40px));
+}
+
+.ai-plan-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.ai-plan-options {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(145, 167, 199, 0.12);
+  border-radius: 12px;
+  background: rgba(9, 15, 25, 0.42);
+}
+
+.ai-plan-field {
+  display: grid;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.ai-plan-field .text-input {
+  min-height: 32px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.ai-plan-instruction {
+  resize: vertical;
+  line-height: 1.45;
+  font-family: inherit;
+}
+
+.ai-plan-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ai-plan-check input {
+  accent-color: var(--blue);
+}
+
+.ai-plan-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ai-plan-timeline {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.ai-plan-day {
+  display: grid;
+  gap: 6px;
+}
+
+.ai-plan-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ai-plan-day-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-plan-item {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  padding: 8px 9px;
+  border: 1px solid rgba(145, 167, 199, 0.2);
+  border-left: 3px solid var(--subject-general);
+  border-radius: 10px;
+  background: rgba(16, 27, 43, 0.74);
+}
+
+.ai-plan-item.category-politics { border-left-color: var(--subject-politics); }
+.ai-plan-item.category-english { border-left-color: var(--subject-english); }
+.ai-plan-item.category-math { border-left-color: var(--subject-math); }
+.ai-plan-item.category-major { border-left-color: var(--subject-major); }
+
+.ai-plan-item.has-conflict {
+  border-color: var(--red);
+  border-left-color: var(--red);
+}
+
+.ai-plan-item-time {
+  display: grid;
+  gap: 1px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-plan-item-time strong {
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.ai-plan-item-time span {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.ai-plan-item-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ai-plan-item-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-plan-item-body small {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.ai-plan-item-rationale {
+  margin: 1px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ai-plan-item-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--amber);
+}
+
+.ai-plan-unscheduled {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(145, 167, 199, 0.2);
+}
+
+.ai-plan-unscheduled-item {
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px dashed rgba(145, 167, 199, 0.24);
+  border-radius: 10px;
+}
+
+.ai-plan-unscheduled-item strong {
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.ai-plan-unscheduled-item small {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.ai-plan-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 11.5px;
+}
+
+.ai-plan-alert > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ai-plan-alert strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ai-plan-alert small {
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.86;
+}
+
+.ai-plan-alert.is-error {
+  border-color: color-mix(in srgb, var(--red) 42%, transparent);
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.ai-plan-alert.is-warn {
+  border-color: color-mix(in srgb, var(--amber) 42%, transparent);
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.ai-plan-alert.is-info {
+  border-color: color-mix(in srgb, var(--blue) 42%, transparent);
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.ai-plan-retry {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+}
+
+.ai-plan-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(145, 167, 199, 0.12);
+}
+
+.ai-plan-empty {
+  margin-top: 4px;
+}
+
+.ai-plan-entry {
+  white-space: nowrap;
+}
+
+/* 抽屉内的按钮贴着抽屉宽度收紧一点，避免长文案换行。 */
+.ai-plan-actions .primary-action,
+.ai-plan-actions .ghost-action,
+.ai-plan-options .primary-action {
+  min-height: 34px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+}
+
+.spin {
+  animation: ai-plan-spin 900ms linear infinite;
+}
+
+@keyframes ai-plan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 尊重系统的「减少动态效果」偏好：转圈仍在转，但去掉多余位移。 */
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation-duration: 1600ms;
+  }
+}
+
+html[data-theme='light'] .ai-plan-options {
+  border-color: rgba(112, 131, 159, 0.16);
+  background: rgba(255, 255, 255, 0.54);
+}
+
+html[data-theme='light'] .ai-plan-options .text-input {
+  color: #162033;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme='light'] .ai-plan-item {
+  border-color: rgba(112, 131, 159, 0.16);
+  border-left-color: var(--subject-general);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+html[data-theme='light'] .ai-plan-item.category-politics { border-left-color: var(--subject-politics); }
+html[data-theme='light'] .ai-plan-item.category-english { border-left-color: var(--subject-english); }
+html[data-theme='light'] .ai-plan-item.category-math { border-left-color: var(--subject-math); }
+html[data-theme='light'] .ai-plan-item.category-major { border-left-color: var(--subject-major); }
+
+html[data-theme='light'] .ai-plan-item.has-conflict {
+  border-color: var(--red);
+  border-left-color: var(--red);
+}
+
+html[data-theme='light'] .ai-plan-unscheduled-item {
+  border-color: rgba(112, 131, 159, 0.24);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+html[data-theme='light'] .ai-plan-actions,
+html[data-theme='light'] .ai-plan-unscheduled {
+  border-top-color: rgba(112, 131, 159, 0.16);
 }

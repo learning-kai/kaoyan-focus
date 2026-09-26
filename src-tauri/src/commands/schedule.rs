@@ -11,10 +11,14 @@ use std::collections::HashSet;
 use std::thread;
 use tauri::{AppHandle, Manager, State};
 
-const ENTITY_SCHEDULE_BLOCK: &str = "schedule_block";
+/// 同步实体名。`pub(crate)` 以便 AI 排期 apply 写入后补 sync_meta。
+pub(crate) const ENTITY_SCHEDULE_BLOCK: &str = "schedule_block";
 const ENTITY_SCHEDULE_TEMPLATE: &str = "schedule_template";
 
-fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
+/// 写入日程后触发对象存储 / 飞书 / CalDAV 三路同步。
+///
+/// `pub(crate)`：AI 排期 apply 写库后也必须触发，否则新块不会推到远端日历。
+pub(crate) fn trigger_shared_sync(app: &AppHandle, trigger: &'static str) {
     let sync_app = app.clone();
     thread::spawn(move || {
         let _ = crate::commands::sync::sync_object_storage_after_external_change(sync_app, trigger);

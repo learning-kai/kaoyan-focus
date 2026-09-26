@@ -7,6 +7,7 @@ import type {
   FeishuSyncStatus,
 } from '../../types/settings';
 import { Detail } from './SettingsPrimitives';
+import { AiSchedulerPanel } from './AiSchedulerPanel';
 import type { CalDavBusyAction, SettingsPanelKey } from './types';
 
 type IntegrationsPanelProps = {
@@ -392,6 +393,16 @@ export function IntegrationsPanel({
             </>
           )}
         </section>
+
+        {/*
+          AI 排期面板自带状态与命令调用：它是整块独立的集成能力，不需要把十几个字段
+          再穿过 SettingsPage / 本组件。只需透传展开状态与专注锁。
+        */}
+        <AiSchedulerPanel
+          expanded={expandedPanels.aiScheduler}
+          locked={settingsLocked}
+          onToggle={() => togglePanel('aiScheduler')}
+        />
       </div>
     </div>
   );

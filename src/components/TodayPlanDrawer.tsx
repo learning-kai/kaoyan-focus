@@ -3,6 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Check, GripVertical, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { CHECKLIST_PRIORITY_OPTIONS } from '../types/checklist';
 import type { TodayPlanItem, TodayPlanItemDraft } from '../types/checklist';
 
 type TodayPlanDrawerProps = {
@@ -100,6 +101,39 @@ function TaskEditor({
           onChange={(event) => onChange({ dueDate: event.target.value })}
           type="date"
           value={draft.dueDate ?? ''}
+        />
+      </label>
+
+      <label className="field-block">
+        <span>优先级</span>
+        <select
+          className="text-input compact-input"
+          onChange={(event) => onChange({ priority: event.target.value })}
+          title="AI 排期据此决定先后顺序与高效时段占用"
+          value={draft.priority ?? 'medium'}
+        >
+          {CHECKLIST_PRIORITY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="field-block">
+        <span>预计耗时</span>
+        <input
+          className="text-input compact-input"
+          min={0}
+          onChange={(event) => {
+            const parsed = Number.parseInt(event.target.value, 10);
+            onChange({ estimatedMinutes: Number.isFinite(parsed) && parsed > 0 ? parsed : 0 });
+          }}
+          placeholder="分钟（未估）"
+          step={5}
+          title="留空表示未估时，AI 排期会回落到默认时长"
+          type="number"
+          value={draft.estimatedMinutes && draft.estimatedMinutes > 0 ? String(draft.estimatedMinutes) : ''}
         />
       </label>
 

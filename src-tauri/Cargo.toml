@@ -1,6 +1,6 @@
 [package]
 name = "kaoyan-focus"
-version = "1.21.7"
+version = "1.22.1"
 description = "Windows study focus app for exam preparation"
 authors = ["kaoyan-focus"]
 edition = "2021"
@@ -11,6 +11,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# 同上：Cargo resolver v2 不跨 [dependencies] / [build-dependencies] 合并特性，
+# 而 schemars 出现在 tauri-build 的构建依赖链上，因此这里必须再声明一次。
+indexmap = { version = "1.9", features = ["std"] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-ico"] }
@@ -21,6 +24,12 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
+# 修复传递依赖 schemars 0.8.x 的特性转发缺陷：
+# schemars 声明 indexmap 时用了 `default-features = false`，且把 std 转发写成 `indexmap?/std`，
+# 当 std 先于 preserve_order 被启用时转发静默失效，导致 indexmap 的 RandomState 失去默认值，
+# 编译报 "IndexMap takes 3 generic arguments but 2 were supplied"。
+# 这里显式启用 std，通过特性合并把缺失的特性补回去。
+indexmap = { version = "1.9", features = ["std"] }
 quick-xml = "0.39.4"
 aws-config = "1"
 aws-credential-types = "1"

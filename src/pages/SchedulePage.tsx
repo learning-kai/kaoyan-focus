@@ -17,10 +17,13 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
+import { openAiPlanDrawer, onAiPlanApplied } from '../services/aiPlanBus';
 import { completeTodayPlanItem } from '../services/checklistApi';
 import { getAppSettings } from '../services/settingsApi';
+import { getAiSchedulerSettings } from '../services/aiSchedulerApi';
 import { syncConfiguredStateChange } from '../services/syncApi';
 import { FEISHU_SYNC_REFRESH_EVENT, syncFeishuBridge } from '../services/feishuApi';
 import { CALDAV_SYNC_REFRESH_EVENT } from '../services/caldavApi';
@@ -42,6 +45,7 @@ import { getStudyModeState, listFocusSessionsInRange, listSubjects } from '../se
 import type { AppSettings } from '../types/settings';
 import type { FocusSession, StudyModeState, Subject } from '../types/focus';
 import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData, ScheduleTemplate, ScheduleTemplateDraft } from '../types/schedule';
+import type { AiSchedulerSettings } from '../types/aiScheduler';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
 import { requestAppNavigation } from '../navigationEvents';
 import { FOCUS_BAND_FALLBACK_COLOR } from '../palette';
@@ -388,6 +392,7 @@ export default function SchedulePage() {
   const [dragState, setDragState] = useState<CalendarDragState | null>(null);
   const [pendingBlockDrag, setPendingBlockDrag] = useState<PendingBlockDragState | null>(null);
   const [selectedBlockDetail, setSelectedBlockDetail] = useState<ScheduleBlockDetail | null>(null);
+  const [aiSettings, setAiSettings] = useState<AiSchedulerSettings | null>(null);
   const refreshTokenRef = useRef(0);
   const focusTokenRef = useRef(0);
   const laneRef = useRef<HTMLDivElement | null>(null);
@@ -408,6 +413,36 @@ export default function SchedulePage() {
   useEffect(() => {
     void initialize();
   }, []);
+
+  // AI 排期入口的显隐只取决于设置；读取失败就当作未开启，静默隐藏。
+  useEffect(() => {
+    let active = true;
+    void getAiSchedulerSettings()
+      .then((value) => {
+        if (active) {
+          setAiSettings(value);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAiSettings(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const aiPlanEnabled = Boolean(aiSettings?.enabled && aiSettings?.privacy_acknowledged);
+
+  // 抽屉已提升为 App 级单例：这里只订阅「写入成功」刷新当前日历。
+  useEffect(() => {
+    return onAiPlanApplied(() => {
+      void refresh(selectedDate);
+    });
+    // refresh 为函数声明，随 selectedDate 闭包取到最新值。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   useEffect(() => {
     void refresh(selectedDate);
@@ -1472,6 +1507,16 @@ export default function SchedulePage() {
           <button className="primary-button" type="button" onClick={() => setShowBlockComposer((value) => !value)}>
             <Plus size={16} /> 日程
           </button>
+          {aiPlanEnabled && (
+            <button
+              className="ghost-button ai-plan-entry"
+              title={`让 AI 为 ${selectedDate} 排一份日程草案`}
+              type="button"
+              onClick={() => openAiPlanDrawer(selectedDate)}
+            >
+              <Sparkles size={16} /> AI 排期
+            </button>
+          )}
         </div>
       </section>
 

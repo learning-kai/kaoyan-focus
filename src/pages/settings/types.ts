@@ -3,6 +3,7 @@ export type SettingsPanelKey =
   | 'feishu'
   | 'caldav'
   | 'email'
+  | 'aiScheduler'
   | 'syncJournal'
   | 'backups'
   | 'objectStorage'

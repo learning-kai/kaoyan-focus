@@ -972,7 +972,8 @@ fn load_checklist_task_rows(
     let mut statement = connection
         .prepare(
             "
-            SELECT id, board_scope, subject_id, title, note, due_date, sort_order, completed, created_at, updated_at
+            SELECT id, board_scope, subject_id, title, note, due_date, sort_order, completed,
+                   priority, estimated_minutes, ai_pinned, created_at, updated_at
             FROM checklist_tasks
             WHERE completed IN (0, 1)
             ORDER BY id ASC
@@ -991,8 +992,11 @@ fn load_checklist_task_rows(
                 due_date: row.get(5)?,
                 sort_order: row.get(6)?,
                 completed: row.get::<_, i64>(7)? != 0,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
+                priority: row.get(8)?,
+                estimated_minutes: row.get(9)?,
+                ai_pinned: row.get::<_, i64>(10)? != 0,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -1007,7 +1011,7 @@ fn load_today_plan_item_rows(
     let mut statement = connection
         .prepare(
             "
-            SELECT id, today_date, source_task_id, subject_id, title, note, due_date, sort_order, completed, synced_source_completion, created_at, updated_at
+            SELECT id, today_date, source_task_id, subject_id, title, note, due_date, sort_order, completed, synced_source_completion, priority, estimated_minutes, created_at, updated_at
             FROM today_plan_items
             ORDER BY today_date ASC, sort_order ASC, id ASC
             ",
@@ -1027,8 +1031,10 @@ fn load_today_plan_item_rows(
                 sort_order: row.get(7)?,
                 completed: row.get::<_, i64>(8)? != 0,
                 synced_source_completion: row.get::<_, i64>(9)? != 0,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                priority: row.get(10)?,
+                estimated_minutes: row.get(11)?,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -1880,6 +1886,9 @@ fn upsert_checklist_task_row(
     due_date: Option<String>,
     sort_order: i64,
     completed: bool,
+    priority: Option<&str>,
+    estimated_minutes: Option<i64>,
+    ai_pinned: Option<bool>,
     created_at: &str,
     updated_at: &str,
 ) -> Result<(), String> {
@@ -1898,9 +1907,12 @@ fn upsert_checklist_task_row(
                     due_date = ?6,
                     sort_order = ?7,
                     completed = ?8,
-                    created_at = ?9,
-                    updated_at = ?10
-                WHERE id = ?11
+                    priority = COALESCE(?9, priority),
+                    estimated_minutes = COALESCE(?10, estimated_minutes),
+                    ai_pinned = COALESCE(?11, ai_pinned),
+                    created_at = ?12,
+                    updated_at = ?13
+                WHERE id = ?14
                 ",
                 params![
                     board_scope,
@@ -1911,6 +1923,9 @@ fn upsert_checklist_task_row(
                     due_date,
                     sort_order,
                     if completed { 1 } else { 0 },
+                    priority,
+                    estimated_minutes,
+                    ai_pinned.map(|value| if value { 1 } else { 0 }),
                     created_at,
                     updated_at,
                     local_id
@@ -1932,10 +1947,25 @@ fn upsert_checklist_task_row(
         .execute(
             "
             INSERT INTO checklist_tasks (
-              board_scope, subject_id, column_id, title, note, due_date, sort_order, completed, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+              board_scope, subject_id, column_id, title, note, due_date, sort_order, completed,
+              priority, estimated_minutes, ai_pinned, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
             ",
-            params![board_scope, subject_id, column_id, title, note, due_date, sort_order, if completed { 1 } else { 0 }, created_at, updated_at],
+            params![
+                board_scope,
+                subject_id,
+                column_id,
+                title,
+                note,
+                due_date,
+                sort_order,
+                if completed { 1 } else { 0 },
+                priority.unwrap_or("medium"),
+                estimated_minutes.unwrap_or(0),
+                ai_pinned.map(|value| if value { 1 } else { 0 }).unwrap_or(0),
+                created_at,
+                updated_at
+            ],
         )
         .map_err(|error| error.to_string())?;
     let local_id = connection.last_insert_rowid();
@@ -1962,6 +1992,8 @@ fn upsert_today_plan_item_row(
     sort_order: i64,
     completed: bool,
     synced_source_completion: bool,
+    priority: Option<&str>,
+    estimated_minutes: Option<i64>,
     created_at: &str,
     updated_at: &str,
 ) -> Result<(), String> {
@@ -1981,9 +2013,11 @@ fn upsert_today_plan_item_row(
                     sort_order = ?7,
                     completed = ?8,
                     synced_source_completion = ?9,
-                    created_at = ?10,
-                    updated_at = ?11
-                WHERE id = ?12
+                    priority = COALESCE(?10, priority),
+                    estimated_minutes = COALESCE(?11, estimated_minutes),
+                    created_at = ?12,
+                    updated_at = ?13
+                WHERE id = ?14
                 ",
                 params![
                     today_date,
@@ -1995,6 +2029,8 @@ fn upsert_today_plan_item_row(
                     sort_order,
                     if completed { 1 } else { 0 },
                     if synced_source_completion { 1 } else { 0 },
+                    priority,
+                    estimated_minutes,
                     created_at,
                     updated_at,
                     local_id
@@ -2016,10 +2052,25 @@ fn upsert_today_plan_item_row(
         .execute(
             "
             INSERT INTO today_plan_items (
-              today_date, source_task_id, subject_id, title, note, due_date, sort_order, completed, synced_source_completion, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+              today_date, source_task_id, subject_id, title, note, due_date, sort_order, completed,
+              synced_source_completion, priority, estimated_minutes, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
             ",
-            params![today_date, source_task_id, subject_id, title, note, due_date, sort_order, if completed { 1 } else { 0 }, if synced_source_completion { 1 } else { 0 }, created_at, updated_at],
+            params![
+                today_date,
+                source_task_id,
+                subject_id,
+                title,
+                note,
+                due_date,
+                sort_order,
+                if completed { 1 } else { 0 },
+                if synced_source_completion { 1 } else { 0 },
+                priority.unwrap_or("medium"),
+                estimated_minutes.unwrap_or(0),
+                created_at,
+                updated_at
+            ],
         )
         .map_err(|error| error.to_string())?;
     let local_id = connection.last_insert_rowid();

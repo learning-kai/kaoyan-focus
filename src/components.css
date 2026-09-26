@@ -92,6 +92,27 @@
   background: var(--bg);
 }
 
+/* 「会发送 / 不会发送」两栏对照（AI 排期首次启用声明）。 */
+.confirm-dialog-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.confirm-dialog-columns ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  line-height: 1.5;
+}
+
+@media (max-width: 680px) {
+  .confirm-dialog-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
 .confirm-dialog-actions {
   display: flex;
   flex-wrap: wrap;
