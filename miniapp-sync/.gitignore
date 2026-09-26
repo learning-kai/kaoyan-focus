@@ -1,0 +1,11 @@
+# 同步方案的运行时产物与本机测试数据，不入库
+server/data/
+server/data-test/
+server/node_modules/
+testdata/
+.testdata/
+agent/.testdata/
+agent/agent-state.json
+agent/sync-agent.log
+# scripts/e2e-smoke.sh 会按实际端口生成一份临时配置（用完即删）
+agent/config.test.gen.json

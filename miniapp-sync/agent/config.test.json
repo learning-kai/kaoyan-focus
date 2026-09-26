@@ -1,0 +1,60 @@
+{
+  "deviceId": "pc-test",
+  "role": "pc",
+  "server": {
+    "baseUrl": "http://127.0.0.1:8788",
+    "token": "test-token-local",
+    "timeoutSeconds": 10,
+    "verifyTls": false,
+    "sseEnabled": true,
+    "proxyMode": "none",
+    "retryAttempts": 3,
+    "retryBaseMs": 500
+  },
+  "local": {
+    "dbPath": "C:/Users/Lenovo/AppData/Local/Temp/kaoyan-sync-test/test.sqlite3",
+    "statePath": "C:/Users/Lenovo/AppData/Local/Temp/kaoyan-sync-test/agent-state.json",
+    "logPath": "C:/Users/Lenovo/AppData/Local/Temp/kaoyan-sync-test/sync-agent.log"
+  },
+  "timing": {
+    "scanIntervalMs": 2000,
+    "digestIntervalMs": 300000,
+    "reconnectBaseMs": 1000,
+    "reconnectMaxMs": 30000
+  },
+  "sync": {
+    "pushBatchSize": 200,
+    "deltaBatchSize": 300,
+    "snapshotPageSize": 300,
+    "appEventDays": 3,
+    "appEventMaxRows": 200,
+    "entityTypes": [
+      "subject",
+      "checklist_task",
+      "today_plan_item",
+      "schedule_block",
+      "schedule_template",
+      "daily_review",
+      "weekly_review",
+      "focus_session",
+      "study_mode",
+      "app_event"
+    ],
+    "digestScope": [
+      "subject",
+      "checklist_task",
+      "today_plan_item",
+      "schedule_block",
+      "schedule_template",
+      "daily_review",
+      "weekly_review",
+      "focus_session",
+      "study_mode"
+    ]
+  },
+  "safety": {
+    "dryRun": false,
+    "allowLocalWrite": true,
+    "allowLocalDelete": true
+  }
+}

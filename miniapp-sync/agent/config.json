@@ -1,0 +1,76 @@
+{
+  "deviceId": "pc-lenovo",
+  "role": "pc",
+
+  "server": {
+    "baseUrl": "https://api.skyhold.cloud/sync",
+    "token": "7db26416525c0ba6d188653140b5500221707a8dee229d0db60e7733837c39d1",
+    "timeoutSeconds": 10,
+    "verifyTls": true,
+    "sseEnabled": true,
+
+    "proxyMode": "none",
+    "proxyUrl": "",
+    "forceIpv4": false,
+    "retryAttempts": 3,
+    "retryBaseMs": 800,
+
+    "fallback": {
+      "enabled": false,
+      "baseUrl": "http://127.0.0.1:8787",
+      "afterFailures": 3,
+      "probeIntervalMs": 300000
+    }
+  },
+
+  "local": {
+    "dbPath": "auto",
+    "statePath": "C:/Users/Lenovo/AppData/Local/kaoyan-focus-sync/agent-state.json",
+    "logPath": "C:/Users/Lenovo/AppData/Local/kaoyan-focus-sync/sync-agent.log"
+  },
+
+  "timing": {
+    "scanIntervalMs": 2000,
+    "digestIntervalMs": 300000,
+    "reconnectBaseMs": 1000,
+    "reconnectMaxMs": 30000,
+    "maxRetry": 8
+  },
+
+  "sync": {
+    "pushBatchSize": 200,
+    "deltaBatchSize": 500,
+    "snapshotPageSize": 500,
+    "appEventDays": 3,
+    "appEventMaxRows": 500,
+    "entityTypes": [
+      "subject",
+      "checklist_task",
+      "today_plan_item",
+      "schedule_block",
+      "schedule_template",
+      "daily_review",
+      "weekly_review",
+      "focus_session",
+      "study_mode",
+      "app_event"
+    ],
+    "digestScope": [
+      "subject",
+      "checklist_task",
+      "today_plan_item",
+      "schedule_block",
+      "schedule_template",
+      "daily_review",
+      "weekly_review",
+      "focus_session",
+      "study_mode"
+    ]
+  },
+
+  "safety": {
+    "dryRun": false,
+    "allowLocalWrite": true,
+    "allowLocalDelete": true
+  }
+}

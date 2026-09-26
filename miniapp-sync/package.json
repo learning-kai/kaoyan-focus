@@ -1,0 +1,12 @@
+{
+  "name": "kaoyan-focus-mini-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "考研专注 桌面端 <-> 微信小程序 实时同步方案（服务端 / PC 代理 / 小程序）",
+  "type": "commonjs",
+  "scripts": {
+    "server": "node server/index.js",
+    "test:mini": "node tests/mini-smoke-test.js --url ws://127.0.0.1:8787/ws --token test-token-local",
+    "agent:dry": "python agent/sync_agent.py --config agent/config.json --once --dry-run"
+  }
+}
