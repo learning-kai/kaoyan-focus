@@ -125,6 +125,9 @@ mod tests {
             due_date: None,
             sort_order: Some(0.0),
             completed: Some(false),
+            priority: Some("high".to_string()),
+            estimated_minutes: Some(90),
+            ai_pinned: Some(false),
             created_at: Some(900),
             updated_at: 2000,
             deleted_at: None,
@@ -139,6 +142,9 @@ mod tests {
             due_date: None,
             sort_order: None,
             completed: None,
+            priority: None,
+            estimated_minutes: None,
+            ai_pinned: None,
             created_at: None,
             updated_at: 2000,
             deleted_at: Some(2000),
@@ -147,6 +153,76 @@ mod tests {
         let merged = merge_shared_sync_payloads(local, remote, "desktop".to_string(), 3000);
         assert_eq!(merged.checklist_tasks.len(), 1);
         assert_eq!(merged.checklist_tasks[0].deleted_at, Some(2000));
+    }
+
+    /// AI 排期字段（priority / estimated_minutes / ai_pinned）必须能跨设备同步，
+    /// 且旧版本设备发来的载荷（字段为 None）不得清空本机已设的值。
+    /// 回归防护：若给载荷字段加了默认值填充，None 会变成默认值并反写，本测试会失败。
+    #[test]
+    fn checklist_ai_fields_sync_and_none_does_not_clear_local_value() {
+        let directory = tempdir().expect("create temp directory");
+        let mut connection =
+            open_database(&directory.path().join("sync-test.sqlite3")).expect("open test db");
+
+        let read_ai_fields = |connection: &rusqlite::Connection| -> (String, i64, i64) {
+            connection
+                .query_row(
+                    "SELECT priority, estimated_minutes, ai_pinned FROM checklist_tasks WHERE title = '数学 660 题' LIMIT 1",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .expect("read checklist task")
+        };
+
+        // 1) 新版本设备导出：携带 AI 排期字段。
+        let mut payload = empty_payload("desktop", 1_000);
+        payload.checklist_tasks.push(SharedChecklistTask {
+            sync_id: "task-priority".to_string(),
+            category_key: Some("math".to_string()),
+            subject_sync_id: None,
+            title: Some("数学 660 题".to_string()),
+            note: None,
+            due_date: None,
+            sort_order: Some(0.0),
+            completed: Some(false),
+            priority: Some("high".to_string()),
+            estimated_minutes: Some(90),
+            ai_pinned: Some(true),
+            created_at: Some(900),
+            updated_at: 1_000,
+            deleted_at: None,
+        });
+        import_shared_sync_payload(&mut connection, &payload).expect("import payload");
+        assert_eq!(
+            read_ai_fields(&connection),
+            ("high".to_string(), 90, 1),
+            "新字段应随载荷写入本地"
+        );
+
+        // 2) 旧版本设备导出：不认识这些字段，反序列化后为 None。
+        let mut legacy = empty_payload("phone", 2_000);
+        legacy.checklist_tasks.push(SharedChecklistTask {
+            sync_id: "task-priority".to_string(),
+            category_key: Some("math".to_string()),
+            subject_sync_id: None,
+            title: Some("数学 660 题".to_string()),
+            note: None,
+            due_date: None,
+            sort_order: Some(0.0),
+            completed: Some(false),
+            priority: None,
+            estimated_minutes: None,
+            ai_pinned: None,
+            created_at: Some(900),
+            updated_at: 2_000,
+            deleted_at: None,
+        });
+        import_shared_sync_payload(&mut connection, &legacy).expect("import legacy payload");
+        assert_eq!(
+            read_ai_fields(&connection),
+            ("high".to_string(), 90, 1),
+            "旧版本载荷的 None 不得清空本机已有值（COALESCE 语义）"
+        );
     }
 
     #[test]
@@ -574,6 +650,9 @@ mod tests {
             due_date: None,
             sort_order: None,
             completed: None,
+            priority: None,
+            estimated_minutes: None,
+            ai_pinned: None,
             created_at: None,
             updated_at: 2_000,
             deleted_at: Some(2_000),

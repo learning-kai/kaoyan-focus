@@ -408,6 +408,9 @@ fn import_checklist_tasks(
                 .map(|value| value.round() as i64)
                 .unwrap_or(0),
             item.completed.unwrap_or(false),
+            item.priority.as_deref(),
+            item.estimated_minutes,
+            item.ai_pinned,
             &created_at,
             &updated_at,
         )?;
@@ -475,6 +478,8 @@ fn import_today_plan_items(
                 .unwrap_or(0),
             item.completed.unwrap_or(false),
             item.synced_source_completion.unwrap_or(false),
+            item.priority.as_deref(),
+            item.estimated_minutes,
             &created_at,
             &updated_at,
         )?;

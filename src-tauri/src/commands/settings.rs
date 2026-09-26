@@ -395,7 +395,9 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         remember_focus_duration: settings.remember_focus_duration,
         default_focus_mode: normalize_mode(&settings.default_focus_mode),
         default_timer_kind: normalize_timer_kind(&settings.default_timer_kind),
-        countup_break_minutes: settings.countup_break_minutes.clamp(1, COUNTUP_BREAK_MAX_SECONDS / 60),
+        countup_break_minutes: settings
+            .countup_break_minutes
+            .clamp(1, COUNTUP_BREAK_MAX_SECONDS / 60),
         whitelist_mode: normalize_whitelist_mode(&settings.whitelist_mode),
         ui_theme: normalize_theme(&settings.ui_theme),
         launch_at_startup: settings.launch_at_startup,

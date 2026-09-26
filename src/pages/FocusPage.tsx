@@ -40,7 +40,14 @@ const FOCUS_TODAY_CONTAINER_ID = 'focus-today-container';
 const QUICK_SCHEDULE_DAY_START = 6 * 60;
 const QUICK_SCHEDULE_DAY_END = 24 * 60;
 const QUICK_SCHEDULE_SLOT_MINUTES = 15;
-const emptyTodayDraft: TodayPlanItemDraft = { title: '', note: '', dueDate: '', subjectId: null };
+const emptyTodayDraft: TodayPlanItemDraft = {
+  title: '',
+  note: '',
+  dueDate: '',
+  subjectId: null,
+  priority: 'medium',
+  estimatedMinutes: 0,
+};
 type FocusConfirmRequest =
   | { kind: 'normalExit' }
   | { kind: 'syncSourceCompletion'; item: TodayPlanItem }
@@ -844,7 +851,14 @@ export default function FocusPage() {
 
   function beginEditTodayItem(item: TodayPlanItem) {
     setEditingTodayId(item.id);
-    setEditingTodayDraft({ title: item.title, note: item.note ?? '', dueDate: item.due_date ?? '', subjectId: item.subject_id });
+    setEditingTodayDraft({
+      title: item.title,
+      note: item.note ?? '',
+      dueDate: item.due_date ?? '',
+      subjectId: item.subject_id,
+      priority: item.priority,
+      estimatedMinutes: item.estimated_minutes,
+    });
   }
 
   async function withChecklistRefresh(work: () => Promise<void>, successMessage?: string, trigger = 'local_data_change') {

@@ -1,9 +1,11 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import AppErrorBoundary from './components/AppErrorBoundary';
+import AiPlanDrawer from './components/AiPlanDrawer';
 import Layout from './components/Layout';
 import UpdateNotification, { type UpdateInfo } from './components/UpdateNotification';
 import { getPageFromKeyboardShortcut, pages } from './navigation';
 import { APP_NAVIGATE_EVENT } from './navigationEvents';
+import { notifyAiPlanApplied, onAiPlanOpen, type AiPlanCategoryLabels } from './services/aiPlanBus';
 import {
   useAutoSync,
   useAutoUpdateCheck,
@@ -21,6 +23,14 @@ import type { AppTheme } from './types/settings';
 
 const APP_TITLE = '考研专注';
 const ACTIVE_PAGE_STORAGE_KEY = 'kaoyan-focus-active-page';
+
+/** 本地时区的今天，YYYY-MM-DD；仅作抽屉初始值，实际打开时页面总会传入目标日期。 */
+function localDateKey(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
 
 function isAppPage(value: string | null | undefined): value is AppPage {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(pages, value);
@@ -80,6 +90,12 @@ export default function App() {
   const [, setNextAlarm] = useState<Alarm | null>(null);
   const [alarmFocusId, setAlarmFocusId] = useState<number | null>(null);
   const [theme, setTheme] = useState<AppTheme>(() => bootstrapTheme());
+  // AI 排期抽屉是 App 级单例：切页时页面组件卸载，抽屉不能跟着被关掉。
+  const [aiPlanOpen, setAiPlanOpen] = useState(false);
+  const [aiPlanTargetDate, setAiPlanTargetDate] = useState<string>(() => localDateKey());
+  const [aiPlanCategoryLabels, setAiPlanCategoryLabels] = useState<AiPlanCategoryLabels | undefined>(
+    undefined,
+  );
   const hasSyncedPageRef = useRef(false);
   const navigateToPage = useCallback((page: AppPage, options?: { alarmId?: number }) => {
     setActivePage(page);
@@ -138,6 +154,17 @@ export default function App() {
     window.addEventListener(APP_NAVIGATE_EVENT, handleAppNavigation);
     return () => window.removeEventListener(APP_NAVIGATE_EVENT, handleAppNavigation);
   }, [navigateToPage]);
+
+  // AI 排期抽屉：页面按钮只发事件，抽屉本体挂在这里，跨页保活。
+  useEffect(() => {
+    return onAiPlanOpen((targetDate, categoryLabels) => {
+      setAiPlanTargetDate(targetDate);
+      if (categoryLabels) {
+        setAiPlanCategoryLabels(categoryLabels);
+      }
+      setAiPlanOpen(true);
+    });
+  }, []);
 
   useEffect(() => {
     function handleHistoryNavigation() {
@@ -239,6 +266,13 @@ export default function App() {
         update={pendingUpdate}
         onDismiss={() => setPendingUpdate(null)}
         onUpdateInstalled={() => setPendingUpdate(null)}
+      />
+      <AiPlanDrawer
+        categoryLabels={aiPlanCategoryLabels}
+        isOpen={aiPlanOpen}
+        onApplied={notifyAiPlanApplied}
+        onClose={() => setAiPlanOpen(false)}
+        targetDate={aiPlanTargetDate}
       />
     </AppErrorBoundary>
   );

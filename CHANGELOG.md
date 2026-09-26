@@ -147,119 +147,157 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ## v1.9.3 - 2026-06-09
 
 ### Desktop
+
 #### Added
+
 - Add cleanup probes and system diagnostic tests (7e8cff9)
 
 #### Changed
+
 - Improve focus workflow and UI feedback across the app (8af17fd)
 
 ## v1.9.4 - 2026-06-09
 
 ### Desktop
+
 #### Changed
+
 - Unify light theme card surfaces (1988884)
 
 ## v1.10.0 - 2026-06-09
 
 ### Desktop
+
 #### Added
+
 - Add focus widget window for study mode (aaed2af)
 
 ## v1.11.0 - 2026-06-09
 
 ### Desktop
+
 #### Fixed
+
 - Fix task drag sorting theme colors (c488ec1)
 
 ## v1.11.1 - 2026-06-09
 
 ### Desktop
+
 #### Added
+
 - Add tray toggle for focus widget and refresh theme cards (714750b)
 
 ## v1.11.2 - 2026-06-09
 
 ### Desktop
+
 #### Changed
+
 - Show the focus widget for paused and idle study states (d5d845f)
 
 ## v1.11.3 - 2026-06-09
 
 ### Desktop
+
 #### Changed
+
 - Refine focus widget dock animations and glass motion (5e2615d)
 
 ## v1.11.4 - 2026-06-09
 
 ### Desktop
+
 #### Changed
+
 - Smooth focus widget collapse edges (f063ef7)
 
 ## v1.11.5 - 2026-06-09
 
 ### Desktop
+
 #### Changed
+
 - Suppress Windows title bar in focus widget (29a3f71)
 
 ## v1.12.0 - 2026-06-09
 
 ### Desktop
+
 #### Changed
+
 - Smooth focus widget retract countdown (854bde8)
 
 ## v1.12.1 - 2026-06-09
 
 ### Desktop
+
 #### Changed
+
 - Smooth focus widget expand animation (896a172)
 
 ## v1.12.2 - 2026-06-09
 
 ### Desktop
+
 #### Changed
+
 - Speed up focus widget collapse animation (e882edb)
 
 ## v1.12.3 - 2026-06-09
 
 ### Desktop
+
 #### Changed
+
 - Prevent focus widget collapse from blocking clicks (d0f13ab)
 
 ## v1.12.4 - 2026-06-10
 
 ### Desktop
+
 #### Added
+
 - Add completion reminders for finished study sessions (18549b6)
 
 #### Changed
+
 - Prevent focus widget from blocking main window input (e241184)
 
 ## v1.12.5 - 2026-06-10
 
 ### Desktop
+
 #### Changed
+
 - Restore global alarm watcher (cc9fde1)
 
 ## v1.12.6 - 2026-06-11
 
 ### Desktop
+
 #### Changed
+
 - Remove sample note and disable reminder sound timeout (a5fb836)
 
 ## v1.12.7 - 2026-06-11
 
 ### Desktop
+
 #### Added
+
 - feat: separate whitelist page content into tabs (204a12c)
 - feat: add tab switcher component to whitelist page (e4793d7)
 - feat: add tab state management for whitelist page (783082d)
 
 #### Fixed
+
 - fix: improve responsive tab styles - remove double border, add transition (d56a60a)
 - fix: narrow transition properties for whitelist tabs (a41b08c)
 - fix: correct indentation at line 688 in WhitelistPage.tsx (ded874d)
 
 #### Changed
+
 - chore: commit unrelated changes from other work (0645557)
 - docs: add final report for whitelist tab layout optimization (cd31ea5)
 - docs: update whitelist page optimization in FEATURES.md (5ce0e2a)
@@ -269,23 +307,30 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ## v1.12.8 - 2026-06-11
 
 ### Desktop
+
 #### Added
+
 - Add focus widget pause toggle (3efc48a)
 - feat: add subject tabs inside whitelist rules view (e54cd5d)
 
 #### Changed
+
 - docs: update final report with subject tabs feature (d768d96)
 
 ## v1.12.9 - 2026-06-11
 
 ### Desktop
+
 #### Changed
+
 - Remove alarm sound auto-stop limit (8520fff)
 
 ## v1.12.10 - 2026-06-11
 
 ### Desktop
+
 #### Added
+
 - feat: complete UI redesign with Arc and Apple styles (31ed482)
 - feat: implement Arc-style typography system (451f5d7)
 - feat: implement Apple-style micro-interactions (ccb77b1)
@@ -301,132 +346,174 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ## v1.12.11 - 2026-06-11
 
 ### Desktop
+
 #### Added
+
 - feat: 添加立即开始休息功能，更新相关UI和API调用 (ebd3bc5)
 - feat: 移除侧边栏快速开始按钮，简化布局并清理未使用样式 (e889e00)
 
 ## v1.12.12 - 2026-06-11
 
 ### Desktop
+
 #### Added
+
 - feat: add update notification features and settings management (32bdf0c)
 
 ## v1.13.1 - 2026-06-11
 
 ### Desktop
+
 #### Added
+
 - feat: 移除立即开始休息功能及相关代码 (3f6eaf0)
 
 ## v1.13.2 - 2026-06-11
 
 ### Desktop
+
 - No commits found.
 
 ## v1.13.3 - 2026-06-16
 
 ### Desktop
+
 #### Changed
+
 - 支持多片段网址白名单匹配 (b2ce781)
 
 ## v1.13.4 - 2026-06-17
 
 ### Desktop
+
 #### Added
+
 - Add study reminder timing and sound settings (dc1b0a7)
 
 #### Changed
+
 - Generalize Cargo lock version अपडेट for package name (9aa2a33)
 
 ## v1.13.5 - 2026-06-17
 
 ### Desktop
+
 #### Added
+
 - Add study reminder timing and sound settings (dc1b0a7)
 
 #### Fixed
+
 - Fix Feishu sync conflict handling (7a503e9)
 
 #### Changed
+
 - chore: release v1.13.4 (2d27536)
 - Generalize Cargo lock version अपडेट for package name (9aa2a33)
 
 ## v1.13.6 - 2026-06-17
 
 ### Desktop
+
 #### Changed
+
 - Guard calendar sync against false remote deletions (74df496)
 
 ## v1.13.7 - 2026-06-18
 
 ### Desktop
+
 #### Fixed
+
 - 修复飞书日程和任务重复同步 (02cd9d4)
 
 ## v1.14.0 - 2026-06-18
 
 ### Desktop
+
 #### Changed
+
 - Refine Feishu sync conflicts and add foreground rule mode (0a3a4ee)
 
 ## v1.14.1 - 2026-06-18
 
 ### Desktop
+
 #### Added
+
 - Add CalDAV sync and rename schedule UI to calendar (abfef73)
 
 ## v1.14.3 - 2026-06-18
 
 ### Desktop
+
 #### Changed
+
 - Accept common CalDAV writable privileges in discovery (f32b061)
 
 ## v1.14.4 - 2026-06-18
 
 ### Desktop
+
 #### Changed
+
 - Preserve CalDAV UIDs during sync and add auto polling (b4a995e)
 
 ## v1.14.5 - 2026-06-18
 
 ### Desktop
+
 #### Changed
+
 - Separate allowlist and blocklist rule entries (562c4d9)
 
 ## v1.15.0 - 2026-06-20
 
 ### Desktop
+
 #### Changed
+
 - Improve dashboard analytics readability (d3ccb80)
 
 ## v1.15.2 - 2026-06-23
 
 ### Desktop
+
 #### Added
+
 - 新增学习趋势判断面板 (c80b0e0)
 
 #### Changed
+
 - Filter emergency exits from focus timeline (29da088)
 
 ## v1.15.3 - 2026-06-23
 
 ### Desktop
+
 #### Changed
+
 - 调整学习趋势为专注时间判断 (634bdde)
 
 ## v1.15.4 - 2026-07-14
 
 ### Desktop
+
 #### Changed
+
 - refactor(review): redesign retrospective dashboard (f7103d6)
 - Use valid focus records in dashboard analytics (e388763)
 
 ## v1.15.5 - 2026-07-27
 
 ### Desktop
+
 #### Added
+
 - feat: skip breaks and add checklist tasks continuously (9fde76c)
 
 #### Changed
+
 - docs: record release verification (1fbfaaf)
 - merge: skip breaks and continuous checklist entry (2ca9fb7)
 - chore: release v1.15.4 (63def6f)
@@ -436,32 +523,40 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ## v1.17.0 - 2026-07-28
 
 ### Desktop
+
 - No commits found.
 
 ## v1.17.1 - 2026-07-28
 
 ### Desktop
+
 - No commits found.
 
 ## v1.17.3 - 2026-07-28
 
 ### Desktop
+
 - No commits found.
 
 ## v1.18.1 - 2026-07-29
 
 ### Desktop
+
 #### Added
+
 - feat: add responsive UI testing scripts with Playwright (dcca7f5)
 
 #### Changed
+
 - Cache native animation context for focus widget frames (b600db7)
 - Refactor application structure and update UI behavior (e69f0e9)
 
 ## v1.18.4 - 2026-07-29
 
 ### Desktop
+
 #### Fixed
+
 - Merge branch '修复日历快速添加' (7c73c8b)
 - fix: 修复快速添加功能，确保不包含已完成的今日事项 (8216fa5)
 - fix: 更新学习模式通知信息，优化通知样式 (24fe032)
@@ -469,59 +564,77 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - fix: 修复悬浮窗卡顿问题，优化窗口事件处理和动画准备逻辑 (10ca584)
 
 #### Changed
+
 - Merge commit '24fe032d66af62bebb9bcf026d812facaaa3a1c5' (a3abf4f)
 
 ## v1.18.5 - 2026-07-29
 
 ### Desktop
+
 #### Fixed
+
 - 修复卡顿 (62c3646)
 
 #### Changed
+
 - Merge commit '62c36468c52e13ac55fc09d304430fd88f3510f4' (51ab8e8)
 
 ## v1.18.6 - 2026-07-29
 
 ### Desktop
+
 #### Changed
+
 - 扩大了默认打开界面大小 (70f52a7)
 
 ## v1.18.7 - 2026-07-29
 
 ### Desktop
+
 #### Changed
+
 - 添加使用过程中能够控制前台规则 (05c0d2a)
 
 ## v1.18.8 - 2026-07-29
 
 ### Desktop
+
 #### Changed
+
 - 设置加控制 (cd4d621)
 
 ## v1.18.9 - 2026-07-30
 
 ### Desktop
+
 #### Changed
+
 - 增强设置面板样式，调整前台规则控制开关样式 (5c65aef)
 
 ## v1.19.0 - 2026-08-01
 
 ### Desktop
+
 #### Fixed
+
 - 修复 (97dba1f)
 - 修复Command plugin:window|set_fullscreen not allowed by ACL (a735c29)
 
 #### Changed
+
 - chore: release v1.19.0 (67b8782)
 
 ## v1.19.1 - 2026-08-01
 
 ### Desktop
+
 #### Fixed
+
 - 修复 (97dba1f)
 - 修复Command plugin:window|set_fullscreen not allowed by ACL (a735c29)
 
 #### Changed
+
 - 界面背景加了点呼吸感 (8b4cc5f)
 - chore: release v1.19.0 (87fb65f)
 - chore: release v1.19.0 (67b8782)
@@ -529,107 +642,207 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ## v1.19.2 - 2026-08-01
 
 ### Desktop
+
 #### Changed
+
 - 优化呼吸 (e88b3bb)
 
 ## v1.19.3 - 2026-08-01
 
 ### Desktop
+
 #### Changed
+
 - 清单多日 (c108410)
 
 ## v1.19.4 - 2026-08-04
 
 ### Desktop
+
 #### Fixed
+
 - 修复日历无法删除周重复 (19ecb38)
 
 ## v1.19.5 - 2026-08-06
 
 ### Desktop
+
 #### Fixed
+
 - 修复日历重叠 (35d1037)
 
 ## v1.19.6 - 2026-08-06
 
 ### Desktop
+
 #### Changed
+
 - 日历模仿苹果 (7a7f2cf)
 
 ## v1.19.7 - 2026-08-07
 
 ### Desktop
+
 #### Fixed
+
 - 修复部分问题 (19f7b4e)
 
 ## v1.19.8 - 2026-08-07
 
 ### Desktop
+
 #### Added
+
 - Add idle UI hiding and ambient focus background animation (4fd0789)
 
 #### Fixed
+
 - Merge branch 'codex/沉浸式修复' (928ec15)
 
 ## v1.19.9 - 2026-08-07
 
 ### Desktop
+
 #### Changed
+
 - 单机实例 (b51010b)
 
 ## v1.20.0 - 2026-08-07
 
 ### Desktop
+
 #### Fixed
+
 - 修复部分bug (eab7570)
 
 ## v1.20.1 - 2026-08-13
 
 ### Desktop
+
 #### Changed
+
 - 铃声加控制按钮 (6b68d0c)
 
 ## v1.21.1 - 2026-09-03
 
 ### Desktop
+
 #### Added
+
 - feat: add configurable focus duration with persistence option (6608c07)
 
 #### Changed
+
 - recover working tree: 正计时专注模式 + 日历专注色带 (5f60bd4)
 
 ## v1.21.2 - 2026-09-03
 
 ### Desktop
+
 #### Fixed
+
 - fix(calendar): 暂停专注时冻结色带在暂停时刻，暂停区间保持空白 (f417c93)
 
 ## v1.21.4 - 2026-09-03
 
 ### Desktop
+
 #### Fixed
+
 - 修复 (d6d9efd)
 - fix(calendar): 暂停区间改为中性灰独立色带，区别于专注色与休息绿 (859554d)
 
 #### Changed
+
 - refactor: 统一科目配色为唯一真源并消除跨语义色值冲突 (58ec950)
 
 ## v1.21.5 - 2026-09-03
 
 ### Desktop
+
 #### Fixed
+
 - fix(calendar): 暂停区间不再单独着色，与休息期一致显示为无颜色 (b365f2c)
 
 ## v1.21.6 - 2026-09-04
 
 ### Desktop
+
 #### Fixed
+
 - fix(calendar): 以学习模式实时状态为准冻结进行中的专注色带 (7e82209)
 
 ## v1.21.7 - 2026-09-06
 
 ### Desktop
+
 #### Fixed
+
 - fix (5472b00)
+
+## v1.22.0 - 2026-09-25
+
+### Desktop
+
+#### Added
+
+- Added an 「AI 智能日程规划」 integration: it reads checklist task attributes (title, priority, estimated minutes, due date, category), generates a non-overlapping timeline against your available windows and existing schedule, and presents the result as an editable draft that is only written to the calendar after you confirm.
+- Added AI scheduler settings under 设置 → 集成 → AI 排期: provider preset (DeepSeek / OpenAI / custom gateway), base URL, model picker backed by `GET /models`, per-weekday available windows, peak windows, capacity parameters (default block length, minimum break, daily cap, `max_tokens`, temperature) and a connectivity test.
+- Added `priority`, `estimated_minutes` and `ai_pinned` to checklist tasks, and `priority` / `estimated_minutes` to today-plan items. 「优先级」 and 「预计耗时」 are now editable in the shared task editor on both the checklist page and the today-plan drawer, instead of being display-only.
+- Added `source_task_id`, `source_proposal_id` and `ai_locked` columns on schedule blocks plus an `ai_plan_proposals` draft table, so AI-generated blocks can be traced back to their source task and re-planned without disturbing manually arranged time.
+- Added a first-enable disclosure dialog that lists exactly which fields leave the machine (task titles, optional notes, priority, estimated duration, due date, category names, existing schedule titles and time ranges, extra instructions) and which never do (focus records, statistics, review notes, allowlists, credentials).
+- Added a local heuristic scheduling engine as the fallback path, so the feature stays usable when the model endpoint is unreachable.
+
+#### Changed
+
+- Bumped the cross-device sync payload to schema version 3 so the new task attributes travel between devices. Older payloads are still accepted and no longer clear locally-set values, because every new payload field is optional and `None` means "do not overwrite".
+
+#### Security
+
+- API keys are stored through Windows DPAPI. They are never persisted in plaintext and never returned to the frontend: the settings command reports only an `api_key_configured` boolean.
+- AI endpoints are required to use HTTPS; plain `http` is accepted only for loopback addresses, so a self-hosted gateway on `127.0.0.1` still works without weakening the rule for remote hosts.
+- The AI draft table is deliberately excluded from the cross-device sync export set, so in-progress drafts do not roam between devices.
+
+#### Fixed
+
+- Fixed a transitive build failure where `schemars 0.8.x` did not forward the `std` feature of `indexmap 1.9` into `tauri-build`'s build-dependency chain. Under Cargo resolver v2 features are not unified across `[dependencies]` and `[build-dependencies]`, so a plain `cargo build` failed with an `E0107` error on a clean checkout. `indexmap` is now declared in both sections.
+- Fixed a `cargo fmt` violation in `src-tauri/src/commands/settings.rs` that made `npm run check:rust` fail.
+
+#### Notes
+
+- The AI planner is being delivered in stages. This release ships the data layer, the cross-device sync plumbing, the task-attribute editors and the settings screen with its connectivity gate. The draft preview drawer, drag-adjustment, apply/discard and one-click re-planning of affected windows land in follow-up builds. Until then, turning AI scheduling on only configures the provider and verifies that it is reachable.
+
+## v1.22.1 - 2026-09-26
+
+### Desktop
+
+#### Fixed
+
+- Fixed a critical defect that made AI scheduling unusable: the typed API key was never persisted. Saving the settings screen cleared `api_key` for redaction *before* the value was read, so the credential store always received an empty string and the app kept reporting 「请先在 设置 → 集成 → AI 排期 中填写 API Key」 no matter what you typed. The plaintext is now captured before normalisation, and three regression tests pin the ordering rule in place.
+- Fixed 「测试连接」 failing even with a freshly typed key, because it read the credential store while the form was still unsaved. The button now saves first, then tests; a blank key still means "keep the existing one", so re-saving stays safe.
+- Corrected the AI-scheduler error copy from 「设置 → AI 排期」 to the actual navigation path 「设置 → 集成 → AI 排期」, and retitled the 集成 tab to mention AI 排期 so the panel can be found.
+- Fixed AI scheduling planning the wrong set of work: it pulled in **every unfinished checklist task across all five categories**, ignoring the 今日 / 计划 queue entirely. Scheduling now reads only the selected day's queue (unfinished entries; entries added to the queue by hand are included too), so what you put in the queue is what gets planned. This moved the scheduling unit from *checklist task* to *queue entry* through the whole pipeline, and a written block now links back to the queue entry it came from instead of fabricating an extra 今日计划 row.
+
+#### Added
+
+- Added the real AI scheduling path: 「生成草案」 now calls the configured model (DeepSeek / OpenAI / custom gateway) with structured-output negotiation, automatic retry with backoff (server `Retry-After` is honoured), and a schema-repair step that closes truncated or fenced JSON before giving up. Candidate items only carry ids and times — titles, categories, priorities and durations are always back-filled locally from the queue, so the model cannot invent entries or rewrite their names.
+- Added an explicit 「改用本地排期」 escape hatch in the error card: AI failures now surface as errors instead of silently producing a local draft. Only after you press the button does the next generation fall back to the local heuristic, and the result is clearly labelled 「本地兜底排期」 instead of pretending to be an AI plan.
+- Added the draft preview drawer: generate a plan, inspect it, then either write it to the calendar or discard it. Entry buttons sit on the checklist page header and the calendar page actions, and only appear once AI scheduling is enabled and the data-disclosure notice has been acknowledged.
+- Added a read-only timeline view of a draft, grouped by day, showing each block's time range, category, duration and priority — plus any per-item warning attached to it.
+- Added an explicit 「没排上的任务」 list to each draft, naming the tasks that could not be scheduled and why (no window long enough before the due date, daily capacity reached, or blocked by existing schedule), instead of reporting only a count.
+- Added a local heuristic scheduler that produces a complete draft without contacting the model at all, so the drawer is fully usable before the AI path lands.
+- Added per-item reasons after a write: when some entries are skipped, the drawer now lists exactly which ones and why (task deleted, no longer inside the current available windows, or conflicting with a named existing block).
+
+#### Changed
+
+- Moved the draft drawer from per-page state to an app-level singleton: switching to another page no longer closes the drawer or throws away an unconfirmed draft. The timeline stays open across navigation, and the checklist / calendar pages just refresh when a draft is written.
+- The prompt engine badge now tells the truth about where a draft came from: 「AI 排期 · <model>」 for model output, 「本地兜底排期（AI 不可用时的降级结果）」 for explicit fallbacks, and 「本地排期（未使用 AI）」 only for legacy drafts created before the AI path existed.
+- Writing a draft re-reads the *current* availability settings from the database rather than the copy taken when the draft was generated, so narrowing your windows between preview and confirmation correctly drops entries that no longer fit.
+- Drift detection now also notices a changed estimated duration and a due date that has already passed, not just a changed priority.
+
+#### Notes
+
+- This build supersedes `v1.22.0`, which was packaged but never published and still contained the API-key defect.
+- The AI planner is still being delivered in stages. Real model scheduling, draft preview, apply and discard now work end to end. Drag-adjustment of a draft and one-click re-planning of affected windows after a task changes land in follow-up builds.
 
 

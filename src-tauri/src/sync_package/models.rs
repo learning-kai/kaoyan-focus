@@ -5,7 +5,7 @@ use std::collections::{hash_map::DefaultHasher, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use uuid::Uuid;
 
-const SYNC_SCHEMA_VERSION: i64 = 2;
+const SYNC_SCHEMA_VERSION: i64 = 3;
 const ENTITY_SUBJECT: &str = "subject";
 const ENTITY_STUDY_MODE: &str = "study_mode";
 const ENTITY_FOCUS_SESSION: &str = "focus_session";
@@ -182,6 +182,11 @@ pub struct SharedChecklistTask {
     pub due_date: Option<String>,
     pub sort_order: Option<f64>,
     pub completed: Option<bool>,
+    // AI 排期扩展字段。必须保持 Option 且不得加默认值填充：
+    // 合并逻辑逐字段 if let Some 处理，None 表示「不覆盖对端已有值」。
+    pub priority: Option<String>,
+    pub estimated_minutes: Option<i64>,
+    pub ai_pinned: Option<bool>,
     pub created_at: Option<i64>,
     pub updated_at: i64,
     pub deleted_at: Option<i64>,
@@ -200,6 +205,9 @@ pub struct SharedTodayPlanItem {
     pub sort_order: Option<f64>,
     pub completed: Option<bool>,
     pub synced_source_completion: Option<bool>,
+    // 同 SharedChecklistTask：保持 Option，None 表示不覆盖。
+    pub priority: Option<String>,
+    pub estimated_minutes: Option<i64>,
     pub created_at: Option<i64>,
     pub updated_at: i64,
     pub deleted_at: Option<i64>,
@@ -364,6 +372,9 @@ struct DesktopChecklistTaskRow {
     due_date: Option<String>,
     sort_order: i64,
     completed: bool,
+    priority: String,
+    estimated_minutes: i64,
+    ai_pinned: bool,
     created_at: String,
     updated_at: String,
 }
@@ -380,6 +391,8 @@ struct DesktopTodayPlanItemRow {
     sort_order: i64,
     completed: bool,
     synced_source_completion: bool,
+    priority: String,
+    estimated_minutes: i64,
     created_at: String,
     updated_at: String,
 }

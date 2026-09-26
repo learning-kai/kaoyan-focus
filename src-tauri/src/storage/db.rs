@@ -464,6 +464,87 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "calendar_count",
         "INTEGER NOT NULL DEFAULT 0",
     )?;
+    // ── AI 智能日程规划：任务属性扩展（见 docs/AI智能日程规划实现方案.md §3.1） ──
+    add_column_if_missing(
+        connection,
+        "checklist_tasks",
+        "priority",
+        "TEXT NOT NULL DEFAULT 'medium'",
+    )?;
+    add_column_if_missing(
+        connection,
+        "checklist_tasks",
+        "estimated_minutes",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    add_column_if_missing(
+        connection,
+        "checklist_tasks",
+        "ai_pinned",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    add_column_if_missing(
+        connection,
+        "today_plan_items",
+        "priority",
+        "TEXT NOT NULL DEFAULT 'medium'",
+    )?;
+    add_column_if_missing(
+        connection,
+        "today_plan_items",
+        "estimated_minutes",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    // ── AI 智能日程规划：日程块的来源与锁定标记 ──
+    add_column_if_missing(connection, "schedule_blocks", "source_task_id", "INTEGER")?;
+    add_column_if_missing(
+        connection,
+        "schedule_blocks",
+        "source_proposal_id",
+        "INTEGER",
+    )?;
+    add_column_if_missing(
+        connection,
+        "schedule_blocks",
+        "ai_locked",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    // ── AI 智能日程规划：排期草案表 ──
+    // 草案与正式日程物理隔离：未经用户确认，绝不写入 schedule_blocks。
+    // 本表不参与 sync_package 导出集合，避免草稿跨设备漫游。
+    connection
+        .execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS ai_plan_proposals (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              proposal_date TEXT NOT NULL,
+              horizon_days INTEGER NOT NULL DEFAULT 1,
+              status TEXT NOT NULL DEFAULT 'draft',
+              scope TEXT NOT NULL DEFAULT 'day',
+              scope_window_start INTEGER,
+              scope_window_end INTEGER,
+              engine TEXT NOT NULL DEFAULT 'llm',
+              model TEXT NOT NULL DEFAULT '',
+              degraded INTEGER NOT NULL DEFAULT 0,
+              source_snapshot TEXT NOT NULL,
+              items_json TEXT NOT NULL,
+              warnings_json TEXT NOT NULL DEFAULT '[]',
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_plan_proposals_date
+              ON ai_plan_proposals (proposal_date, status, id);
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+    // 「排不下」清单单独一列：原方案只在 stats 里存了计数，无法还原**哪些**任务没排上。
+    // 用 add_column_if_missing 而不是写进上面的 CREATE TABLE，保证 S1 已建过表的老库也能补上。
+    add_column_if_missing(
+        connection,
+        "ai_plan_proposals",
+        "unscheduled_json",
+        "TEXT NOT NULL DEFAULT '[]'",
+    )?;
     backfill_feishu_task_count(connection)?;
     connection
         .execute_batch(

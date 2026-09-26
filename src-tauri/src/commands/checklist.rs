@@ -64,6 +64,9 @@ pub struct ChecklistTask {
     pub due_date: Option<String>,
     pub sort_order: i64,
     pub completed: bool,
+    pub priority: String,
+    pub estimated_minutes: i64,
+    pub ai_pinned: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -80,6 +83,8 @@ pub struct TodayPlanItem {
     pub sort_order: i64,
     pub completed: bool,
     pub synced_source_completion: bool,
+    pub priority: String,
+    pub estimated_minutes: i64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -109,6 +114,13 @@ pub struct ChecklistTaskDraft {
     pub title: String,
     pub note: Option<String>,
     pub due_date: Option<String>,
+    // AI 排期属性。缺省时保持既有行为：priority = medium、estimated_minutes = 0（未估）。
+    #[serde(default)]
+    pub priority: Option<String>,
+    #[serde(default)]
+    pub estimated_minutes: Option<i64>,
+    #[serde(default)]
+    pub ai_pinned: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -118,6 +130,24 @@ pub struct TodayPlanItemDraft {
     pub note: Option<String>,
     pub due_date: Option<String>,
     pub subject_id: Option<i64>,
+    #[serde(default)]
+    pub priority: Option<String>,
+    #[serde(default)]
+    pub estimated_minutes: Option<i64>,
+}
+
+/// 规范化优先级取值。非法值一律回落为 medium，避免脏数据进入排期计算。
+fn normalize_priority(value: Option<String>) -> String {
+    match value.as_deref().map(str::trim) {
+        Some("high") => "high".to_string(),
+        Some("low") => "low".to_string(),
+        _ => "medium".to_string(),
+    }
+}
+
+/// 规范化预计耗时：负数与非数字回落为 0（0 表示未估时，排期时取 default_block_minutes）。
+fn normalize_estimated_minutes(value: Option<i64>) -> i64 {
+    value.filter(|minutes| *minutes > 0).unwrap_or(0)
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +160,9 @@ struct TaskRecord {
     due_date: Option<String>,
     sort_order: i64,
     completed: bool,
+    priority: String,
+    estimated_minutes: i64,
+    ai_pinned: bool,
     created_at: String,
     updated_at: String,
 }
@@ -188,9 +221,12 @@ pub fn create_checklist_task(
               due_date,
               sort_order,
               completed,
+              priority,
+              estimated_minutes,
+              ai_pinned,
               created_at,
               updated_at
-            ) VALUES (?1, NULL, (SELECT id FROM checklist_columns WHERE board_scope = ?1 ORDER BY sort_order ASC, id ASC LIMIT 1), ?2, ?3, ?4, ?5, 0, ?6, ?6)
+            ) VALUES (?1, NULL, (SELECT id FROM checklist_columns WHERE board_scope = ?1 ORDER BY sort_order ASC, id ASC LIMIT 1), ?2, ?3, ?4, ?5, 0, ?6, ?7, ?8, ?9, ?9)
             ",
             params![
                 board_scope,
@@ -198,6 +234,9 @@ pub fn create_checklist_task(
                 normalize_optional_string(draft.note),
                 normalize_optional_string(draft.due_date),
                 sort_order,
+                normalize_priority(draft.priority),
+                normalize_estimated_minutes(draft.estimated_minutes),
+                if draft.ai_pinned.unwrap_or(false) { 1 } else { 0 },
                 now
             ],
         )
@@ -233,14 +272,20 @@ pub fn update_checklist_task(
                 title = ?2,
                 note = ?3,
                 due_date = ?4,
-                updated_at = ?5
-            WHERE id = ?6
+                priority = ?5,
+                estimated_minutes = ?6,
+                ai_pinned = COALESCE(?7, ai_pinned),
+                updated_at = ?8
+            WHERE id = ?9
             ",
             params![
                 board_scope,
                 title,
                 normalize_optional_string(draft.note),
                 normalize_optional_string(draft.due_date),
+                normalize_priority(draft.priority),
+                normalize_estimated_minutes(draft.estimated_minutes),
+                draft.ai_pinned.map(|value| if value { 1 } else { 0 }),
                 Utc::now().to_rfc3339(),
                 id
             ],
@@ -331,76 +376,28 @@ pub fn add_task_to_today_plan(
     selected_date: Option<String>,
 ) -> Result<TodayPlanItem, String> {
     let connection = open_database(&database_path(&app)?)?;
-    let task = get_checklist_task_by_id(&connection, task_id)?;
+    // 先校验任务存在，保证「任务不存在」的错误早于任何写入与日期解析。
+    let _ = get_checklist_task_by_id(&connection, task_id)?;
     let today_date = plan_date_string(selected_date)?;
 
-    let existing = connection
-        .query_row(
-            "
-            SELECT id
-            FROM today_plan_items
-            WHERE today_date = ?1 AND source_task_id = ?2
-            LIMIT 1
-            ",
-            params![today_date, task_id],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
+    let (item_id, created) = ensure_today_plan_item_for_task(&connection, task_id, &today_date)?;
+    let item = get_today_plan_item_by_id(&connection, item_id)?;
 
-    if let Some(existing_id) = existing {
-        return get_today_plan_item_by_id(&connection, existing_id);
+    // 已存在于今日计划时不重复补 sync_meta、也不触发同步（与抽出前的行为一致）。
+    if created {
+        ensure_sync_meta_for_local_id(
+            &connection,
+            "today_plan_item",
+            item.id,
+            Some(format!(
+                "today_plan:{}:source-task:{}",
+                item.today_date, task_id
+            )),
+            Utc::now().timestamp_millis(),
+        )?;
+        trigger_shared_sync(&app, "today_plan_change");
     }
 
-    let now = Utc::now().to_rfc3339();
-    let sort_order = next_sort_order(
-        &connection,
-        "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM today_plan_items WHERE today_date = ?1",
-        params![today_date.clone()],
-    )?;
-
-    connection
-        .execute(
-            "
-            INSERT INTO today_plan_items (
-              today_date,
-              source_task_id,
-              subject_id,
-              title,
-              note,
-              due_date,
-              sort_order,
-              completed,
-              synced_source_completion,
-              created_at,
-              updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 0, ?8, ?8)
-            ",
-            params![
-                today_date,
-                task.id,
-                task.subject_id,
-                task.title,
-                task.note,
-                task.due_date,
-                sort_order,
-                now
-            ],
-        )
-        .map_err(|error| error.to_string())?;
-
-    let item = get_today_plan_item_by_id(&connection, connection.last_insert_rowid())?;
-    ensure_sync_meta_for_local_id(
-        &connection,
-        "today_plan_item",
-        item.id,
-        Some(format!(
-            "today_plan:{}:source-task:{}",
-            item.today_date, task.id
-        )),
-        Utc::now().timestamp_millis(),
-    )?;
-    trigger_shared_sync(&app, "today_plan_change");
     Ok(item)
 }
 
@@ -439,9 +436,11 @@ pub fn create_today_plan_item(
               sort_order,
               completed,
               synced_source_completion,
+              priority,
+              estimated_minutes,
               created_at,
               updated_at
-            ) VALUES (?1, NULL, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7, ?7)
+            ) VALUES (?1, NULL, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7, ?8, ?9, ?9)
             ",
             params![
                 today_date,
@@ -450,6 +449,8 @@ pub fn create_today_plan_item(
                 normalize_optional_string(draft.note),
                 normalize_optional_string(draft.due_date),
                 sort_order,
+                normalize_priority(draft.priority),
+                normalize_estimated_minutes(draft.estimated_minutes),
                 now
             ],
         )
@@ -482,14 +483,18 @@ pub fn update_today_plan_item(
                 title = ?2,
                 note = ?3,
                 due_date = ?4,
-                updated_at = ?5
-            WHERE id = ?6
+                priority = ?5,
+                estimated_minutes = ?6,
+                updated_at = ?7
+            WHERE id = ?8
             ",
             params![
                 draft.subject_id,
                 title,
                 normalize_optional_string(draft.note),
                 normalize_optional_string(draft.due_date),
+                normalize_priority(draft.priority),
+                normalize_estimated_minutes(draft.estimated_minutes),
                 Utc::now().to_rfc3339(),
                 id
             ],
@@ -664,7 +669,8 @@ fn list_all_checklist_tasks(connection: &Connection) -> Result<Vec<TaskRecord>, 
     let mut statement = connection
         .prepare(
             "
-            SELECT id, board_scope, subject_id, title, note, due_date, sort_order, completed, created_at, updated_at
+            SELECT id, board_scope, subject_id, title, note, due_date, sort_order, completed,
+                   priority, estimated_minutes, ai_pinned, created_at, updated_at
             FROM checklist_tasks
             ORDER BY completed ASC, sort_order ASC, id ASC
             ",
@@ -682,14 +688,213 @@ fn list_all_checklist_tasks(connection: &Connection) -> Result<Vec<TaskRecord>, 
                 due_date: row.get(5)?,
                 sort_order: row.get(6)?,
                 completed: row.get::<_, bool>(7)?,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
+                priority: row.get(8)?,
+                estimated_minutes: row.get(9)?,
+                ai_pinned: row.get::<_, bool>(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         })
         .map_err(|error| error.to_string())?;
 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())
+}
+
+// ── 供 AI 智能日程规划使用的只读接口 ──
+//
+// 刻意不暴露私有的 `TaskRecord` / `ChecklistCategoryKey`，避免把清单内部实现细节
+// 泄漏进 `commands::ai_scheduler`。分类键已在返回前归一化为五值枚举的字符串形式。
+
+/// 参与自动排期的**队列条目**（`today_plan_items` 的一行）。
+///
+/// 排期单位是「今日 / 计划队列」里的条目，而不是整个清单的任务：用户把任务加进队列
+/// 表达的是「今天要做这些」，那才是排期的输入。队列里手动新建的临时条目
+/// （`source_task_id = None`）同样是队列成员，必须一起排。
+///
+/// **不再按 `ai_pinned` 过滤**：既然「在队列里」本身就是用户的显式选择，再叠一层
+/// 用户看不见也改不了的隐藏过滤只会让「加进今天却没被排期」无法解释
+/// （`ai_pinned` 目前也没有 UI 入口）。这是对方案 §4.2 第 1 步的有意修正。
+#[derive(Debug, Clone)]
+pub(crate) struct SchedulableQueueItem {
+    /// `today_plan_items.id` —— 本次排期的唯一标识。
+    pub item_id: i64,
+    /// 清单来源；手动新建的临时条目为 `None`。
+    pub source_task_id: Option<i64>,
+    pub category_key: String,
+    pub subject_id: Option<i64>,
+    pub title: String,
+    pub note: Option<String>,
+    pub due_date: Option<String>,
+    pub priority: String,
+    /// 0 表示未估时。
+    pub estimated_minutes: i64,
+}
+
+/// 指定日期的可排期队列条目：该日队列里未完成的条目。
+///
+/// `board_scope` 靠 LEFT JOIN 取到——它是分类的**权威来源**（与
+/// `map_task_record_to_view` 一致）；来源任务已被删除的手动条目则回落到 `subject_id`
+/// 反查分类，再不行算「通用」。
+pub(crate) fn list_queue_items(
+    connection: &Connection,
+    today_date: &str,
+) -> Result<Vec<SchedulableQueueItem>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT queue.id, queue.source_task_id, queue.subject_id, queue.title, queue.note,
+                   queue.due_date, queue.priority, queue.estimated_minutes, task.board_scope
+            FROM today_plan_items AS queue
+            LEFT JOIN checklist_tasks AS task ON task.id = queue.source_task_id
+            WHERE queue.today_date = ?1 AND queue.completed = 0
+            ORDER BY queue.sort_order ASC, queue.id ASC
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map(params![today_date], |row| {
+            let source_task_id: Option<i64> = row.get(1)?;
+            let subject_id: Option<i64> = row.get(2)?;
+            let board_scope: Option<String> = row.get(8)?;
+            let key = board_scope
+                .as_deref()
+                .map(map_board_scope_to_category_key)
+                .or_else(|| category_key_for_subject_id(subject_id))
+                .unwrap_or(ChecklistCategoryKey::General);
+            Ok(SchedulableQueueItem {
+                item_id: row.get(0)?,
+                source_task_id,
+                category_key: key.as_str().to_string(),
+                // 与 `map_task_record_to_view` 保持一致：未显式关联科目时用分类固有科目。
+                subject_id: subject_id.or(category_subject_id(key)),
+                title: row.get(3)?,
+                note: row.get(4)?,
+                due_date: row.get(5)?,
+                priority: row.get(6)?,
+                estimated_minutes: row.get(7)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+/// 分类键 → 显示名，直接复用设置页维护的 `checklist_category_names`。
+pub(crate) fn category_label_map(
+    connection: &Connection,
+) -> Result<HashMap<String, String>, String> {
+    load_category_names(connection)
+}
+
+/// apply 阶段漂移检测所需的队列条目当前状态。
+#[derive(Debug, Clone)]
+pub(crate) struct QueueItemDriftState {
+    pub completed: bool,
+    pub priority: String,
+    pub due_date: Option<String>,
+    pub estimated_minutes: i64,
+}
+
+/// 读取队列条目当前状态；`Ok(None)` 表示条目已被移出队列或删除。
+///
+/// 漂移检测必须落在**队列条目**上（而不是它的来源任务）：草案是照队列生成的，
+/// 用户把条目移出队列、勾选完成、或改了优先级，都会让草案失去依据。
+pub(crate) fn queue_item_drift_state(
+    connection: &Connection,
+    item_id: i64,
+) -> Result<Option<QueueItemDriftState>, String> {
+    connection
+        .query_row(
+            "SELECT completed, priority, due_date, estimated_minutes FROM today_plan_items WHERE id = ?1",
+            params![item_id],
+            |row| {
+                Ok(QueueItemDriftState {
+                    completed: row.get::<_, bool>(0)?,
+                    priority: row.get(1)?,
+                    due_date: row.get(2)?,
+                    estimated_minutes: row.get(3)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+/// 在给定连接上把清单任务补进今日计划，返回 `(item_id, 是否新建)`。
+///
+/// 与命令 `add_task_to_today_plan` 的区别：**不打开新连接、不触发同步**，因此可以在
+/// `apply` 的事务内安全调用（方案 §8.2 要求抽成可复用函数）。原本该命令自带一套
+/// 连接与同步逻辑，若 apply 复用它会在事务中另开连接，导致写锁冲突。
+pub(crate) fn ensure_today_plan_item_for_task(
+    connection: &Connection,
+    task_id: i64,
+    today_date: &str,
+) -> Result<(i64, bool), String> {
+    let existing = connection
+        .query_row(
+            "
+            SELECT id
+            FROM today_plan_items
+            WHERE today_date = ?1 AND source_task_id = ?2
+            LIMIT 1
+            ",
+            params![today_date, task_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    if let Some(existing_id) = existing {
+        return Ok((existing_id, false));
+    }
+
+    let task = get_checklist_task_by_id(connection, task_id)?;
+    let now = Utc::now().to_rfc3339();
+    let sort_order = next_sort_order(
+        connection,
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM today_plan_items WHERE today_date = ?1",
+        params![today_date],
+    )?;
+
+    connection
+        .execute(
+            "
+            INSERT INTO today_plan_items (
+              today_date,
+              source_task_id,
+              subject_id,
+              title,
+              note,
+              due_date,
+              sort_order,
+              completed,
+              synced_source_completion,
+              priority,
+              estimated_minutes,
+              created_at,
+              updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 0, ?8, ?9, ?10, ?10)
+            ",
+            params![
+                today_date,
+                task.id,
+                task.subject_id,
+                task.title,
+                task.note,
+                task.due_date,
+                sort_order,
+                // 从来源任务继承 AI 排期属性，避免加入今日计划后丢失。
+                task.priority.clone(),
+                task.estimated_minutes,
+                now
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok((connection.last_insert_rowid(), true))
 }
 
 fn list_today_plan_items(
@@ -699,7 +904,7 @@ fn list_today_plan_items(
     let mut statement = connection
         .prepare(
             "
-            SELECT id, today_date, source_task_id, subject_id, title, note, due_date, sort_order, completed, synced_source_completion, created_at, updated_at
+            SELECT id, today_date, source_task_id, subject_id, title, note, due_date, sort_order, completed, synced_source_completion, priority, estimated_minutes, created_at, updated_at
             FROM today_plan_items
             WHERE today_date = ?1
             ORDER BY completed ASC, sort_order ASC, id ASC
@@ -725,6 +930,9 @@ fn map_task_record_to_view(task: &TaskRecord, key: ChecklistCategoryKey) -> Chec
         due_date: task.due_date.clone(),
         sort_order: task.sort_order,
         completed: task.completed,
+        priority: task.priority.clone(),
+        estimated_minutes: task.estimated_minutes,
+        ai_pinned: task.ai_pinned,
         created_at: task.created_at.clone(),
         updated_at: task.updated_at.clone(),
     }
@@ -734,7 +942,8 @@ fn get_checklist_task_by_id(connection: &Connection, id: i64) -> Result<Checklis
     let record = connection
         .query_row(
             "
-            SELECT id, board_scope, subject_id, title, note, due_date, sort_order, completed, created_at, updated_at
+            SELECT id, board_scope, subject_id, title, note, due_date, sort_order, completed,
+                   priority, estimated_minutes, ai_pinned, created_at, updated_at
             FROM checklist_tasks
             WHERE id = ?1
             ",
@@ -749,8 +958,11 @@ fn get_checklist_task_by_id(connection: &Connection, id: i64) -> Result<Checklis
                     due_date: row.get(5)?,
                     sort_order: row.get(6)?,
                     completed: row.get::<_, bool>(7)?,
-                    created_at: row.get(8)?,
-                    updated_at: row.get(9)?,
+                    priority: row.get(8)?,
+                    estimated_minutes: row.get(9)?,
+                    ai_pinned: row.get::<_, bool>(10)?,
+                    created_at: row.get(11)?,
+                    updated_at: row.get(12)?,
                 })
             },
         )
@@ -764,7 +976,7 @@ fn get_today_plan_item_by_id(connection: &Connection, id: i64) -> Result<TodayPl
     connection
         .query_row(
             "
-            SELECT id, today_date, source_task_id, subject_id, title, note, due_date, sort_order, completed, synced_source_completion, created_at, updated_at
+            SELECT id, today_date, source_task_id, subject_id, title, note, due_date, sort_order, completed, synced_source_completion, priority, estimated_minutes, created_at, updated_at
             FROM today_plan_items
             WHERE id = ?1
             ",
@@ -786,8 +998,10 @@ fn row_to_today_plan_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<TodayPlan
         sort_order: row.get(7)?,
         completed: row.get::<_, bool>(8)?,
         synced_source_completion: row.get::<_, bool>(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
+        priority: row.get(10)?,
+        estimated_minutes: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
     })
 }
 
@@ -987,6 +1201,10 @@ fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::plan_date_string;
+    use super::{list_queue_items, SchedulableQueueItem};
+    use crate::storage::db::open_database;
+    use rusqlite::{params, Connection};
+    use std::path::PathBuf;
 
     #[test]
     fn selected_plan_date_accepts_a_future_calendar_date() {
@@ -999,5 +1217,52 @@ mod tests {
     #[test]
     fn selected_plan_date_rejects_invalid_calendar_date() {
         assert!(plan_date_string(Some("2026-02-30".to_string())).is_err());
+    }
+
+    fn temp_database(name: &str) -> (tempfile::TempDir, PathBuf) {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let path = directory.path().join(name);
+        (directory, path)
+    }
+
+    /// 手动队列条目夹具：无清单来源、无科目。
+    fn seed_queue_row(connection: &Connection, id: i64, today_date: &str, completed: bool) {
+        connection
+            .execute(
+                "
+                INSERT INTO today_plan_items (
+                  id, today_date, source_task_id, subject_id, title, note, due_date, sort_order,
+                  completed, synced_source_completion, priority, estimated_minutes,
+                  created_at, updated_at
+                ) VALUES (?1, ?2, NULL, NULL, ?3, NULL, NULL, 0, ?4, 0, 'medium', 60, 'now', 'now')
+                ",
+                params![id, today_date, format!("条目{id}"), i64::from(completed)],
+            )
+            .expect("seed queue row");
+    }
+
+    /// 排期输入必须是「指定日期、未完成」的队列条目 —— 这是 2026-09-26 修正的核心：
+    /// 旧实现排的是整个清单（`completed = 0 AND ai_pinned = 0`），用户无法用队列
+    /// 控制「这次排什么」。
+    #[test]
+    fn queue_items_are_scoped_to_one_date_and_unfinished_only() {
+        let (_directory, path) = temp_database("checklist-queue.sqlite3");
+        let connection = open_database(&path).expect("open db");
+
+        seed_queue_row(&connection, 1, "2026-09-25", false);
+        seed_queue_row(&connection, 2, "2026-09-25", true);
+        seed_queue_row(&connection, 3, "2026-09-26", false);
+
+        let items: Vec<SchedulableQueueItem> =
+            list_queue_items(&connection, "2026-09-25").expect("list");
+
+        assert_eq!(
+            items.iter().map(|item| item.item_id).collect::<Vec<_>>(),
+            vec![1],
+            "只取当天、未完成的队列条目"
+        );
+        // 无清单来源、无科目的手动条目 → 分类回落为「通用」。
+        assert_eq!(items[0].category_key, "general");
+        assert_eq!(items[0].source_task_id, None);
     }
 }

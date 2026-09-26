@@ -232,7 +232,7 @@ const settingsSectionKeys: SettingsSectionKey[] = ['basic', 'sync', 'integration
 const settingsSections: Array<{ key: SettingsSectionKey; label: string; description: string; icon: LucideIcon }> = [
   { key: 'basic', label: '基础', description: '节奏与提醒', icon: Settings2 },
   { key: 'sync', label: '同步', description: '云端数据', icon: Cloud },
-  { key: 'integrations', label: '集成', description: '飞书与邮件', icon: ExternalLink },
+  { key: 'integrations', label: '集成', description: '飞书、邮件与 AI 排期', icon: ExternalLink },
   { key: 'system', label: '系统', description: '规则与诊断', icon: HardDrive },
 ];
 
@@ -294,6 +294,7 @@ export default function SettingsPage({
     feishu: false,
     caldav: false,
     email: false,
+    aiScheduler: false,
     syncJournal: false,
     backups: false,
     objectStorage: false,
