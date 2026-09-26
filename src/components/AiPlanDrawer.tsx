@@ -317,7 +317,7 @@ export default function AiPlanDrawer({
         <div className="ai-plan-alert is-warn">
           <AlertTriangle size={14} />
           <div>
-            <strong>有 {applyResult.warnings.length} 条未能写入</strong>
+            <strong>{applyResult.message}</strong>
             {applyResult.warnings.map((warning, index) => (
               <small key={`${warning.code}-${index}`}>{warning.message}</small>
             ))}

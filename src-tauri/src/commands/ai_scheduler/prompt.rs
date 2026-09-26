@@ -48,7 +48,7 @@ pub fn build_system_prompt() -> String {
         "1. 只能使用输入 queue_items 中出现过的 item_id，不得编造 id，也不得改写标题；",
         "2. 每条安排的 start_minute 与 end_minute 必须完整落在该日期的可用时段内，并且不与 existing_blocks 重叠；",
         "3. 不得把条目排到它的 due_date 之后；优先级高、截止日近的条目尽量靠前，优先安排进高效时段；",
-        "4. 单日安排总时长不得超过 max_daily_minutes，相邻安排之间至少留出 min_break_minutes 分钟休息；学习块可以根据任务难度在合理范围内自行决定时长，不要机械地全部切成同样长度；",
+        "4. 单日安排总时长不得超过 max_daily_minutes，相邻安排之间至少留出 min_break_minutes 分钟休息；当 adaptive_durations=true 时，把 estimated_minutes 视为基准，可根据标题、科目、难度和截止日期按 5 分钟调整，通常控制在 25-90 分钟，并在 rationale 说明明显调整；当 adaptive_durations=false 时严格使用 estimated_minutes，未估时才使用默认时长；",
         "5. 固定生活安排（早餐、午餐、晚餐）是不可占用的硬约束；它们已经列在 meal_windows 中，学习任务必须避开；",
         "6. 确实放不下的条目放进 unscheduled，并用一句话说明原因，绝不硬塞；",
         "7. 每个条目在同一天只安排一次；",
@@ -58,7 +58,7 @@ pub fn build_system_prompt() -> String {
         r#"{"items":[{"item_id":41,"date":"2026-09-25","start_minute":480,"end_minute":570,"rationale":"上午头脑清醒，先做数学"}],"unscheduled":[{"item_id":42,"reason":"截止日前没有足够长的可用时段"}]}"#,
         "",
         "字段说明：start_minute / end_minute 是距当天 00:00 的分钟数（例如 480 = 08:00）；",
-        "rationale 是不超过 40 字的排期理由，可以留空字符串；unscheduled 可以是空数组。",
+        "rationale 是不超过 40 字的排期理由，可以留空字符串；unscheduled 可以是空数组。先保证不超容量，再综合优先级、截止日期、高效时段、每日目标学习时长和任务分类连续性安排；不要把所有任务机械地排成同样时长。",
     ]
     .join("\n")
 }
@@ -162,9 +162,10 @@ pub fn build_user_prompt(
         .iter()
         .map(|item| {
             let mut line = format!(
-                "{{\"item_id\":{},\"title\":\"{}\",\"category\":\"{}\",\"priority\":\"{}\",\"estimated_minutes\":{},\"due_date\":\"{}\"",
+                "{{\"item_id\":{},\"title\":\"{}\",\"category_key\":\"{}\",\"category\":\"{}\",\"priority\":\"{}\",\"estimated_minutes\":{},\"due_date\":\"{}\"",
                 item.item_id,
                 item.title.replace('"', "'"),
+                item.category_key,
                 item.category_label,
                 item.priority,
                 item.estimated_minutes,

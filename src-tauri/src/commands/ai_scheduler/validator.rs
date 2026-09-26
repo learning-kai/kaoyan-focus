@@ -40,7 +40,7 @@ fn normalize_bounds(raw_start: i64, raw_end: i64, item_minutes: i64) -> Option<(
         return Some((start, end));
     }
 
-    // 倒置或长度为零：按条目时长从 start 重算。
+    // 倒置或长度为零：按条目有效时长重算。
     let repaired_end = align_to_five(start + item_minutes.max(TIME_ALIGN_MINUTES));
     if repaired_end > start && repaired_end <= MAX_DAY_MINUTE {
         Some((start, repaired_end))
@@ -475,6 +475,16 @@ mod tests {
         let plan_context = context_with(vec![queue_item(41, None, 0)], vec![]);
         let outcome = validate(&raw(vec![raw_item(41, 600, 600)]), &plan_context);
 
+        assert_eq!(outcome.items[0].duration_minutes(), 45);
+    }
+
+    #[test]
+    fn estimated_duration_can_be_adapted_by_model() {
+        let plan_context = context_with(vec![queue_item(41, None, 75)], vec![]);
+        // 自适应时长开启时，模型可以结合任务难度给出不同于预计时长的草案时长。
+        let outcome = validate(&raw(vec![raw_item(41, 480, 525)]), &plan_context);
+
+        assert_eq!(outcome.items.len(), 1);
         assert_eq!(outcome.items[0].duration_minutes(), 45);
     }
 
