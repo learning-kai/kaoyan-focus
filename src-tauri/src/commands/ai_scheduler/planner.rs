@@ -49,6 +49,75 @@ fn ordered_queue_items<'a>(
     keyed.into_iter().map(|(_, _, _, _, item)| item).collect()
 }
 
+fn adaptive_duration(item: &ContextQueueItem, plan_context: &PlanContext) -> i64 {
+    let raw = item.effective_minutes(plan_context.default_block_minutes);
+    // 用户填写的预计时长是明确意图，管家只替未估时条目补全时长。
+    if !plan_context.planner_preferences.adaptive_durations || item.estimated_minutes > 0 {
+        return raw;
+    }
+    let (min, max) = match item.category_key.as_str() {
+        "math" | "major" => (45, 90),
+        "english" | "politics" => (25, 60),
+        _ => (25, 45),
+    };
+    (raw.clamp(min, max) / 5 * 5).max(5)
+}
+
+fn append_meal_items(items: &mut Vec<AiPlanItem>, plan_context: &PlanContext) {
+    if !plan_context.planner_preferences.auto_meals {
+        return;
+    }
+    let start = context::parse_date(&plan_context.horizon_start).ok();
+    let Some(start) = start else {
+        return;
+    };
+    for date in context::horizon_dates(start, plan_context.horizon_days) {
+        let date_key = context::date_string(date);
+        for meal in &plan_context.planner_preferences.meal_windows {
+            if meal.end_minute <= meal.start_minute {
+                continue;
+            }
+            let id = format!("{date_key}-meal-{}", meal.kind);
+            if items.iter().any(|item| item.id == id) {
+                continue;
+            }
+            let conflict_with = plan_context
+                .existing_blocks
+                .iter()
+                .filter(|block| {
+                    block.date == date_key
+                        && block.start_minute < meal.end_minute
+                        && meal.start_minute < block.end_minute
+                })
+                .map(|block| block.block_id)
+                .collect();
+            items.push(AiPlanItem {
+                id,
+                source_task_id: None,
+                source_today_item_id: None,
+                schedule_date: date_key.clone(),
+                start_minute: meal.start_minute,
+                end_minute: meal.end_minute,
+                title: meal.kind.clone(),
+                category_key: "general".to_string(),
+                subject_id: None,
+                priority: "low".to_string(),
+                rationale: Some("固定生活安排，保证学习节奏".to_string()),
+                manually_adjusted: false,
+                conflict_with,
+                kind: "meal".to_string(),
+            });
+        }
+    }
+    items.sort_by(|a, b| {
+        (a.schedule_date.as_str(), a.start_minute, a.end_minute).cmp(&(
+            b.schedule_date.as_str(),
+            b.start_minute,
+            b.end_minute,
+        ))
+    });
+}
+
 /// 把占用区间按最小间隔外扩：这样从「可用时段减去占用」得到的空档天然满足相邻间隔约束。
 fn expand_by_break(ranges: &[(i64, i64)], min_break_minutes: i64) -> Vec<(i64, i64)> {
     ranges
@@ -110,9 +179,14 @@ pub fn plan_locally(
     let mut placed: HashMap<String, Vec<(i64, i64)>> = HashMap::new();
     let mut items: Vec<RawPlanItem> = Vec::new();
     let mut unscheduled: Vec<RawUnscheduledItem> = Vec::new();
+    let break_minutes = match plan_context.planner_preferences.rest_style.as_str() {
+        "gentle" => plan_context.min_break_minutes.max(15),
+        "focused" => plan_context.min_break_minutes.min(5),
+        _ => plan_context.min_break_minutes,
+    };
 
     for queue_item in ordered_queue_items(plan_context, request.respect_priority) {
-        let duration = queue_item.effective_minutes(plan_context.default_block_minutes);
+        let duration = adaptive_duration(queue_item, plan_context);
         let mut scheduled = false;
 
         for date in &dates {
@@ -131,13 +205,26 @@ pub fn plan_locally(
             }
 
             // `keep_locked_blocks = false` 时，AI 产出的未锁定块视为可被顶替，不再占用空档。
-            let existing: Vec<(i64, i64)> = plan_context
+            let mut existing: Vec<(i64, i64)> = plan_context
                 .existing_blocks
                 .iter()
                 .filter(|block| block.date == date_key)
                 .filter(|block| request.keep_locked_blocks || block.locked)
                 .map(|block| (block.start_minute, block.end_minute))
                 .collect();
+
+            if plan_context.planner_preferences.auto_meals {
+                existing.extend(
+                    plan_context
+                        .planner_preferences
+                        .meal_windows
+                        .iter()
+                        .filter_map(|meal| {
+                            (meal.end_minute > meal.start_minute)
+                                .then_some((meal.start_minute, meal.end_minute))
+                        }),
+                );
+            }
 
             let existing_total: i64 = existing.iter().map(|(s, e)| e - s).sum();
             let placed_ranges = placed.get(&date_key).cloned().unwrap_or_default();
@@ -150,10 +237,7 @@ pub fn plan_locally(
 
             let mut occupied = existing;
             occupied.extend(placed_ranges);
-            let occupied = expand_by_break(
-                &context::merge_ranges(occupied),
-                plan_context.min_break_minutes,
-            );
+            let occupied = expand_by_break(&context::merge_ranges(occupied), break_minutes);
 
             let peaks = context::peaks_for_date(&plan_context.peak_windows, *date);
             let gaps = subtract_ranges(&windows, &occupied);
@@ -431,6 +515,7 @@ fn empty_context(horizon_days: i64, target_date: &str) -> PlanContext {
         min_break_minutes: 0,
         max_daily_minutes: DEFAULT_MAX_DAILY_MINUTES,
         default_block_minutes: DEFAULT_BLOCK_MINUTES,
+        planner_preferences: AiPlannerPreferences::default(),
     }
 }
 
@@ -575,7 +660,7 @@ pub fn preview_proposal(
 
     // 队列里没有可排条目就不浪费一次网络往返——这不是排期失败，是没东西可排。
     if plan_context.queue_items.is_empty() {
-        return Err(bad_request_message(&format!(
+        return Err(bad_request_message(format!(
             "「{}」的计划队列里没有未完成条目，先在「今日 / 计划」里加几条再生成草案",
             request.target_date
         )));
@@ -589,12 +674,14 @@ pub fn preview_proposal(
             }
             let raw = plan_locally(&plan_context, &request)?;
             let outcome = validator::validate(&raw, &plan_context);
+            let mut items = outcome.items;
+            append_meal_items(&mut items, &plan_context);
             persist_proposal(
                 connection,
                 NewProposal {
                     request: &request,
                     plan_context: &plan_context,
-                    items: &outcome.items,
+                    items: &items,
                     warnings: &outcome.warnings,
                     unscheduled: &outcome.unscheduled,
                     engine: ENGINE_LOCAL_HEURISTIC,
@@ -637,13 +724,15 @@ fn llm_plan(
     let validated = validator::validate(&outcome.response, plan_context);
     let mut warnings = validated.warnings;
     warnings.extend(outcome.warnings);
+    let mut items = validated.items;
+    append_meal_items(&mut items, plan_context);
 
     persist_proposal(
         connection,
         NewProposal {
             request,
             plan_context,
-            items: &validated.items,
+            items: &items,
             warnings: &warnings,
             unscheduled: &validated.unscheduled,
             engine: ENGINE_LLM,
@@ -701,6 +790,10 @@ mod tests {
             min_break_minutes: 10,
             max_daily_minutes: 480,
             default_block_minutes: 45,
+            planner_preferences: AiPlannerPreferences {
+                auto_meals: false,
+                ..AiPlannerPreferences::default()
+            },
         }
     }
 
@@ -846,6 +939,31 @@ mod tests {
         let raw = plan_locally(&plan_context, &request()).expect("plan");
 
         assert_eq!(raw.items[0].end_minute - raw.items[0].start_minute, 45);
+    }
+
+    #[test]
+    fn butler_mode_blocks_meals_and_adapts_unestimated_tasks() {
+        let mut plan_context = base_context(vec![ContextQueueItem {
+            item_id: 1,
+            source_task_id: None,
+            title: "英语阅读".to_string(),
+            category_key: "english".to_string(),
+            category_label: "英语".to_string(),
+            subject_id: None,
+            priority: "high".to_string(),
+            estimated_minutes: 0,
+            due_date: None,
+            note: None,
+        }]);
+        plan_context.available_windows = vec![window(5, 480, 900)];
+        plan_context.planner_preferences.auto_meals = true;
+        let raw = plan_locally(&plan_context, &request()).expect("plan");
+        assert_eq!(raw.items[0].start_minute, 480);
+        assert_eq!(raw.items[0].end_minute - raw.items[0].start_minute, 45);
+        assert!(raw
+            .items
+            .iter()
+            .all(|item| item.end_minute <= 720 || item.start_minute >= 780));
     }
 
     #[test]

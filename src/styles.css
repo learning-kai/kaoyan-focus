@@ -7803,6 +7803,18 @@ html[data-study-fullscreen='true'] .focus-clock-zone strong {
 .ai-plan-item.category-math { border-left-color: var(--subject-math); }
 .ai-plan-item.category-major { border-left-color: var(--subject-major); }
 
+.ai-plan-item.is-meal {
+  border-left-color: var(--green);
+  background: color-mix(in srgb, var(--green) 12%, rgba(16, 27, 43, 0.74));
+}
+
+.ai-plan-item.is-meal .ai-plan-item-title::before {
+  content: '生活 · ';
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .ai-plan-item.has-conflict {
   border-color: var(--red);
   border-left-color: var(--red);

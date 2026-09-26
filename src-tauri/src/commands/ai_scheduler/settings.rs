@@ -151,6 +151,34 @@ fn normalize_settings(
         align_to_five(settings.default_block_minutes.clamp(5, 480)).max(5);
     settings.min_break_minutes = settings.min_break_minutes.clamp(0, 120);
     settings.max_daily_minutes = settings.max_daily_minutes.clamp(30, 1440);
+    settings.planner_preferences.daily_target_minutes = settings
+        .planner_preferences
+        .daily_target_minutes
+        .clamp(60, 960);
+    settings.planner_preferences.rest_style = match settings.planner_preferences.rest_style.as_str()
+    {
+        "gentle" | "focused" => settings.planner_preferences.rest_style.clone(),
+        _ => "balanced".to_string(),
+    };
+    settings.planner_preferences.memory_note = settings
+        .planner_preferences
+        .memory_note
+        .trim()
+        .chars()
+        .take(240)
+        .collect();
+    for meal in &mut settings.planner_preferences.meal_windows {
+        meal.start_minute = align_to_five(meal.start_minute.clamp(0, 1440));
+        meal.end_minute = align_to_five(meal.end_minute.clamp(0, 1440));
+        meal.kind = meal.kind.trim().chars().take(12).collect();
+    }
+    settings
+        .planner_preferences
+        .meal_windows
+        .retain(|meal| !meal.kind.is_empty() && meal.start_minute < meal.end_minute);
+    if settings.planner_preferences.meal_windows.is_empty() {
+        settings.planner_preferences.meal_windows = AiPlannerPreferences::default().meal_windows;
+    }
     settings.available_windows = normalize_windows(settings.available_windows);
     if settings.available_windows.is_empty() {
         settings.available_windows = AiSchedulerSettings::default().available_windows;

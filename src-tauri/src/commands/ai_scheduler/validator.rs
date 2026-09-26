@@ -141,6 +141,23 @@ pub fn validate(raw: &RawPlanResponse, plan_context: &PlanContext) -> Validation
             continue;
         }
 
+        if plan_context.planner_preferences.auto_meals
+            && plan_context
+                .planner_preferences
+                .meal_windows
+                .iter()
+                .any(|meal| meal.start_minute < end_minute && start_minute < meal.end_minute)
+        {
+            warnings.push(
+                AiPlanWarning::new(
+                    WARN_NO_WINDOW,
+                    format!("「{}」与固定生活安排冲突，已忽略", queue_item.title),
+                )
+                .for_queue_item(Some(candidate.item_id)),
+            );
+            continue;
+        }
+
         let mut id = item_id_for(&date_string, start_minute, candidate.item_id);
         // 理论上不会撞（同日同条目已去重），留一个兜底避免前端 key 重复。
         let mut suffix = 1;
@@ -203,6 +220,7 @@ pub fn validate(raw: &RawPlanResponse, plan_context: &PlanContext) -> Validation
                 .map(|value| value.chars().take(40).collect()),
             manually_adjusted: false,
             conflict_with,
+            kind: "study".to_string(),
         });
     }
 
@@ -357,6 +375,10 @@ mod tests {
             min_break_minutes: 10,
             max_daily_minutes: 480,
             default_block_minutes: 45,
+            planner_preferences: AiPlannerPreferences {
+                auto_meals: false,
+                ..AiPlannerPreferences::default()
+            },
         }
     }
 

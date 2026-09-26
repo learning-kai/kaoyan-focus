@@ -25,6 +25,7 @@ pub const DEFAULT_TEMPERATURE: f64 = 0.2;
 pub const DEFAULT_BLOCK_MINUTES: i64 = 45;
 pub const DEFAULT_MIN_BREAK_MINUTES: i64 = 10;
 pub const DEFAULT_MAX_DAILY_MINUTES: i64 = 480;
+pub const DEFAULT_DAILY_TARGET_MINUTES: i64 = 360;
 pub const DEFAULT_WINDOW_START_MINUTE: i64 = 8 * 60;
 pub const DEFAULT_WINDOW_END_MINUTE: i64 = 22 * 60;
 
@@ -114,6 +115,63 @@ pub struct AiTimeWindow {
     pub end_minute: i64,
 }
 
+/// 管家模式的固定生活安排。它们是排期的硬约束，同时会作为日程条目展示。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AiMealWindow {
+    pub kind: String,
+    pub start_minute: i64,
+    pub end_minute: i64,
+}
+
+fn default_meal_windows() -> Vec<AiMealWindow> {
+    vec![
+        AiMealWindow {
+            kind: "早餐".to_string(),
+            start_minute: 7 * 60,
+            end_minute: 7 * 60 + 40,
+        },
+        AiMealWindow {
+            kind: "午餐".to_string(),
+            start_minute: 12 * 60,
+            end_minute: 13 * 60,
+        },
+        AiMealWindow {
+            kind: "晚餐".to_string(),
+            start_minute: 18 * 60,
+            end_minute: 19 * 60,
+        },
+    ]
+}
+
+fn default_rest_style() -> String {
+    "balanced".to_string()
+}
+
+/// 只保存用户真正想长期记住的排期偏好，不保存模型返回内容。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct AiPlannerPreferences {
+    pub auto_meals: bool,
+    pub adaptive_durations: bool,
+    pub rest_style: String,
+    pub daily_target_minutes: i64,
+    pub memory_note: String,
+    pub meal_windows: Vec<AiMealWindow>,
+}
+
+impl Default for AiPlannerPreferences {
+    fn default() -> Self {
+        Self {
+            auto_meals: true,
+            adaptive_durations: true,
+            rest_style: default_rest_style(),
+            daily_target_minutes: DEFAULT_DAILY_TARGET_MINUTES,
+            memory_note: String::new(),
+            meal_windows: default_meal_windows(),
+        }
+    }
+}
+
 /// 服务商预设。选中即自动填充 `base_url` / `model` / `structured_output_mode`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AiProviderPreset {
@@ -187,6 +245,9 @@ pub struct AiSchedulerSettings {
     pub send_notes: bool,
     /// 用户是否已确认过「数据出境字段」声明。用于只在首次启用时弹确认框。
     pub privacy_acknowledged: bool,
+    /// 自动排期的高层偏好。旧版本配置缺失时使用 `AiPlannerPreferences::default()`。
+    #[serde(default)]
+    pub planner_preferences: AiPlannerPreferences,
 }
 
 fn default_weekdays_window() -> Vec<AiTimeWindow> {
@@ -222,6 +283,7 @@ impl Default for AiSchedulerSettings {
             max_daily_minutes: DEFAULT_MAX_DAILY_MINUTES,
             send_notes: true,
             privacy_acknowledged: false,
+            planner_preferences: AiPlannerPreferences::default(),
         }
     }
 }
@@ -348,6 +410,13 @@ pub struct AiPlanItem {
     pub manually_adjusted: bool,
     /// 与哪些已有 `schedule_blocks.id` 冲突。
     pub conflict_with: Vec<i64>,
+    /// `study` 为学习任务，`meal` 为管家自动插入的生活安排。
+    #[serde(default = "default_plan_item_kind")]
+    pub kind: String,
+}
+
+fn default_plan_item_kind() -> String {
+    "study".to_string()
 }
 
 impl AiPlanItem {
@@ -544,6 +613,9 @@ pub struct PlanContext {
     pub min_break_minutes: i64,
     pub max_daily_minutes: i64,
     pub default_block_minutes: i64,
+    /// 仅包含排期所需的管家偏好；不包含 API Key。
+    #[serde(default)]
+    pub planner_preferences: AiPlannerPreferences,
 }
 
 impl PlanContext {

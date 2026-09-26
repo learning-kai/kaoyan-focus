@@ -212,7 +212,7 @@ export function AiSchedulerPanel({ expanded, locked, onToggle }: AiSchedulerPane
         <>
           <p className="panel-copy">
             读取清单任务的标题、优先级、预计耗时与截止日，结合你的可用时段生成不重叠的时间轴。
-            排期先以草案形式预览，确认后才写入日历；接口不可用时自动改用本地启发式排期。
+            排期先以草案形式预览，确认后才写入日历；接口不可用时可在错误提示中切换本地兜底。
           </p>
 
           {loading && <p className="alert neutral">正在读取 AI 排期配置…</p>}
@@ -229,6 +229,150 @@ export function AiSchedulerPanel({ expanded, locked, onToggle }: AiSchedulerPane
                 />
                 <span>启用 AI 智能日程规划</span>
               </label>
+
+              <div className="ai-butler-card">
+                <div className="ai-butler-card-head">
+                  <div>
+                    <span className="eyebrow">管家模式</span>
+                    <strong>让排期自己处理生活节奏</strong>
+                    <small>这些偏好会保存在本机，生成每次日程时自动生效。</small>
+                  </div>
+                  <Sparkles size={18} />
+                </div>
+                <label className="capability-row sync-toggle-row">
+                  <input
+                    checked={settings.planner_preferences.auto_meals}
+                    disabled={locked}
+                    onChange={(event) =>
+                      updateSettings({
+                        planner_preferences: {
+                          ...settings.planner_preferences,
+                          auto_meals: event.target.checked,
+                        },
+                      })
+                    }
+                    type="checkbox"
+                  />
+                  <span>自动留出三餐时间</span>
+                </label>
+                <label className="capability-row sync-toggle-row">
+                  <input
+                    checked={settings.planner_preferences.adaptive_durations}
+                    disabled={locked}
+                    onChange={(event) =>
+                      updateSettings({
+                        planner_preferences: {
+                          ...settings.planner_preferences,
+                          adaptive_durations: event.target.checked,
+                        },
+                      })
+                    }
+                    type="checkbox"
+                  />
+                  <span>让 AI 按科目难度和剩余时间自动决定每块时长</span>
+                </label>
+                <div className="inline-fields">
+                  <label className="field-block">
+                    <span>每日目标学习（分钟）</span>
+                    <input
+                      className="text-input"
+                      disabled={locked}
+                      max={960}
+                      min={60}
+                      onChange={(event) =>
+                        updateSettings({
+                          planner_preferences: {
+                            ...settings.planner_preferences,
+                            daily_target_minutes: Number(event.target.value) || 360,
+                          },
+                        })
+                      }
+                      step={30}
+                      type="number"
+                      value={settings.planner_preferences.daily_target_minutes}
+                    />
+                  </label>
+                  <label className="field-block">
+                    <span>休息节奏</span>
+                    <select
+                      className="text-input"
+                      disabled={locked}
+                      onChange={(event) =>
+                        updateSettings({
+                          planner_preferences: {
+                            ...settings.planner_preferences,
+                            rest_style: event.target.value,
+                          },
+                        })
+                      }
+                      value={settings.planner_preferences.rest_style}
+                    >
+                      <option value="gentle">温和：多留一点缓冲</option>
+                      <option value="balanced">平衡：学习与休息均衡</option>
+                      <option value="focused">专注：减少切换</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="ai-meal-grid">
+                  {settings.planner_preferences.meal_windows.map((meal, index) => (
+                    <label className="field-block" key={`${meal.kind}-${index}`}>
+                      <span>{meal.kind}</span>
+                      <div className="ai-meal-times">
+                        <input
+                          aria-label={`${meal.kind}开始时间`}
+                          className="text-input"
+                          disabled={locked}
+                          type="time"
+                          value={minutesToTimeInput(meal.start_minute)}
+                          onChange={(event) => {
+                            const start = timeInputToMinutes(event.target.value);
+                            if (start == null) return;
+                            const meal_windows = settings.planner_preferences.meal_windows.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, start_minute: start } : entry,
+                            );
+                            updateSettings({ planner_preferences: { ...settings.planner_preferences, meal_windows } });
+                          }}
+                        />
+                        <span>至</span>
+                        <input
+                          aria-label={`${meal.kind}结束时间`}
+                          className="text-input"
+                          disabled={locked}
+                          type="time"
+                          value={minutesToTimeInput(meal.end_minute)}
+                          onChange={(event) => {
+                            const end = timeInputToMinutes(event.target.value);
+                            if (end == null) return;
+                            const meal_windows = settings.planner_preferences.meal_windows.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, end_minute: end } : entry,
+                            );
+                            updateSettings({ planner_preferences: { ...settings.planner_preferences, meal_windows } });
+                          }}
+                        />
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <label className="field-block">
+                  <span>长期记忆（例如：晚上效率低，专业课放上午）</span>
+                  <textarea
+                    className="text-input"
+                    disabled={locked}
+                    maxLength={240}
+                    onChange={(event) =>
+                      updateSettings({
+                        planner_preferences: {
+                          ...settings.planner_preferences,
+                          memory_note: event.target.value,
+                        },
+                      })
+                    }
+                    placeholder="可留空。只保存你主动写下的排期偏好。"
+                    rows={2}
+                    value={settings.planner_preferences.memory_note}
+                  />
+                </label>
+              </div>
 
               <div className="form-stack">
                 <label className="field-block">

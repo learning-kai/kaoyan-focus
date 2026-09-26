@@ -215,3 +215,63 @@
     grid-template-columns: 1fr;
   }
 }
+
+.ai-butler-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--green) 28%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--green) 7%, var(--surface-soft));
+}
+
+.ai-butler-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-butler-card-head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.ai-butler-card-head strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.ai-butler-card-head small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.ai-butler-card-head > svg {
+  flex: 0 0 auto;
+  color: var(--green);
+}
+
+.ai-meal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ai-meal-times {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 5px;
+  align-items: center;
+}
+
+.ai-meal-times > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 680px) {
+  .ai-meal-grid {
+    grid-template-columns: 1fr;
+  }
+}

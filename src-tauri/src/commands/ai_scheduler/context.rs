@@ -245,6 +245,7 @@ pub fn build_context(
         min_break_minutes: settings.min_break_minutes,
         max_daily_minutes: settings.max_daily_minutes,
         default_block_minutes: settings.default_block_minutes,
+        planner_preferences: settings.planner_preferences.clone(),
     })
 }
 

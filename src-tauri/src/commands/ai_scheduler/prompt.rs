@@ -48,10 +48,11 @@ pub fn build_system_prompt() -> String {
         "1. 只能使用输入 queue_items 中出现过的 item_id，不得编造 id，也不得改写标题；",
         "2. 每条安排的 start_minute 与 end_minute 必须完整落在该日期的可用时段内，并且不与 existing_blocks 重叠；",
         "3. 不得把条目排到它的 due_date 之后；优先级高、截止日近的条目尽量靠前，优先安排进高效时段；",
-        "4. 单日安排总时长不得超过 max_daily_minutes，相邻安排之间至少留出 min_break_minutes 分钟休息；",
-        "5. 确实放不下的条目放进 unscheduled，并用一句话说明原因，绝不硬塞；",
-        "6. 每个条目在同一天只安排一次；",
-        "7. 只输出 json，不要输出任何解释文字、Markdown 代码块或注释。",
+        "4. 单日安排总时长不得超过 max_daily_minutes，相邻安排之间至少留出 min_break_minutes 分钟休息；学习块可以根据任务难度在合理范围内自行决定时长，不要机械地全部切成同样长度；",
+        "5. 固定生活安排（早餐、午餐、晚餐）是不可占用的硬约束；它们已经列在 meal_windows 中，学习任务必须避开；",
+        "6. 确实放不下的条目放进 unscheduled，并用一句话说明原因，绝不硬塞；",
+        "7. 每个条目在同一天只安排一次；",
+        "8. 只输出 json，不要输出任何解释文字、Markdown 代码块或注释。",
         "",
         "输出 json 的结构：",
         r#"{"items":[{"item_id":41,"date":"2026-09-25","start_minute":480,"end_minute":570,"rationale":"上午头脑清醒，先做数学"}],"unscheduled":[{"item_id":42,"reason":"截止日前没有足够长的可用时段"}]}"#,
@@ -63,7 +64,10 @@ pub fn build_system_prompt() -> String {
 }
 
 /// 用户提示词。把「可排什么 / 什么时候能排 / 已经占了什么 / 容量多少」一次性给全。
-pub fn build_user_prompt(request: &super::models::AiPlanRequest, plan_context: &PlanContext) -> String {
+pub fn build_user_prompt(
+    request: &super::models::AiPlanRequest,
+    plan_context: &PlanContext,
+) -> String {
     let mut sections: Vec<String> = Vec::new();
 
     let mut header = format!(
@@ -74,10 +78,50 @@ pub fn build_user_prompt(request: &super::models::AiPlanRequest, plan_context: &
         plan_context.horizon_end,
         format_windows(&windows_of(plan_context)),
         format_windows(&peaks_of(plan_context)),
-        plan_context.min_break_minutes,
+        match plan_context.planner_preferences.rest_style.as_str() {
+            "gentle" => plan_context.min_break_minutes.max(15),
+            "focused" => plan_context.min_break_minutes.min(5),
+            _ => plan_context.min_break_minutes,
+        },
         plan_context.max_daily_minutes,
         plan_context.default_block_minutes,
     );
+    let meals = if plan_context.planner_preferences.auto_meals {
+        plan_context
+            .planner_preferences
+            .meal_windows
+            .iter()
+            .map(|meal| {
+                format!(
+                    "{} {}-{}",
+                    meal.kind,
+                    format_minute(meal.start_minute),
+                    format_minute(meal.end_minute)
+                )
+            })
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    header.push_str(&format!(
+        "\n管家偏好：自动安排三餐={}；自适应任务时长={}；休息节奏={}；每日目标学习 {} 分钟。\nmeal_windows：{}",
+        plan_context.planner_preferences.auto_meals,
+        plan_context.planner_preferences.adaptive_durations,
+        plan_context.planner_preferences.rest_style,
+        plan_context.planner_preferences.daily_target_minutes,
+        if meals.is_empty() { "（无）".to_string() } else { meals.join("、") },
+    ));
+    if !plan_context
+        .planner_preferences
+        .memory_note
+        .trim()
+        .is_empty()
+    {
+        header.push_str(&format!(
+            "\n长期偏好备注：{}",
+            plan_context.planner_preferences.memory_note
+        ));
+    }
     if let Some(instruction) = request.extra_instruction.as_deref() {
         header.push_str(&format!("\n补充说明（请尽量遵守）：{instruction}"));
     }
@@ -97,7 +141,11 @@ pub fn build_user_prompt(request: &super::models::AiPlanRequest, plan_context: &
                     format_minute(block.start_minute),
                     format_minute(block.end_minute),
                     block.title,
-                    if block.locked { " (locked，不可占用)" } else { "" },
+                    if block.locked {
+                        " (locked，不可占用)"
+                    } else {
+                        ""
+                    },
                 )
             })
             .collect();
@@ -158,7 +206,7 @@ fn peaks_of(plan_context: &PlanContext) -> Vec<(i64, i64, i64)> {
 mod tests {
     use super::*;
     use crate::commands::ai_scheduler::models::{
-        AiPlanRequest, AiTimeWindow, ContextBlock, ContextQueueItem,
+        AiPlanRequest, AiPlannerPreferences, AiTimeWindow, ContextBlock, ContextQueueItem,
     };
 
     fn queue_item(item_id: i64, title: &str, note: Option<&str>) -> ContextQueueItem {
@@ -204,6 +252,10 @@ mod tests {
             min_break_minutes: 10,
             max_daily_minutes: 480,
             default_block_minutes: 45,
+            planner_preferences: AiPlannerPreferences {
+                auto_meals: false,
+                ..AiPlannerPreferences::default()
+            },
         }
     }
 
@@ -219,7 +271,10 @@ mod tests {
     #[test]
     fn user_prompt_lists_queue_items_and_locked_blocks() {
         let request = AiPlanRequest::default();
-        let prompt = build_user_prompt(&request, &plan_context(vec![queue_item(41, "数学 660 题", None)]));
+        let prompt = build_user_prompt(
+            &request,
+            &plan_context(vec![queue_item(41, "数学 660 题", None)]),
+        );
 
         assert!(prompt.contains("[queue_items]"));
         assert!(prompt.contains("\"item_id\":41"));
@@ -232,7 +287,8 @@ mod tests {
 
     #[test]
     fn notes_are_only_sent_when_enabled() {
-        let plan_context = plan_context(vec![queue_item(41, "带备注的条目", Some("第三章 前两节"))]);
+        let plan_context =
+            plan_context(vec![queue_item(41, "带备注的条目", Some("第三章 前两节"))]);
 
         let mut request = AiPlanRequest::default();
         let with_note = build_user_prompt(&request, &plan_context);

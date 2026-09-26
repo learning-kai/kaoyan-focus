@@ -14,6 +14,21 @@ export type AiTimeWindow = {
   end_minute: number;
 };
 
+export type AiMealWindow = {
+  kind: string;
+  start_minute: number;
+  end_minute: number;
+};
+
+export type AiPlannerPreferences = {
+  auto_meals: boolean;
+  adaptive_durations: boolean;
+  rest_style: 'gentle' | 'balanced' | 'focused' | string;
+  daily_target_minutes: number;
+  memory_note: string;
+  meal_windows: AiMealWindow[];
+};
+
 export type AiProviderPresetKey = 'deepseek' | 'openai' | 'custom';
 
 /**
@@ -49,6 +64,7 @@ export type AiSchedulerSettings = {
   send_notes: boolean;
   /** 用户是否已确认过「数据出境字段」声明；只在首次启用时弹确认框 */
   privacy_acknowledged: boolean;
+  planner_preferences: AiPlannerPreferences;
 };
 
 /**
@@ -147,6 +163,7 @@ export type AiPlanItem = {
   manually_adjusted: boolean;
   /** 与哪些已有 schedule_block 冲突 */
   conflict_with: number[];
+  kind?: 'study' | 'meal' | string;
 };
 
 export type AiPlanWarningCode =

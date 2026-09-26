@@ -244,7 +244,7 @@ fn prepare_items(
         let inside_window = windows
             .iter()
             .any(|(start, end)| item.start_minute >= *start && item.end_minute <= *end);
-        if !inside_window {
+        if item.kind != "meal" && !inside_window {
             warnings.push(
                 AiPlanWarning::new(
                     WARN_NO_WINDOW,
@@ -410,7 +410,7 @@ pub fn apply_proposal(
                   schedule_date, title, note, category_key, subject_id, source_today_item_id,
                   start_minute, end_minute, status, source_task_id, source_proposal_id, ai_locked,
                   created_at, updated_at
-                ) VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, 'planned', ?8, ?9, 0, ?10, ?10)
+                ) VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, 'planned', ?8, ?9, ?10, ?11, ?11)
                 ",
                 params![
                     item.schedule_date,
@@ -422,6 +422,7 @@ pub fn apply_proposal(
                     item.end_minute,
                     item.source_task_id,
                     proposal_id,
+                    i64::from(item.kind == "meal"),
                     now,
                 ],
             )
@@ -509,22 +510,15 @@ pub async fn preview_ai_schedule(
     tauri::async_runtime::spawn_blocking(move || run_preview(app, request))
         .await
         .map_err(|error| {
-            AiSchedulerError::new(
-                ERR_NETWORK,
-                format!("排期后台任务失败：{error}"),
-                true,
-            )
-            .to_envelope()
+            AiSchedulerError::new(ERR_NETWORK, format!("排期后台任务失败：{error}"), true)
+                .to_envelope()
         })?
         .map_err(|error| error.to_envelope())
 }
 
-fn run_preview(
-    app: AppHandle,
-    request: AiPlanRequest,
-) -> Result<AiPlanProposal, AiSchedulerError> {
-    let connection = open_database(&database_path(&app).map_err(db_error_string)?)
-        .map_err(db_error_string)?;
+fn run_preview(app: AppHandle, request: AiPlanRequest) -> Result<AiPlanProposal, AiSchedulerError> {
+    let connection =
+        open_database(&database_path(&app).map_err(db_error_string)?).map_err(db_error_string)?;
     let settings = settings::current_settings(&connection)?;
     planner::preview_proposal(&connection, request, &settings)
 }
@@ -598,6 +592,7 @@ mod tests {
             rationale: None,
             manually_adjusted: false,
             conflict_with: Vec::new(),
+            kind: "study".to_string(),
         }
     }
 
@@ -672,6 +667,27 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.code == WARN_NO_WINDOW));
+    }
+
+    #[test]
+    fn meal_block_can_be_before_study_window() {
+        let (_directory, path) = temp_database("apply-meal.sqlite3");
+        let connection = open_database(&path).expect("open db");
+        let mut meal = item("meal", 0, 420, 460);
+        meal.source_today_item_id = None;
+        meal.source_task_id = None;
+        meal.title = "早餐".to_string();
+        meal.kind = "meal".to_string();
+
+        let outcome = prepare_items(
+            &connection,
+            &[meal],
+            &settings_with_friday_window(),
+            &AiApplyOptions::default(),
+        )
+        .expect("prepare");
+
+        assert_eq!(outcome.accepted.len(), 1, "餐食不应被学习时段过滤");
     }
 
     #[test]

@@ -559,9 +559,8 @@ fn remove_trailing_commas(text: &str) -> String {
                 continue;
             }
         }
-        match ch {
-            '"' => in_string = true,
-            _ => {}
+        if ch == '"' {
+            in_string = true;
         }
         out.push(ch);
     }
@@ -654,11 +653,8 @@ pub fn chat_json(
         }
 
         let Ok(value) = serde_json::from_str::<Value>(&raw) else {
-            last_error = AiSchedulerError::new(
-                ERR_INVALID_RESPONSE,
-                "服务商返回的内容不是合法 JSON",
-                true,
-            );
+            last_error =
+                AiSchedulerError::new(ERR_INVALID_RESPONSE, "服务商返回的内容不是合法 JSON", true);
             continue;
         };
 

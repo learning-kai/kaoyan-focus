@@ -129,7 +129,7 @@ export default function AiPlanTimeline({
               return (
                 <article
                   aria-label={`${item.title}，${formatMinute(item.start_minute)} 到 ${formatMinute(item.end_minute)}`}
-                  className={`ai-plan-item category-${item.category_key}${hasConflict ? ' has-conflict' : ''}`}
+                  className={`ai-plan-item category-${item.category_key}${item.kind === 'meal' ? ' is-meal' : ''}${hasConflict ? ' has-conflict' : ''}`}
                   key={item.id}
                 >
                   <div className="ai-plan-item-time">
@@ -139,8 +139,9 @@ export default function AiPlanTimeline({
                   <div className="ai-plan-item-body">
                     <strong className="ai-plan-item-title">{item.title}</strong>
                     <small>
-                      {categoryLabel(item.category_key, categoryLabels)} · {durationLabel(minutes)} ·
-                      优先级{PRIORITY_LABELS[item.priority] ?? item.priority}
+                      {item.kind === 'meal'
+                        ? '生活安排 · 固定时间 · 不占学习目标'
+                        : `${categoryLabel(item.category_key, categoryLabels)} · ${durationLabel(minutes)} · 优先级${PRIORITY_LABELS[item.priority] ?? item.priority}`}
                     </small>
                     {item.rationale && <p className="ai-plan-item-rationale">{item.rationale}</p>}
                     {hasConflict && (
