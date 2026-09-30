@@ -24,7 +24,6 @@ use windows::Win32::{
         WM_MOUSEACTIVATE, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCPAINT, WNDPROC, WS_CAPTION, WS_CHILD,
         WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_NOACTIVATE, WS_EX_STATICEDGE,
         WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU,
-        WS_THICKFRAME,
     },
 };
 
@@ -534,7 +533,7 @@ fn build_focus_widget_window(
         .title(FOCUS_WIDGET_TITLE)
         .decorations(false)
         .transparent(true)
-        .resizable(false)
+        .resizable(true)
         .skip_taskbar(true)
         .always_on_top(always_on_top)
         .shadow(false)
@@ -542,6 +541,7 @@ fn build_focus_widget_window(
         .focused(false)
         .focusable(false)
         .prevent_overflow()
+        .drag_and_drop(false)
         .min_inner_size(MIN_WINDOW_WIDTH as f64, MIN_WINDOW_HEIGHT as f64)
         .max_inner_size(MAX_NORMAL_WIDTH as f64, MAX_NORMAL_HEIGHT as f64)
         .inner_size(geometry.width, geometry.height)
@@ -567,7 +567,7 @@ fn configure_focus_widget_window(
     let dock_state = current_dock_state();
     let _ = window.set_title(FOCUS_WIDGET_TITLE);
     let _ = window.set_decorations(false);
-    let _ = window.set_resizable(false);
+    let _ = window.set_resizable(true);
     let _ = window.set_skip_taskbar(true);
     let _ = window.set_always_on_top(settings.focus_widget_always_on_top);
     let _ = window.set_focusable(false);
@@ -1541,7 +1541,7 @@ unsafe extern "system" fn focus_widget_wndproc(
 fn enforce_focus_widget_chrome_less(hwnd: HWND) {
     let style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
     let blocked_style_bits =
-        (WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX).0 as isize;
+        (WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX).0 as isize;
     let next_style = style & !blocked_style_bits;
     let ex_style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
     let blocked_ex_style_bits =
