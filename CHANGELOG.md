@@ -864,4 +864,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - 修复bug (38b30c8)
 
+## v1.4.0 - 2026-09-30
+
+### Desktop
+#### Changed
+- 加入白噪音混合功能 (5ca2a13)
+
 
