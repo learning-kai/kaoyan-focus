@@ -899,10 +899,6 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 
 ### Desktop
 #### Fixed
-- fix (4ff78d1)
-- fix (457e9ff)
-
-#### Changed
-- chore: release v1.5.1 (21a260f)
+- fix (269da17)
 
 
