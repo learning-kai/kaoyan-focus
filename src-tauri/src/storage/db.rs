@@ -545,6 +545,8 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "unscheduled_json",
         "TEXT NOT NULL DEFAULT '[]'",
     )?;
+    // 模型 / 本地规则给出的一句话总结。可空：旧草案没有它。
+    add_column_if_missing(connection, "ai_plan_proposals", "summary", "TEXT")?;
     backfill_feishu_task_count(connection)?;
     connection
         .execute_batch(

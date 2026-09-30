@@ -307,8 +307,16 @@ pub const MIN_HORIZON_DAYS: i64 = 1;
 pub const MAX_HORIZON_DAYS: i64 = 7;
 /// `extra_instruction` 的字符上限（§3.2）。
 pub const MAX_EXTRA_INSTRUCTION_CHARS: usize = 200;
+/// 「按反馈调整」的反馈文本上限，与补充说明同一量级。
+pub const MAX_FEEDBACK_CHARS: usize = 200;
 /// 草案在多少天后自动过期（§6.4）。启动清理时使用。
 pub const PROPOSAL_EXPIRE_DAYS: i64 = 3;
+/// 一个队列条目最多拆成几段。再多就不是「分段学习」而是碎片化了。
+pub const MAX_SEGMENTS_PER_ITEM: usize = 3;
+/// 拆分后每段的最短时长。短于它的碎片不值得打断一次专注。
+pub const MIN_SEGMENT_MINUTES: i64 = 25;
+/// 规划「今天」时，最早从「现在 + 该缓冲」开始排，给用户留出进入状态的时间。
+pub const NOW_BUFFER_MINUTES: i64 = 10;
 
 // 草案警告码（§5.5 / §6.4）。前后端共用同一组字面量。
 pub const WARN_NO_WINDOW: &str = "no_window";
@@ -323,6 +331,9 @@ pub const WARN_TRUNCATED: &str = "truncated";
 pub const WARN_SNAPSHOT_DRIFT: &str = "snapshot_drift";
 /// 同一条目在同一天被排了多次，只保留第一条（§6.4）。原方案只提到「专用 warning」而未命名。
 pub const WARN_DUPLICATE: &str = "duplicate";
+/// 模型给的时间不可行（撞了固定安排 / 已过去 / 超容量 / 漏排），由本地可行性修复挪到了
+/// 最近的空档。条目保留，前端显示「已自动调整」。
+pub const WARN_ADJUSTED: &str = "adjusted";
 
 // 草案状态与来源引擎。
 pub const PROPOSAL_STATUS_DRAFT: &str = "draft";
@@ -359,8 +370,15 @@ pub struct AiPlanRequest {
     pub category_keys: Option<Vec<String>>,
     #[serde(default = "default_true")]
     pub respect_priority: bool,
+    /// 旧字段：`false` 时 AI 产出的未锁定块可被顶替。语义与名字不符（锁定块从来都会保留），
+    /// 新前端恒传 `true`，改用 `replace_ai_blocks` 表达意图；保留它只为兼容旧调用方。
     #[serde(default = "default_true")]
     pub keep_locked_blocks: bool,
+    /// 重新安排已经写进日历、但还没开始的 AI 日程（未锁定、未完成）。
+    ///
+    /// 默认 `false`：已在日历上的队列条目不再重复排期，避免「点两次生成就出现两份」。
+    #[serde(default)]
+    pub replace_ai_blocks: bool,
     #[serde(default)]
     pub extra_instruction: Option<String>,
     /// AI 调用失败时是否允许改用本地启发式。
@@ -380,9 +398,17 @@ impl Default for AiPlanRequest {
             category_keys: None,
             respect_priority: true,
             keep_locked_blocks: true,
+            replace_ai_blocks: false,
             extra_instruction: None,
             allow_local_fallback: false,
         }
+    }
+}
+
+impl AiPlanRequest {
+    /// 是否允许顶替已写入日历的 AI 未锁定块。新旧两个字段任一表达了该意图即可。
+    pub fn wants_replace(&self) -> bool {
+        self.replace_ai_blocks || !self.keep_locked_blocks
     }
 }
 
@@ -459,11 +485,32 @@ impl AiPlanWarning {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AiPlanStats {
+    /// 学习条目数（不含三餐）。
     pub scheduled_count: i64,
     pub unscheduled_count: i64,
+    /// 草案全部条目的总时长（含三餐），保留给旧前端。
     pub total_minutes: i64,
-    /// 超出单日容量上限的分钟数，用于前端提示「有 N 分钟排不下」。
+    /// 超出单日容量上限的分钟数，用于前端提示「有 N 分钟排不下」。只算学习条目。
     pub overflow_minutes: i64,
+    /// 学习条目总时长（不含三餐），与每日目标对比用。
+    #[serde(default)]
+    pub study_minutes: i64,
+    /// 每日目标学习分钟数 × 规划天数，前端据此画进度。
+    #[serde(default)]
+    pub target_minutes: i64,
+    /// 被本地可行性修复挪动 / 补排过的条目数。
+    #[serde(default)]
+    pub adjusted_count: i64,
+}
+
+/// 已经在日历上、因此本次**没有**重复排期的队列条目。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AlreadyScheduledEntry {
+    /// `today_plan_items.id`
+    pub item_id: i64,
+    pub title: String,
+    /// 例如「09-30 14:00 已在日历（手动安排）」。
+    pub detail: String,
 }
 
 /// 「排不下」的条目。原方案 §3.2 只在 stats 里给了计数，但抽屉必须能列出**哪些**
@@ -495,6 +542,15 @@ pub struct AiPlanProposal {
     pub warnings: Vec<AiPlanWarning>,
     pub unscheduled: Vec<UnscheduledEntry>,
     pub stats: AiPlanStats,
+    /// 模型对这份草案的一句话总结；本地排期给出规则化的描述。
+    #[serde(default)]
+    pub summary: Option<String>,
+    /// 已在日历上、本次跳过的队列条目，让用户知道它们不是「被漏掉」。
+    #[serde(default)]
+    pub already_scheduled: Vec<AlreadyScheduledEntry>,
+    /// 写入时会被替换掉的旧 AI 日程块数量（`replace_ai_blocks = true` 时才可能非零）。
+    #[serde(default)]
+    pub replaceable_block_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -528,6 +584,9 @@ pub struct AiApplyResult {
     /// 仅有计数时用户无从判断该改哪里，因此这里把 `apply` 阶段的告警一并带回；
     /// 字段是追加的，旧前端忽略它也不会出错。
     pub warnings: Vec<AiPlanWarning>,
+    /// 被新安排替换掉（删除）的旧 AI 日程块数量。
+    #[serde(default)]
+    pub replaced_count: i64,
 }
 
 /// 日程变动事件。S6 的 `replan_ai_schedule_after_change` 用它定位受影响窗口。
@@ -570,6 +629,11 @@ pub struct ContextQueueItem {
     pub due_date: Option<String>,
     /// 仅 `send_notes = true` 时填充（§7 隐私边界）。
     pub note: Option<String>,
+    /// 该条目此前被排进日历、但时间过了也没完成的次数。
+    ///
+    /// 防摆烂信号：错过过的条目应当更早、更短地安排，而不是再被排到晚上继续拖。
+    #[serde(default)]
+    pub missed_count: i64,
 }
 
 impl ContextQueueItem {
@@ -592,6 +656,19 @@ pub struct ContextBlock {
     pub title: String,
     /// `ai_locked` 或用户手动块 → 视为硬约束，不参与重排。
     pub locked: bool,
+    /// 本次重排会替换掉它（AI 未锁定、未开始、且属于本次重新安排的条目）。
+    /// 为 true 时它不占用空档，写入时由 apply 删除。
+    #[serde(default)]
+    pub replaceable: bool,
+}
+
+/// 生成草案时的「现在」。只用于把今天已经过去的时间挖掉，并判断哪些日期已经过去。
+///
+/// 以值的形式放进快照而不是在各处调用 `Local::now()`：排期结果因此可复现、可单测。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PlanClock {
+    pub date: String,
+    pub minute: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -616,6 +693,18 @@ pub struct PlanContext {
     /// 仅包含排期所需的管家偏好；不包含 API Key。
     #[serde(default)]
     pub planner_preferences: AiPlannerPreferences,
+    /// `None` 表示不做「已过去」裁剪（旧快照 / 单测）。
+    #[serde(default)]
+    pub clock: Option<PlanClock>,
+    /// 已在日历上、本次不再重复排期的队列条目。
+    #[serde(default)]
+    pub already_scheduled: Vec<AlreadyScheduledEntry>,
+    /// 写入时要删除的旧 AI 块 id（可能在 horizon 之外，因此不能只靠 `existing_blocks`）。
+    #[serde(default)]
+    pub replaceable_block_ids: Vec<i64>,
+    /// 生成这份草案用的请求参数。「按反馈调整」据此复现同一范围，不必让前端再传一遍。
+    #[serde(default)]
+    pub source_request: Option<AiPlanRequest>,
 }
 
 impl PlanContext {
@@ -652,6 +741,9 @@ pub struct RawUnscheduledItem {
 /// 保证两条路径的合法性判定完全一致。
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct RawPlanResponse {
+    /// 模型对整份安排的一句话说明（≤60 字）。旧模型不给也能解析。
+    #[serde(default)]
+    pub summary: Option<String>,
     #[serde(default)]
     pub items: Vec<RawPlanItem>,
     #[serde(default)]

@@ -8,6 +8,8 @@
 //! - `settings`：命令 1–3（读取 / 保存 / 连通性测试），密钥走 DPAPI
 //! - `context`：把队列条目、日程、时段收成一份 `PlanContext` 快照
 //! - `prompt`：系统 / 用户提示词（S4）
+//! - `slots`：空档引擎（可用时段 − 保留日程 − 三餐 − 已过去时间），提示词 / 修复 / 本地排期共用
+//! - `refine`：可行性修复——模型给的时间不可行就挪到最近空档，漏排的补上，本地排期也走这里
 //! - `validator`：硬校验 + 按 `item_id` 回填字段，拒绝模型幻觉
 //! - `planner`：模型排期编排（本地启发式仅作显式兜底）+ 草案落库
 //! - `client`：Chat Completions 调用与档位探测
@@ -21,7 +23,9 @@ pub mod context;
 pub mod models;
 pub mod planner;
 pub mod prompt;
+pub mod refine;
 pub mod settings;
+pub mod slots;
 pub mod validator;
 
 use tauri::{AppHandle, Manager};

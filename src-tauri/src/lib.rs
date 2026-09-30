@@ -495,6 +495,8 @@ pub fn run() {
             commands::ai_scheduler::apply::apply_ai_plan_proposal,
             commands::ai_scheduler::apply::discard_ai_plan_proposal,
             commands::ai_scheduler::apply::get_latest_ai_plan_proposal,
+            commands::ai_scheduler::apply::update_ai_plan_proposal_items,
+            commands::ai_scheduler::apply::regenerate_ai_plan_proposal,
             commands::schedule::get_schedule_page_data,
             commands::schedule::create_schedule_block,
             commands::schedule::create_schedule_block_from_today_item,

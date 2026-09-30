@@ -1,21 +1,24 @@
 //! 命令 7：把草案写入日历。
 //!
-//! 这是全流程唯一会写 `schedule_blocks` 的地方，因此承担三道保险（方案 §4.2）：
+//! 这是全流程唯一会写 `schedule_blocks` 的地方，因此承担四道保险（方案 §4.2）：
 //! 1. **漂移检测**——草案生成后任务可能已被删除或勾选完成；
 //! 2. **二次硬校验**——生成到确认之间，用户可能改过可用时段、也可能有远端日程同步进来；
-//! 3. **单事务写入**——要么全写进去，要么一条都不写。
+//! 3. **替换旧 AI 块**——仅当草案是用「重新安排」生成的，才删掉被新安排取代的旧 AI 块；
+//! 4. **单事务写入**——删旧、写新要么全成，要么一条都不动。
 //!
-//! 注意 `replan` 的教训（方案 §7.2）：这里必须读**当前库**，不能依赖 `source_snapshot`
-//! 里的日程块——CalDAV / 飞书会把远端变更反向写回 `schedule_blocks`。
+//! 注意 `replan` 的教训（方案 §7.2）：冲突判定必须读**当前库**，不能依赖 `source_snapshot`
+//! 里的日程块——CalDAV / 飞书会把远端变更反向写回 `schedule_blocks`。快照只提供
+//! 「生成时的依据」：当时的预计时长、当时允许替换哪些块（且每个块都按当前库复核）。
 
 use super::models::*;
 use super::{context, database_path, planner, settings};
 use crate::commands::checklist;
 use crate::commands::schedule::{trigger_shared_sync, ENTITY_SCHEDULE_BLOCK};
 use crate::storage::db::open_database;
-use crate::sync_package::ensure_sync_meta_for_local_id;
+use crate::sync_package::{ensure_sync_meta_for_local_id, mark_entity_deleted};
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::{BTreeSet, HashMap};
 use tauri::AppHandle;
 
 fn db_error(error: rusqlite::Error) -> AiSchedulerError {
@@ -36,8 +39,8 @@ pub fn apply_ai_plan_proposal(
     let result =
         apply_proposal(&connection, proposal_id, &options).map_err(|error| error.to_envelope())?;
 
-    // 只有真的写进去了才触发同步，避免空转一次三路推送。
-    if result.created_count > 0 {
+    // 只有真的写进去（或删掉了旧块）才触发同步，避免空转一次三路推送。
+    if result.created_count > 0 || result.replaced_count > 0 {
         trigger_shared_sync(&app, "ai_schedule_apply");
     }
     Ok(result)
@@ -79,6 +82,7 @@ fn load_present_blocks(
                 end_minute: row.get(3)?,
                 title: row.get(4)?,
                 locked: ai_locked != 0 || source_proposal_id.is_none(),
+                replaceable: false,
             })
         })
         .map_err(db_error)?;
@@ -88,6 +92,74 @@ fn load_present_blocks(
 
 fn overlaps(a_start: i64, a_end: i64, b_start: i64, b_end: i64) -> bool {
     a_start < b_end && b_start < a_end
+}
+
+/// 一个可以被本次写入替换掉的旧 AI 块（已按当前库复核）。
+struct ReplaceCandidate {
+    block_id: i64,
+    source_today_item_id: Option<i64>,
+    date: String,
+    start_minute: i64,
+    end_minute: i64,
+}
+
+/// apply 用到的「生成草案时的依据」，来自快照。
+#[derive(Default)]
+struct ApplyBasis {
+    /// 生成时每个队列条目的有效预计时长。漂移检测与它比，而**不是**与草案块长比：
+    /// 自适应时长、拆段、压缩都会让块长合理地偏离预计时长，拿块长比会每条都误报。
+    snapshot_minutes: HashMap<i64, i64>,
+    /// 生成时标为可替换、且此刻仍是「AI 产出、未锁定、未开始」的旧块。
+    replaceable: Vec<ReplaceCandidate>,
+}
+
+fn load_apply_basis(
+    connection: &Connection,
+    proposal_id: i64,
+) -> Result<ApplyBasis, AiSchedulerError> {
+    let Some(snapshot) = planner::load_proposal_snapshot(connection, proposal_id)? else {
+        return Ok(ApplyBasis::default());
+    };
+    let snapshot_minutes = snapshot
+        .queue_items
+        .iter()
+        .map(|item| {
+            (
+                item.item_id,
+                item.effective_minutes(snapshot.default_block_minutes),
+            )
+        })
+        .collect();
+    let mut replaceable = Vec::new();
+    for block_id in &snapshot.replaceable_block_ids {
+        // 预览之后用户可能锁定了它、开始了它，或远端同步改了它——这些都不能再删。
+        let candidate = connection
+            .query_row(
+                "
+                SELECT source_today_item_id, schedule_date, start_minute, end_minute
+                FROM schedule_blocks
+                WHERE id = ?1 AND ai_locked = 0 AND source_proposal_id IS NOT NULL
+                  AND status = 'planned'
+                ",
+                params![block_id],
+                |row| {
+                    Ok(ReplaceCandidate {
+                        block_id: *block_id,
+                        source_today_item_id: row.get(0)?,
+                        date: row.get(1)?,
+                        start_minute: row.get(2)?,
+                        end_minute: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(db_error)?;
+        replaceable.extend(candidate);
+    }
+    Ok(ApplyBasis {
+        snapshot_minutes,
+        replaceable,
+    })
 }
 
 /// 单条草案条目的处置结果。
@@ -106,12 +178,19 @@ fn prepare_items(
     draft_items: &[AiPlanItem],
     settings: &AiSchedulerSettings,
     options: &AiApplyOptions,
+    basis: &ApplyBasis,
 ) -> Result<PrepareOutcome, AiSchedulerError> {
     let dates: Vec<String> = draft_items
         .iter()
         .map(|item| item.schedule_date.clone())
         .collect();
     let present_blocks = load_present_blocks(connection, &dates)?;
+    // 本次会被替换的旧 AI 块不算冲突：写入前它会在同一事务里被删掉。
+    let replace_ids: BTreeSet<i64> = basis
+        .replaceable
+        .iter()
+        .map(|candidate| candidate.block_id)
+        .collect();
 
     let mut warnings: Vec<AiPlanWarning> = Vec::new();
     let mut accepted: Vec<AiPlanItem> = Vec::new();
@@ -179,30 +258,29 @@ fn prepare_items(
                             .for_item(Some(item.id.clone())),
                         );
                     }
-                    // 预计耗时变了 → 草案里的自适应时长仍然可以写入，但要明确告诉用户
-                    // 当前任务数据与草案依据不同；这不是写入失败，重新生成才会重算整条时间轴。
+                    // 预计耗时在预览之后被改过 → 草案仍可写入，但要告诉用户依据已经过时。
                     //
-                    // 必须与排期器用同一套「有效时长」口径（未估时条目回落为默认块长），
-                    // 否则每个未估时条目都会误报一次。
-                    let expected_minutes = if state.estimated_minutes > 0 {
+                    // 比的是「生成时的预计时长」与「现在的预计时长」，两边用同一套有效时长口径
+                    // （未估时回落为默认块长）。不和草案块长比：自适应 / 拆段 / 压缩本来就会改块长。
+                    let current_minutes = if state.estimated_minutes > 0 {
                         state.estimated_minutes
                     } else {
                         settings.default_block_minutes.max(5)
                     };
-                    if expected_minutes != item.duration_minutes() {
-                        warnings.push(
-                            AiPlanWarning::new(
-                                WARN_SNAPSHOT_DRIFT,
-                                format!(
-                                    "「{}」当前预计 {} 分钟，草案按 {} 分钟写入；如需同步请重新生成",
-                                    item.title,
-                                    expected_minutes,
-                                    item.duration_minutes()
-                                ),
-                            )
-                            .for_queue_item(Some(queue_item_id))
-                            .for_item(Some(item.id.clone())),
-                        );
+                    if let Some(previous) = basis.snapshot_minutes.get(&queue_item_id) {
+                        if *previous != current_minutes {
+                            warnings.push(
+                                AiPlanWarning::new(
+                                    WARN_SNAPSHOT_DRIFT,
+                                    format!(
+                                        "「{}」的预计时长在预览后由 {previous} 分钟改为 {current_minutes} 分钟，仍按草案写入；如需同步请重新生成",
+                                        item.title
+                                    ),
+                                )
+                                .for_queue_item(Some(queue_item_id))
+                                .for_item(Some(item.id.clone())),
+                            );
+                        }
                     }
                     // 草案把条目排到了截止日之后 → 属于截止日风险，必须显式提示（§5.5）。
                     if let Some(due_date) = state.due_date.as_deref() {
@@ -283,7 +361,8 @@ fn prepare_items(
         let overlapping: Vec<&ContextBlock> = present_blocks
             .iter()
             .filter(|block| {
-                block.date == item.schedule_date
+                !replace_ids.contains(&block.block_id)
+                    && block.date == item.schedule_date
                     && overlaps(
                         item.start_minute,
                         item.end_minute,
@@ -341,6 +420,10 @@ fn prepare_items(
         accepted.push(item.clone());
     }
 
+    // 拆段条目的每一段都会触发同一条漂移提示，按 (code, message) 去重。
+    let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
+    warnings.retain(|warning| seen.insert((warning.code.clone(), warning.message.clone())));
+
     Ok(PrepareOutcome {
         accepted,
         warnings,
@@ -371,7 +454,8 @@ pub fn apply_proposal(
     }
 
     let settings = settings::current_settings(connection)?;
-    let outcome = prepare_items(connection, &proposal.items, &settings, options)?;
+    let basis = load_apply_basis(connection, proposal_id)?;
+    let outcome = prepare_items(connection, &proposal.items, &settings, options, &basis)?;
 
     if outcome.accepted.is_empty() {
         if outcome.conflict_skips > 0 && !proposal.items.is_empty() {
@@ -391,12 +475,54 @@ pub fn apply_proposal(
             message: "没有条目被写入日历，草案已作废，请重新生成".to_string(),
             created_block_ids: Vec::new(),
             warnings: outcome.warnings,
+            replaced_count: 0,
         });
     }
+
+    // 只删「被新安排取代」的旧 AI 块：条目这次排上了，或旧块的位置被新安排占了。
+    // 这次没排上的条目保留原来的块，不会从日历上凭空消失。
+    let accepted_queue_ids: BTreeSet<i64> = outcome
+        .accepted
+        .iter()
+        .filter_map(|item| item.source_today_item_id)
+        .collect();
+    let doomed: Vec<i64> = basis
+        .replaceable
+        .iter()
+        .filter(|candidate| {
+            candidate
+                .source_today_item_id
+                .is_some_and(|queue_id| accepted_queue_ids.contains(&queue_id))
+                || outcome.accepted.iter().any(|item| {
+                    item.schedule_date == candidate.date
+                        && overlaps(
+                            item.start_minute,
+                            item.end_minute,
+                            candidate.start_minute,
+                            candidate.end_minute,
+                        )
+                })
+        })
+        .map(|candidate| candidate.block_id)
+        .collect();
 
     let transaction = connection.unchecked_transaction().map_err(db_error)?;
     let now = Utc::now().to_rfc3339();
     let mut created_block_ids: Vec<i64> = Vec::new();
+
+    // 与 `delete_schedule_block` 同一删除方式：先记墓碑再删行，远端日历才会同步删除。
+    let deleted_at = Utc::now().timestamp_millis();
+    for block_id in &doomed {
+        mark_entity_deleted(&transaction, ENTITY_SCHEDULE_BLOCK, *block_id, deleted_at)
+            .map_err(|error| AiSchedulerError::new(ERR_DB_ERROR, error, false))?;
+        transaction
+            .execute(
+                "DELETE FROM schedule_blocks WHERE id = ?1",
+                params![block_id],
+            )
+            .map_err(db_error)?;
+    }
+    let replaced_count = doomed.len() as i64;
 
     for item in &outcome.accepted {
         // 链路完整性（方案 §3.1）在这里是**天然成立**的：草案本身就是从队列条目派生的，
@@ -453,11 +579,16 @@ pub fn apply_proposal(
     } else {
         "partial"
     };
+    let replaced_note = if replaced_count > 0 {
+        format!("，替换了 {replaced_count} 条旧安排")
+    } else {
+        String::new()
+    };
     let message = if outcome.skipped_count == 0 {
-        format!("已写入 {created_count} 条日程")
+        format!("已写入 {created_count} 条日程{replaced_note}")
     } else {
         format!(
-            "已写入 {created_count} 条，跳过 {} 条（原因见下方提示）",
+            "已写入 {created_count} 条{replaced_note}，跳过 {} 条（原因见下方提示）",
             outcome.skipped_count
         )
     };
@@ -470,6 +601,7 @@ pub fn apply_proposal(
         message,
         created_block_ids,
         warnings: outcome.warnings,
+        replaced_count,
     })
 }
 
@@ -496,6 +628,45 @@ pub fn get_latest_ai_plan_proposal(
     let connection = open_database(&database_path(&app)?).map_err(|error| error.to_string())?;
     context::parse_date(&target_date).map_err(|error| error.to_envelope())?;
     planner::latest_draft_proposal(&connection, &target_date).map_err(|error| error.to_envelope())
+}
+
+/// 命令 5：从草案里删掉条目（预览阶段只支持删除，不改时间）。
+#[tauri::command]
+pub fn update_ai_plan_proposal_items(
+    app: AppHandle,
+    proposal_id: i64,
+    items: Vec<AiPlanItem>,
+) -> Result<AiPlanProposal, String> {
+    let connection = open_database(&database_path(&app)?).map_err(|error| error.to_string())?;
+    planner::update_proposal_items(&connection, proposal_id, &items)
+        .map_err(|error| error.to_envelope())
+}
+
+/// 命令 6：按用户反馈重新生成。网络命令，同样走 `spawn_blocking`。
+#[tauri::command]
+pub async fn regenerate_ai_plan_proposal(
+    app: AppHandle,
+    proposal_id: i64,
+    feedback: String,
+) -> Result<AiPlanProposal, String> {
+    tauri::async_runtime::spawn_blocking(move || run_revise(app, proposal_id, feedback))
+        .await
+        .map_err(|error| {
+            AiSchedulerError::new(ERR_NETWORK, format!("排期后台任务失败：{error}"), true)
+                .to_envelope()
+        })?
+        .map_err(|error| error.to_envelope())
+}
+
+fn run_revise(
+    app: AppHandle,
+    proposal_id: i64,
+    feedback: String,
+) -> Result<AiPlanProposal, AiSchedulerError> {
+    let connection =
+        open_database(&database_path(&app).map_err(db_error_string)?).map_err(db_error_string)?;
+    let settings = settings::current_settings(&connection)?;
+    planner::revise_proposal(&connection, proposal_id, &feedback, &settings)
 }
 
 /// 命令 4：AI 排期预览。
@@ -618,6 +789,7 @@ mod tests {
             &[item("a", 999, 480, 540)],
             &settings_with_friday_window(),
             &AiApplyOptions::default(),
+            &ApplyBasis::default(),
         )
         .expect("prepare");
 
@@ -640,6 +812,7 @@ mod tests {
             &[item("a", 1, 480, 540)],
             &settings_with_friday_window(),
             &AiApplyOptions::default(),
+            &ApplyBasis::default(),
         )
         .expect("prepare");
 
@@ -659,6 +832,7 @@ mod tests {
             &[item("a", 1, 720, 780)],
             &settings_with_friday_window(),
             &AiApplyOptions::default(),
+            &ApplyBasis::default(),
         )
         .expect("prepare");
 
@@ -684,6 +858,7 @@ mod tests {
             &[meal],
             &settings_with_friday_window(),
             &AiApplyOptions::default(),
+            &ApplyBasis::default(),
         )
         .expect("prepare");
 
@@ -713,6 +888,7 @@ mod tests {
             &[item("a", 1, 540, 600)],
             &settings_with_friday_window(),
             &AiApplyOptions::default(),
+            &ApplyBasis::default(),
         )
         .expect("prepare");
 
@@ -746,6 +922,7 @@ mod tests {
                 overwrite_conflicts: true,
                 skip_locked: true,
             },
+            &ApplyBasis::default(),
         )
         .expect("prepare");
 
@@ -765,6 +942,7 @@ mod tests {
             &[item("a", 1, 480, 600), item("b", 2, 540, 660)],
             &settings_with_friday_window(),
             &AiApplyOptions::default(),
+            &ApplyBasis::default(),
         )
         .expect("prepare");
 
@@ -803,6 +981,7 @@ mod tests {
                 model: "",
                 scope: SCOPE_DAY,
                 window: None,
+                summary: None,
             },
         )
         .expect("persist");
@@ -870,6 +1049,7 @@ mod tests {
                 model: "",
                 scope: SCOPE_DAY,
                 window: None,
+                summary: None,
             },
         )
         .expect("persist");
@@ -958,6 +1138,7 @@ mod tests {
                 model: "",
                 scope: SCOPE_DAY,
                 window: None,
+                summary: None,
             },
         )
         .expect("persist");
@@ -999,6 +1180,7 @@ mod tests {
             &[item("a", 1, 480, 540)],
             &settings_with_friday_window(),
             &AiApplyOptions::default(),
+            &ApplyBasis::default(),
         )
         .expect("prepare");
 
@@ -1009,11 +1191,18 @@ mod tests {
             .any(|warning| warning.code == WARN_DUE_RISK));
     }
 
+    fn basis_with_minutes(queue_item_id: i64, minutes: i64) -> ApplyBasis {
+        ApplyBasis {
+            snapshot_minutes: HashMap::from([(queue_item_id, minutes)]),
+            replaceable: Vec::new(),
+        }
+    }
+
     #[test]
     fn duration_drift_uses_effective_minutes_rule() {
         let (_directory, path) = temp_database("apply-duration-drift.sqlite3");
         let connection = open_database(&path).expect("open db");
-        // 预计耗时 90 分钟，但草案只给了 60 分钟（60 = item 的 480..540）。
+        // 生成草案时预计 60 分钟，预览之后被改成了 90 分钟。
         seed_queue_item_with(&connection, 1, "耗时变长的任务", false, None, 90);
 
         let outcome = prepare_items(
@@ -1021,6 +1210,7 @@ mod tests {
             &[item("a", 1, 480, 540)],
             &settings_with_friday_window(),
             &AiApplyOptions::default(),
+            &basis_with_minutes(1, 60),
         )
         .expect("prepare");
 
@@ -1029,6 +1219,32 @@ mod tests {
             .iter()
             .any(|warning| warning.code == WARN_SNAPSHOT_DRIFT));
         assert_eq!(outcome.accepted.len(), 1);
+    }
+
+    /// 自适应时长 / 拆段让块长偏离预计时长是正常的，只要预计时长本身没变就不是漂移。
+    #[test]
+    fn adaptive_block_length_is_not_reported_as_drift() {
+        let (_directory, path) = temp_database("apply-adaptive-no-drift.sqlite3");
+        let connection = open_database(&path).expect("open db");
+        seed_queue_item_with(&connection, 1, "预计 90 分钟、被拆成 60 分钟一段", false, None, 90);
+
+        let outcome = prepare_items(
+            &connection,
+            &[item("a", 1, 480, 540)],
+            &settings_with_friday_window(),
+            &AiApplyOptions::default(),
+            &basis_with_minutes(1, 90),
+        )
+        .expect("prepare");
+
+        assert!(
+            outcome
+                .warnings
+                .iter()
+                .all(|warning| warning.code != WARN_SNAPSHOT_DRIFT),
+            "{:?}",
+            outcome.warnings
+        );
     }
 
     #[test]
@@ -1046,6 +1262,7 @@ mod tests {
             &[item("a", 1, 480, 540)],
             &settings,
             &AiApplyOptions::default(),
+            &ApplyBasis::default(),
         )
         .expect("prepare");
 
@@ -1086,6 +1303,7 @@ mod tests {
                 model: "",
                 scope: SCOPE_DAY,
                 window: None,
+                summary: None,
             },
         )
         .expect("persist");
@@ -1136,6 +1354,7 @@ mod tests {
                 model: "",
                 scope: SCOPE_DAY,
                 window: None,
+                summary: None,
             },
         )
         .expect("persist");
@@ -1150,5 +1369,246 @@ mod tests {
             })
             .expect("count");
         assert_eq!(count, 1, "冲突时不得写入任何块");
+    }
+
+    /// 队列条目已经挂在日历上的日程块（2026-09-25）。`source_proposal_id = None` 即手动块。
+    fn seed_linked_block(
+        connection: &Connection,
+        queue_item_id: i64,
+        start: i64,
+        end: i64,
+        source_proposal_id: Option<i64>,
+    ) -> i64 {
+        connection
+            .execute(
+                "
+                INSERT INTO schedule_blocks (
+                  schedule_date, title, category_key, source_today_item_id, start_minute,
+                  end_minute, status, source_proposal_id, ai_locked, created_at, updated_at
+                ) VALUES ('2026-09-25', '旧安排', 'math', ?1, ?2, ?3, 'planned', ?4, 0, 'now', 'now')
+                ",
+                params![queue_item_id, start, end, source_proposal_id],
+            )
+            .expect("seed linked block");
+        connection.last_insert_rowid()
+    }
+
+    fn clock_at(minute: i64) -> Option<PlanClock> {
+        Some(PlanClock {
+            date: "2026-09-25".to_string(),
+            minute,
+        })
+    }
+
+    fn friday_request(replace_ai_blocks: bool) -> AiPlanRequest {
+        AiPlanRequest {
+            target_date: "2026-09-25".to_string(),
+            horizon_days: 1,
+            replace_ai_blocks,
+            ..AiPlanRequest::default()
+        }
+    }
+
+    fn queued_ids(plan_context: &PlanContext) -> Vec<i64> {
+        let mut ids: Vec<i64> = plan_context.queue_items.iter().map(|item| item.item_id).collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// 点两次「生成」不该出现两份：已在日历上的条目默认跳过，并说明原因。
+    #[test]
+    fn items_already_on_calendar_are_not_planned_twice() {
+        let (_directory, path) = temp_database("context-already.sqlite3");
+        let connection = open_database(&path).expect("open db");
+        seed_queue_item(&connection, 1, "AI 排过的", false);
+        seed_queue_item(&connection, 2, "手动排过的", false);
+        seed_queue_item(&connection, 3, "还没排的", false);
+        seed_linked_block(&connection, 1, 600, 660, Some(9));
+        seed_linked_block(&connection, 2, 700, 760, None);
+
+        let plan_context = context::build_context_at(
+            &connection,
+            &friday_request(false),
+            &settings_with_friday_window(),
+            clock_at(8 * 60),
+        )
+        .expect("context");
+
+        assert_eq!(queued_ids(&plan_context), vec![3]);
+        let detail = |item_id: i64| {
+            plan_context
+                .already_scheduled
+                .iter()
+                .find(|entry| entry.item_id == item_id)
+                .map(|entry| entry.detail.clone())
+                .unwrap_or_default()
+        };
+        assert!(detail(1).contains("AI 已排"), "{}", detail(1));
+        assert!(detail(2).contains("手动安排"), "{}", detail(2));
+        assert!(plan_context.replaceable_block_ids.is_empty());
+    }
+
+    /// 「重新安排」只放开 AI 未锁定的旧块，手动块依旧钉住条目。
+    #[test]
+    fn replace_mode_requeues_ai_items_but_keeps_manual_ones_pinned() {
+        let (_directory, path) = temp_database("context-replace.sqlite3");
+        let connection = open_database(&path).expect("open db");
+        seed_queue_item(&connection, 1, "AI 排过的", false);
+        seed_queue_item(&connection, 2, "手动排过的", false);
+        let ai_block = seed_linked_block(&connection, 1, 600, 660, Some(9));
+        seed_linked_block(&connection, 2, 700, 760, None);
+
+        let plan_context = context::build_context_at(
+            &connection,
+            &friday_request(true),
+            &settings_with_friday_window(),
+            clock_at(8 * 60),
+        )
+        .expect("context");
+
+        assert_eq!(queued_ids(&plan_context), vec![1]);
+        assert_eq!(plan_context.replaceable_block_ids, vec![ai_block]);
+        assert!(plan_context
+            .existing_blocks
+            .iter()
+            .any(|block| block.block_id == ai_block && block.replaceable));
+        assert!(plan_context
+            .already_scheduled
+            .iter()
+            .any(|entry| entry.item_id == 2));
+    }
+
+    /// 时间过了却没完成：不算「已排」，而是记一次错过，条目照常重排。
+    #[test]
+    fn missed_block_counts_as_missed_and_item_is_replanned() {
+        let (_directory, path) = temp_database("context-missed.sqlite3");
+        let connection = open_database(&path).expect("open db");
+        seed_queue_item(&connection, 1, "上午没做的", false);
+        seed_linked_block(&connection, 1, 480, 540, Some(9));
+
+        let plan_context = context::build_context_at(
+            &connection,
+            &friday_request(false),
+            &settings_with_friday_window(),
+            clock_at(10 * 60),
+        )
+        .expect("context");
+
+        assert_eq!(queued_ids(&plan_context), vec![1]);
+        assert_eq!(plan_context.queue_items[0].missed_count, 1);
+        assert!(plan_context.already_scheduled.is_empty());
+        assert!(
+            plan_context.replaceable_block_ids.is_empty(),
+            "过去的块是历史，不删"
+        );
+    }
+
+    #[test]
+    fn replan_replaces_old_ai_block_in_the_same_transaction() {
+        let (_directory, path) = temp_database("apply-replace.sqlite3");
+        let connection = open_database(&path).expect("open db");
+        seed_queue_item(&connection, 1, "数学", false);
+        let old_block = seed_linked_block(&connection, 1, 600, 660, Some(9));
+
+        let request = friday_request(true);
+        let plan_context = context::build_context_at(
+            &connection,
+            &request,
+            &settings_with_friday_window(),
+            clock_at(7 * 60),
+        )
+        .expect("context");
+        let proposal = planner::persist_proposal(
+            &connection,
+            planner::NewProposal {
+                request: &request,
+                plan_context: &plan_context,
+                items: &[item("a", 1, 480, 540)],
+                warnings: &[],
+                unscheduled: &[],
+                engine: ENGINE_LOCAL_HEURISTIC,
+                degraded: false,
+                model: "",
+                scope: SCOPE_DAY,
+                window: None,
+                summary: None,
+            },
+        )
+        .expect("persist");
+        assert_eq!(proposal.replaceable_block_count, 1);
+
+        let result =
+            apply_proposal(&connection, proposal.id, &AiApplyOptions::default()).expect("apply");
+        assert_eq!(result.created_count, 1);
+        assert_eq!(result.replaced_count, 1);
+        assert!(result.message.contains("替换了 1 条旧安排"), "{}", result.message);
+
+        let mut statement = connection
+            .prepare("SELECT id FROM schedule_blocks ORDER BY id")
+            .expect("prepare");
+        let remaining: Vec<i64> = statement
+            .query_map([], |row| row.get(0))
+            .expect("query")
+            .collect::<Result<_, _>>()
+            .expect("rows");
+        assert_eq!(remaining.len(), 1, "旧块被删，只剩新块");
+        assert!(!remaining.contains(&old_block));
+    }
+
+    #[test]
+    fn removing_items_moves_them_back_to_unscheduled_and_drops_orphan_meals() {
+        let (_directory, path) = temp_database("proposal-remove.sqlite3");
+        let connection = open_database(&path).expect("open db");
+        seed_queue_item(&connection, 1, "条目一", false);
+        seed_queue_item(&connection, 2, "条目二", false);
+        let request = friday_request(false);
+        let plan_context =
+            context::build_context_at(&connection, &request, &settings_with_friday_window(), None)
+                .expect("context");
+        let mut meal = item("meal", 0, 720, 780);
+        meal.source_today_item_id = None;
+        meal.title = "午餐".to_string();
+        meal.kind = "meal".to_string();
+        let study_a = item("a", 1, 480, 540);
+        let study_b = item("b", 2, 600, 660);
+        let proposal = planner::persist_proposal(
+            &connection,
+            planner::NewProposal {
+                request: &request,
+                plan_context: &plan_context,
+                items: &[study_a.clone(), study_b.clone(), meal.clone()],
+                warnings: &[],
+                unscheduled: &[],
+                engine: ENGINE_LLM,
+                degraded: false,
+                model: "m",
+                scope: SCOPE_DAY,
+                window: None,
+                summary: Some("上午数学"),
+            },
+        )
+        .expect("persist");
+        assert_eq!(proposal.summary.as_deref(), Some("上午数学"));
+
+        // 预览阶段不能改时间，只能删。
+        let mut moved = study_a.clone();
+        moved.start_minute = 500;
+        let error = planner::update_proposal_items(&connection, proposal.id, &[moved, meal.clone()])
+            .err()
+            .expect("改时间应被拒绝");
+        assert_eq!(error.code, ERR_BAD_REQUEST);
+
+        let updated = planner::update_proposal_items(&connection, proposal.id, &[study_a, meal.clone()])
+            .expect("remove b");
+        assert_eq!(updated.items.len(), 2);
+        assert!(updated
+            .unscheduled
+            .iter()
+            .any(|entry| entry.item_id == 2 && entry.reason == "已从草案中移除"));
+
+        let emptied =
+            planner::update_proposal_items(&connection, proposal.id, &[meal]).expect("remove a");
+        assert!(emptied.items.is_empty(), "只剩三餐时三餐也去掉");
+        assert_eq!(emptied.unscheduled.len(), 2);
     }
 }

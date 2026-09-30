@@ -313,6 +313,64 @@ fn response_format_for(mode: &str) -> Option<Value> {
     }
 }
 
+const PLAN_SCHEMA_NAME: &str = "ai_schedule_plan";
+
+/// 正式排期用的 `response_format`。
+///
+/// **不能复用 `response_format_for`**：那份是连通性探测用的 `{"ok": boolean}` strict schema。
+/// 旧实现在 `json_schema` 档（OpenAI）下把它发给了真实排期请求，约束解码只会吐出
+/// `{"ok": true}`，解析后条目为空——草案永远是空的。
+///
+/// strict 模式要求所有字段都在 `required` 里、对象都禁 `additionalProperties`，
+/// 且不支持 `maxLength`，长度约束交给校验器。
+fn plan_response_format(mode: &str) -> Option<Value> {
+    match mode {
+        "json_schema" => Some(json!({
+            "type": "json_schema",
+            "json_schema": {
+                "name": PLAN_SCHEMA_NAME,
+                "strict": true,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["summary", "items", "unscheduled"],
+                    "properties": {
+                        "summary": { "type": "string" },
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": ["item_id", "date", "start_minute", "end_minute", "rationale"],
+                                "properties": {
+                                    "item_id": { "type": "integer" },
+                                    "date": { "type": "string" },
+                                    "start_minute": { "type": "integer" },
+                                    "end_minute": { "type": "integer" },
+                                    "rationale": { "type": "string" }
+                                }
+                            }
+                        },
+                        "unscheduled": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": ["item_id", "reason"],
+                                "properties": {
+                                    "item_id": { "type": "integer" },
+                                    "reason": { "type": "string" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })),
+        other => response_format_for(other),
+    }
+}
+
 fn probe_messages() -> Value {
     json!([
         {
@@ -597,7 +655,7 @@ pub fn chat_json(
 ) -> Result<ChatOutcome, AiSchedulerError> {
     let url = endpoint(base_url, "chat/completions");
     let attempts = settings.max_retries.clamp(0, MAX_RETRIES_CEILING) as u32 + 1;
-    let response_format = response_format_for(&settings.structured_output_mode);
+    let response_format = plan_response_format(&settings.structured_output_mode);
 
     let mut last_error = AiSchedulerError::new(ERR_NETWORK, "未发起请求", true);
     for attempt in 0..attempts {
@@ -717,6 +775,17 @@ pub fn chat_json(
                 }
             }
         };
+
+        // 一条都没给（既没排也没说排不下）通常是模型没理解结构。调用方保证队列非空，
+        // 所以这不是「没东西可排」，重试一次比拿本地补排冒充 AI 结果更诚实。
+        if response.items.is_empty() && response.unscheduled.is_empty() {
+            last_error = AiSchedulerError::new(
+                ERR_INVALID_RESPONSE,
+                "模型返回了空的排期结果，请重试或更换模型",
+                true,
+            );
+            continue;
+        }
 
         return Ok(ChatOutcome { response, warnings });
     }
@@ -853,6 +922,33 @@ mod tests {
         assert_eq!(object["type"], "json_object");
 
         assert!(response_format_for("auto").is_none());
+    }
+
+    /// 回归：`json_schema` 档的正式排期请求曾经带着探测用的 `{"ok": boolean}` schema，
+    /// 约束解码下模型只能输出 `{"ok": true}`，草案恒为空。
+    #[test]
+    fn plan_request_uses_plan_schema_not_probe_schema() {
+        let schema = plan_response_format("json_schema").expect("schema mode payload");
+        let body = &schema["json_schema"]["schema"];
+        assert_eq!(schema["json_schema"]["name"], PLAN_SCHEMA_NAME);
+        assert!(body["properties"].get("ok").is_none());
+        assert_eq!(body["required"], json!(["summary", "items", "unscheduled"]));
+        assert_eq!(
+            body["properties"]["items"]["items"]["required"],
+            json!(["item_id", "date", "start_minute", "end_minute", "rationale"])
+        );
+
+        // 模型按这份 schema 输出的内容必须能被解析成草案候选。
+        let sample = r#"{"summary":"s","items":[{"item_id":1,"date":"2026-09-30","start_minute":480,"end_minute":540,"rationale":""}],"unscheduled":[]}"#;
+        let parsed: RawPlanResponse = serde_json::from_str(sample).expect("parse");
+        assert_eq!(parsed.items.len(), 1);
+        assert_eq!(parsed.summary.as_deref(), Some("s"));
+
+        assert_eq!(
+            plan_response_format("json_object").expect("object")["type"],
+            "json_object"
+        );
+        assert!(plan_response_format("auto").is_none());
     }
 
     #[test]

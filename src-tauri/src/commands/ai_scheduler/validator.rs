@@ -7,8 +7,8 @@
 //! `category_key` / `subject_id` / `priority` 一律由本模块按 `item_id` 从上下文回填，
 //! 模型既无法编造条目、也无法篡改标题（方案 §2.1 原则 1）。
 
-use super::context;
 use super::models::*;
+use super::{context, refine};
 use std::collections::{BTreeSet, HashMap};
 
 const TIME_ALIGN_MINUTES: i64 = 5;
@@ -29,7 +29,9 @@ fn align_to_five(minutes: i64) -> i64 {
 ///
 /// 非 5 分钟对齐会被吸附；`start >= end` 或越界时按条目实际时长重算一次；
 /// 仍然不成立则返回 `None`（调用方丢弃该条，方案 §5.5 第 3 行）。
-fn normalize_bounds(raw_start: i64, raw_end: i64, item_minutes: i64) -> Option<(i64, i64)> {
+///
+/// `refine` 用同一个函数规范模型时间，保证两边对「这个时间是多少」没有分歧。
+pub fn normalize_bounds(raw_start: i64, raw_end: i64, item_minutes: i64) -> Option<(i64, i64)> {
     if !(0..=MAX_DAY_MINUTE).contains(&raw_start) || !(0..=MAX_DAY_MINUTE).contains(&raw_end) {
         return None;
     }
@@ -59,7 +61,8 @@ fn overlaps(a_start: i64, a_end: i64, b_start: i64, b_end: i64) -> bool {
     a_start < b_end && b_start < a_end
 }
 
-fn item_id_for(date: &str, start_minute: i64, queue_item_id: i64) -> String {
+/// 草案条目的稳定 key。`refine` 用它把「已自动调整」提示挂到对应条目上。
+pub fn item_id_for(date: &str, start_minute: i64, queue_item_id: i64) -> String {
     format!("{date}-{start_minute}-{queue_item_id}")
 }
 
@@ -67,8 +70,9 @@ fn item_id_for(date: &str, start_minute: i64, queue_item_id: i64) -> String {
 pub fn validate(raw: &RawPlanResponse, plan_context: &PlanContext) -> ValidationOutcome {
     let mut warnings: Vec<AiPlanWarning> = Vec::new();
     let mut items: Vec<AiPlanItem> = Vec::new();
-    // 同一队列条目在同一天只保留第一条（方案 §6.4）。
-    let mut seen_item_dates: BTreeSet<(i64, String)> = BTreeSet::new();
+    // 同一队列条目允许拆成至多 MAX_SEGMENTS_PER_ITEM 段（refine 会这样做），
+    // 但各段不得重叠、总时长不得超出 `refine::segment_budget`——超出即视为重复排期（§6.4）。
+    let mut segments_by_item: HashMap<i64, Vec<(String, i64, i64)>> = HashMap::new();
     let mut used_ids: BTreeSet<String> = BTreeSet::new();
 
     for candidate in &raw.items {
@@ -98,12 +102,12 @@ pub fn validate(raw: &RawPlanResponse, plan_context: &PlanContext) -> Validation
         };
         let date_string = context::date_string(date);
 
-        if !seen_item_dates.insert((candidate.item_id, date_string.clone())) {
+        if date_string < plan_context.horizon_start || date_string > plan_context.horizon_end {
             warnings.push(
                 AiPlanWarning::new(
-                    WARN_DUPLICATE,
+                    WARN_NO_WINDOW,
                     format!(
-                        "「{}」在 {} 被排了多次，只保留第一条",
+                        "「{}」被排到了规划范围之外的 {}，已忽略",
                         queue_item.title, date_string
                     ),
                 )
@@ -125,6 +129,32 @@ pub fn validate(raw: &RawPlanResponse, plan_context: &PlanContext) -> Validation
             );
             continue;
         };
+
+        let segments = segments_by_item
+            .get(&candidate.item_id)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let used: i64 = segments.iter().map(|(_, start, end)| end - start).sum();
+        let overlapping = segments.iter().any(|(date, start, end)| {
+            date == &date_string && overlaps(start_minute, end_minute, *start, *end)
+        });
+        let over_budget = !segments.is_empty()
+            && (segments.len() >= MAX_SEGMENTS_PER_ITEM
+                || used + (end_minute - start_minute)
+                    > refine::segment_budget(queue_item, plan_context));
+        if overlapping || over_budget {
+            warnings.push(
+                AiPlanWarning::new(
+                    WARN_DUPLICATE,
+                    format!(
+                        "「{}」在 {} 被重复安排，只保留第一条",
+                        queue_item.title, date_string
+                    ),
+                )
+                .for_queue_item(Some(candidate.item_id)),
+            );
+            continue;
+        }
 
         let windows = context::windows_for_date(&plan_context.available_windows, date);
         if !is_within_windows(start_minute, end_minute, &windows) {
@@ -170,11 +200,13 @@ pub fn validate(raw: &RawPlanResponse, plan_context: &PlanContext) -> Validation
         }
 
         // 与已有日程的重叠：填 conflict_with，是否覆盖交给 apply 的 options 决定。
+        // 本次会被替换掉的旧 AI 块不算冲突——写入时它会先被删掉。
         let conflict_with: Vec<i64> = plan_context
             .existing_blocks
             .iter()
             .filter(|block| {
                 block.date == date_string
+                    && !block.replaceable
                     && overlaps(
                         start_minute,
                         end_minute,
@@ -185,7 +217,7 @@ pub fn validate(raw: &RawPlanResponse, plan_context: &PlanContext) -> Validation
             .map(|block| block.block_id)
             .collect();
 
-        // 排到截止日之后：保留但告警（方案 §5.5）。
+        // 排到截止日之后：保留但告警（方案 §5.5）。挂到条目上，用户能看到是哪一条。
         if let Some(due_date) = queue_item.due_date.as_deref() {
             if date_string.as_str() > due_date {
                 warnings.push(
@@ -193,11 +225,17 @@ pub fn validate(raw: &RawPlanResponse, plan_context: &PlanContext) -> Validation
                         WARN_DUE_RISK,
                         format!("「{}」被排到了截止日 {due_date} 之后", queue_item.title),
                     )
-                    .for_queue_item(Some(candidate.item_id)),
+                    .for_queue_item(Some(candidate.item_id))
+                    .for_item(Some(id.clone())),
                 );
             }
         }
 
+        segments_by_item.entry(candidate.item_id).or_default().push((
+            date_string.clone(),
+            start_minute,
+            end_minute,
+        ));
         items.push(AiPlanItem {
             id,
             // 展示 / 追溯用的清单来源，写库链路不依赖它。
@@ -227,17 +265,29 @@ pub fn validate(raw: &RawPlanResponse, plan_context: &PlanContext) -> Validation
     warnings.extend(detect_intra_draft_conflicts(&items));
     warnings.extend(detect_over_capacity(&items, plan_context));
 
-    let mut unscheduled = raw.unscheduled.clone();
+    let accepted: BTreeSet<i64> = items
+        .iter()
+        .filter_map(|item| item.source_today_item_id)
+        .collect();
+    // 「排不下」只列真实存在、且一段都没排上的条目：编造的 id 不该冒充任务，
+    // 已经排上的条目（例如多出来的重复段被去掉）也不该再被说成没排上。
+    let mut unscheduled: Vec<RawUnscheduledItem> = Vec::new();
+    for entry in &raw.unscheduled {
+        let known = plan_context.item_by_id(entry.item_id).is_some();
+        let listed = unscheduled
+            .iter()
+            .any(|existing| existing.item_id == entry.item_id);
+        if known && !listed && !accepted.contains(&entry.item_id) {
+            unscheduled.push(entry.clone());
+        }
+    }
     // 被校验器丢弃的条目也要在「排不下」里体现，否则前端会显示「全部排成功」。
     let dropped: BTreeSet<i64> = warnings
         .iter()
-        .filter(|warning| {
-            matches!(
-                warning.code.as_str(),
-                WARN_UNKNOWN_TASK | WARN_NO_WINDOW | WARN_DUPLICATE
-            )
-        })
+        .filter(|warning| matches!(warning.code.as_str(), WARN_NO_WINDOW | WARN_DUPLICATE))
         .filter_map(|warning| warning.queue_item_id)
+        .filter(|item_id| !accepted.contains(item_id))
+        .filter(|item_id| plan_context.item_by_id(*item_id).is_some())
         .collect();
     for item_id in dropped {
         if unscheduled.iter().all(|entry| entry.item_id != item_id) {
@@ -297,12 +347,18 @@ fn detect_intra_draft_conflicts(items: &[AiPlanItem]) -> Vec<AiPlanWarning> {
     warnings
 }
 
-/// 单日总时长超上限：保留但告警，`overflow_minutes` 由 stats 汇总。
-fn detect_over_capacity(items: &[AiPlanItem], plan_context: &PlanContext) -> Vec<AiPlanWarning> {
+/// 每天的学习分钟数。三餐不计入学习上限。
+fn study_totals(items: &[AiPlanItem]) -> HashMap<String, i64> {
     let mut totals: HashMap<String, i64> = HashMap::new();
-    for item in items {
+    for item in items.iter().filter(|item| item.kind != "meal") {
         *totals.entry(item.schedule_date.clone()).or_insert(0) += item.duration_minutes();
     }
+    totals
+}
+
+/// 单日总时长超上限：保留但告警，`overflow_minutes` 由 stats 汇总。
+fn detect_over_capacity(items: &[AiPlanItem], plan_context: &PlanContext) -> Vec<AiPlanWarning> {
+    let totals = study_totals(items);
 
     let mut warnings = Vec::new();
     let mut dates: Vec<&String> = totals.keys().collect();
@@ -324,11 +380,7 @@ fn detect_over_capacity(items: &[AiPlanItem], plan_context: &PlanContext) -> Vec
 
 /// 单日超出容量的分钟数合计，用于 stats。
 pub fn overflow_minutes(items: &[AiPlanItem], plan_context: &PlanContext) -> i64 {
-    let mut totals: HashMap<String, i64> = HashMap::new();
-    for item in items {
-        *totals.entry(item.schedule_date.clone()).or_insert(0) += item.duration_minutes();
-    }
-    totals
+    study_totals(items)
         .values()
         .map(|total| (total - plan_context.max_daily_minutes).max(0))
         .sum()
@@ -358,6 +410,7 @@ mod tests {
             estimated_minutes: minutes,
             due_date: due_date.map(str::to_string),
             note: None,
+            missed_count: 0,
         }
     }
 
@@ -379,14 +432,82 @@ mod tests {
                 auto_meals: false,
                 ..AiPlannerPreferences::default()
             },
+            clock: None,
+            already_scheduled: Vec::new(),
+            replaceable_block_ids: Vec::new(),
+            source_request: None,
         }
     }
 
     fn raw(items: Vec<RawPlanItem>) -> RawPlanResponse {
         RawPlanResponse {
+            summary: None,
             items,
             unscheduled: vec![],
         }
+    }
+
+    #[test]
+    fn split_segments_within_budget_are_both_kept() {
+        let plan_context = context_with(vec![queue_item(41, None, 120)], vec![]);
+        // 上午、下午各 60 分钟，合计 120 = 预计时长 → 合法拆分，不是重复。
+        let outcome = validate(
+            &raw(vec![raw_item(41, 480, 540), raw_item(41, 840, 900)]),
+            &plan_context,
+        );
+
+        assert_eq!(outcome.items.len(), 2);
+        assert!(outcome
+            .warnings
+            .iter()
+            .all(|warning| warning.code != WARN_DUPLICATE));
+        assert!(outcome.unscheduled.is_empty());
+    }
+
+    #[test]
+    fn replaceable_blocks_are_not_conflicts() {
+        let plan_context = context_with(
+            vec![queue_item(41, None, 60)],
+            vec![ContextBlock {
+                block_id: 77,
+                date: "2026-09-25".to_string(),
+                start_minute: 480,
+                end_minute: 540,
+                title: "AI 上次排的".to_string(),
+                locked: false,
+                replaceable: true,
+            }],
+        );
+        let outcome = validate(&raw(vec![raw_item(41, 480, 540)]), &plan_context);
+
+        assert!(outcome.items[0].conflict_with.is_empty(), "写入时旧块会先被替换掉");
+    }
+
+    #[test]
+    fn meals_do_not_count_toward_capacity() {
+        let mut plan_context = context_with(vec![queue_item(41, None, 60)], vec![]);
+        plan_context.max_daily_minutes = 60;
+        let mut outcome = validate(&raw(vec![raw_item(41, 480, 540)]), &plan_context);
+        outcome.items.push(AiPlanItem {
+            kind: "meal".to_string(),
+            start_minute: 720,
+            end_minute: 780,
+            ..outcome.items[0].clone()
+        });
+
+        assert_eq!(overflow_minutes(&outcome.items, &plan_context), 0);
+    }
+
+    #[test]
+    fn out_of_horizon_date_is_dropped() {
+        let plan_context = context_with(vec![queue_item(41, None, 60)], vec![]);
+        let mut candidate = raw_item(41, 480, 540);
+        // 2026-10-02 也是周五，有可用时段，但不在本次 horizon 内。
+        candidate.date = "2026-10-02".to_string();
+        let outcome = validate(&raw(vec![candidate]), &plan_context);
+
+        assert!(outcome.items.is_empty());
+        assert_eq!(outcome.warnings[0].code, WARN_NO_WINDOW);
     }
 
     fn raw_item(item_id: i64, start: i64, end: i64) -> RawPlanItem {
@@ -499,6 +620,7 @@ mod tests {
                 end_minute: 600,
                 title: "已存在的英语真题".to_string(),
                 locked: true,
+                replaceable: false,
             }],
         );
         let outcome = validate(&raw(vec![raw_item(41, 540, 660)]), &plan_context);

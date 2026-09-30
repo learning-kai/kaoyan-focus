@@ -1,96 +1,50 @@
-//! 本地启发式排期器与草案落库。
+//! 排期编排与草案落库。
 //!
-//! `plan_locally` 是纯确定性算法（无网络、无随机），因此可以离线单测。它同时是
-//! **降级路径**：S4 起若 LLM 不可用则回落到这里，保证「API 挂了功能依然可用」（§6.3）。
+//! 两条路径产出同一种 `RawPlanResponse`（只有队列条目 id 与时间）：
+//! - 模型路径：提示词 → Chat Completions → `refine`（可行性修复：不可行的挪、漏排的补）；
+//! - 本地路径：`refine` 在「模型什么都没给」时的特例，只在用户显式点「改用本地排期」时使用。
 //!
-//! 产出的是 `RawPlanResponse`（只有队列条目 id 与时间），再交给 `validator` 统一校验 ——
-//! 这样本地路径与 AI 路径的合法性判定完全一致，不存在两套规则。
+//! 两者随后都交给 `validator` 统一校验，合法性判定只有一套规则。
 
 use super::models::*;
-use super::{client, context, prompt, settings, validator};
+use super::{client, context, prompt, refine, settings, slots, validator};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
-// ── 本地启发式排期（方案 §6.3） ──
-
-fn priority_rank(priority: &str) -> i64 {
-    match priority {
-        "high" => 0,
-        "medium" => 1,
-        "low" => 2,
-        // 脏数据不应打乱顺序，按 medium 处理。
-        _ => 1,
-    }
-}
-
-/// 排序键：priority 降序 → due_date 升序 → estimated_minutes 降序 → item_id 兜底。
+/// 三餐只加在有学习安排的日子，并跳过已经过去的、或与保留日程重叠的餐次。
 ///
-/// `respect_priority = false` 时忽略优先级，只按截止日与时长排（用户可能只关心 DDL）。
-fn ordered_queue_items<'a>(
-    plan_context: &'a PlanContext,
-    respect_priority: bool,
-) -> Vec<&'a ContextQueueItem> {
-    let far_future = "9999-12-31".to_string();
-    let mut keyed: Vec<(i64, String, i64, i64, &'a ContextQueueItem)> = plan_context
-        .queue_items
-        .iter()
-        .map(|item| {
-            let rank = if respect_priority {
-                priority_rank(&item.priority)
-            } else {
-                0
-            };
-            let due = item.due_date.clone().unwrap_or_else(|| far_future.clone());
-            (rank, due, -item.estimated_minutes, item.item_id, item)
-        })
-        .collect();
-    keyed.sort_by(|a, b| (a.0, a.1.as_str(), a.2, a.3).cmp(&(b.0, b.1.as_str(), b.2, b.3)));
-    keyed.into_iter().map(|(_, _, _, _, item)| item).collect()
-}
-
-fn adaptive_duration(item: &ContextQueueItem, plan_context: &PlanContext) -> i64 {
-    let raw = item.effective_minutes(plan_context.default_block_minutes);
-    // 用户填写的预计时长是明确意图，管家只替未估时条目补全时长。
-    if !plan_context.planner_preferences.adaptive_durations || item.estimated_minutes > 0 {
-        return raw;
-    }
-    let (min, max) = match item.category_key.as_str() {
-        "math" | "major" => (45, 90),
-        "english" | "politics" => (25, 60),
-        _ => (25, 45),
-    };
-    (raw.clamp(min, max) / 5 * 5).max(5)
-}
-
+/// 旧实现给 horizon 的每一天都加三餐且不看已有日程：重排同一天时，上次写进日历的
+/// 「午餐」（ai_locked）会让新午餐在写入时报「与已锁定时段冲突」，每次都多一条噪音。
 fn append_meal_items(items: &mut Vec<AiPlanItem>, plan_context: &PlanContext) {
     if !plan_context.planner_preferences.auto_meals {
         return;
     }
-    let start = context::parse_date(&plan_context.horizon_start).ok();
-    let Some(start) = start else {
-        return;
-    };
-    for date in context::horizon_dates(start, plan_context.horizon_days) {
-        let date_key = context::date_string(date);
+    let study_dates: BTreeSet<String> = items
+        .iter()
+        .filter(|item| item.kind != "meal")
+        .map(|item| item.schedule_date.clone())
+        .collect();
+    for date_key in study_dates {
+        let earliest = slots::earliest_start(plan_context.clock.as_ref(), &date_key);
         for meal in &plan_context.planner_preferences.meal_windows {
-            if meal.end_minute <= meal.start_minute {
+            if meal.end_minute <= meal.start_minute || meal.start_minute < earliest {
                 continue;
             }
+            let occupied = plan_context.existing_blocks.iter().any(|block| {
+                block.date == date_key
+                    && !block.replaceable
+                    && slots::overlaps(
+                        meal.start_minute,
+                        meal.end_minute,
+                        block.start_minute,
+                        block.end_minute,
+                    )
+            });
             let id = format!("{date_key}-meal-{}", meal.kind);
-            if items.iter().any(|item| item.id == id) {
+            if occupied || items.iter().any(|item| item.id == id) {
                 continue;
             }
-            let conflict_with = plan_context
-                .existing_blocks
-                .iter()
-                .filter(|block| {
-                    block.date == date_key
-                        && block.start_minute < meal.end_minute
-                        && meal.start_minute < block.end_minute
-                })
-                .map(|block| block.block_id)
-                .collect();
             items.push(AiPlanItem {
                 id,
                 source_task_id: None,
@@ -104,7 +58,7 @@ fn append_meal_items(items: &mut Vec<AiPlanItem>, plan_context: &PlanContext) {
                 priority: "low".to_string(),
                 rationale: Some("固定生活安排，保证学习节奏".to_string()),
                 manually_adjusted: false,
-                conflict_with,
+                conflict_with: Vec::new(),
                 kind: "meal".to_string(),
             });
         }
@@ -118,166 +72,55 @@ fn append_meal_items(items: &mut Vec<AiPlanItem>, plan_context: &PlanContext) {
     });
 }
 
-/// 把占用区间按最小间隔外扩：这样从「可用时段减去占用」得到的空档天然满足相邻间隔约束。
-fn expand_by_break(ranges: &[(i64, i64)], min_break_minutes: i64) -> Vec<(i64, i64)> {
-    ranges
-        .iter()
-        .map(|(start, end)| (start - min_break_minutes, end + min_break_minutes))
-        .collect()
-}
-
-/// 从可用时段中挖掉占用区间，返回剩余空档。
-fn subtract_ranges(windows: &[(i64, i64)], occupied: &[(i64, i64)]) -> Vec<(i64, i64)> {
-    let mut free: Vec<(i64, i64)> = windows.to_vec();
-    for (occupied_start, occupied_end) in occupied {
-        let mut next: Vec<(i64, i64)> = Vec::new();
-        for (start, end) in free {
-            // 完全不相交 → 原样保留。
-            if *occupied_end <= start || *occupied_start >= end {
-                next.push((start, end));
-                continue;
-            }
-            if *occupied_start > start {
-                next.push((start, *occupied_start));
-            }
-            if *occupied_end < end {
-                next.push((*occupied_end, end));
-            }
-        }
-        free = next;
-    }
-    free
-}
-
-/// 与高效时段相交的空档优先——这是本地启发式里唯一体现「偏好」的地方。
-fn order_gaps_by_peak(gaps: Vec<(i64, i64)>, peaks: &[(i64, i64)]) -> Vec<(i64, i64)> {
-    let mut keyed: Vec<(bool, i64, (i64, i64))> = gaps
-        .into_iter()
-        .map(|gap| {
-            let touches_peak = peaks
-                .iter()
-                .any(|(peak_start, peak_end)| gap.0 < *peak_end && *peak_start < gap.1);
-            // `!touches_peak`：false（即命中高效时段）排在前面。
-            (!touches_peak, gap.0, gap)
-        })
-        .collect();
-    keyed.sort_by_key(|(not_peak, start, range)| (*not_peak, *start, *range));
-    keyed.into_iter().map(|(_, _, range)| range).collect()
-}
-
-/// 生成排期候选。放不下的条目进 `unscheduled`，**绝不硬塞**。
+/// 本地规则排期：`refine` 在「模型什么都没给」时的特例。
 ///
-/// 与 LLM 路径的差别：这里把「不得排到 due_date 之后」当作硬约束（方案 §5.1 第 5 条），
-/// 因此本地路径不会产出 `due_risk`；该警告只在模型越界时由校验器给出。
+/// 顺序：优先级 → 错过次数 → 截止日 → 重科目；高优先级与数学 / 专业课优先进高效时段；
+/// 整段放不下就拆段；截止日前放不下才排到之后（校验器会给 `due_risk`）；
+/// 实在放不下才进 `unscheduled`。每条都带规则化的理由。
 pub fn plan_locally(
     plan_context: &PlanContext,
     request: &AiPlanRequest,
 ) -> Result<RawPlanResponse, AiSchedulerError> {
-    let start = context::parse_date(&plan_context.horizon_start)?;
-    let dates = context::horizon_dates(start, plan_context.horizon_days);
+    context::parse_date(&plan_context.horizon_start)?;
+    let outcome = refine::make_feasible(
+        &RawPlanResponse::default(),
+        plan_context,
+        request.respect_priority,
+        refine::Mode::Local,
+    );
+    let mut response = outcome.response;
+    response.summary = Some(local_summary(&response));
+    Ok(response)
+}
 
-    let mut placed: HashMap<String, Vec<(i64, i64)>> = HashMap::new();
-    let mut items: Vec<RawPlanItem> = Vec::new();
-    let mut unscheduled: Vec<RawUnscheduledItem> = Vec::new();
-    let break_minutes = match plan_context.planner_preferences.rest_style.as_str() {
-        "gentle" => plan_context.min_break_minutes.max(15),
-        "focused" => plan_context.min_break_minutes.min(5),
-        _ => plan_context.min_break_minutes,
-    };
-
-    for queue_item in ordered_queue_items(plan_context, request.respect_priority) {
-        let duration = adaptive_duration(queue_item, plan_context);
-        let mut scheduled = false;
-
-        for date in &dates {
-            let date_key = context::date_string(*date);
-
-            // 硬约束：不得排到截止日之后。日期是递增的，越界即可停止尝试。
-            if let Some(due_date) = queue_item.due_date.as_deref() {
-                if date_key.as_str() > due_date {
-                    break;
-                }
-            }
-
-            let windows = context::windows_for_date(&plan_context.available_windows, *date);
-            if windows.is_empty() {
-                continue;
-            }
-
-            // `keep_locked_blocks = false` 时，AI 产出的未锁定块视为可被顶替，不再占用空档。
-            let mut existing: Vec<(i64, i64)> = plan_context
-                .existing_blocks
-                .iter()
-                .filter(|block| block.date == date_key)
-                .filter(|block| request.keep_locked_blocks || block.locked)
-                .map(|block| (block.start_minute, block.end_minute))
-                .collect();
-
-            if plan_context.planner_preferences.auto_meals {
-                existing.extend(
-                    plan_context
-                        .planner_preferences
-                        .meal_windows
-                        .iter()
-                        .filter_map(|meal| {
-                            (meal.end_minute > meal.start_minute)
-                                .then_some((meal.start_minute, meal.end_minute))
-                        }),
-                );
-            }
-
-            let existing_total: i64 = existing.iter().map(|(s, e)| e - s).sum();
-            let placed_ranges = placed.get(&date_key).cloned().unwrap_or_default();
-            let placed_total: i64 = placed_ranges.iter().map(|(s, e)| e - s).sum();
-
-            // 累计约束：单日容量。
-            if existing_total + placed_total + duration > plan_context.max_daily_minutes {
-                continue;
-            }
-
-            let mut occupied = existing;
-            occupied.extend(placed_ranges);
-            let occupied = expand_by_break(&context::merge_ranges(occupied), break_minutes);
-
-            let peaks = context::peaks_for_date(&plan_context.peak_windows, *date);
-            let gaps = subtract_ranges(&windows, &occupied);
-
-            // 首个能容纳的连续空档即放置。
-            if let Some((gap_start, gap_end)) = order_gaps_by_peak(gaps, &peaks)
-                .into_iter()
-                .find(|(gap_start, gap_end)| gap_end - gap_start >= duration)
-            {
-                debug_assert!(gap_start + duration <= gap_end);
-                items.push(RawPlanItem {
-                    item_id: queue_item.item_id,
-                    date: date_key.clone(),
-                    start_minute: gap_start,
-                    end_minute: gap_start + duration,
-                    // 本地路径给不出语义理由，诚实留空比编一个更好。
-                    rationale: None,
-                });
-                placed
-                    .entry(date_key)
-                    .or_default()
-                    .push((gap_start, gap_start + duration));
-                scheduled = true;
-                break;
-            }
-        }
-
-        if !scheduled {
-            unscheduled.push(RawUnscheduledItem {
-                item_id: queue_item.item_id,
-                reason: Some(if queue_item.due_date.is_some() {
-                    "截止日前没有足够长的可用时段".to_string()
-                } else {
-                    "可用时段内放不下（可能受单日容量或已有日程限制）".to_string()
-                }),
-            });
-        }
+/// 本地排期的一句话总结：只陈述结果，不假装有「思路」。
+fn local_summary(response: &RawPlanResponse) -> String {
+    let placed: BTreeSet<i64> = response.items.iter().map(|item| item.item_id).collect();
+    let minutes: i64 = response
+        .items
+        .iter()
+        .map(|item| item.end_minute - item.start_minute)
+        .sum();
+    let mut text = format!(
+        "按优先级与截止日依次排入空档，共 {} 条、{}",
+        placed.len(),
+        duration_label(minutes)
+    );
+    if !response.unscheduled.is_empty() {
+        text.push_str(&format!("；{} 条没排上", response.unscheduled.len()));
     }
+    text
+}
 
-    Ok(RawPlanResponse { items, unscheduled })
+fn duration_label(minutes: i64) -> String {
+    if minutes < 60 {
+        return format!("{minutes} 分钟");
+    }
+    if minutes % 60 == 0 {
+        format!("{} 小时", minutes / 60)
+    } else {
+        format!("{:.1} 小时", minutes as f64 / 60.0)
+    }
 }
 
 // ── 草案落库与读取 ──
@@ -303,6 +146,8 @@ pub struct NewProposal<'a> {
     pub model: &'a str,
     pub scope: &'a str,
     pub window: Option<(i64, i64)>,
+    /// 模型或本地规则给出的一句话总结。
+    pub summary: Option<&'a str>,
 }
 
 /// 把「排不下」的 item_id 补上标题，让前端不必再查一次队列。
@@ -326,16 +171,46 @@ fn resolve_unscheduled(
         .collect()
 }
 
+/// 草案统计。学习条目与三餐分开算：三餐不计入「排了几条」，也不计入每日目标。
 fn compute_stats(
     items: &[AiPlanItem],
+    warnings: &[AiPlanWarning],
     unscheduled_count: i64,
     plan_context: &PlanContext,
 ) -> AiPlanStats {
+    let study: Vec<&AiPlanItem> = items.iter().filter(|item| item.kind != "meal").collect();
+    // 拆段的条目只算一条。
+    let distinct: BTreeSet<i64> = study
+        .iter()
+        .filter_map(|item| item.source_today_item_id)
+        .collect();
+    let unlinked = study
+        .iter()
+        .filter(|item| item.source_today_item_id.is_none())
+        .count();
+    let open_days = slots::build_day_frames(plan_context)
+        .iter()
+        .filter(|frame| !frame.past)
+        .count() as i64;
+    let daily_target = plan_context
+        .planner_preferences
+        .daily_target_minutes
+        .min(plan_context.max_daily_minutes)
+        .max(0);
+    let adjusted: BTreeSet<&str> = warnings
+        .iter()
+        .filter(|warning| warning.code == WARN_ADJUSTED)
+        .filter_map(|warning| warning.item_id.as_deref())
+        .collect();
+
     AiPlanStats {
-        scheduled_count: items.len() as i64,
+        scheduled_count: (distinct.len() + unlinked) as i64,
         unscheduled_count,
         total_minutes: items.iter().map(AiPlanItem::duration_minutes).sum(),
         overflow_minutes: validator::overflow_minutes(items, plan_context),
+        study_minutes: study.iter().map(|item| item.duration_minutes()).sum(),
+        target_minutes: daily_target * open_days,
+        adjusted_count: adjusted.len() as i64,
     }
 }
 
@@ -358,7 +233,7 @@ pub fn persist_proposal(
     let now = Utc::now().to_rfc3339();
 
     let unscheduled = resolve_unscheduled(new_proposal.unscheduled, plan_context);
-    let stats = compute_stats(items, unscheduled.len() as i64, plan_context);
+    let stats = compute_stats(items, warnings, unscheduled.len() as i64, plan_context);
 
     let items_json = serde_json::to_string(items).map_err(serialize_error)?;
     let warnings_json = serde_json::to_string(warnings).map_err(serialize_error)?;
@@ -387,8 +262,8 @@ pub fn persist_proposal(
             INSERT INTO ai_plan_proposals (
               proposal_date, horizon_days, status, scope, scope_window_start, scope_window_end,
               engine, model, degraded, source_snapshot, items_json, warnings_json,
-              unscheduled_json, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)
+              unscheduled_json, created_at, updated_at, summary
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14, ?15)
             ",
             params![
                 request.target_date,
@@ -405,6 +280,7 @@ pub fn persist_proposal(
                 warnings_json,
                 unscheduled_json,
                 now,
+                new_proposal.summary,
             ],
         )
         .map_err(db_error)?;
@@ -425,13 +301,16 @@ pub fn persist_proposal(
         warnings: warnings.to_vec(),
         unscheduled,
         stats,
+        summary: new_proposal.summary.map(str::to_string),
+        already_scheduled: plan_context.already_scheduled.clone(),
+        replaceable_block_count: plan_context.replaceable_block_ids.len() as i64,
     })
 }
 
 const PROPOSAL_COLUMNS: &str = "
     id, proposal_date, horizon_days, status, scope, scope_window_start, scope_window_end,
     engine, model, degraded, source_snapshot, items_json, warnings_json, unscheduled_json,
-    created_at
+    created_at, summary
 ";
 
 struct ProposalRow {
@@ -450,6 +329,7 @@ struct ProposalRow {
     warnings_json: String,
     unscheduled_json: String,
     created_at: String,
+    summary: Option<String>,
 }
 
 fn row_to_proposal_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProposalRow> {
@@ -469,6 +349,7 @@ fn row_to_proposal_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProposalRow>
         warnings_json: row.get(12)?,
         unscheduled_json: row.get(13)?,
         created_at: row.get(14)?,
+        summary: row.get(15)?,
     })
 }
 
@@ -481,7 +362,7 @@ fn finish_proposal(row: ProposalRow) -> AiPlanProposal {
     let plan_context: PlanContext = serde_json::from_str(&row.source_snapshot)
         .unwrap_or_else(|_| empty_context(row.horizon_days, &row.target_date));
 
-    let stats = compute_stats(&items, unscheduled.len() as i64, &plan_context);
+    let stats = compute_stats(&items, &warnings, unscheduled.len() as i64, &plan_context);
 
     AiPlanProposal {
         id: row.id,
@@ -499,6 +380,9 @@ fn finish_proposal(row: ProposalRow) -> AiPlanProposal {
         warnings,
         unscheduled,
         stats,
+        summary: row.summary,
+        already_scheduled: plan_context.already_scheduled.clone(),
+        replaceable_block_count: plan_context.replaceable_block_ids.len() as i64,
     }
 }
 
@@ -516,6 +400,10 @@ fn empty_context(horizon_days: i64, target_date: &str) -> PlanContext {
         max_daily_minutes: DEFAULT_MAX_DAILY_MINUTES,
         default_block_minutes: DEFAULT_BLOCK_MINUTES,
         planner_preferences: AiPlannerPreferences::default(),
+        clock: None,
+        already_scheduled: Vec::new(),
+        replaceable_block_ids: Vec::new(),
+        source_request: None,
     }
 }
 
@@ -531,12 +419,11 @@ pub fn load_proposal(
     Ok(row.map(finish_proposal))
 }
 
-/// 读取快照。`apply` 阶段做漂移检测时用，因此保留原始结构类型。
+/// 读取快照。
 ///
-/// S3 的 apply **刻意不用它**：CalDAV / 飞书会反向写回 `schedule_blocks`，
-/// 基于快照判断冲突必然漏掉远端变更（§7.2 的教训），所以改为读当前库。
-/// 保留此函数供 S6 的 `replan` 判断「原始 horizon 与范围」使用。
-#[allow(dead_code)]
+/// 用途只有两类「生成时的依据」：apply 的漂移检测（生成时的预计时长、要替换的旧块 id），
+/// 以及「按反馈调整」复现同一组请求参数。**冲突判定不能用它**：CalDAV / 飞书会反向写回
+/// `schedule_blocks`，基于快照判断冲突必然漏掉远端变更（§7.2 的教训），apply 读的是当前库。
 pub fn load_proposal_snapshot(
     connection: &Connection,
     proposal_id: i64,
@@ -615,17 +502,16 @@ pub fn expire_stale_proposals(connection: &Connection) -> Result<(), AiScheduler
     Ok(())
 }
 
-/// 预览编排（命令 4）：开关校验 → 队列预检 → **模型排期** → （仅显式要求时）本地兜底。
-///
-/// 降级语义（2026-09-26 按用户要求修正，偏离 §6.3）：默认**不**悄悄回落本地启发式——
-/// 「排不出来」就该报错让用户重试，而不是拿一份没经过 AI 的结果冒充排期。
-/// `request.allow_local_fallback = true`（前端错误卡片上的「改用本地排期」按钮）时才走本地，
-/// 且草案会带上 `degraded = true`，前端明确标注这是兜底结果。
-pub fn preview_proposal(
-    connection: &Connection,
-    request: AiPlanRequest,
-    settings: &AiSchedulerSettings,
-) -> Result<AiPlanProposal, AiSchedulerError> {
+fn bad_request_message(message: impl Into<String>) -> AiSchedulerError {
+    AiSchedulerError::new(ERR_BAD_REQUEST, message, false)
+}
+
+fn not_found() -> AiSchedulerError {
+    AiSchedulerError::new(ERR_NOT_FOUND, "草案不存在或已被清理，请重新生成", false)
+}
+
+/// 调模型前的开关 / 凭据检查。
+fn ensure_ai_ready(settings: &AiSchedulerSettings) -> Result<(), AiSchedulerError> {
     if !settings.enabled {
         return Err(bad_request_message(
             "AI 排期尚未开启，请先在 设置 → 集成 → AI 排期 中打开",
@@ -653,65 +539,130 @@ pub fn preview_proposal(
             "请先在 设置 → 集成 → AI 排期 中选择或填写模型名",
         ));
     }
+    Ok(())
+}
 
-    expire_stale_proposals(connection)?;
-    let request = context::normalize_plan_request(request)?;
-    let plan_context = context::build_context(connection, &request, settings)?;
-
-    // 队列里没有可排条目就不浪费一次网络往返——这不是排期失败，是没东西可排。
+/// 排期前的预检：没有可排条目、日期已过、或范围内已经没有空档时，不浪费一次网络往返，
+/// 并且直接告诉用户卡在哪里。
+fn ensure_schedulable(
+    request: &AiPlanRequest,
+    plan_context: &PlanContext,
+) -> Result<(), AiSchedulerError> {
     if plan_context.queue_items.is_empty() {
+        if !plan_context.already_scheduled.is_empty() {
+            return Err(bad_request_message(format!(
+                "「{}」队列里的 {} 条都已经在日历上了，不会重复排期；想重排 AI 之前的安排，请勾选「重新安排已写入日历的 AI 日程」",
+                request.target_date,
+                plan_context.already_scheduled.len()
+            )));
+        }
         return Err(bad_request_message(format!(
             "「{}」的计划队列里没有未完成条目，先在「今日 / 计划」里加几条再生成草案",
             request.target_date
         )));
     }
-
-    match llm_plan(connection, &request, settings, &plan_context) {
-        Ok(proposal) => Ok(proposal),
-        Err(llm_error) => {
-            if !request.allow_local_fallback {
-                return Err(llm_error);
-            }
-            let raw = plan_locally(&plan_context, &request)?;
-            let outcome = validator::validate(&raw, &plan_context);
-            let mut items = outcome.items;
-            append_meal_items(&mut items, &plan_context);
-            persist_proposal(
-                connection,
-                NewProposal {
-                    request: &request,
-                    plan_context: &plan_context,
-                    items: &items,
-                    warnings: &outcome.warnings,
-                    unscheduled: &outcome.unscheduled,
-                    engine: ENGINE_LOCAL_HEURISTIC,
-                    degraded: true,
-                    model: "",
-                    scope: SCOPE_DAY,
-                    window: None,
-                },
-            )
-        }
+    let frames = slots::build_day_frames(plan_context);
+    if !frames.is_empty() && frames.iter().all(|frame| frame.past) {
+        return Err(bad_request_message(format!(
+            "{} 已经过去：请把没完成的条目移到今天的队列，或选择今天及之后的日期",
+            plan_context.horizon_end
+        )));
     }
+    let break_minutes = slots::break_minutes(plan_context);
+    let room: i64 = frames
+        .iter()
+        .filter(|frame| !frame.past)
+        .map(|frame| {
+            let free: i64 = frame
+                .free_gaps(&[], break_minutes)
+                .iter()
+                .map(|(start, end)| end - start)
+                .sum();
+            free.min(frame.capacity_left(0, plan_context.max_daily_minutes))
+        })
+        .sum();
+    if room < MIN_SEGMENT_MINUTES {
+        return Err(bad_request_message(
+            "规划范围内已经没有可排的空档（今天剩下的时间不多，或日程与学习上限已排满）；可以改成「连续 3 天」，或在设置里放宽可用时段",
+        ));
+    }
+    Ok(())
 }
 
-fn bad_request_message(message: impl Into<String>) -> AiSchedulerError {
-    AiSchedulerError::new(ERR_BAD_REQUEST, message, false)
+/// 预览编排（命令 4）：开关校验 → 队列与空档预检 → **模型排期** → （仅显式要求时）本地兜底。
+///
+/// 降级语义（2026-09-26 按用户要求修正，偏离 §6.3）：默认**不**悄悄回落本地启发式。
+/// `request.allow_local_fallback = true`（前端错误卡片上的「改用本地排期」）时直接走本地，
+/// 草案带 `degraded = true`，前端明确标注这是兜底结果。
+pub fn preview_proposal(
+    connection: &Connection,
+    request: AiPlanRequest,
+    settings: &AiSchedulerSettings,
+) -> Result<AiPlanProposal, AiSchedulerError> {
+    ensure_ai_ready(settings)?;
+    expire_stale_proposals(connection)?;
+    let request = context::normalize_plan_request(request)?;
+    let plan_context = context::build_context(connection, &request, settings)?;
+    ensure_schedulable(&request, &plan_context)?;
+    generate(connection, &request, settings, &plan_context, None)
 }
 
-/// 模型路径：提示词 → Chat Completions → 同一个校验器 → 落库（engine = llm）。
+/// 选路径。用户点了「改用本地排期」就直接走本地——再等一次多半还会失败的模型请求没有意义。
+/// 「按反馈调整」只能走模型：本地规则读不懂自然语言反馈。
+fn generate(
+    connection: &Connection,
+    request: &AiPlanRequest,
+    settings: &AiSchedulerSettings,
+    plan_context: &PlanContext,
+    revision: Option<&prompt::PlanRevision<'_>>,
+) -> Result<AiPlanProposal, AiSchedulerError> {
+    if request.allow_local_fallback && revision.is_none() {
+        return local_plan_proposal(connection, request, plan_context);
+    }
+    llm_plan(connection, request, settings, plan_context, revision)
+}
+
+fn local_plan_proposal(
+    connection: &Connection,
+    request: &AiPlanRequest,
+    plan_context: &PlanContext,
+) -> Result<AiPlanProposal, AiSchedulerError> {
+    let raw = plan_locally(plan_context, request)?;
+    let outcome = validator::validate(&raw, plan_context);
+    let mut items = outcome.items;
+    append_meal_items(&mut items, plan_context);
+    persist_proposal(
+        connection,
+        NewProposal {
+            request,
+            plan_context,
+            items: &items,
+            warnings: &outcome.warnings,
+            unscheduled: &outcome.unscheduled,
+            engine: ENGINE_LOCAL_HEURISTIC,
+            degraded: true,
+            model: "",
+            scope: SCOPE_DAY,
+            window: None,
+            summary: raw.summary.as_deref(),
+        },
+    )
+}
+
+/// 模型路径：提示词 → Chat Completions → `refine`（可行性修复）→ 同一个校验器 → 落库（engine = llm）。
 fn llm_plan(
     connection: &Connection,
     request: &AiPlanRequest,
     settings: &AiSchedulerSettings,
     plan_context: &PlanContext,
+    revision: Option<&prompt::PlanRevision<'_>>,
 ) -> Result<AiPlanProposal, AiSchedulerError> {
     let base_url = client::normalize_base_url(&settings.base_url)?;
     let api_key = settings::load_api_key(connection)?;
     let http = client::build_client(settings.timeout_seconds)?;
 
     let system_prompt = prompt::build_system_prompt();
-    let user_prompt = prompt::build_user_prompt(request, plan_context);
+    let user_prompt = prompt::build_user_prompt(request, plan_context, revision);
     let outcome = client::chat_json(
         &http,
         &base_url,
@@ -721,8 +672,16 @@ fn llm_plan(
         &user_prompt,
     )?;
 
-    let validated = validator::validate(&outcome.response, plan_context);
+    // 模型给的时间不可行就挪到最近空档，漏排的补上——而不是整条丢掉。
+    let refined = refine::make_feasible(
+        &outcome.response,
+        plan_context,
+        request.respect_priority,
+        refine::Mode::Llm,
+    );
+    let validated = validator::validate(&refined.response, plan_context);
     let mut warnings = validated.warnings;
+    warnings.extend(refined.warnings);
     warnings.extend(outcome.warnings);
     let mut items = validated.items;
     append_meal_items(&mut items, plan_context);
@@ -740,8 +699,171 @@ fn llm_plan(
             model: &settings.model,
             scope: SCOPE_DAY,
             window: None,
+            summary: refined.response.summary.as_deref(),
         },
     )
+}
+
+/// 按反馈调整（命令 6）：用生成原草案时的同一组请求参数重读当前库，把上一版草案与用户反馈
+/// 一起交给模型。失败时原草案保持不变（只有新草案落库成功才会顶掉旧的）。
+pub fn revise_proposal(
+    connection: &Connection,
+    proposal_id: i64,
+    feedback: &str,
+    settings: &AiSchedulerSettings,
+) -> Result<AiPlanProposal, AiSchedulerError> {
+    ensure_ai_ready(settings)?;
+    let feedback: String = feedback.trim().chars().take(MAX_FEEDBACK_CHARS).collect();
+    if feedback.is_empty() {
+        return Err(bad_request_message(
+            "先写一句想怎么调整，例如「数学挪到下午」",
+        ));
+    }
+    let proposal = load_proposal(connection, proposal_id)?.ok_or_else(not_found)?;
+    if proposal.status != PROPOSAL_STATUS_DRAFT {
+        return Err(AiSchedulerError::new(
+            ERR_CONFLICT,
+            "这份草案已经写入或放弃，不能再调整",
+            false,
+        ));
+    }
+    let snapshot = load_proposal_snapshot(connection, proposal_id)?;
+    let mut request = snapshot
+        .and_then(|plan_context| plan_context.source_request)
+        .unwrap_or_else(|| AiPlanRequest {
+            target_date: proposal.target_date.clone(),
+            horizon_days: proposal.horizon_days,
+            ..AiPlanRequest::default()
+        });
+    request.allow_local_fallback = false;
+    let request = context::normalize_plan_request(request)?;
+    let plan_context = context::build_context(connection, &request, settings)?;
+    ensure_schedulable(&request, &plan_context)?;
+
+    let revision = prompt::PlanRevision {
+        previous_items: &proposal.items,
+        feedback: &feedback,
+    };
+    generate(connection, &request, settings, &plan_context, Some(&revision))
+}
+
+/// 删除草案里的条目（命令 5）。
+///
+/// 本期只支持**删除**：传入的条目必须是草案里已有的（按 id 匹配），时间 / 标题 / 来源一律以库里
+/// 存的为准，前端改不了。时间微调属于 S5 的拖拽，届时再放开并在这里补可行性校验。
+pub fn update_proposal_items(
+    connection: &Connection,
+    proposal_id: i64,
+    incoming: &[AiPlanItem],
+) -> Result<AiPlanProposal, AiSchedulerError> {
+    let mut proposal = load_proposal(connection, proposal_id)?.ok_or_else(not_found)?;
+    if proposal.status != PROPOSAL_STATUS_DRAFT {
+        return Err(AiSchedulerError::new(
+            ERR_CONFLICT,
+            "这份草案已经写入或放弃，不能再修改",
+            false,
+        ));
+    }
+    let kept_ids: BTreeSet<String> = {
+        let stored: HashMap<&str, &AiPlanItem> = proposal
+            .items
+            .iter()
+            .map(|item| (item.id.as_str(), item))
+            .collect();
+        let mut kept = BTreeSet::new();
+        for item in incoming {
+            let Some(original) = stored.get(item.id.as_str()) else {
+                return Err(AiSchedulerError::new(
+                    ERR_CONFLICT,
+                    "草案已经变化，请刷新后重试",
+                    false,
+                ));
+            };
+            if original.schedule_date != item.schedule_date
+                || original.start_minute != item.start_minute
+                || original.end_minute != item.end_minute
+            {
+                return Err(bad_request_message(
+                    "预览阶段暂不支持直接改时间；可以在下方写一句反馈，让 AI 按反馈调整",
+                ));
+            }
+            kept.insert(item.id.clone());
+        }
+        kept
+    };
+
+    let (mut kept, removed): (Vec<AiPlanItem>, Vec<AiPlanItem>) =
+        std::mem::take(&mut proposal.items)
+            .into_iter()
+            .partition(|item| kept_ids.contains(&item.id));
+    // 某天的学习条目全删了，那天的三餐也一起去掉：日历上只剩三餐没有意义。
+    let study_dates: BTreeSet<String> = kept
+        .iter()
+        .filter(|item| item.kind != "meal")
+        .map(|item| item.schedule_date.clone())
+        .collect();
+    kept.retain(|item| item.kind != "meal" || study_dates.contains(&item.schedule_date));
+
+    // 被删的学习条目回到「没排上」，拆段条目只要还剩一段就不算没排上。
+    let kept_queue_ids: BTreeSet<i64> = kept
+        .iter()
+        .filter_map(|item| item.source_today_item_id)
+        .collect();
+    let mut unscheduled = proposal.unscheduled.clone();
+    let mut dropped_queue_ids: BTreeSet<i64> = BTreeSet::new();
+    for item in removed.iter().filter(|item| item.kind != "meal") {
+        let Some(queue_id) = item.source_today_item_id else {
+            continue;
+        };
+        if kept_queue_ids.contains(&queue_id)
+            || unscheduled.iter().any(|entry| entry.item_id == queue_id)
+        {
+            continue;
+        }
+        dropped_queue_ids.insert(queue_id);
+        unscheduled.push(UnscheduledEntry {
+            item_id: queue_id,
+            title: item.title.clone(),
+            reason: "已从草案中移除".to_string(),
+        });
+    }
+    let warnings: Vec<AiPlanWarning> = std::mem::take(&mut proposal.warnings)
+        .into_iter()
+        .filter(|warning| {
+            warning
+                .item_id
+                .as_deref()
+                .is_none_or(|item_id| kept_ids.contains(item_id))
+        })
+        .filter(|warning| {
+            warning
+                .queue_item_id
+                .is_none_or(|queue_id| !dropped_queue_ids.contains(&queue_id))
+        })
+        .collect();
+
+    let now = Utc::now().to_rfc3339();
+    let items_json = serde_json::to_string(&kept).map_err(serialize_error)?;
+    let warnings_json = serde_json::to_string(&warnings).map_err(serialize_error)?;
+    let unscheduled_json = serde_json::to_string(&unscheduled).map_err(serialize_error)?;
+    connection
+        .execute(
+            "
+            UPDATE ai_plan_proposals
+            SET items_json = ?1, warnings_json = ?2, unscheduled_json = ?3, updated_at = ?4
+            WHERE id = ?5 AND status = ?6
+            ",
+            params![
+                items_json,
+                warnings_json,
+                unscheduled_json,
+                now,
+                proposal_id,
+                PROPOSAL_STATUS_DRAFT
+            ],
+        )
+        .map_err(db_error)?;
+    load_proposal(connection, proposal_id)?.ok_or_else(not_found)
 }
 
 #[cfg(test)]
@@ -773,6 +895,7 @@ mod tests {
             estimated_minutes: minutes,
             due_date: due_date.map(str::to_string),
             note: None,
+            missed_count: 0,
         }
     }
 
@@ -794,6 +917,10 @@ mod tests {
                 auto_meals: false,
                 ..AiPlannerPreferences::default()
             },
+            clock: None,
+            already_scheduled: Vec::new(),
+            replaceable_block_ids: Vec::new(),
+            source_request: None,
         }
     }
 
@@ -874,6 +1001,7 @@ mod tests {
             end_minute: 660,
             title: "已有安排".to_string(),
             locked: true,
+            replaceable: false,
         }];
         // 高效时段在 13:00–15:00。
         plan_context.peak_windows = vec![window(5, 780, 900)];
@@ -883,11 +1011,12 @@ mod tests {
         // 两个空档都放得下 100 分钟：(480,590) 与 (670,900)。
         // 按「先来先占」会落在 480，命中高效时段的那一段应当被优先。
         assert_eq!(raw.items.len(), 1);
+        // 高优先级条目从高效时段开头（13:00）开始，整段落在高效时段里，
+        // 11:10–13:00 留给后面的条目，而不是从 11:10 起跨进高效时段、把它切碎。
         assert_eq!(
-            raw.items[0].start_minute, 670,
+            raw.items[0].start_minute, 780,
             "应优先使用命中高效时段的空档"
         );
-        // 670 = 已有安排结束的 660 + 最小间隔 10，说明休息间隔没有被跳过。
         assert!(raw.items[0].start_minute >= 660 + plan_context.min_break_minutes);
     }
 
@@ -920,17 +1049,48 @@ mod tests {
         assert_eq!(raw.items[1].date, "2026-09-26");
     }
 
+    /// 截止日已经过了：旧实现让条目从计划里消失，现在尽早补上并由校验器提示逾期。
     #[test]
-    fn due_date_is_a_hard_constraint() {
-        let mut plan_context = base_context(vec![queue_item(1, "high", 60, Some("2026-09-24"))]);
-        plan_context.horizon_start = "2026-09-25".to_string();
+    fn overdue_item_is_still_scheduled_with_due_risk() {
+        let plan_context = base_context(vec![queue_item(1, "high", 60, Some("2026-09-24"))]);
         let raw = plan_locally(&plan_context, &request()).expect("plan");
 
-        assert!(
-            raw.items.is_empty(),
-            "截止日已过就不该排到之后的日子（硬约束，§5.1 第 5 条）"
-        );
-        assert_eq!(raw.unscheduled.len(), 1);
+        assert_eq!(raw.items.len(), 1);
+        assert_eq!(raw.items[0].start_minute, 480);
+        assert_eq!(raw.items[0].rationale.as_deref(), Some("已逾期，尽早补上"));
+        let outcome = validator::validate(&raw, &plan_context);
+        assert!(outcome
+            .warnings
+            .iter()
+            .any(|warning| warning.code == WARN_DUE_RISK));
+    }
+
+    /// 截止日还来得及时优先排在截止日前；截止日前实在没空，排到之后也比消失强。
+    #[test]
+    fn due_date_is_preferred_but_late_placement_beats_disappearing() {
+        let mut plan_context = base_context(vec![queue_item(1, "high", 60, Some("2026-09-25"))]);
+        plan_context.horizon_days = 2;
+        plan_context.horizon_end = "2026-09-26".to_string();
+        plan_context.available_windows = vec![window(5, 480, 720), window(6, 480, 720)];
+        // 周五整段被锁定日程占满。
+        plan_context.existing_blocks = vec![ContextBlock {
+            block_id: 9,
+            date: "2026-09-25".to_string(),
+            start_minute: 480,
+            end_minute: 720,
+            title: "模拟考试".to_string(),
+            locked: true,
+            replaceable: false,
+        }];
+        let raw = plan_locally(&plan_context, &request()).expect("plan");
+
+        assert_eq!(raw.items.len(), 1);
+        assert_eq!(raw.items[0].date, "2026-09-26");
+        let outcome = validator::validate(&raw, &plan_context);
+        assert!(outcome
+            .warnings
+            .iter()
+            .any(|warning| warning.code == WARN_DUE_RISK));
     }
 
     #[test]
@@ -954,6 +1114,7 @@ mod tests {
             estimated_minutes: 0,
             due_date: None,
             note: None,
+            missed_count: 0,
         }]);
         plan_context.available_windows = vec![window(5, 480, 900)];
         plan_context.planner_preferences.auto_meals = true;
@@ -976,6 +1137,7 @@ mod tests {
             end_minute: 600,
             title: "锁定的块".to_string(),
             locked: true,
+            replaceable: false,
         }];
 
         let raw = plan_locally(&plan_context, &request()).expect("plan");
@@ -983,8 +1145,10 @@ mod tests {
         assert!(raw.items.is_empty());
     }
 
+    /// 是否可替换由 `build_context` 决定（只有本次重新安排的条目的旧 AI 块才会标记），
+    /// 排期器只看 `replaceable`。
     #[test]
-    fn unlocked_blocks_can_be_replaced_when_not_keeping_locked() {
+    fn replaceable_blocks_do_not_block_space() {
         let mut plan_context = base_context(vec![queue_item(1, "high", 60, None)]);
         plan_context.existing_blocks = vec![ContextBlock {
             block_id: 9,
@@ -993,19 +1157,13 @@ mod tests {
             end_minute: 600,
             title: "AI 上次排的".to_string(),
             locked: false,
+            replaceable: true,
         }];
 
-        let raw = plan_locally(
-            &plan_context,
-            &AiPlanRequest {
-                keep_locked_blocks: false,
-                ..request()
-            },
-        )
-        .expect("plan");
+        let raw = plan_locally(&plan_context, &request()).expect("plan");
 
         assert_eq!(raw.items.len(), 1);
-        assert_eq!(raw.items[0].start_minute, 480, "未锁定块可被顶替");
+        assert_eq!(raw.items[0].start_minute, 480, "可替换的旧块可被顶替");
     }
 
     #[test]
@@ -1018,5 +1176,93 @@ mod tests {
         let raw = plan_locally(&plan_context, &request()).expect("plan");
         assert!(raw.items.is_empty());
         assert_eq!(raw.unscheduled.len(), 1);
+    }
+
+    fn study(date: &str, start: i64, end: i64, queue_id: i64) -> AiPlanItem {
+        AiPlanItem {
+            id: validator::item_id_for(date, start, queue_id),
+            source_task_id: None,
+            source_today_item_id: Some(queue_id),
+            schedule_date: date.to_string(),
+            start_minute: start,
+            end_minute: end,
+            title: format!("条目{queue_id}"),
+            category_key: "math".to_string(),
+            subject_id: None,
+            priority: "high".to_string(),
+            rationale: None,
+            manually_adjusted: false,
+            conflict_with: Vec::new(),
+            kind: "study".to_string(),
+        }
+    }
+
+    #[test]
+    fn meals_are_only_added_on_days_with_study() {
+        let mut plan_context = base_context(Vec::new());
+        plan_context.horizon_days = 2;
+        plan_context.horizon_end = "2026-09-26".to_string();
+        plan_context.planner_preferences.auto_meals = true;
+        let mut items = vec![study("2026-09-25", 480, 540, 1)];
+        append_meal_items(&mut items, &plan_context);
+
+        let meals: Vec<&AiPlanItem> = items.iter().filter(|item| item.kind == "meal").collect();
+        assert_eq!(meals.len(), 3);
+        assert!(meals.iter().all(|meal| meal.schedule_date == "2026-09-25"));
+    }
+
+    #[test]
+    fn meals_skip_past_times_and_existing_meal_blocks() {
+        let mut plan_context = base_context(Vec::new());
+        plan_context.planner_preferences.auto_meals = true;
+        // 现在 09:00，早餐已过；午餐上次已经写进日历。
+        plan_context.clock = Some(PlanClock {
+            date: "2026-09-25".to_string(),
+            minute: 9 * 60,
+        });
+        plan_context.existing_blocks = vec![ContextBlock {
+            block_id: 5,
+            date: "2026-09-25".to_string(),
+            start_minute: 720,
+            end_minute: 780,
+            title: "午餐".to_string(),
+            locked: true,
+            replaceable: false,
+        }];
+        let mut items = vec![study("2026-09-25", 600, 660, 1)];
+        append_meal_items(&mut items, &plan_context);
+
+        let meals: Vec<&str> = items
+            .iter()
+            .filter(|item| item.kind == "meal")
+            .map(|item| item.title.as_str())
+            .collect();
+        assert_eq!(meals, vec!["晚餐"]);
+    }
+
+    #[test]
+    fn stats_count_split_items_once_and_exclude_meals() {
+        let mut plan_context = base_context(Vec::new());
+        plan_context.planner_preferences.daily_target_minutes = 300;
+        let mut meal = study("2026-09-25", 720, 780, 0);
+        meal.id = "2026-09-25-meal-午餐".to_string();
+        meal.source_today_item_id = None;
+        meal.kind = "meal".to_string();
+        let items = vec![
+            study("2026-09-25", 480, 540, 1),
+            study("2026-09-25", 600, 660, 1),
+            study("2026-09-25", 800, 845, 2),
+            meal,
+        ];
+        let warnings = vec![AiPlanWarning::new(WARN_ADJUSTED, "挪过".to_string())
+            .for_item(Some(items[0].id.clone()))];
+        let stats = compute_stats(&items, &warnings, 0, &plan_context);
+
+        assert_eq!(stats.scheduled_count, 2, "拆成两段的条目只算一条，三餐不算");
+        assert_eq!(stats.study_minutes, 165);
+        assert_eq!(stats.total_minutes, 225);
+        assert_eq!(stats.target_minutes, 300);
+        assert_eq!(stats.adjusted_count, 1);
+        assert_eq!(stats.overflow_minutes, 0);
     }
 }

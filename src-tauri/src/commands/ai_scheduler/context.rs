@@ -9,8 +9,17 @@
 
 use super::models::*;
 use crate::commands::checklist;
-use chrono::{Datelike, Duration, NaiveDate, Utc};
+use chrono::{Datelike, Duration, Local, NaiveDate, Timelike, Utc};
 use rusqlite::{params, Connection};
+
+/// 本机当前时间。日期判断与日历页一致，用本地时区而不是 UTC。
+pub fn local_clock() -> PlanClock {
+    let now = Local::now();
+    PlanClock {
+        date: now.format("%Y-%m-%d").to_string(),
+        minute: i64::from(now.hour()) * 60 + i64::from(now.minute()),
+    }
+}
 
 /// 分类键的合法取值域。与 `checklist.rs` 的五值枚举一致。
 pub const CATEGORY_KEYS: [&str; 5] = ["politics", "english", "math", "major", "general"];
@@ -181,6 +190,7 @@ fn list_context_blocks(
                 end_minute: row.get(3)?,
                 title: row.get(4)?,
                 locked: ai_locked != 0 || source_proposal_id.is_none(),
+                replaceable: false,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -189,13 +199,111 @@ fn list_context_blocks(
         .map_err(|error| error.to_string())
 }
 
-/// 构造快照。排期来源遵循「队列即输入」：
-/// 只取 `target_date` 那天的队列条目（`today_plan_items`，未完成），
-/// 再与 `queue_item_ids` / `category_keys` 取交集。
+/// 当天队列条目已经挂在日历上的日程块（任意日期）。
+struct LinkedBlock {
+    block_id: i64,
+    item_id: i64,
+    date: String,
+    start_minute: i64,
+    end_minute: i64,
+    status: String,
+    ai_locked: bool,
+    from_ai: bool,
+}
+
+fn list_linked_blocks(connection: &Connection, today_date: &str) -> Result<Vec<LinkedBlock>, String> {
+    let mut statement = connection
+        .prepare(
+            "
+            SELECT block.id, block.source_today_item_id, block.schedule_date, block.start_minute,
+                   block.end_minute, block.status, block.ai_locked, block.source_proposal_id
+            FROM schedule_blocks AS block
+            JOIN today_plan_items AS queue ON queue.id = block.source_today_item_id
+            WHERE queue.today_date = ?1
+            ORDER BY block.schedule_date ASC, block.start_minute ASC, block.id ASC
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![today_date], |row| {
+            Ok(LinkedBlock {
+                block_id: row.get(0)?,
+                item_id: row.get(1)?,
+                date: row.get(2)?,
+                start_minute: row.get(3)?,
+                end_minute: row.get(4)?,
+                status: row.get(5)?,
+                ai_locked: row.get::<_, i64>(6)? != 0,
+                from_ai: row.get::<_, Option<i64>>(7)?.is_some(),
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+/// 还没结束的块。没有时钟（单测 / 旧快照）时一律视为未结束。
+fn is_upcoming(block: &LinkedBlock, clock: Option<&PlanClock>) -> bool {
+    clock.is_none_or(|clock| {
+        block.date.as_str() > clock.date.as_str()
+            || (block.date == clock.date && block.end_minute > clock.minute)
+    })
+}
+
+/// 这个块是否把条目「钉」在日历上：用户手动放的、锁定的、进行中或完成的都不能被 AI 挪走。
+fn pins_item(block: &LinkedBlock, clock: Option<&PlanClock>) -> bool {
+    block.status == "running"
+        || (is_upcoming(block, clock)
+            && (block.ai_locked || !block.from_ai || block.status != "planned"))
+}
+
+fn already_scheduled_entry(item: &ContextQueueItem, block: &LinkedBlock) -> AlreadyScheduledEntry {
+    let label = if block.status == "running" {
+        "进行中"
+    } else if block.status == "completed" {
+        "已完成"
+    } else if !block.from_ai {
+        "手动安排"
+    } else if block.ai_locked {
+        "已锁定"
+    } else {
+        "AI 已排，勾选「重新安排」可重排"
+    };
+    AlreadyScheduledEntry {
+        item_id: item.item_id,
+        title: item.title.clone(),
+        detail: format!(
+            "{} {:02}:{:02} 已在日历（{label}）",
+            block.date.get(5..).unwrap_or(&block.date),
+            block.start_minute / 60,
+            block.start_minute % 60
+        ),
+    }
+}
+
+/// 构造快照（以本机当前时间为「现在」）。
 pub fn build_context(
     connection: &Connection,
     request: &AiPlanRequest,
     settings: &AiSchedulerSettings,
+) -> Result<PlanContext, AiSchedulerError> {
+    build_context_at(connection, request, settings, Some(local_clock()))
+}
+
+/// 构造快照。排期来源遵循「队列即输入」：
+/// 只取 `target_date` 那天的队列条目（`today_plan_items`，未完成），
+/// 再与 `queue_item_ids` / `category_keys` 取交集。
+///
+/// 在此之上做两件防重复的事：
+/// - 已经挂在日历上、且还没过去的条目默认**不再排**（记入 `already_scheduled`）；
+/// - `wants_replace()` 时，AI 排的、未锁定、未开始的旧块标为可替换，条目重新参与排期。
+///
+/// 时间过了却没完成的旧块不算「已排」，而是计入 `missed_count`，条目照常重排。
+pub fn build_context_at(
+    connection: &Connection,
+    request: &AiPlanRequest,
+    settings: &AiSchedulerSettings,
+    clock: Option<PlanClock>,
 ) -> Result<PlanContext, AiSchedulerError> {
     // 目标日期必须合法；horizon 的起止日推导统一交给 `horizon_bounds`。
     parse_date(&request.target_date)?;
@@ -203,7 +311,7 @@ pub fn build_context(
 
     let labels = checklist::category_label_map(connection).map_err(source_error)?;
 
-    let queue_items: Vec<ContextQueueItem> =
+    let candidates: Vec<ContextQueueItem> =
         checklist::list_queue_items(connection, &request.target_date)
             .map_err(source_error)?
             .into_iter()
@@ -226,12 +334,48 @@ pub fn build_context(
                     // 备注只在 send_notes 打开时进入快照。快照会落盘到 source_snapshot，
                     // 因此这里同时是「备注不外发」的执行点（方案 §7）。
                     note: if settings.send_notes { item.note } else { None },
+                    missed_count: 0,
                 }
             })
             .collect();
 
-    let existing_blocks =
+    let linked = list_linked_blocks(connection, &request.target_date).map_err(source_error)?;
+    let mut queue_items: Vec<ContextQueueItem> = Vec::new();
+    let mut already_scheduled: Vec<AlreadyScheduledEntry> = Vec::new();
+    let mut replace_ids: Vec<i64> = Vec::new();
+    for mut item in candidates {
+        let blocks: Vec<&LinkedBlock> = linked
+            .iter()
+            .filter(|block| block.item_id == item.item_id)
+            .collect();
+        item.missed_count = blocks
+            .iter()
+            .filter(|block| !is_upcoming(block, clock.as_ref()) && block.status == "planned")
+            .count() as i64;
+
+        if let Some(pin) = blocks.iter().find(|block| pins_item(block, clock.as_ref())) {
+            already_scheduled.push(already_scheduled_entry(&item, pin));
+            continue;
+        }
+        let replaceable: Vec<&&LinkedBlock> = blocks
+            .iter()
+            .filter(|block| is_upcoming(block, clock.as_ref()))
+            .collect();
+        if let Some(first) = replaceable.first() {
+            if !request.wants_replace() {
+                already_scheduled.push(already_scheduled_entry(&item, first));
+                continue;
+            }
+            replace_ids.extend(replaceable.iter().map(|block| block.block_id));
+        }
+        queue_items.push(item);
+    }
+
+    let mut existing_blocks =
         list_context_blocks(connection, &horizon_start, &horizon_end).map_err(source_error)?;
+    for block in &mut existing_blocks {
+        block.replaceable = replace_ids.contains(&block.block_id);
+    }
 
     Ok(PlanContext {
         generated_at: Utc::now().to_rfc3339(),
@@ -246,6 +390,10 @@ pub fn build_context(
         max_daily_minutes: settings.max_daily_minutes,
         default_block_minutes: settings.default_block_minutes,
         planner_preferences: settings.planner_preferences.clone(),
+        clock,
+        already_scheduled,
+        replaceable_block_ids: replace_ids,
+        source_request: Some(request.clone()),
     })
 }
 
