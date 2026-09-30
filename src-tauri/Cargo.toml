@@ -4,10 +4,15 @@ version = "1.5.2"
 description = "Windows study focus app for exam preparation"
 authors = ["kaoyan-focus"]
 edition = "2021"
+default-run = "kaoyan-focus"
 
 [lib]
 name = "kaoyan_focus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "kaoyan-focus"
+path = "src/main.rs"
 
 [[bin]]
 name = "find_window_class"
