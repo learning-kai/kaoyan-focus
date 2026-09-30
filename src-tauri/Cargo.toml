@@ -9,6 +9,10 @@ edition = "2021"
 name = "kaoyan_focus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "find_window_class"
+path = "find_window_class.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 # 同上：Cargo resolver v2 不跨 [dependencies] / [build-dependencies] 合并特性，

@@ -421,7 +421,7 @@ fn apply_mydock_embed(window: &WebviewWindow, embed: bool) -> Result<(), String>
 
         if embed {
             // 查找 MyFinder 窗口
-            let class_name: Vec<u16> = OsStr::new("MyFinderClass")
+            let class_name: Vec<u16> = OsStr::new("MyFinderApp")
                 .encode_wide()
                 .chain(std::iter::once(0))
                 .collect();
