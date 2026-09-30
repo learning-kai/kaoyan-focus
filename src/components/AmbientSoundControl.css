@@ -1,0 +1,387 @@
+/* 白噪音入口（侧边栏底部）与混音面板。只使用全局主题 token，深浅色主题自动适配。 */
+
+.ambient-sound-entry {
+  align-self: end;
+  padding-top: var(--space-3, 12px);
+}
+
+.ambient-sound-trigger {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 50px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  text-align: left;
+  transition:
+    background var(--motion-base, 180ms) var(--ease-standard, ease),
+    border-color var(--motion-base, 180ms) var(--ease-standard, ease),
+    color var(--motion-base, 180ms) var(--ease-standard, ease);
+}
+
+.ambient-sound-trigger:hover,
+.ambient-sound-trigger[aria-expanded='true'] {
+  color: var(--ink);
+  background: var(--surface-strong);
+}
+
+.ambient-sound-trigger.is-playing {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--green) 38%, var(--line));
+  background: color-mix(in srgb, var(--green-soft, rgba(52, 199, 89, 0.12)) 70%, var(--surface-strong));
+}
+
+.ambient-sound-trigger-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ambient-sound-trigger-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ambient-sound-trigger-copy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ambient-sound-live {
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 20%, transparent);
+  animation: ambient-sound-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes ambient-sound-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---------- 面板 ---------- */
+
+.ambient-sound-panel {
+  position: fixed;
+  z-index: 200;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel, 16px);
+  color: var(--ink);
+  background: var(--surface-card, var(--bg-elevated));
+  box-shadow: var(--shadow-strong);
+  overscroll-behavior: contain;
+  animation: ambient-sound-enter var(--motion-panel, 240ms) var(--ease-apple, ease-out);
+}
+
+/* 面板本身只是打开时的焦点落点，不需要全局 [tabindex]:focus-visible 的蓝色光圈。 */
+.ambient-sound-panel:focus,
+.ambient-sound-panel:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-strong);
+}
+
+@keyframes ambient-sound-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ambient-sound-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.ambient-sound-head .eyebrow {
+  margin: 0;
+}
+
+.ambient-sound-head h3 {
+  margin: 2px 0 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.ambient-sound-icon-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-control);
+}
+
+.ambient-sound-icon-button:hover {
+  color: var(--ink);
+}
+
+.ambient-sound-master {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: var(--radius-card, 12px);
+  background: var(--surface-soft);
+}
+
+.ambient-sound-switch {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+}
+
+.ambient-sound-master-volume {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.ambient-sound-master-volume span {
+  color: var(--muted);
+}
+
+.ambient-sound-master-volume strong {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ambient-sound-clear {
+  display: inline-flex;
+  grid-column: 2;
+  grid-row: 1;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+}
+
+.ambient-sound-clear:not(:disabled):hover {
+  color: var(--ink);
+  background: var(--surface-control);
+}
+
+.ambient-sound-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ambient-sound-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.ambient-sound-group {
+  display: grid;
+  gap: 8px;
+}
+
+.ambient-sound-group-label {
+  margin: 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ambient-sound-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ambient-sound-tile {
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 12px);
+  background: var(--surface-soft);
+  transition:
+    border-color var(--motion-base, 180ms) ease,
+    background var(--motion-base, 180ms) ease;
+}
+
+.ambient-sound-tile.is-active {
+  border-color: color-mix(in srgb, var(--blue) 42%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 60%, var(--surface-strong));
+}
+
+.ambient-sound-tile.is-playing {
+  border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+  background: color-mix(in srgb, var(--green-soft, rgba(52, 199, 89, 0.12)) 80%, var(--surface-strong));
+}
+
+.ambient-sound-tile.is-failed {
+  border-color: color-mix(in srgb, var(--red) 50%, var(--line));
+}
+
+.ambient-sound-toggle {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 6px 0 2px;
+  border: none;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+}
+
+.ambient-sound-tile.is-active .ambient-sound-toggle {
+  color: var(--ink);
+}
+
+.ambient-sound-toggle small {
+  color: var(--red);
+  font-size: 10px;
+}
+
+.ambient-sound-tile-volume {
+  height: 18px;
+}
+
+.ambient-sound-tile:not(.is-active) .ambient-sound-tile-volume {
+  opacity: 0.45;
+}
+
+.ambient-sound-tile-volume::-webkit-slider-runnable-track {
+  height: 4px;
+}
+
+.ambient-sound-tile-volume::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  box-shadow: 0 2px 6px rgba(2, 6, 17, 0.2);
+}
+
+.ambient-sound-tile-volume::-moz-range-track,
+.ambient-sound-tile-volume::-moz-range-progress {
+  height: 4px;
+}
+
+.ambient-sound-tile-volume::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+}
+
+.ambient-sound-credits {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ambient-sound-credits summary {
+  cursor: pointer;
+  padding: 4px 2px;
+}
+
+.ambient-sound-credits ul {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ambient-sound-credits li {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.ambient-sound-credits p {
+  margin: 6px 0 0;
+}
+
+.ambient-sound-link {
+  padding: 0;
+  border: none;
+  color: var(--blue);
+  background: transparent;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 与 apple-hig.css 保持同一断点：≤1100px 时侧边栏收成 72px 图标栏，入口只保留图标。 */
+@media (max-width: 1100px) {
+  .ambient-sound-trigger {
+    justify-content: center;
+    padding: 6px;
+  }
+
+  .ambient-sound-trigger-copy {
+    display: none;
+  }
+
+  .ambient-sound-live {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+  }
+}
+
+/* 超窄预览下侧边栏变为顶栏。 */
+@media (max-width: 680px) {
+  .ambient-sound-entry {
+    padding-top: 8px;
+  }
+
+  .ambient-sound-trigger {
+    min-height: 40px;
+  }
+
+  .ambient-sound-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-sound-live,
+  .ambient-sound-panel {
+    animation: none;
+  }
+}

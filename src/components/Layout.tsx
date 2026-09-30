@@ -2,6 +2,7 @@ import { useEffect, useRef, type MouseEvent, type PropsWithChildren } from 'reac
 import { BookOpenCheck } from 'lucide-react';
 import type { PageMeta } from '../navigation';
 import type { AppPage } from '../types/navigation';
+import AmbientSoundControl from './AmbientSoundControl';
 
 type LayoutProps = PropsWithChildren<{
   activePage: AppPage;
@@ -88,6 +89,8 @@ export default function Layout({
             {secondaryPages.map(renderNavButton)}
           </div>
         </nav>
+
+        <AmbientSoundControl />
       </aside>
 
       <main className="main-panel" id="main-content" ref={mainContentRef} tabIndex={-1}>

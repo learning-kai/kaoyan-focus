@@ -6,6 +6,7 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ### Added
 
+- Added a 白噪音 ambient sound mixer, opened from the bottom of the sidebar: 14 bundled loops (rain, storm, waves, wind, stream, birds, summer night, train, city, boat, coffee shop, fireplace, pink noise, white noise), any number playing at once with per-sound and master volume, a master pause switch, fade in/out, and playback that survives page switches and minimising to the tray. The mix is restored on restart but stays paused until turned on. Sounds ship in `public/sounds/ambient/` (~24 MB), with attribution in `NOTICE.md` and in the panel. Covered by `npm run test:ambient-sound`.
 - Added `miniapp-sync/`, an optional real-time sync channel between the desktop database and a WeChat mini program: a Node relay server (REST + SSE + WebSocket, snapshot + oplog + central conflict arbitration), a dependency-free Python PC agent that scans `kaoyan-focus.sqlite3` and writes whitelisted fields back, and a mini program with 今日 / 清单 / 复盘 / 我的 tabs. The desktop source code is untouched; `settings` and all credential fields are excluded from the sync channel by design.
 - Added `miniapp-sync/agent/doctor.py`, a layered connectivity doctor (DNS → TCP → TLS/cert → HTTPS over three proxy routes → large payload → SSE) that reports which layer failed instead of a bare timeout.
 - Added `miniapp-sync/agent/tunnel-ssh.cmd`, a Windows keep-alive SSH tunnel script, as a fallback when the local network interrupts TLS to the public sync domain.
