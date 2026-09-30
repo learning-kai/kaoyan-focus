@@ -889,4 +889,16 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - chore: release v1.5.0 (cfe0b71)
 - 完成？ (c9c774f)
 
+## v1.5.1 - 2026-09-30
+
+### Desktop
+#### Fixed
+- 修复ai排期 (c66cea2)
+
+#### Changed
+- 悬浮窗能够嵌入mydockfinder (0e28e23)
+- chore: release v1.5.0 (94fb5ce)
+- chore: release v1.5.0 (cfe0b71)
+- 完成？ (c9c774f)
+
 
