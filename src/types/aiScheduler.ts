@@ -131,8 +131,16 @@ export type AiPlanRequest = {
   /** null = 全部分类 */
   category_keys: string[] | null;
   respect_priority: boolean;
-  /** 保留 ai_locked 与手动块 */
+  /**
+   * 旧字段，新前端恒传 true：锁定块与手动块从来都会保留。
+   * 想重排 AI 之前写进日历的安排，用 `replace_ai_blocks`。
+   */
   keep_locked_blocks: boolean;
+  /**
+   * 重新安排已写入日历、但还没开始的 AI 日程（未锁定、未完成），写入时旧块会被替换。
+   * 默认 false：已在日历上的队列条目不再重复排期。
+   */
+  replace_ai_blocks: boolean;
   /** 自然语言补充（≤200 字） */
   extra_instruction: string | null;
   /**
@@ -175,7 +183,9 @@ export type AiPlanWarningCode =
   | 'schema_repaired'
   | 'truncated'
   | 'snapshot_drift'
-  | 'duplicate';
+  | 'duplicate'
+  /** 模型给的时间不可行（撞了三餐 / 已有日程 / 已过去 / 超上限）或漏排，已挪到最近空档 */
+  | 'adjusted';
 
 export type AiPlanWarning = {
   code: AiPlanWarningCode | string;
@@ -200,11 +210,29 @@ export type AiUnscheduledEntry = {
   reason: string;
 };
 
+/** 已经在日历上、因此这次没有重复排期的队列条目。 */
+export type AiAlreadyScheduledEntry = {
+  /** `today_plan_items.id` */
+  item_id: number;
+  title: string;
+  /** 例如「09-30 14:00 已在日历（手动安排）」 */
+  detail: string;
+};
+
 export type AiPlanStats = {
+  /** 学习条目数（拆段只算一条，不含三餐） */
   scheduled_count: number;
   unscheduled_count: number;
+  /** 全部条目总时长（含三餐） */
   total_minutes: number;
+  /** 超出单日学习上限的分钟数 */
   overflow_minutes: number;
+  /** 学习总时长（不含三餐） */
+  study_minutes: number;
+  /** 每日目标 × 可排天数 */
+  target_minutes: number;
+  /** 被本地可行性修复挪动 / 补排的条目数 */
+  adjusted_count: number;
 };
 
 export type AiProposalStatus = 'draft' | 'applied' | 'discarded' | 'expired';
@@ -231,6 +259,12 @@ export type AiPlanProposal = {
   warnings: AiPlanWarning[];
   unscheduled: AiUnscheduledEntry[];
   stats: AiPlanStats;
+  /** 模型（或本地规则）对整份安排的一句话说明；旧草案为 null */
+  summary: string | null;
+  /** 已在日历上、这次没有重复排期的条目 */
+  already_scheduled: AiAlreadyScheduledEntry[];
+  /** 写入时会被替换掉的旧 AI 日程数（勾选「重新安排」时才可能非零） */
+  replaceable_block_count: number;
 };
 
 export type AiSchedulerErrorCode =
@@ -294,4 +328,6 @@ export type AiApplyResult = {
   created_block_ids: number[];
   /** 逐条跳过/降级的具体原因，用于写入后展示「为什么少了这几条」 */
   warnings: AiPlanWarning[];
+  /** 被新安排替换（删除）的旧 AI 日程数 */
+  replaced_count: number;
 };
