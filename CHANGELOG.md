@@ -871,4 +871,12 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 加入白噪音混合功能 (5ca2a13)
 
+## v1.4.1 - 2026-09-30
+
+### Desktop
+#### Changed
+- 加入微休息的功能 (4b3a2f3)
+- chore: release v1.4.0 (0418018)
+- 加入白噪音混合功能 (5ca2a13)
+
 
