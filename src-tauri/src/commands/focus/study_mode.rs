@@ -1028,6 +1028,10 @@ pub fn tick_background_study_mode(app: &AppHandle) -> Result<(), String> {
     let before_marker = current_study_runtime_marker(app).ok().flatten();
     let study_state = advance_study_mode(app, state.inner())?;
     sync_focus_widget_for_state(app, &study_state);
+    // 微休息提示只是提醒，失败不能影响学习模式主链路。
+    if let Err(error) = crate::commands::micro_break::tick_micro_break(app, &study_state) {
+        eprintln!("Micro break cue check failed: {error}");
+    }
     let after_marker = study_runtime_marker(&study_state);
     if before_marker != after_marker {
         let app = app.clone();

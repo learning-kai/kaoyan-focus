@@ -30,6 +30,7 @@ mod commands {
     pub mod feishu;
     pub mod focus;
     pub mod health;
+    pub mod micro_break;
     pub mod monitor;
     pub mod review;
     pub mod schedule;
@@ -540,6 +541,8 @@ pub fn run() {
             commands::focus::update_focus_session_subject,
             commands::focus::list_subjects,
             commands::focus::get_focus_stats_summary,
+            commands::micro_break::get_micro_break_settings,
+            commands::micro_break::save_micro_break_settings,
             commands::settings::get_app_settings,
             commands::settings::get_app_data_location,
             commands::settings::open_app_data_location,

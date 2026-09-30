@@ -5,6 +5,10 @@ import { BellRing, BookOpen, CalendarClock, CheckCircle2, ClipboardList, Coffee,
 import ConfirmDialog from '../components/ConfirmDialog';
 import FocusDurationPicker from '../components/focus/FocusDurationPicker';
 import LearningHub from '../components/focus/LearningHub';
+import MicroBreakPanel from '../components/focus/MicroBreakPanel';
+import { useMicroBreak } from '../hooks/useMicroBreak';
+import { updateMicroBreakSettings } from '../services/microBreakCoordinator';
+import { describeMicroBreak, MICRO_BREAK_METHOD_PRESET } from '../utils/microBreak';
 import ScheduleDrawer from '../components/ScheduleDrawer';
 import TodayPlanDrawer from '../components/TodayPlanDrawer';
 import { completeTodayPlanItem, createTodayPlanItem, deleteTodayPlanItem, getChecklistPageData, reorderTodayPlanItems, updateTodayPlanItem } from '../services/checklistApi';
@@ -282,6 +286,7 @@ export default function FocusPage() {
   const suppressNextReminderRef = useRef(false);
   const activeReminderScopeRef = useRef<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const microBreak = useMicroBreak();
 
   const active = studyState.status === 'active';
   const isCountupActive = active && studyState.timer_kind === 'countup';
@@ -323,9 +328,19 @@ export default function FocusPage() {
   const activeModeMessage = buildActiveModeMessage(studyState, ruleModeLabel);
   const isPrimaryDevice = Boolean(syncDeviceId && primaryOwnerDeviceId === syncDeviceId);
   const primaryStatusLabel = isPrimaryDevice ? '当前为主端' : primaryOwnerDeviceId ? '当前非主端' : '未设置主端';
+  const microBreakCountThisRound =
+    microBreak.lastCue && microBreak.lastCue.studyModeId === studyState.id && microBreak.lastCue.cycleIndex === studyState.cycle_index
+      ? microBreak.lastCue.cueNumber
+      : 0;
+  const microBreakMeta = microBreak.settings.enabled
+    ? microBreakCountThisRound > 0
+      ? '本轮已微休息 ' + microBreakCountThisRound + ' 次'
+      : '随机微休息已开启'
+    : null;
   const quietMeta = [
     activeModeLabel,
     '第 ' + studyState.cycle_index + ' 轮',
+    ...(microBreakMeta ? [microBreakMeta] : []),
     countupUnbounded ? '总时长不限' : '剩余 ' + formatSeconds(studyState.study_remaining_seconds),
     isCountupActive ? '休息 ' + formatDuration(studyState.effective_break_seconds || studyState.break_seconds) : nextBreakLabel(studyState),
     primaryStatusLabel,
@@ -629,6 +644,17 @@ export default function FocusPage() {
     if (rememberFocusDuration) {
       void persistFocusPreference(result.value, rememberFocusDuration);
     }
+  }
+
+  /** 90/20 专注法：90 分钟一轮、每轮之后休息 20 分钟，两轮为一次学习模式。 */
+  function handleApplyMicroBreakMethod() {
+    setTimerKind('pomodoro');
+    handleFocusMinutesChange(MICRO_BREAK_METHOD_PRESET.focus_minutes);
+    setBreakMinutes(MICRO_BREAK_METHOD_PRESET.break_minutes);
+    setLongBreakMinutes(MICRO_BREAK_METHOD_PRESET.long_break_minutes);
+    setStudyMinutes(MICRO_BREAK_METHOD_PRESET.study_minutes);
+    setError(null);
+    setNotice('已套用 90/20 专注法：专注 90 分钟，休息 20 分钟，专注中每 3–5 分钟随机提示闭眼 10 秒。');
   }
 
   function handleRememberFocusDurationChange(remember: boolean) {
@@ -1290,6 +1316,21 @@ export default function FocusPage() {
                     />
                   </label>
                 )}
+                {microBreak.settingsStatus === 'ready' && (
+                  <label
+                    className={'focus-hud-card live-primary-toggle live-rule-toggle' + (microBreak.settings.enabled ? ' is-active' : '')}
+                    title={describeMicroBreak(microBreak.settings)}
+                  >
+                    <span>随机微休息</span>
+                    <input
+                      aria-label="启用随机微休息"
+                      checked={microBreak.settings.enabled}
+                      onChange={(event) => updateMicroBreakSettings({ enabled: event.target.checked })}
+                      role="switch"
+                      type="checkbox"
+                    />
+                  </label>
+                )}
                 {canSwitchKind && (
                   <button aria-label={isCountupActive ? '切换为番茄钟节奏' : '切换为正计时节奏'} className="focus-hud-card focus-command-button" onClick={isCountupActive ? requestSwitchToPomodoro : requestSwitchToCountup} title={isCountupActive ? '切换为番茄钟节奏' : '切换为正计时节奏'} type="button">
                     <span className="focus-hud-icon"><Repeat size={14} /></span>
@@ -1411,6 +1452,7 @@ export default function FocusPage() {
               <input checked={normalWhitelistEnabled} onChange={(event) => setNormalWhitelistEnabled(event.target.checked)} role="switch" type="checkbox" />
             </label>
           )}
+          <MicroBreakPanel onApplyMethodPreset={handleApplyMicroBreakMethod} showMethodPreset={timerKind === 'pomodoro'} />
         </aside>
       </div>
       <div className="dashboard-strip">

@@ -2,6 +2,8 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import AiPlanDrawer from './components/AiPlanDrawer';
 import Layout from './components/Layout';
+import MicroBreakOverlay from './components/focus/MicroBreakOverlay';
+import { useMicroBreakListener } from './hooks/useMicroBreak';
 import UpdateNotification, { type UpdateInfo } from './components/UpdateNotification';
 import { getPageFromKeyboardShortcut, pages } from './navigation';
 import { APP_NAVIGATE_EVENT } from './navigationEvents';
@@ -214,6 +216,7 @@ export default function App() {
   useScheduleReminders();
   useAlarmWatcher(setNextAlarm);
   useEmailReminders(setLastAutoSyncMessage);
+  useMicroBreakListener();
 
   function handleThemeChange(nextTheme: AppTheme) {
     setTheme(nextTheme);
@@ -262,6 +265,7 @@ export default function App() {
       >
         {renderActivePage()}
       </Layout>
+      <MicroBreakOverlay />
       <UpdateNotification
         update={pendingUpdate}
         onDismiss={() => setPendingUpdate(null)}
