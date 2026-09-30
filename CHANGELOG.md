@@ -882,7 +882,11 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 ## v1.5.0 - 2026-09-30
 
 ### Desktop
+#### Fixed
+- 修复ai排期 (c66cea2)
+
 #### Changed
+- chore: release v1.5.0 (cfe0b71)
 - 完成？ (c9c774f)
 
 
