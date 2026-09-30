@@ -23,6 +23,7 @@ const FOCUS_WIDGET_ENABLED_KEY: &str = "focus_widget_enabled";
 const FOCUS_WIDGET_AUTO_FOLLOW_KEY: &str = "focus_widget_auto_follow";
 const FOCUS_WIDGET_REMEMBER_GEOMETRY_KEY: &str = "focus_widget_remember_geometry";
 const FOCUS_WIDGET_ALWAYS_ON_TOP_KEY: &str = "focus_widget_always_on_top";
+const FOCUS_WIDGET_EMBED_IN_MYDOCK_KEY: &str = "focus_widget_embed_in_mydock";
 const FOCUS_WIDGET_X_KEY: &str = "focus_widget_x";
 const FOCUS_WIDGET_Y_KEY: &str = "focus_widget_y";
 const FOCUS_WIDGET_WIDTH_KEY: &str = "focus_widget_width";
@@ -76,6 +77,7 @@ pub struct AppSettings {
     pub focus_widget_auto_follow: bool,
     pub focus_widget_remember_geometry: bool,
     pub focus_widget_always_on_top: bool,
+    pub focus_widget_embed_in_mydock: bool,
     pub focus_widget_x: Option<i64>,
     pub focus_widget_y: Option<i64>,
     pub focus_widget_width: Option<i64>,
@@ -147,6 +149,7 @@ impl Default for AppSettings {
             focus_widget_auto_follow: true,
             focus_widget_remember_geometry: true,
             focus_widget_always_on_top: true,
+            focus_widget_embed_in_mydock: false,
             focus_widget_x: None,
             focus_widget_y: None,
             focus_widget_width: Some(280),
@@ -283,6 +286,11 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             FOCUS_WIDGET_ALWAYS_ON_TOP_KEY,
             defaults.focus_widget_always_on_top,
         )?,
+        focus_widget_embed_in_mydock: get_bool_setting(
+            &connection,
+            FOCUS_WIDGET_EMBED_IN_MYDOCK_KEY,
+            defaults.focus_widget_embed_in_mydock,
+        )?,
         focus_widget_x: get_optional_i64_setting_allow_zero(&connection, FOCUS_WIDGET_X_KEY)?
             .map(|value| value.clamp(-32768, 32768)),
         focus_widget_y: get_optional_i64_setting_allow_zero(&connection, FOCUS_WIDGET_Y_KEY)?
@@ -409,6 +417,7 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         focus_widget_auto_follow: settings.focus_widget_auto_follow,
         focus_widget_remember_geometry: settings.focus_widget_remember_geometry,
         focus_widget_always_on_top: settings.focus_widget_always_on_top,
+        focus_widget_embed_in_mydock: settings.focus_widget_embed_in_mydock,
         focus_widget_x: settings
             .focus_widget_x
             .map(|value| value.clamp(-32768, 32768)),
@@ -595,6 +604,16 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         FOCUS_WIDGET_ALWAYS_ON_TOP_KEY,
         if normalized.focus_widget_always_on_top {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_EMBED_IN_MYDOCK_KEY,
+        if normalized.focus_widget_embed_in_mydock {
             "1"
         } else {
             "0"

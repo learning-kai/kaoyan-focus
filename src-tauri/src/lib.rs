@@ -325,6 +325,16 @@ fn focus_widget_toggle_always_on_top(app: tauri::AppHandle) -> Result<bool, Stri
 }
 
 #[tauri::command]
+fn focus_widget_get_mydock_embed(app: tauri::AppHandle) -> Result<bool, String> {
+    windows::focus_widget::get_mydock_embed(&app)
+}
+
+#[tauri::command]
+fn focus_widget_toggle_mydock_embed(app: tauri::AppHandle) -> Result<bool, String> {
+    windows::focus_widget::toggle_mydock_embed(&app)
+}
+
+#[tauri::command]
 fn focus_widget_peek_from_edge(
     app: tauri::AppHandle,
 ) -> Result<windows::focus_widget::FocusWidgetDockState, String> {
@@ -465,6 +475,8 @@ pub fn run() {
             focus_widget_get_dock_state,
             focus_widget_get_always_on_top,
             focus_widget_toggle_always_on_top,
+            focus_widget_get_mydock_embed,
+            focus_widget_toggle_mydock_embed,
             focus_widget_peek_from_edge,
             focus_widget_collapse_to_edge,
             commands::alarm::list_alarms,

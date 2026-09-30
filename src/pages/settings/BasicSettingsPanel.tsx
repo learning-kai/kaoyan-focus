@@ -372,6 +372,21 @@ export function BasicSettingsPanel({
                   </button>
                 </div>
               </div>
+
+              <div className="setting-row mode-setting">
+                <div>
+                  <strong>嵌入 MyDockFinder</strong>
+                  <p>将悬浮窗作为监控组件嵌入到 MyDockFinder 的任务栏中。需要 MyDockFinder 正在运行。</p>
+                </div>
+                <div className="segmented-control">
+                  <button className={settings.focus_widget_embed_in_mydock ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_embed_in_mydock: true })} type="button">
+                    开启
+                  </button>
+                  <button className={!settings.focus_widget_embed_in_mydock ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_embed_in_mydock: false })} type="button">
+                    关闭
+                  </button>
+                </div>
+              </div>
             </div>
           </>
         )}

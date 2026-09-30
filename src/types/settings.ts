@@ -28,6 +28,7 @@ export type AppSettings = {
   focus_widget_auto_follow: boolean;
   focus_widget_remember_geometry: boolean;
   focus_widget_always_on_top: boolean;
+  focus_widget_embed_in_mydock: boolean;
   focus_widget_x: number | null;
   focus_widget_y: number | null;
   focus_widget_width: number | null;

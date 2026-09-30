@@ -18,10 +18,10 @@ use windows::Win32::{
         RGN_ERROR, RGN_OR,
     },
     UI::WindowsAndMessaging::{
-        CallWindowProcW, GetClientRect, GetCursorPos, GetWindowLongPtrW, GetWindowRect,
-        IsWindowVisible, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, GWL_STYLE, GWL_WNDPROC,
+        CallWindowProcW, FindWindowW, GetClientRect, GetCursorPos, GetWindowLongPtrW, GetWindowRect,
+        IsWindowVisible, SetParent, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, GWL_STYLE, GWL_WNDPROC,
         MA_NOACTIVATE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-        WM_MOUSEACTIVATE, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCPAINT, WNDPROC, WS_CAPTION,
+        WM_MOUSEACTIVATE, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCPAINT, WNDPROC, WS_CAPTION, WS_CHILD,
         WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_NOACTIVATE, WS_EX_STATICEDGE,
         WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU,
         WS_THICKFRAME,
@@ -292,6 +292,22 @@ impl FocusWidget {
         Ok(settings.focus_widget_always_on_top)
     }
 
+    pub fn mydock_embed(&self) -> Result<bool, String> {
+        Ok(get_app_settings(self.app.clone())?.focus_widget_embed_in_mydock)
+    }
+
+    pub fn toggle_mydock_embed(&self) -> Result<bool, String> {
+        let mut settings = get_app_settings(self.app.clone())?;
+        settings.focus_widget_embed_in_mydock = !settings.focus_widget_embed_in_mydock;
+        let settings = save_app_settings(self.app.clone(), settings)?;
+
+        if let Some(window) = self.window() {
+            apply_mydock_embed(&window, settings.focus_widget_embed_in_mydock)?;
+        }
+
+        Ok(settings.focus_widget_embed_in_mydock)
+    }
+
     pub fn bring_to_main(&self) -> Result<(), String> {
         mark_manual_hidden_for_current_study_mode(&self.app);
 
@@ -358,6 +374,14 @@ pub fn toggle_always_on_top(app: &AppHandle) -> Result<bool, String> {
     focus_widget(app).toggle_always_on_top()
 }
 
+pub fn get_mydock_embed(app: &AppHandle) -> Result<bool, String> {
+    focus_widget(app).mydock_embed()
+}
+
+pub fn toggle_mydock_embed(app: &AppHandle) -> Result<bool, String> {
+    focus_widget(app).toggle_mydock_embed()
+}
+
 pub fn bring_to_main(app: &AppHandle) -> Result<(), String> {
     focus_widget(app).bring_to_main()
 }
@@ -382,7 +406,81 @@ pub fn apply_current_settings(app: &AppHandle) -> Result<(), String> {
     let settings = get_app_settings(app.clone())?;
     if let Some(window) = focus_widget(app).window() {
         configure_focus_widget_window(&window, &settings)?;
+        apply_mydock_embed(&window, settings.focus_widget_embed_in_mydock)?;
     }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn apply_mydock_embed(window: &WebviewWindow, embed: bool) -> Result<(), String> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    unsafe {
+        let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0 as _);
+
+        if embed {
+            // 查找 MyFinder 窗口
+            let class_name: Vec<u16> = OsStr::new("MyFinderClass")
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
+            let myfinder_hwnd = FindWindowW(
+                windows::core::PCWSTR(class_name.as_ptr()),
+                windows::core::PCWSTR::null()
+            );
+
+            if myfinder_hwnd.is_err() {
+                return Err("未找到 MyFinder 窗口".to_string());
+            }
+
+            let myfinder_hwnd = myfinder_hwnd.unwrap();
+            if myfinder_hwnd == HWND(std::ptr::null_mut()) {
+                return Err("未找到 MyFinder 窗口".to_string());
+            }
+
+            let parent_hwnd = myfinder_hwnd;
+
+            // 设置为子窗口
+            let _ = SetParent(hwnd, Some(parent_hwnd));
+
+            // 修改窗口样式为子窗口
+            let mut style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+            style |= WS_CHILD.0;
+            style &= !WS_CAPTION.0;
+            SetWindowLongPtrW(hwnd, GWL_STYLE, style as isize);
+
+            // 刷新窗口
+            SetWindowPos(
+                hwnd,
+                Some(HWND::default()),
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED
+            ).map_err(|e| e.to_string())?;
+        } else {
+            // 取消嵌入，恢复为独立窗口
+            let _ = SetParent(hwnd, None);
+
+            // 恢复窗口样式
+            let mut style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+            style &= !WS_CHILD.0;
+            SetWindowLongPtrW(hwnd, GWL_STYLE, style as isize);
+
+            // 刷新窗口
+            SetWindowPos(
+                hwnd,
+                Some(HWND::default()),
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn apply_mydock_embed(_window: &WebviewWindow, _embed: bool) -> Result<(), String> {
     Ok(())
 }
 
