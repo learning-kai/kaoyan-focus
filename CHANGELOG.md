@@ -908,4 +908,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 重构悬浮窗 (6acbd88)
 
+## v1.6.3 - 2026-10-01
+
+### Desktop
+#### Changed
+- 优化动画 (2928e5c)
+
 
