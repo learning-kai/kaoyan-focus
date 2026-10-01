@@ -9,6 +9,7 @@ import {
   getFocusWidgetDockState,
   hideFocusWidget,
   listenFocusWidgetDockState,
+  listenFocusWidgetStudyState,
   peekFocusWidgetFromEdge,
   returnFocusWidgetToMain,
   toggleFocusWidgetAlwaysOnTop,
@@ -22,7 +23,8 @@ import { isTauriRuntime } from '../services/tauriInvoke';
 import type { StudyModePhase, StudyModeState, Subject } from '../types/focus';
 import './FocusWidgetPage.css';
 
-const REMAINING_REFRESH_MS = 1000;
+const BACKEND_REFRESH_MS = 2500;
+const CLOCK_TICK_MS = 1000;
 const TITLE = '专注悬浮窗';
 const HOVER_EXPAND_DELAY_MS = 60;
 const HOVER_COLLAPSE_DELAY_MS = 160;
@@ -134,6 +136,7 @@ export default function FocusWidgetPage() {
 
     let cancelled = false;
     let unlistenStudyState: (() => void) | undefined;
+    let unlistenStudySync: (() => void) | undefined;
 
     async function refreshStudyState() {
       try {
@@ -150,15 +153,30 @@ export default function FocusWidgetPage() {
     }
 
     void refreshStudyState();
+    // The native event covers user actions and phase changes. This slower
+    // refresh is only a recovery path for sleep/wake and older runtimes.
     const timerId = window.setInterval(() => {
       void refreshStudyState();
-    }, REMAINING_REFRESH_MS);
+    }, BACKEND_REFRESH_MS);
+
+    void listenFocusWidgetStudyState((nextState) => {
+      if (!cancelled) {
+        setStudyState(nextState);
+        setError(null);
+      }
+    })
+      .then((dispose) => {
+        unlistenStudyState = dispose;
+      })
+      .catch(() => {
+        // Older builds may not expose the widget state event.
+      });
 
     void listenTauriEvent(STUDY_SYNC_STATE_CHANGED_EVENT, () => {
       void refreshStudyState();
     })
       .then((dispose) => {
-        unlistenStudyState = dispose;
+        unlistenStudySync = dispose;
       })
       .catch(() => {
         // Older builds may not expose the sync event.
@@ -168,6 +186,7 @@ export default function FocusWidgetPage() {
       cancelled = true;
       window.clearInterval(timerId);
       unlistenStudyState?.();
+      unlistenStudySync?.();
     };
   }, [canInteract]);
 
@@ -259,13 +278,6 @@ export default function FocusWidgetPage() {
   const countupActive = studyState.status === 'active' && studyState.timer_kind === 'countup';
   const countupFocus = countupActive && studyState.phase === 'focus';
   const unlimited = countupActive && studyState.planned_seconds <= 0;
-  const remainingSeconds = countupFocus
-    ? studyState.phase_elapsed_seconds
-    : studyState.phase_remaining_seconds;
-  const timeWord = studyState.phase === 'idle' || studyState.phase === 'finished' || studyState.phase === 'emergency_exited' ? '时长' : (countupFocus ? '已专注' : '剩余');
-  const progressPercent = studyState.planned_seconds > 0
-    ? Math.max(0, Math.min(100, Math.round((studyState.study_elapsed_seconds / studyState.planned_seconds) * 100)))
-    : 0;
   const subjectName = useMemo(() => {
     if (studyState.subject_id == null) {
       return '未指定科目';
@@ -280,8 +292,6 @@ export default function FocusWidgetPage() {
   const collapsedStage = countupFocus ? '正计时' : collapsedPhaseLabel[studyState.phase];
   const roundLabel = `第 ${Math.max(studyState.cycle_index, 1)} 轮`;
   const combinedLabel = `${subjectName} / ${roundLabel}`;
-  const progressLabel = unlimited ? '不限' : `${progressPercent}%`;
-  const elapsedLabel = formatCompactDuration(studyState.study_elapsed_seconds);
 
   const returnToMain = useCallback(async () => {
     if (!canInteract) return;
@@ -555,7 +565,7 @@ export default function FocusWidgetPage() {
     return (
       <section
         ref={shellRef}
-        aria-label={`${stageLabel}，${timeWord} ${formatWidgetSeconds(remainingSeconds)}，${combinedLabel}`}
+        aria-label={`${stageLabel}，${combinedLabel}`}
         className={`focus-widget-shell is-collapsed edge-${edge}`}
         onMouseEnter={() => void handleCollapsedMouseEnter()}
         onMouseLeave={handleCollapsedMouseLeave}
@@ -568,7 +578,7 @@ export default function FocusWidgetPage() {
           type="button"
         >
           <span className="focus-widget-dot" />
-          <strong>{formatCollapsedSeconds(remainingSeconds, edge)}</strong>
+          <LiveCollapsedTime studyState={studyState} edge={edge} />
           <span>{collapsedStage}</span>
         </button>
       </section>
@@ -667,25 +677,12 @@ export default function FocusWidgetPage() {
           </div>
         </header>
 
-        <strong className="focus-widget-time">{formatWidgetSeconds(remainingSeconds)}</strong>
-
-        <p className="focus-widget-subject">{combinedLabel}</p>
-
-        <div className="focus-widget-progress" aria-label={`总进度 ${progressLabel}`}>
-          <div className="focus-widget-meta-row" aria-hidden="true">
-            <span>已进行 {elapsedLabel}</span>
-            <span>{unlimited ? '正计时' : roundLabel}</span>
-          </div>
-          <div className="focus-widget-progress-row">
-            <span>{unlimited ? '本轮时长' : '总进度'}</span>
-            <strong>{unlimited ? '不限' : progressLabel}</strong>
-          </div>
-          {!unlimited && (
-            <div className="focus-widget-bar" aria-hidden="true">
-              <div className="focus-widget-bar-fill" style={{ width: `${progressPercent}%` }} />
-            </div>
-          )}
-        </div>
+        <LiveWidgetReadout
+          studyState={studyState}
+          combinedLabel={combinedLabel}
+          roundLabel={roundLabel}
+          unlimited={unlimited}
+        />
 
         {error && (
           <p className="focus-widget-error" aria-live="polite">
@@ -694,6 +691,86 @@ export default function FocusWidgetPage() {
         )}
       </div>
     </section>
+  );
+}
+
+type LiveMetrics = {
+  seconds: number;
+  studyElapsed: number;
+  progressPercent: number;
+};
+
+function useLiveMetrics(studyState: StudyModeState): LiveMetrics {
+  const syncedAtRef = useRef(Date.now());
+  const [, setClockTick] = useState(0);
+
+  useEffect(() => {
+    syncedAtRef.current = Date.now();
+  }, [studyState]);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => setClockTick((tick) => tick + 1), CLOCK_TICK_MS);
+    return () => window.clearInterval(timerId);
+  }, []);
+
+  const liveDelta = studyState.status === 'active' && !studyState.is_paused
+    ? Math.max(0, Math.floor((Date.now() - syncedAtRef.current) / 1000))
+    : 0;
+  const phaseElapsed = studyState.phase_elapsed_seconds + liveDelta;
+  const studyElapsed = studyState.study_elapsed_seconds
+    + (['focus', 'awaiting_break'].includes(studyState.phase) ? liveDelta : 0);
+  const countupFocus = studyState.status === 'active'
+    && studyState.timer_kind === 'countup'
+    && studyState.phase === 'focus';
+  const seconds = countupFocus
+    ? phaseElapsed
+    : Math.max(0, studyState.phase_remaining_seconds - liveDelta);
+  const progressPercent = studyState.planned_seconds > 0
+    ? Math.max(0, Math.min(100, Math.round((studyElapsed / studyState.planned_seconds) * 100)))
+    : 0;
+
+  return { seconds, studyElapsed, progressPercent };
+}
+
+function LiveCollapsedTime({ studyState, edge }: { studyState: StudyModeState; edge: FocusWidgetDockEdge }) {
+  const { seconds } = useLiveMetrics(studyState);
+  return <strong>{formatCollapsedSeconds(seconds, edge)}</strong>;
+}
+
+function LiveWidgetReadout({
+  studyState,
+  combinedLabel,
+  roundLabel,
+  unlimited,
+}: {
+  studyState: StudyModeState;
+  combinedLabel: string;
+  roundLabel: string;
+  unlimited: boolean;
+}) {
+  const { seconds, studyElapsed, progressPercent } = useLiveMetrics(studyState);
+  const progressLabel = unlimited ? '不限' : `${progressPercent}%`;
+
+  return (
+    <>
+      <strong className="focus-widget-time">{formatWidgetSeconds(seconds)}</strong>
+      <p className="focus-widget-subject">{combinedLabel}</p>
+      <div className="focus-widget-progress" aria-label={`总进度 ${progressLabel}`}>
+        <div className="focus-widget-meta-row" aria-hidden="true">
+          <span>已进行 {formatCompactDuration(studyElapsed)}</span>
+          <span>{unlimited ? '正计时' : roundLabel}</span>
+        </div>
+        <div className="focus-widget-progress-row">
+          <span>{unlimited ? '本轮时长' : '总进度'}</span>
+          <strong>{progressLabel}</strong>
+        </div>
+        {!unlimited && (
+          <div className="focus-widget-bar" aria-hidden="true">
+            <div className="focus-widget-bar-fill" style={{ width: `${progressPercent}%` }} />
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 

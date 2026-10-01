@@ -1,5 +1,6 @@
 import { invokeCommand } from './tauriInvoke';
 import { listenTauriEvent } from './tauriEvents';
+import type { StudyModeState } from '../types/focus';
 
 export type FocusWidgetDockMode = 'floating' | 'collapsed' | 'peek';
 export type FocusWidgetDockEdge = 'left' | 'right' | 'top' | 'bottom';
@@ -11,6 +12,7 @@ export type FocusWidgetDockState = {
 
 export const FOCUS_WIDGET_DOCK_STATE_CHANGED_EVENT = 'focus-widget-dock-state-changed';
 export const FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT = 'focus-widget-collapse-requested';
+export const FOCUS_WIDGET_STUDY_STATE_EVENT = 'focus-widget-study-state';
 
 export const defaultFocusWidgetDockState: FocusWidgetDockState = {
   mode: 'floating',
@@ -49,6 +51,17 @@ export function listenFocusWidgetDockState(
   callback: (state: FocusWidgetDockState) => void,
 ): Promise<() => void> {
   return listenTauriEvent<FocusWidgetDockState>(FOCUS_WIDGET_DOCK_STATE_CHANGED_EVENT, (event) => {
+    callback(event.payload);
+  });
+}
+
+export function listenFocusWidgetStudyState(
+  callback: (state: StudyModeState) => void,
+): Promise<() => void> {
+  return listenTauriEvent<StudyModeState>(FOCUS_WIDGET_STUDY_STATE_EVENT, (event) => {
+    // Startup visibility emits a small snapshot on older builds. Ignore it and
+    // keep the full state fetched by the widget as the source of truth.
+    if (typeof event.payload?.phase_remaining_seconds !== 'number') return;
     callback(event.payload);
   });
 }
