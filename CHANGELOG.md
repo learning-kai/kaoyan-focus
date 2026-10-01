@@ -920,4 +920,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 再次尝试嵌入 (527bb1a)
 
+## v1.6.5 - 2026-10-01
+
+### Desktop
+#### Fixed
+- fix中间位置 (1cd8f59)
+
 
