@@ -914,4 +914,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 优化动画 (2928e5c)
 
+## v1.6.4 - 2026-10-01
+
+### Desktop
+#### Changed
+- 再次尝试嵌入 (527bb1a)
+
 
