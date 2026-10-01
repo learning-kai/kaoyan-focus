@@ -85,6 +85,8 @@
   transform: translateZ(0);
   opacity: 1;
   -webkit-app-region: no-drag;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .focus-widget-panel::before {
@@ -170,6 +172,8 @@
   gap: 5px;
   min-height: 22px;
   -webkit-app-region: drag;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .focus-widget-stage {

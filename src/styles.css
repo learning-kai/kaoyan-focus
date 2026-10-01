@@ -2212,6 +2212,27 @@ html[data-study-fullscreen='true'] body {
 
 .metric-card.large {
   min-height: 128px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 128, 0.3) transparent;
+}
+
+.metric-card.large::-webkit-scrollbar {
+  width: 6px;
+}
+
+.metric-card.large::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.metric-card.large::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 128, 0.3);
+  border-radius: 999px;
+}
+
+.metric-card.large::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 128, 0.5);
 }
 
 .metric-card.danger,
@@ -3112,6 +3133,27 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   display: grid;
   gap: 8px;
   margin-top: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 128, 0.3) transparent;
+}
+
+.details-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.details-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.details-card::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 128, 0.3);
+  border-radius: 999px;
+}
+
+.details-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 128, 0.5);
 }
 
 .details-card.stacked {

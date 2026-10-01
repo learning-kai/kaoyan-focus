@@ -197,6 +197,35 @@ button {
 .core-fact,
 .details-card {
   min-height: 86px;
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 128, 0.3) transparent;
+}
+
+.metric-card::-webkit-scrollbar,
+.core-fact::-webkit-scrollbar,
+.details-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.metric-card::-webkit-scrollbar-track,
+.core-fact::-webkit-scrollbar-track,
+.details-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.metric-card::-webkit-scrollbar-thumb,
+.core-fact::-webkit-scrollbar-thumb,
+.details-card::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 128, 0.3);
+  border-radius: 999px;
+}
+
+.metric-card::-webkit-scrollbar-thumb:hover,
+.core-fact::-webkit-scrollbar-thumb:hover,
+.details-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 128, 0.5);
 }
 
 .metric-card strong,
