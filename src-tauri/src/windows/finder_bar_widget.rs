@@ -12,6 +12,7 @@ use crate::commands::{
 };
 
 pub const FINDER_BAR_WIDGET_LABEL: &str = "finder-bar-widget";
+const FINDER_BAR_HOST_CLASS: &str = "MyFinderAppDesktopBg";
 const FINDER_BAR_CLASS: &str = "MyFinderApp";
 const MODULE_WIDTH: i32 = 184;
 const MODULE_HEIGHT: i32 = 28;
@@ -22,7 +23,7 @@ use windows::{
     Win32::{
         Foundation::{HWND, RECT},
         UI::WindowsAndMessaging::{
-            FindWindowW, GetClientRect, GetWindowLongPtrW, SetParent, SetWindowLongPtrW,
+            FindWindowExW, GetClientRect, GetWindowLongPtrW, SetParent, SetWindowLongPtrW,
             SetWindowPos, GWL_EXSTYLE, GWL_STYLE, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW,
             WS_CHILD, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
         },
@@ -143,11 +144,25 @@ pub fn sync_visibility_with_active_status(
 
 #[cfg(windows)]
 fn finder_bar_hwnd() -> Option<HWND> {
-    let class_name: Vec<u16> = FINDER_BAR_CLASS
+    let host_class: Vec<u16> = FINDER_BAR_HOST_CLASS
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
-    let hwnd = unsafe { FindWindowW(PCWSTR(class_name.as_ptr()), PCWSTR::null()) }.ok()?;
+    let finder_class: Vec<u16> = FINDER_BAR_CLASS
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let host =
+        unsafe { FindWindowExW(None, None, PCWSTR(host_class.as_ptr()), PCWSTR::null()) }.ok()?;
+    let hwnd = unsafe {
+        FindWindowExW(
+            Some(host),
+            None,
+            PCWSTR(finder_class.as_ptr()),
+            PCWSTR::null(),
+        )
+    }
+    .ok()?;
     if hwnd.0.is_null() {
         None
     } else {
@@ -183,7 +198,9 @@ fn embed_window(window: &WebviewWindow) -> Result<(), String> {
             SetParent(child, Some(parent)).map_err(|error| error.to_string())?;
             let mut rect = RECT::default();
             GetClientRect(parent, &mut rect).map_err(|error| error.to_string())?;
-            let x = (rect.right - MODULE_WIDTH - 8).max(0);
+            // Finder Bar spans the display width; keep the custom module centered
+            // in its client area instead of stacking it against the right edge.
+            let x = ((rect.right - rect.left - MODULE_WIDTH) / 2).max(0);
             SetWindowPos(
                 child,
                 None,
