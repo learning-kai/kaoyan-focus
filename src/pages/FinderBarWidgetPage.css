@@ -1,0 +1,7 @@
+.finder-bar-widget { box-sizing: border-box; display: flex; align-items: center; gap: 7px; width: 184px; height: 28px; padding: 0 9px; overflow: hidden; color: rgba(255,255,255,.92); background: rgba(25,28,34,.78); border: 1px solid rgba(255,255,255,.18); border-radius: 7px; font: 600 11px/1 system-ui, sans-serif; backdrop-filter: blur(12px); }
+.finder-bar-widget-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: rgba(255,255,255,.44); }
+.finder-bar-widget-dot.is-active { background: #67d69a; box-shadow: 0 0 0 3px rgba(103,214,154,.16); }
+.finder-bar-widget-label { color: rgba(255,255,255,.62); }
+.finder-bar-widget strong { margin-left: auto; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.finder-bar-widget-progress { width: 26px; height: 3px; overflow: hidden; border-radius: 2px; background: rgba(255,255,255,.18); }
+.finder-bar-widget-progress i { display: block; height: 100%; background: #75a9ff; border-radius: inherit; transition: width 300ms linear; }

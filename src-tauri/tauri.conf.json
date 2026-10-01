@@ -36,6 +36,26 @@
         "focus": false,
         "focusable": false,
         "shadow": false
+      },
+      {
+        "label": "finder-bar-widget",
+        "title": "",
+        "url": "/?windowLabel=finder-bar-widget",
+        "width": 184,
+        "height": 28,
+        "minWidth": 184,
+        "minHeight": 28,
+        "maxWidth": 184,
+        "maxHeight": 28,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "focusable": false,
+        "shadow": false
       }
     ],
     "security": {

@@ -345,6 +345,17 @@ export function BasicSettingsPanel({
 
               <div className="setting-row mode-setting">
                 <div>
+                  <strong>显示位置</strong>
+                  <p>悬浮窗模式保留完整控制面板；Finder Bar 模式只在 MyDockFinder 状态栏显示轻量倒计时。</p>
+                </div>
+                <div className="segmented-control">
+                  <button className={settings.focus_widget_mode === 'floating' ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_mode: 'floating' })} type="button">悬浮窗</button>
+                  <button className={settings.focus_widget_mode === 'finder_bar' ? 'active' : ''} disabled={settingsLocked || !settings.focus_widget_enabled} onClick={() => updateSettings({ focus_widget_mode: 'finder_bar' })} type="button">Finder Bar</button>
+                </div>
+              </div>
+
+              <div className="setting-row mode-setting">
+                <div>
                   <strong>记住悬浮窗位置</strong>
                   <p>拖动或调整悬浮窗后保存位置和尺寸，下次显示时恢复到同一位置。</p>
                 </div>

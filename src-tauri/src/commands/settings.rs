@@ -20,6 +20,7 @@ const SHOW_FOREGROUND_RULE_TOGGLE_KEY: &str = "show_foreground_rule_toggle";
 const SCHEDULE_REMINDER_ENABLED_KEY: &str = "schedule_reminder_enabled";
 const SCHEDULE_REMINDER_LEAD_MINUTES_KEY: &str = "schedule_reminder_lead_minutes";
 const FOCUS_WIDGET_ENABLED_KEY: &str = "focus_widget_enabled";
+const FOCUS_WIDGET_MODE_KEY: &str = "focus_widget_mode";
 const FOCUS_WIDGET_AUTO_FOLLOW_KEY: &str = "focus_widget_auto_follow";
 const FOCUS_WIDGET_REMEMBER_GEOMETRY_KEY: &str = "focus_widget_remember_geometry";
 const FOCUS_WIDGET_ALWAYS_ON_TOP_KEY: &str = "focus_widget_always_on_top";
@@ -73,6 +74,8 @@ pub struct AppSettings {
     pub schedule_reminder_enabled: bool,
     pub schedule_reminder_lead_minutes: i64,
     pub focus_widget_enabled: bool,
+    #[serde(default = "default_focus_widget_mode")]
+    pub focus_widget_mode: String,
     pub focus_widget_auto_follow: bool,
     pub focus_widget_remember_geometry: bool,
     pub focus_widget_always_on_top: bool,
@@ -124,6 +127,10 @@ fn default_remember_focus_duration() -> bool {
     true
 }
 
+fn default_focus_widget_mode() -> String {
+    "floating".to_string()
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -144,6 +151,7 @@ impl Default for AppSettings {
             schedule_reminder_enabled: true,
             schedule_reminder_lead_minutes: 5,
             focus_widget_enabled: false,
+            focus_widget_mode: default_focus_widget_mode(),
             focus_widget_auto_follow: true,
             focus_widget_remember_geometry: true,
             focus_widget_always_on_top: true,
@@ -268,6 +276,11 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             FOCUS_WIDGET_ENABLED_KEY,
             defaults.focus_widget_enabled,
         )?,
+        focus_widget_mode: normalize_focus_widget_mode(&get_string_setting(
+            &connection,
+            FOCUS_WIDGET_MODE_KEY,
+            &defaults.focus_widget_mode,
+        )?),
         focus_widget_auto_follow: get_bool_setting(
             &connection,
             FOCUS_WIDGET_AUTO_FOLLOW_KEY,
@@ -406,6 +419,7 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         schedule_reminder_enabled: settings.schedule_reminder_enabled,
         schedule_reminder_lead_minutes: settings.schedule_reminder_lead_minutes.clamp(0, 60),
         focus_widget_enabled: settings.focus_widget_enabled,
+        focus_widget_mode: normalize_focus_widget_mode(&settings.focus_widget_mode),
         focus_widget_auto_follow: settings.focus_widget_auto_follow,
         focus_widget_remember_geometry: settings.focus_widget_remember_geometry,
         focus_widget_always_on_top: settings.focus_widget_always_on_top,
@@ -569,6 +583,12 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         } else {
             "0"
         },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        FOCUS_WIDGET_MODE_KEY,
+        &normalized.focus_widget_mode,
         &now,
     )?;
     set_setting(
@@ -749,6 +769,7 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
     )?;
     sync_launch_at_startup(&app, normalized.launch_at_startup)?;
     let _ = crate::windows::focus_widget::apply_current_settings(&app);
+    let _ = crate::windows::finder_bar_widget::apply_current_settings(&app);
 
     Ok(normalized)
 }
@@ -1067,6 +1088,14 @@ fn normalize_mode(mode: &str) -> String {
         "strict".to_string()
     } else {
         "normal".to_string()
+    }
+}
+
+fn normalize_focus_widget_mode(mode: &str) -> String {
+    if mode == "finder_bar" {
+        "finder_bar".to_string()
+    } else {
+        "floating".to_string()
     }
 }
 

@@ -370,6 +370,12 @@ pub fn get_dock_state(_app: &AppHandle) -> FocusWidgetDockState {
     current_dock_state()
 }
 
+pub(crate) fn background_study_mode_is_active(app: &AppHandle) -> bool {
+    load_background_study_mode_visibility(app)
+        .map(|snapshot| snapshot.status == "active")
+        .unwrap_or(false)
+}
+
 pub fn peek_from_edge(app: &AppHandle) -> Result<FocusWidgetDockState, String> {
     focus_widget(app).peek_from_edge()
 }
@@ -393,6 +399,10 @@ pub fn restore_on_app_startup(app: &AppHandle) -> Result<(), String> {
 
 pub fn sync_visibility_with_background_study_mode(app: &AppHandle) -> Result<(), String> {
     let settings = get_app_settings(app.clone())?;
+    if settings.focus_widget_mode == "finder_bar" {
+        let snapshot = load_background_study_mode_visibility(app)?;
+        return crate::windows::finder_bar_widget::sync_visibility_with_active_status(app, &settings, snapshot.status == "active");
+    }
     let snapshot = load_background_study_mode_visibility(app)?;
     apply_study_mode_visibility(app, &settings, &snapshot)?;
     emit_focus_widget_study_state(app, &snapshot);
@@ -404,6 +414,9 @@ pub fn sync_visibility_with_study_mode_state(
     study_state: &StudyModeState,
 ) -> Result<(), String> {
     let settings = get_app_settings(app.clone())?;
+    if settings.focus_widget_mode == "finder_bar" {
+        return crate::windows::finder_bar_widget::sync_visibility_with_study_mode_state(app, &settings, study_state);
+    }
     let snapshot = StudyModeVisibilitySnapshot::from(study_state);
     apply_study_mode_visibility(app, &settings, &snapshot)?;
     emit_focus_widget_study_state(app, study_state);

@@ -15,12 +15,21 @@ async function renderCurrentWindow() {
   }
 
   const isFocusWidgetWindow = new URLSearchParams(window.location.search).get('windowLabel') === 'focus-widget';
+  const isFinderBarWidgetWindow = new URLSearchParams(window.location.search).get('windowLabel') === 'finder-bar-widget';
   if (isFocusWidgetWindow) {
     document.documentElement.classList.add('focus-widget-document');
     document.body.classList.add('focus-widget-body');
   }
+  if (isFinderBarWidgetWindow) {
+    document.documentElement.classList.add('focus-widget-document');
+    document.body.classList.add('focus-widget-body');
+  }
 
-  const EntryApp = isFocusWidgetWindow ? (await import('./pages/FocusWidgetPage')).default : (await import('./App')).default;
+  const EntryApp = isFocusWidgetWindow
+    ? (await import('./pages/FocusWidgetPage')).default
+    : isFinderBarWidgetWindow
+      ? (await import('./pages/FinderBarWidgetPage')).default
+      : (await import('./App')).default;
 
   ReactDOM.createRoot(root).render(
     <React.StrictMode>

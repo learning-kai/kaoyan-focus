@@ -4,6 +4,7 @@ export type AppTheme = 'dark' | 'light' | 'mono' | 'dawn' | 'forest' | 'sakura';
 export type SyncBackend = 'webdav' | 'object_storage';
 export type ReminderSoundSource = 'builtin' | 'custom';
 export type ReminderSoundId = 'classic' | 'bright' | 'soft' | 'urgent' | 'short';
+export type FocusWidgetMode = 'floating' | 'finder_bar';
 export type RuntimeHealthStatus = 'ok' | 'healthy' | 'warning' | 'degraded' | 'error' | 'failed' | 'unavailable' | 'unknown';
 
 export type AppSettings = {
@@ -25,6 +26,7 @@ export type AppSettings = {
   schedule_reminder_enabled: boolean;
   schedule_reminder_lead_minutes: number;
   focus_widget_enabled: boolean;
+  focus_widget_mode: FocusWidgetMode;
   focus_widget_auto_follow: boolean;
   focus_widget_remember_geometry: boolean;
   focus_widget_always_on_top: boolean;

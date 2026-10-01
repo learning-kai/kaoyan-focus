@@ -106,6 +106,7 @@ const defaultSettings: AppSettings = {
   schedule_reminder_enabled: true,
   schedule_reminder_lead_minutes: 5,
   focus_widget_enabled: false,
+  focus_widget_mode: 'floating',
   focus_widget_auto_follow: true,
   focus_widget_remember_geometry: true,
   focus_widget_always_on_top: true,
