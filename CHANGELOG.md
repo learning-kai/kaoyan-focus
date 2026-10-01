@@ -902,4 +902,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - chore: release v1.5.0 (cfe0b71)
 - 完成？ (c9c774f)
 
+## v1.6.2 - 2026-10-01
+
+### Desktop
+#### Changed
+- 重构悬浮窗 (6acbd88)
+
 
