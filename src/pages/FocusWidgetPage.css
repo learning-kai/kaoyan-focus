@@ -17,19 +17,20 @@
 }
 
 .focus-widget-shell {
-  --widget-ink: #f4f7fb;
-  --widget-muted: #91a0b2;
-  --widget-dim: #68788b;
-  --widget-line: rgba(175, 196, 220, 0.2);
-  --widget-panel: rgba(15, 23, 34, 0.97);
-  --widget-panel-raised: #1a2737;
-  --widget-accent: #68e0b0;
-  --widget-blue: #7ab8ff;
-  --widget-danger: #ff8f82;
+  --widget-ink: var(--ink, rgba(0, 0, 0, 0.88));
+  --widget-muted: var(--muted, rgba(60, 60, 67, 0.6));
+  --widget-dim: color-mix(in srgb, var(--widget-muted) 78%, transparent);
+  --widget-line: var(--line, rgba(60, 60, 67, 0.16));
+  --widget-panel: color-mix(in srgb, var(--surface-strong, #ffffff) 88%, transparent);
+  --widget-panel-raised: var(--surface-soft, rgba(120, 120, 128, 0.12));
+  --widget-accent: var(--green, #34c759);
+  --widget-blue: var(--blue, #007aff);
+  --widget-danger: var(--red, #ff3b30);
   --widget-radius: 18px;
   --widget-control-ease: cubic-bezier(0.23, 1, 0.32, 1);
   --widget-material-enter: 180ms;
   --widget-material-exit: 160ms;
+  --widget-transition-duration: 220ms;
   box-sizing: border-box;
   display: grid;
   width: 100vw;
@@ -42,9 +43,23 @@
   border: 0 !important;
   border-radius: var(--widget-radius) !important;
   box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   clip-path: inset(0 round var(--widget-radius));
   contain: paint;
   -webkit-app-region: no-drag;
+}
+
+html[data-theme='dark'] .focus-widget-shell {
+  --widget-ink: rgba(255, 255, 255, 0.94);
+  --widget-muted: rgba(235, 235, 245, 0.62);
+  --widget-dim: rgba(235, 235, 245, 0.42);
+  --widget-line: rgba(84, 84, 88, 0.7);
+  --widget-panel: rgba(28, 28, 30, 0.94);
+  --widget-panel-raised: #2c2c2e;
+  --widget-accent: #30d158;
+  --widget-blue: #0a84ff;
+  --widget-danger: #ff453a;
 }
 
 .focus-widget-panel {
@@ -62,6 +77,7 @@
   box-shadow: 0 12px 28px rgba(1, 6, 12, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  transform: translate3d(0, 0, 0);
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: no-drag;
@@ -83,19 +99,19 @@
   .focus-widget-collapsed-tab {
     will-change: transform, opacity;
     transition:
-      opacity var(--widget-material-enter) var(--widget-control-ease),
-      transform var(--widget-material-enter) var(--widget-control-ease);
+      opacity var(--widget-transition-duration) var(--widget-control-ease),
+      transform var(--widget-transition-duration) var(--widget-control-ease);
   }
 
   .focus-widget-shell.is-peek.is-expanding .focus-widget-panel,
   .focus-widget-shell.is-retracting .focus-widget-panel {
     opacity: 0.28;
-    transform: scale(0.986);
+    transform: translate3d(0, 0, 0) scale(0.986);
   }
 
   .focus-widget-shell.is-retracting .focus-widget-panel {
     pointer-events: none;
-    transition-duration: var(--widget-material-exit), var(--widget-material-exit);
+    transition-duration: 200ms, 200ms;
   }
 
   .edge-left .focus-widget-panel { transform-origin: left center; }
