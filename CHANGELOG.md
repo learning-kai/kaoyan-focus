@@ -926,4 +926,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - fix中间位置 (1cd8f59)
 
+## v1.6.6 - 2026-10-10
+
+### Desktop
+#### Fixed
+- fix (c90cd3b)
+
 
