@@ -1124,6 +1124,7 @@ html[data-study-fullscreen='true'] body {
 .inline-fields {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .number-grid,
@@ -3158,6 +3159,7 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 .details-card.stacked {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 /* AI 排期设置里用 <details> 折叠「请求参数与容量」。 */
