@@ -3133,7 +3133,6 @@ html[data-study-fullscreen='true'] .focus-resume-action {
   display: grid;
   gap: 8px;
   margin-top: 12px;
-  max-height: 280px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(120, 120, 128, 0.3) transparent;
