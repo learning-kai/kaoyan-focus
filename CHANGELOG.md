@@ -930,6 +930,6 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 
 ### Desktop
 #### Fixed
-- fix (c90cd3b)
+- fix (3d45383)
 
 
