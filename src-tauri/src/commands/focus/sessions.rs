@@ -167,7 +167,7 @@ pub fn recover_active_focus_session(
             "
             SELECT id, mode, subject_id, planned_seconds, actual_seconds, started_at, ended_at,
                    status, end_reason, interruption_count, emergency_exit_count,
-                   created_at, updated_at
+                   created_at, updated_at, break_reason
             FROM focus_sessions
             WHERE status = 'running'
             ORDER BY id DESC
@@ -220,7 +220,7 @@ pub fn list_focus_sessions(app: AppHandle, limit: Option<i64>) -> Result<Vec<Foc
             "
             SELECT id, mode, subject_id, planned_seconds, actual_seconds, started_at, ended_at,
                    status, end_reason, interruption_count, emergency_exit_count,
-                   created_at, updated_at
+                   created_at, updated_at, break_reason
             FROM focus_sessions
             WHERE status != 'running' AND actual_seconds >= ?1
             ORDER BY id DESC
@@ -265,7 +265,8 @@ pub fn list_focus_sessions_in_range(
             SELECT fs.id, fs.mode, fs.subject_id, fs.planned_seconds, fs.actual_seconds,
                    fs.started_at, fs.ended_at, fs.status, fs.end_reason,
                    fs.interruption_count, fs.emergency_exit_count, fs.created_at, fs.updated_at,
-                   (SELECT sm.paused_at FROM study_modes sm WHERE sm.current_session_id = fs.id LIMIT 1)
+                   (SELECT sm.paused_at FROM study_modes sm WHERE sm.current_session_id = fs.id LIMIT 1),
+                   fs.break_reason
             FROM focus_sessions fs
             WHERE fs.started_at < ?2
               AND (fs.ended_at IS NULL OR fs.ended_at > ?1)

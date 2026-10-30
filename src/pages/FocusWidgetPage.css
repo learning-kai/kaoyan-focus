@@ -310,6 +310,58 @@ html[data-theme='dark'] .focus-widget-shell {
   pointer-events: none;
 }
 
+.focus-widget-reason {
+  position: absolute;
+  top: 28px;
+  right: 8px;
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px;
+  background: var(--widget-panel-raised);
+  border: 1px solid var(--widget-line);
+  border-radius: 10px;
+  box-shadow: 0 6px 16px rgba(1, 6, 12, 0.35);
+  -webkit-app-region: no-drag;
+}
+
+.focus-widget-reason input {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  color: var(--widget-ink);
+  font-size: 10px;
+  background: var(--widget-panel);
+  border: 1px solid var(--widget-line);
+  border-radius: 7px;
+  outline: none;
+}
+
+.focus-widget-reason input::placeholder {
+  color: var(--widget-dim);
+}
+
+.focus-widget-reason button {
+  height: 22px;
+  padding: 0 7px;
+  color: var(--widget-ink);
+  font-size: 10px;
+  font-weight: 650;
+  background: var(--widget-panel);
+  border: 1px solid var(--widget-line);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.focus-widget-reason button[type='submit'] {
+  color: #04150c;
+  background: var(--widget-accent);
+  border-color: transparent;
+}
+
 .focus-widget-shell.is-collapsed {
   --widget-radius: 16px;
   padding: 0;

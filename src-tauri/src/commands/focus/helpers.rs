@@ -1,4 +1,4 @@
-﻿fn study_elapsed_seconds(record: &StudyModeRecord, now: DateTime<Utc>) -> Result<i64, String> {
+fn study_elapsed_seconds(record: &StudyModeRecord, now: DateTime<Utc>) -> Result<i64, String> {
     let current_phase_seconds = match record.phase.as_str() {
         "focus" | "awaiting_break" => phase_elapsed_seconds(record, now)?,
         _ => 0,
@@ -92,7 +92,7 @@ fn get_focus_session_by_id(
             "
             SELECT id, mode, subject_id, planned_seconds, actual_seconds, started_at, ended_at,
                    status, end_reason, interruption_count, emergency_exit_count,
-                   created_at, updated_at
+                   created_at, updated_at, break_reason
             FROM focus_sessions
             WHERE id = ?1
             ",
@@ -171,6 +171,7 @@ fn row_to_study_mode_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<StudyMo
         _today_plan_item_id: row.get(21)?,
         whitelist_enabled: row.get(22)?,
         status: row.get(23)?,
+        break_reason: row.get(25)?,
     })
 }
 
@@ -190,6 +191,7 @@ fn row_to_focus_session(row: &rusqlite::Row<'_>) -> rusqlite::Result<FocusSessio
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
         paused_at: None,
+        break_reason: row.get(13)?,
     })
 }
 
@@ -211,6 +213,7 @@ fn row_to_focus_session_with_paused(row: &rusqlite::Row<'_>) -> rusqlite::Result
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
         paused_at: row.get(13)?,
+        break_reason: row.get(14)?,
     })
 }
 

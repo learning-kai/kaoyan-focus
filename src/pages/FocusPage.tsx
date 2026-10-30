@@ -31,6 +31,7 @@ import type { ScheduleBlock, ScheduleBlockDraft, SchedulePageData } from '../typ
 import type { AppSettings } from '../types/settings';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
 import { clampCountupBreakMinutes, clampFocusMinutes, COUNTUP_BREAK_MINUTES_MAX, COUNTUP_BREAK_MINUTES_MIN, COUNTUP_BREAK_PRESET_MINUTES, COUNTUP_BREAK_RANGE_LABEL, formatFocusDurationLabel, validateFocusMinutes } from '../utils/focusDuration';
+import { BREAK_REASON_MAX_CHARS, normalizeBreakReason } from '../utils/breakReason';
 import { recommendScheduleBlock, type ScheduleRecommendation } from '../utils/scheduleRecommendation';
 
 const studyPresetMinutes = [60, 120, 180, 240];
@@ -83,6 +84,7 @@ const idleStudyState: StudyModeState = {
   long_break_interval: 4,
   effective_break_seconds: 0,
   break_kind: 'short',
+  break_reason: null,
   cycle_index: 0,
   started_at: null,
   phase_started_at: null,
@@ -245,6 +247,9 @@ export default function FocusPage() {
   const [timerKind, setTimerKind] = useState<FocusTimerKind>('pomodoro');
   const [countupBreakMinutes, setCountupBreakMinutes] = useState(5);
   const [manualBreakMinutes, setManualBreakMinutes] = useState(5);
+  /** 休息理由输入草稿；提交后由后端持久化到 study_modes.break_reason。 */
+  const [breakReasonDraft, setBreakReasonDraft] = useState('');
+  const [breakReasonError, setBreakReasonError] = useState<string | null>(null);
   const [switchPlannedMinutes, setSwitchPlannedMinutes] = useState(120);
   const [isSwitchingKind, setIsSwitchingKind] = useState(false);
   const [whitelistMode, setWhitelistMode] = useState<AppSettings['whitelist_mode']>('allowlist');
@@ -343,6 +348,7 @@ export default function FocusPage() {
     ...(microBreakMeta ? [microBreakMeta] : []),
     countupUnbounded ? '总时长不限' : '剩余 ' + formatSeconds(studyState.study_remaining_seconds),
     isCountupActive ? '休息 ' + formatDuration(studyState.effective_break_seconds || studyState.break_seconds) : nextBreakLabel(studyState),
+    ...(isCountupActive && studyState.phase === 'break' && studyState.break_reason ? ['休息理由：' + studyState.break_reason] : []),
     primaryStatusLabel,
     latestAppCheck ? foregroundSummary(latestAppCheck) : studyState.whitelist_enabled ? '前台监控待命' : '前台规则关闭',
   ];
@@ -728,6 +734,8 @@ export default function FocusPage() {
   function openManualBreak() {
     const fallback = countupBreakMinutes || 5;
     setManualBreakMinutes(clampCountupBreakMinutes(fallback));
+    setBreakReasonDraft('');
+    setBreakReasonError(null);
     setPendingConfirm({ kind: 'manualBreak' });
   }
 
@@ -737,13 +745,20 @@ export default function FocusPage() {
       setError(`休息时长需在 ${COUNTUP_BREAK_MINUTES_MIN} 到 ${COUNTUP_BREAK_MINUTES_MAX} 分钟之间。`);
       return;
     }
+    // 理由由后端持久化（study_modes.break_reason），刷新/重启后仍能显示。
+    const reason = normalizeBreakReason(breakReasonDraft);
+    if (!reason.ok) {
+      setBreakReasonError(reason.message);
+      return;
+    }
+    setBreakReasonError(null);
     try {
       setError(null);
       const requestId = beginStudyStateRequest();
-      const nextState = await takeManualBreak(minutes * 60);
+      const nextState = await takeManualBreak(minutes * 60, reason.value);
       if (!applyStudyStateIfCurrent(nextState, requestId)) return;
       setPendingConfirm(null);
-      setNotice('休息 ' + formatDuration(nextState.effective_break_seconds) + ' 已开始，结束后自动开始下一轮正计时。');
+      setNotice('休息 ' + formatDuration(nextState.effective_break_seconds) + ' 已开始（' + reason.value + '），结束后自动开始下一轮正计时。');
       markStudyReminderSeen(nextState, syncDeviceId);
       void notifyStudyReminder({ title: '休息开始', body: '休息 ' + formatDuration(nextState.effective_break_seconds) + '，结束后自动开始下一轮正计时专注。' });
       await refreshDashboard();
@@ -1121,6 +1136,20 @@ export default function FocusPage() {
       open
       title="开始休息？"
     >
+      <label className="field-block">
+        <span>休息理由（必填，最多 {BREAK_REASON_MAX_CHARS} 字）</span>
+        <input
+          className="text-input"
+          maxLength={BREAK_REASON_MAX_CHARS}
+          onChange={(event) => {
+            setBreakReasonDraft(event.target.value);
+            setBreakReasonError(null);
+          }}
+          placeholder="例如：眼睛酸了，起来走一走"
+          value={breakReasonDraft}
+        />
+      </label>
+      {breakReasonError && <p className="alert error" role="alert">{breakReasonError}</p>}
       <div className="segmented-control">
         {breakPresetMinutes.map((value) => (
           <button className={manualBreakMinutes === value ? 'active' : ''} key={'manual-break-' + value} onClick={() => setManualBreakMinutes(value)} type="button">{value} 分钟</button>

@@ -109,6 +109,7 @@ function buildSessionSearchTarget(session: FocusSession, subjectName: string) {
     subjectName,
     getSessionStatusLabel(session.status),
     session.end_reason ?? '',
+    session.break_reason ?? '',
     session.started_at,
     session.ended_at ?? '',
     formatSessionTimeRange(session),
@@ -139,6 +140,7 @@ function buildSessionsCsv(sessions: FocusSession[], subjectNameMap: Map<number, 
     '结束时间',
     '时间段',
     '结束原因',
+    '休息理由',
     '干扰次数',
     '紧急退出次数',
   ];
@@ -156,6 +158,7 @@ function buildSessionsCsv(sessions: FocusSession[], subjectNameMap: Map<number, 
       session.ended_at ?? '',
       formatSessionTimeRange(session),
       session.end_reason ?? '',
+      session.break_reason ?? '',
       String(session.interruption_count),
       String(session.emergency_exit_count),
     ];
@@ -683,6 +686,7 @@ export default function StatsPage() {
                       {formatSessionTimeRange(session)} / {getSessionStatusLabel(session.status)}
                     </p>
                     {session.end_reason && <p>结束原因：{session.end_reason}</p>}
+                    {session.break_reason && <p>休息理由：{session.break_reason}</p>}
                   </div>
                 </div>
                 <div className="record-subject">

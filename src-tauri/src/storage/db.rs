@@ -57,6 +57,7 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               ended_at TEXT,
               status TEXT NOT NULL,
               end_reason TEXT,
+              break_reason TEXT,
               interruption_count INTEGER NOT NULL DEFAULT 0,
               emergency_exit_count INTEGER NOT NULL DEFAULT 0,
               created_at TEXT NOT NULL,
@@ -75,6 +76,7 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
               long_break_interval INTEGER NOT NULL DEFAULT 4,
               whitelist_enabled INTEGER NOT NULL DEFAULT 1,
               phase TEXT NOT NULL,
+              break_reason TEXT,
               cycle_index INTEGER NOT NULL DEFAULT 1,
               started_at TEXT NOT NULL,
               phase_started_at TEXT NOT NULL,
@@ -390,6 +392,7 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "INTEGER NOT NULL DEFAULT 1",
     )?;
     add_column_if_missing(connection, "study_modes", "paused_at", "TEXT")?;
+    add_column_if_missing(connection, "study_modes", "break_reason", "TEXT")?;
     add_column_if_missing(
         connection,
         "study_modes",
@@ -437,6 +440,7 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
         "TEXT",
     )?;
     add_column_if_missing(connection, "focus_sessions", "schedule_block_id", "INTEGER")?;
+    add_column_if_missing(connection, "focus_sessions", "break_reason", "TEXT")?;
     add_column_if_missing(
         connection,
         "focus_sessions",

@@ -162,6 +162,7 @@
                             cycle_index = cycle_index + 1,
                             phase_paused_seconds = 0,
                             paused_stage_elapsed_seconds = 0,
+                            break_reason = NULL,
                             current_session_id = ?2,
                             updated_at = ?4
                         WHERE id = ?3 AND status = 'active'
@@ -310,6 +311,7 @@ fn idle_study_mode_state() -> StudyModeState {
         long_break_interval: 4,
         effective_break_seconds: 0,
         break_kind: "short".to_string(),
+        break_reason: None,
         cycle_index: 0,
         started_at: None,
         phase_started_at: None,
@@ -387,6 +389,7 @@ fn study_mode_record_to_state(
         long_break_interval: record.long_break_interval,
         effective_break_seconds,
         break_kind: break_kind.to_string(),
+        break_reason: record.break_reason.clone(),
         cycle_index: record.cycle_index,
         started_at: Some(record.started_at.clone()),
         phase_started_at: Some(record.phase_started_at.clone()),
@@ -415,7 +418,7 @@ fn get_active_study_mode_record(
                    total_paused_seconds, phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at,
                    current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status,
-                   timer_kind
+                   timer_kind, break_reason
             FROM study_modes
             WHERE status = 'active'
             ORDER BY state_revision DESC, updated_at DESC, id DESC
@@ -440,7 +443,7 @@ fn get_latest_study_mode_record(
                    total_paused_seconds, phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at,
                    current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status,
-                   timer_kind
+                   timer_kind, break_reason
             FROM study_modes
             ORDER BY state_revision DESC, updated_at DESC, id DESC
             LIMIT 1
@@ -465,7 +468,7 @@ fn get_study_mode_record_by_id(
                    total_paused_seconds, phase_paused_seconds, accumulated_study_seconds,
                    paused_stage_elapsed_seconds, ended_at,
                    current_session_id, schedule_block_id, today_plan_item_id, whitelist_enabled, status,
-                   timer_kind
+                   timer_kind, break_reason
             FROM study_modes
             WHERE id = ?1
             ",
@@ -539,6 +542,26 @@ fn finish_running_focus_session(
     now: DateTime<Utc>,
     end_reason: &str,
 ) -> Result<(), String> {
+    finish_running_focus_session_with_reason(
+        connection,
+        session_id,
+        actual_seconds,
+        now,
+        end_reason,
+        None,
+    )
+}
+
+/// 与 `finish_running_focus_session` 相同，但可以额外写入本次休息理由，
+/// 让「手动休息」这条结束原因在专注历史里带上用户写下的说明。
+fn finish_running_focus_session_with_reason(
+    connection: &Connection,
+    session_id: i64,
+    actual_seconds: i64,
+    now: DateTime<Utc>,
+    end_reason: &str,
+    break_reason: Option<&str>,
+) -> Result<(), String> {
     connection
         .execute(
             "
@@ -547,6 +570,7 @@ fn finish_running_focus_session(
                 ended_at = ?2,
                 status = 'finished',
                 end_reason = ?3,
+                break_reason = COALESCE(?5, break_reason),
                 updated_at = ?2
             WHERE id = ?4 AND status = 'running'
             ",
@@ -554,7 +578,8 @@ fn finish_running_focus_session(
                 actual_seconds.max(0),
                 now.to_rfc3339(),
                 end_reason,
-                session_id
+                session_id,
+                break_reason
             ],
         )
         .map_err(|error| error.to_string())?;

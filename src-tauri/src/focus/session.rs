@@ -11,6 +11,8 @@ pub struct FocusSession {
     pub ended_at: Option<String>,
     pub status: String,
     pub end_reason: Option<String>,
+    /// 正计时手动休息时填写的理由；番茄钟或其它结束原因下为 None。
+    pub break_reason: Option<String>,
     pub interruption_count: i64,
     pub emergency_exit_count: i64,
     pub created_at: String,

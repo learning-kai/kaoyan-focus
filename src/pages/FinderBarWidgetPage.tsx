@@ -6,7 +6,7 @@ import './FinderBarWidgetPage.css';
 const idleState: StudyModeState = {
   id: null, phase: 'idle', status: 'idle', mode: 'normal', timer_kind: 'pomodoro', subject_id: null,
   planned_seconds: 0, focus_seconds: 0, break_seconds: 0, long_break_seconds: 0, long_break_interval: 4,
-  effective_break_seconds: 0, break_kind: 'short', cycle_index: 0, started_at: null, phase_started_at: null,
+  effective_break_seconds: 0, break_kind: 'short', break_reason: null, cycle_index: 0, started_at: null, phase_started_at: null,
   paused_at: null, ended_at: null, current_session: null, study_elapsed_seconds: 0, study_remaining_seconds: 0,
   phase_elapsed_seconds: 0, phase_remaining_seconds: 0, focus_enforcement_active: false, whitelist_enabled: true,
   is_paused: false,

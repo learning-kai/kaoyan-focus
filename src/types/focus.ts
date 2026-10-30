@@ -20,6 +20,8 @@ export type FocusSession = {
   updated_at: string;
   /** 进行中且被暂停时记录暂停时刻（RFC3339），否则为 null。前端据此把色带冻结在暂停那一刻。 */
   paused_at: string | null;
+  /** 正计时手动休息时填写的理由，随记录长期留存；其它结束原因下为 null。 */
+  break_reason: string | null;
 };
 
 export type Subject = {
@@ -69,6 +71,8 @@ export type StudyModeState = {
   long_break_interval: number;
   effective_break_seconds: number;
   break_kind: 'short' | 'long';
+  /** 本次休息的理由（正计时手动休息时填写），休息阶段展示；进入下一轮专注后清空。 */
+  break_reason: string | null;
   cycle_index: number;
   started_at: string | null;
   phase_started_at: string | null;

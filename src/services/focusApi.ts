@@ -45,9 +45,10 @@ export function startCountupStudyMode(
   });
 }
 
-export function takeManualBreak(breakSeconds: number): Promise<StudyModeState> {
+export function takeManualBreak(breakSeconds: number, reason: string): Promise<StudyModeState> {
   return invokeCommand<StudyModeState>('take_manual_break', {
     breakSeconds,
+    reason,
   });
 }
 

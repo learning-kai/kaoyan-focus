@@ -1,4 +1,4 @@
-﻿use crate::{
+use crate::{
     focus::{session::FocusSession, subject::Subject},
     storage::db::open_database,
     sync_package::{load_or_create_device_id, mark_entity_deleted},
@@ -76,6 +76,8 @@ pub struct StudyModeState {
     pub long_break_interval: i64,
     pub effective_break_seconds: i64,
     pub break_kind: String,
+    /// 正计时手动休息时用户填写的理由，休息期间展示，并随学习模式记录长期留存。
+    pub break_reason: Option<String>,
     pub cycle_index: i64,
     pub started_at: Option<String>,
     pub phase_started_at: Option<String>,
@@ -129,6 +131,8 @@ struct StudyModeRecord {
     paused_stage_elapsed_seconds: i64,
     ended_at: Option<String>,
     current_session_id: Option<i64>,
+    /// 本次休息的理由（正计时手动休息时填写，进入下一轮专注后清空）。
+    break_reason: Option<String>,
     schedule_block_id: Option<i64>,
     _today_plan_item_id: Option<i64>,
     status: String,

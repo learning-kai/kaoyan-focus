@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftToLine, Coffee, EyeOff, FastForward, Pause, Pin, PinOff, Play } from 'lucide-react';
 import { confirmStudyBreak, getStudyModeState, listSubjects, pauseStudyMode, resumeStudyMode, skipStudyBreak, takeManualBreak } from '../services/focusApi';
+import { BREAK_REASON_MAX_CHARS, normalizeBreakReason } from '../utils/breakReason';
 import {
   collapseFocusWidgetToEdge,
   defaultFocusWidgetDockState,
@@ -46,6 +47,7 @@ const idleState: StudyModeState = {
   long_break_interval: 4,
   effective_break_seconds: 0,
   break_kind: 'short',
+  break_reason: null,
   cycle_index: 0,
   started_at: null,
   phase_started_at: null,
@@ -88,6 +90,9 @@ export default function FocusWidgetPage() {
   const [isExpanding, setIsExpanding] = useState(false);
   const [isRetracting, setIsRetracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 正计时手动休息时，先在小组件里就地填理由。 */
+  const [isBreakReasonPrompting, setBreakReasonPrompting] = useState(false);
+  const [breakReasonDraft, setBreakReasonDraft] = useState('');
   const shellRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const expandTimerRef = useRef<number | null>(null);
@@ -290,6 +295,13 @@ export default function FocusWidgetPage() {
       ? '正计时专注中'
       : phaseLabel[studyState.phase];
   const collapsedStage = countupFocus ? '正计时' : collapsedPhaseLabel[studyState.phase];
+
+  // 休息理由弹层只在正计时专注中有效，阶段一变就收起，避免残留在别的阶段上。
+  useEffect(() => {
+    if (!countupFocus || studyState.is_paused) {
+      setBreakReasonPrompting(false);
+    }
+  }, [countupFocus, studyState.is_paused]);
   const roundLabel = `第 ${Math.max(studyState.cycle_index, 1)} 轮`;
   const combinedLabel = `${subjectName} / ${roundLabel}`;
 
@@ -365,6 +377,18 @@ export default function FocusWidgetPage() {
 
   const handleManualBreak = useCallback(async () => {
     if (!canInteract || studyState.is_paused) return;
+    // 理由先在小组件里就地填，确认后才真的开始休息（理由由后端持久化）。
+    if (!isBreakReasonPrompting) {
+      setBreakReasonDraft('');
+      setError(null);
+      setBreakReasonPrompting(true);
+      return;
+    }
+    const reason = normalizeBreakReason(breakReasonDraft);
+    if (!reason.ok) {
+      setError(reason.message);
+      return;
+    }
     try {
       let minutes = 5;
       try {
@@ -373,12 +397,13 @@ export default function FocusWidgetPage() {
       } catch {
         // Fall back to the default 5 minutes when settings are unavailable.
       }
-      setStudyState(await takeManualBreak(minutes * 60));
+      setStudyState(await takeManualBreak(minutes * 60, reason.value));
+      setBreakReasonPrompting(false);
       setError(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
-  }, [canInteract, studyState.is_paused]);
+  }, [breakReasonDraft, canInteract, isBreakReasonPrompting, studyState.is_paused]);
 
   const peekFromEdge = useCallback(async (interruptRetraction = false) => {
     const startsFromCollapsed = dockModeRef.current === 'collapsed';
@@ -653,6 +678,26 @@ export default function FocusWidgetPage() {
               >
                 <Coffee size={15} />
               </button>
+            )}
+            {isBreakReasonPrompting && (
+              <form
+                className="focus-widget-reason"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleManualBreak();
+                }}
+              >
+                <input
+                  aria-label="休息理由"
+                  autoFocus
+                  maxLength={BREAK_REASON_MAX_CHARS}
+                  onChange={(event) => setBreakReasonDraft(event.target.value)}
+                  placeholder="休息理由（必填）"
+                  value={breakReasonDraft}
+                />
+                <button disabled={!canInteract} title="开始休息" type="submit">休息</button>
+                <button onClick={() => setBreakReasonPrompting(false)} title="取消" type="button">取消</button>
+              </form>
             )}
             <button
               aria-label={`确认开始${studyState.break_kind === 'long' ? '长' : '短'}休息`}

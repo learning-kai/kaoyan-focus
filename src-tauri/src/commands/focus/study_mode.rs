@@ -351,7 +351,8 @@ pub fn skip_study_break(
     connection.execute(
         "UPDATE study_modes SET phase = 'focus', state_revision = state_revision + 1,
          phase_started_at = ?1, cycle_index = cycle_index + 1, phase_paused_seconds = 0,
-         paused_stage_elapsed_seconds = 0, paused_at = NULL, accumulated_study_seconds = ?2,
+         paused_stage_elapsed_seconds = 0, paused_at = NULL, break_reason = NULL,
+         accumulated_study_seconds = ?2,
          current_session_id = ?3, last_control_device_id = ?4, last_control_action = ?5,
          last_control_at = ?6, updated_at = ?1 WHERE id = ?7 AND status = 'active'",
         params![now.to_rfc3339(), next_accumulated, session.id, device_id, CONTROL_SKIP_BREAK,
@@ -727,6 +728,23 @@ pub fn reset_study_mode(
     Ok(next_state)
 }
 
+/// 休息理由在前后端都要校验：必须非空，且不超过 60 字（与前端 maxLength 一致）。
+const BREAK_REASON_MAX_CHARS: usize = 60;
+
+fn normalize_break_reason(reason: Option<String>) -> Result<String, String> {
+    let trimmed = reason.unwrap_or_default().trim().to_string();
+    if trimmed.is_empty() {
+        return Err("休息前请先写一句理由，说明为什么要休息".to_string());
+    }
+    if trimmed.chars().count() > BREAK_REASON_MAX_CHARS {
+        return Err(format!(
+            "休息理由最多 {} 字",
+            BREAK_REASON_MAX_CHARS
+        ));
+    }
+    Ok(trimmed)
+}
+
 fn validate_countup_break_seconds(break_seconds: i64) -> Result<(), String> {
     if !(COUNTUP_BREAK_MIN_SECONDS..=COUNTUP_BREAK_MAX_SECONDS).contains(&break_seconds) {
         return Err(format!(
@@ -817,8 +835,10 @@ pub fn take_manual_break(
     app: AppHandle,
     state: State<'_, AppState>,
     break_seconds: i64,
+    reason: Option<String>,
 ) -> Result<StudyModeState, String> {
     validate_countup_break_seconds(break_seconds)?;
+    let break_reason = normalize_break_reason(reason)?;
     let current_state = advance_study_mode(&app, state.inner())?;
     if current_state.status != "active" {
         sync_focus_widget_for_state(&app, &current_state);
@@ -849,7 +869,14 @@ pub fn take_manual_break(
 
     if let Some(session_id) = record.current_session_id {
         let actual_seconds = focus_session_actual_seconds(&record, now)?;
-        finish_running_focus_session(&connection, session_id, actual_seconds, now, "manual_break")?;
+        finish_running_focus_session_with_reason(
+            &connection,
+            session_id,
+            actual_seconds,
+            now,
+            "manual_break",
+            Some(break_reason.as_str()),
+        )?;
     }
 
     connection
@@ -864,6 +891,7 @@ pub fn take_manual_break(
                 paused_at = NULL,
                 break_seconds = ?2,
                 accumulated_study_seconds = ?3,
+                break_reason = ?8,
                 current_session_id = NULL,
                 last_control_device_id = ?4,
                 last_control_action = ?5,
@@ -878,7 +906,8 @@ pub fn take_manual_break(
                 device_id,
                 CONTROL_MANUAL_BREAK,
                 now.timestamp_millis(),
-                record.id
+                record.id,
+                break_reason
             ],
         )
         .map_err(|error| error.to_string())?;
@@ -1062,4 +1091,58 @@ pub fn tick_background_study_mode(app: &AppHandle) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod break_reason_tests {
+    use super::*;
+    use crate::storage::db::open_database;
+    use tempfile::tempdir;
+
+    #[test]
+    fn break_reason_requires_non_empty_text() {
+        assert!(normalize_break_reason(None).is_err(), "缺少理由应被拒绝");
+        assert!(normalize_break_reason(Some("   ".to_string())).is_err(), "纯空格应被拒绝");
+        assert_eq!(
+            normalize_break_reason(Some("  喝水  ".to_string())).unwrap(),
+            "喝水",
+            "应去掉首尾空白"
+        );
+        assert!(normalize_break_reason(Some("休".repeat(BREAK_REASON_MAX_CHARS))).is_ok());
+        assert!(
+            normalize_break_reason(Some("休".repeat(BREAK_REASON_MAX_CHARS + 1))).is_err(),
+            "超长理由应被拒绝"
+        );
+    }
+
+    #[test]
+    fn break_reason_is_persisted_on_study_mode() {
+        let directory = tempdir().expect("create temp directory");
+        let connection =
+            open_database(&directory.path().join("break-reason.sqlite3")).expect("open database");
+        let now = Utc::now().to_rfc3339();
+        connection
+            .execute(
+                "
+                INSERT INTO study_modes (
+                  mode, timer_kind, planned_seconds, focus_seconds, break_seconds,
+                  phase, cycle_index, started_at, phase_started_at, status, created_at, updated_at
+                ) VALUES ('normal', 'countup', 0, 0, 300, 'break', 1, ?1, ?1, 'active', ?1, ?1)
+                ",
+                params![now],
+            )
+            .expect("insert countup study mode");
+
+        connection
+            .execute(
+                "UPDATE study_modes SET break_reason = ?1",
+                params!["眼睛酸了"],
+            )
+            .expect("write break reason");
+
+        let state = load_current_study_mode_state(&connection, Utc::now())
+            .expect("load study mode state");
+        assert_eq!(state.phase, "break");
+        assert_eq!(state.break_reason.as_deref(), Some("眼睛酸了"));
+    }
 }
