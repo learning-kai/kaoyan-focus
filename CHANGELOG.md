@@ -934,4 +934,15 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - fix (3d45383)
 
+## v1.6.7 - 2026-10-31
+
+### Desktop
+#### Fixed
+- fix (3d45383)
+
+#### Changed
+- 加上ai总结功能 (9ee2b3b)
+- 加上休息提问 (f22b5b6)
+- chore: release v1.6.6 (f4b7a27)
+
 

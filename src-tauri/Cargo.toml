@@ -1,6 +1,6 @@
 [package]
 name = "kaoyan-focus"
-version = "1.6.6"
+version = "1.6.7"
 description = "Windows study focus app for exam preparation"
 authors = ["kaoyan-focus"]
 edition = "2021"
