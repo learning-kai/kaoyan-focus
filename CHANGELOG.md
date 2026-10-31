@@ -946,4 +946,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 - 加上休息提问 (f22b5b6)
 - chore: release v1.6.6 (f4b7a27)
 
+## v1.6.8 - 2026-10-31
+
+### Desktop
+#### Changed
+- 加一个提示词功能 (3c8851b)
+
 
