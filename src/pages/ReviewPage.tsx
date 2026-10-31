@@ -282,7 +282,7 @@ export default function ReviewPage() {
         });
       }
       const used = result.context_notes.length > 0 ? result.context_notes.join('、') : '本时段数据';
-      setAiNote(`AI 草稿由 ${result.model} 生成，用到：${used}。请按你的判断修改后再保存。`);
+      setAiNote(`AI 草稿由 ${result.model} 生成，用到：${used}。语气偏冲，是照数据说话——哪句不认同就改掉再保存。`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -516,7 +516,7 @@ export default function ReviewPage() {
               className="ghost-action review-ai-action"
               disabled={editorDisabled || draftingAi}
               onClick={() => void handleDraftWithAi()}
-              title="根据这段时间的学习数据生成草稿，填进下面三个框，你改完再保存"
+              title="根据这段时间的学习数据，用带刺的督学口吻写一份草稿，填进下面三个框，你改完再保存"
               type="button"
             >
               {draftingAi
@@ -565,11 +565,22 @@ function ReviewField({
   value: string;
 }) {
   const hintId = `${id}-hint`;
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // 复盘是写长文的地方：输入框跟着内容长高，而不是把人锁在小窗口里
+  // 反复滚动。上限由 CSS 的 max-height 兜底，超过后仍可正常滚动。
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [value]);
+
   return (
     <label className="field-block review-field" htmlFor={id}>
       <span className="review-field-label">{label}</span>
       <span className="review-field-hint" id={hintId}>{hint}</span>
-      <textarea aria-describedby={hintId} className="text-input review-textarea" disabled={disabled} id={id} maxLength={maxLength} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} />
+      <textarea aria-describedby={hintId} className="text-input review-textarea" disabled={disabled} id={id} maxLength={maxLength} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} ref={textareaRef} rows={6} value={value} />
       <span className="review-character-count">{value.length}/{maxLength}</span>
     </label>
   );

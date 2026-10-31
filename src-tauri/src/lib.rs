@@ -14,7 +14,7 @@ use ::windows::{
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, UserAttentionType, WindowEvent,
+    Emitter, Manager, UserAttentionType, WebviewWindowBuilder, WindowEvent,
 };
 #[cfg(windows)]
 use tauri_winrt_notification::{
@@ -58,6 +58,75 @@ pub struct AppState {
 const REMINDER_NOTIFICATION_CLOSED_EVENT: &str = "study-reminder-notification-closed";
 const CRITICAL_REMINDER_TOPMOST_RESET_MS: u64 = 8_000;
 const MAIN_WINDOW_LABEL: &str = "main";
+
+/// 主窗口关闭请求一律收敛成「隐藏到托盘」。
+///
+/// 之前只有存在活动学习模式/专注记录时才隐藏，空闲时关闭会把主窗口销毁；
+/// 而进程还被悬浮小组件窗口留在后台，于是下一次启动被单实例插件拦下、
+/// 回调里又找不到已销毁的 `main` 窗口，表现就是「应用在后台跑着却再也打不开，
+/// 只能彻底结束进程」。现在窗口永不销毁，托盘、单实例唤起和提醒都能把它叫回来。
+fn reveal_main_window(window: &tauri::WebviewWindow) -> Result<(), tauri::Error> {
+    window.show()?;
+    let _ = window.unminimize();
+    let _ = window.set_fullscreen(false);
+    window.set_focus()?;
+    Ok(())
+}
+
+fn hide_main_window_to_tray(window: &tauri::Window) {
+    let _ = window.set_fullscreen(false);
+    let _ = window.hide();
+}
+
+/// 主窗口被销毁（旧版本遗留状态、WebView 崩溃）后按 `tauri.conf.json` 重建。
+///
+/// 建窗不能在当前主线程的消息处理里同步进行：托盘点击、单实例回调（`WM_COPYDATA`）
+/// 都跑在主线程，同步建窗会重入事件循环。这里统一换到后台线程，建窗请求和随后的
+/// `show()` 都进同一个事件队列，顺序上窗口一定先创建好再显示。
+fn recreate_main_window(app: &tauri::AppHandle) -> Result<(), tauri::Error> {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let Ok(_guard) = main_window_create_lock()
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+        else {
+            return;
+        };
+
+        // 并发调用时可能已经有另一条路径抢先建好了窗口。
+        if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+            let _ = reveal_main_window(&window);
+            return;
+        }
+
+        match create_main_window(&app) {
+            Ok(window) => {
+                if let Err(error) = reveal_main_window(&window) {
+                    eprintln!("Failed to show the recreated main window: {error}");
+                }
+            }
+            Err(error) => eprintln!("Failed to recreate the main window: {error}"),
+        }
+    });
+    Ok(())
+}
+
+fn main_window_create_lock() -> &'static std::sync::OnceLock<Mutex<()>> {
+    static CREATE_LOCK: std::sync::OnceLock<Mutex<()>> = std::sync::OnceLock::new();
+    &CREATE_LOCK
+}
+
+fn create_main_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow, tauri::Error> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == MAIN_WINDOW_LABEL)
+        .cloned()
+        .ok_or(tauri::Error::WindowNotFound)?;
+    WebviewWindowBuilder::from_config(app, &config)?.build()
+}
 
 impl AppState {
     fn should_prevent_exit(&self, app: Option<&tauri::AppHandle>) -> Result<bool, String> {
@@ -193,11 +262,12 @@ fn show_toast_with_close_event(
 }
 
 fn wake_main_window_for_reminder(app: &tauri::AppHandle) {
+    // 先确保主窗口存在（可能被旧版本销毁过），再拿它做置顶和提示。
+    let _ = show_main_window(app);
     let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
         return;
     };
 
-    let _ = show_main_window(app);
     let _ = window.set_always_on_top(true);
     let _ = window.request_user_attention(Some(UserAttentionType::Critical));
 
@@ -443,16 +513,9 @@ pub fn run() {
                 let _ = windows::focus_widget::hide(window.app_handle());
             }
             WindowEvent::CloseRequested { api, .. } => {
-                if let Some(state) = window.try_state::<AppState>() {
-                    if state
-                        .should_prevent_exit(Some(window.app_handle()))
-                        .unwrap_or(false)
-                    {
-                        api.prevent_close();
-                        let _ = window.set_fullscreen(false);
-                        let _ = window.hide();
-                    }
-                }
+                // 一律拦截关闭：主窗口只隐藏到托盘，绝不销毁。
+                api.prevent_close();
+                hide_main_window_to_tray(window);
             }
             _ => {}
         })
@@ -606,13 +669,9 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-fn show_main_window(app: &tauri::AppHandle) -> Result<(), tauri::Error> {
-    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-        window.show()?;
-        let _ = window.unminimize();
-        let _ = window.set_fullscreen(false);
-        window.set_focus()?;
+pub(crate) fn show_main_window(app: &tauri::AppHandle) -> Result<(), tauri::Error> {
+    match app.get_webview_window(MAIN_WINDOW_LABEL) {
+        Some(window) => reveal_main_window(&window),
+        None => recreate_main_window(app),
     }
-
-    Ok(())
 }

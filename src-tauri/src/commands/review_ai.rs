@@ -452,15 +452,10 @@ fn build_system_prompt(scope: ReviewScope) -> String {
     };
 
     format!(
-        "你是考研备考者的复盘助手。请根据用户提供的客观数据，写一份{period}复盘草稿。\n\n\
-硬性要求：\n\
-1. 只输出三行，每行格式为「字段名：内容」，字段名依次是「{summary_field}」「问题卡点」「{focus_field}」。\n\
-2. 不要输出任何解释、前言、markdown 标记或额外空行。\n\
-3. 每段控制在 80-150 个汉字，具体、可执行，不要写空话。\n\
-4. 只能使用用户数据中出现的科目、事项和时间，不要编造没发生过的事。\n\
-5. 如果某段确实没素材可写，就写「暂无数据」，不要硬凑。\n\
-6. 语气平实客观，像一个了解情况的同伴，不要喊口号、不要夸张鼓励。",
+        "你是一名带过十几届考研生的督学教练，说话直接、有脾气、不惯着。用户要的是被骂醒，不是被安慰。\n\n输出格式（必须严格遵守）：\n1. 只输出三行，每行格式为「字段名：内容」，字段名依次是「{summary_field}」「问题卡点」「{focus_field}」。\n2. 不要输出任何解释、前言、markdown 标记或额外空行。\n3. 每段 100-180 个汉字。\n4. 只能使用用户数据中出现的科目、事项、时间和数字；不要编造没发生过的事，也不要编造数据里没有的细节。\n5. 如果某段确实没素材可写，就写「暂无数据」。\n\n语气与判断标准（这是重点，必须做到）：\n- 不要当老好人。数据里暴露出问题时，直接点名，用「你」称呼，把责任落到具体行为上，而不是笼统评价状态。\n- 禁止空转话术：不要写「总体不错」「继续加油」「保持节奏」「注意劳逸结合」「建议适当」这类没有信息量的缓冲句。每一句都要能落到具体的时间、科目、数字或行为上。\n- 批评要具体到可反驳：不要写「效率不高」，要写「{period}只专注了 N 分钟，却记了 M 次干扰」；不要写「计划没完成」，要把没完成的事项名点出来。\n- 允许尖锐、允许难听，但每一条批评都必须有数据里的数字或事实支撑；找不到支撑就先不说，不要为了凶而编。\n- 「问题卡点」是火力最集中的一段：先指出{period}最要命的一个问题，再说明它正在怎样拖垮结果。不要罗列一堆小毛病，也不要安抚。\n- 「{focus_field}」只给动作，不给口号：先做什么、做多久、做到什么程度算完成，写清楚。\n- 「{summary_field}」也要诚实：做得好就说做得好，但同样要带数字，不要顺手夸奖。\n- 你的目标是把时间抢回来，不是给他打分。批评行为，不否定人品；不做人身攻击，不涉及隐私，不涉及外貌、家庭或健康。",
         period = scope.label(),
+        summary_field = summary_field,
+        focus_field = focus_field,
     )
 }
 
@@ -473,8 +468,24 @@ fn build_user_prompt(scope: ReviewScope, facts: &ReviewFacts) -> String {
     ));
     lines.push(format!("干扰次数：{} 次", facts.interruption_count));
 
+    // 把「该被追问的地方」提前算好：直接给出数字对比，
+    // 模型就不会用「总体不错」蒙混过去，而是能直接拿数字说话。
+    if facts.focus_session_count > 0 {
+        let average = facts.study_minutes / facts.focus_session_count.max(1);
+        lines.push(format!("平均每条专注：{average} 分钟"));
+    }
+    if facts.study_minutes > 0 {
+        let per_hour = (facts.interruption_count as f64) * 60.0 / (facts.study_minutes as f64);
+        lines.push(format!("折合每小时干扰：{per_hour:.1} 次"));
+    }
+
     if let Some(completion) = facts.completion_summary() {
         lines.push(format!("计划完成：{completion}"));
+        let total = facts.schedule_total + facts.today_total;
+        let done = facts.schedule_completed + facts.today_completed;
+        if total > 0 && done < total {
+            lines.push(format!("未完成数量：{} 项", total - done));
+        }
     }
     if !facts.completed_titles.is_empty() {
         lines.push(format!(
@@ -497,14 +508,8 @@ fn build_user_prompt(scope: ReviewScope, facts: &ReviewFacts) -> String {
 
     lines.push(String::new());
     lines.push(match scope {
-        ReviewScope::Daily => {
-            "请据上述数据写出今天的复盘草稿：今天真正推进了什么、卡在哪里、明天先做什么。"
-                .to_string()
-        }
-        ReviewScope::Weekly => {
-            "请据上述数据写出这一周的复盘草稿：这周最重要的推进、反复出现的阻力、下周先守住什么。"
-                .to_string()
-        }
+        ReviewScope::Daily => "请对着上面的数字写今天的复盘。先说今天到底推进了什么（带数字），再直接点出最要命的那个卡点并说明它正在怎样拖垮结果，最后给出明天能直接执行的动作。不要客气。".to_string(),
+        ReviewScope::Weekly => "请对着上面的数字写这一周的复盘。先说这周真正推进了什么（带数字），再直接点出反复出现、一直没解决的那个阻力并说明他为什么没解决，最后给出下周能直接执行的动作。不要客气。".to_string(),
     });
 
     lines.join("\n")
@@ -772,6 +777,45 @@ mod tests {
         assert!(prompt.contains("眼睛酸了"));
         assert!(prompt.contains("数学真题"));
         assert!(prompt.contains("210"));
+    }
+
+    #[test]
+    fn system_prompt_demands_blunt_criticism_and_bans_small_talk() {
+        let prompt = build_system_prompt(ReviewScope::Daily);
+        // 必须明确要求「骂醒」而不是安抚。
+        assert!(prompt.contains("骂醒"));
+        assert!(prompt.contains("老好人"));
+        // 必须点名禁用空话，否则模型一定回退到安全话术。
+        for banned in ["总体不错", "继续加油", "保持节奏"] {
+            assert!(prompt.contains(banned), "应明确禁用这类空话：{banned}");
+        }
+        // 必须要求每条批评都有数据支撑。
+        assert!(prompt.contains("数据里的数字"));
+        // 边界：骂行为不骂人，避免模型失控成人身攻击。
+        assert!(prompt.contains("批评行为，不否定人品"));
+        assert!(prompt.contains("不做人身攻击"));
+        assert!(prompt.contains("不涉及隐私"));
+    }
+
+    #[test]
+    fn system_prompt_uses_scope_specific_field_names() {
+        let daily = build_system_prompt(ReviewScope::Daily);
+        assert!(daily.contains("今日总结"));
+        assert!(daily.contains("明日重点"));
+        let weekly = build_system_prompt(ReviewScope::Weekly);
+        assert!(weekly.contains("本周总结"));
+        assert!(weekly.contains("下周重点"));
+    }
+
+    #[test]
+    fn user_prompt_supplies_numbers_to_argue_with() {
+        let prompt = build_user_prompt(ReviewScope::Daily, &sample_facts());
+        // 210 分钟 / 4 条 = 平均每条专注时长，模型可以直接拿它说事。
+        assert!(prompt.contains("平均每条专注"));
+        // 干扰密度是「效率」最直接的可反驳证据。
+        assert!(prompt.contains("折合每小时干扰"));
+        // 计划没做完时要把缺口数量摆出来。
+        assert!(prompt.contains("未完成数量"));
     }
 
     #[test]

@@ -4861,15 +4861,33 @@ details.details-card[open] > summary::before {
   align-items: start;
 }
 
+/* 复盘是「写东西」的页面，编辑区必须占主导；左栏只是数据概览，
+   窄一点、离远一点都无所谓。旧比例 0.82:1.38 在 1100px 窗口下
+   把编辑区压到 569px，正文每栏只剩两行。 */
+@media (min-width: 1201px) {
+  .review-grid {
+    grid-template-columns: minmax(260px, 0.68fr) minmax(0, 1.55fr);
+    gap: 20px;
+  }
+}
+
 .review-summary-panel,
 .review-editor {
   display: grid;
   gap: 18px;
+  min-width: 0;
+}
+
+/* 编辑器内部也拉开：三个输入框之间要能看清边界，不要挤成一团。 */
+.review-editor {
+  align-content: start;
+  gap: 20px;
 }
 
 .review-summary-panel {
   position: sticky;
   top: 18px;
+  align-content: start;
 }
 
 .review-context-row {
@@ -5067,8 +5085,10 @@ details.details-card[open] > summary::before {
 }
 
 .review-textarea {
-  min-height: 132px;
+  min-height: 168px;
+  max-height: 480px;
   padding: 12px 13px;
+  overflow-y: auto;
   resize: vertical;
   line-height: 1.7;
 }

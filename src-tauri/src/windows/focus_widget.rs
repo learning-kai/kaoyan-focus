@@ -38,7 +38,6 @@ use crate::{
 
 pub const FOCUS_WIDGET_LABEL: &str = "focus-widget";
 
-const MAIN_WINDOW_LABEL: &str = "main";
 const FOCUS_WIDGET_TITLE: &str = "";
 const FOCUS_WIDGET_DOCK_STATE_CHANGED_EVENT: &str = "focus-widget-dock-state-changed";
 const FOCUS_WIDGET_COLLAPSE_REQUEST_EVENT: &str = "focus-widget-collapse-requested";
@@ -300,14 +299,8 @@ impl FocusWidget {
             let _ = window.hide();
         }
 
-        let main_window = self
-            .app
-            .get_webview_window(MAIN_WINDOW_LABEL)
-            .ok_or_else(|| "Main window not found".to_string())?;
-        main_window.show().map_err(|error| error.to_string())?;
-        let _ = main_window.unminimize();
-        let _ = main_window.set_fullscreen(false);
-        main_window.set_focus().map_err(|error| error.to_string())
+        // 主窗口可能因历史遗留状态被销毁过，这里走统一的「显示或重建」入口。
+        crate::show_main_window(&self.app).map_err(|error| error.to_string())
     }
 
     pub fn refresh_geometry(&self) -> Result<(), String> {

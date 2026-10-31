@@ -398,6 +398,16 @@ select {
   box-shadow: none !important;
 }
 
+/* 多行文本框必须比单行控件高：上面的选择器组里同时列了 `textarea` 和
+   `.review-textarea`，把 `styles.css` 的 `.review-textarea { min-height: 132px }`
+   按「后加载覆盖」压回了按钮高度（36px），复盘每一栏只能看到两行字。
+   这里只针对复盘输入框重新给回高度，不牵动其它页面的多行输入。 */
+.review-textarea {
+  min-height: 168px;
+  max-height: 480px;
+  line-height: 1.7;
+}
+
 .text-input:focus,
 .number-input:focus,
 .select-input:focus,
