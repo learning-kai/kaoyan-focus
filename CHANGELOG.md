@@ -958,4 +958,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - 加一个提示词功能 (3c8851b)
 
+## v1.7.0 - 2026-11-01
+
+### Desktop
+#### Fixed
+- fix: 主窗口关闭后打不开 + 复盘页只能看两行 + AI 复盘语气改为督学教练 (257d842)
+
 
