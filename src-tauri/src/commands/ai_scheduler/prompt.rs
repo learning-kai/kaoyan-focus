@@ -112,6 +112,14 @@ pub fn build_user_prompt(
         preferences.adaptive_durations,
         rest_style_label(&preferences.rest_style),
     ));
+    // 用户自定义排期规则：整段注入，优先级高于内置排期偏好，但不得违反硬性规则。
+    // 放在 memory_note 之前，让模型先读到完整规则，再看到零散偏好。
+    let custom_prompt = preferences.custom_prompt.trim();
+    if !custom_prompt.is_empty() {
+        header.push_str(&format!(
+            "\n\n[用户自定义排期规则]\nn以下规则由用户本人编写，在你做时间分配决策时优先级高于上面的内置排期偏好，但不得违反硬性规则（item_id、空档边界、due_date、json 结构）。\n\n{custom_prompt}\n\n[用户自定义排期规则结束]\nn请严格按上述规则决定各科目的时段、时长与切换顺序。"
+        ));
+    }
     if !preferences.memory_note.trim().is_empty() {
         header.push_str(&format!("\n长期偏好：{}", preferences.memory_note.trim()));
     }
@@ -301,6 +309,68 @@ mod tests {
             replaceable_block_ids: Vec::new(),
             source_request: None,
         }
+    }
+
+    /// 构造一份带自定义提示词的上下文，用于验证注入行为。
+    fn plan_context_with_custom_prompt(custom_prompt: &str) -> PlanContext {
+        let mut context = plan_context(vec![queue_item(41, "数学 660 题", None)]);
+        context.planner_preferences.custom_prompt = custom_prompt.to_string();
+        context
+    }
+
+    #[test]
+    fn custom_prompt_is_injected_with_boundaries() {
+        let request = AiPlanRequest::default();
+        let context = plan_context_with_custom_prompt("数学和专业课优先，整卷至少连续 3 小时。");
+        let prompt = build_user_prompt(&request, &context, None);
+
+        assert!(prompt.contains("[用户自定义排期规则]"), "应有起始标记");
+        assert!(prompt.contains("[用户自定义排期规则结束]"), "应有结束标记");
+        assert!(
+            prompt.contains("数学和专业课优先，整卷至少连续 3 小时。"),
+            "应原样包含规则"
+        );
+        // 规则必须出现在排队条目之前，模型先读规则再排期。
+        let rules_at = prompt.find("[用户自定义排期规则]").unwrap();
+        let queue_at = prompt.find("[queue_items]").unwrap();
+        assert!(rules_at < queue_at, "自定义规则应在 queue_items 之前");
+        assert!(
+            prompt.contains("不得违反硬性规则"),
+            "应声明规则不得越过硬性约束"
+        );
+    }
+
+    #[test]
+    fn custom_prompt_is_omitted_when_blank() {
+        let request = AiPlanRequest::default();
+        let context = plan_context_with_custom_prompt(
+            "   
+  ",
+        );
+        let prompt = build_user_prompt(&request, &context, None);
+        assert!(
+            !prompt.contains("[用户自定义排期规则]"),
+            "空白规则不应产生标记，避免污染提示词"
+        );
+    }
+
+    #[test]
+    fn custom_prompt_keeps_line_breaks_and_markdown() {
+        let request = AiPlanRequest::default();
+        let context = plan_context_with_custom_prompt(
+            "## 一、核心目标
+数学优先
+
+- 第一条",
+        );
+        let prompt = build_user_prompt(&request, &context, None);
+        // 用户写的是规则文档，换行与标题必须原样保留，不能被压成一行。
+        assert!(prompt.contains(
+            "## 一、核心目标
+数学优先
+
+- 第一条"
+        ));
     }
 
     #[test]

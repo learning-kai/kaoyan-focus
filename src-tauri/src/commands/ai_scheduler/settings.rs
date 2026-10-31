@@ -167,6 +167,15 @@ fn normalize_settings(
         .chars()
         .take(240)
         .collect();
+    // 自定义提示词按原样保留换行与缩进——用户写的是一份规则文档，重新排版会破坏可读性；
+    // 只裁掉首尾空白并限制总长度。
+    settings.planner_preferences.custom_prompt = settings
+        .planner_preferences
+        .custom_prompt
+        .trim()
+        .chars()
+        .take(crate::commands::ai_scheduler::models::MAX_CUSTOM_PROMPT_CHARS)
+        .collect();
     for meal in &mut settings.planner_preferences.meal_windows {
         meal.start_minute = align_to_five(meal.start_minute.clamp(0, 1440));
         meal.end_minute = align_to_five(meal.end_minute.clamp(0, 1440));

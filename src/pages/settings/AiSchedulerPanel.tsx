@@ -12,7 +12,7 @@ import type {
   AiSchedulerSettings,
   AiTimeWindow,
 } from '../../types/aiScheduler';
-import { AI_PROVIDER_PRESETS, findAiProviderPreset } from '../../types/aiScheduler';
+import { AI_CUSTOM_PROMPT_MAX_CHARS, AI_PROVIDER_PRESETS, findAiProviderPreset } from '../../types/aiScheduler';
 
 type AiSchedulerPanelProps = {
   expanded: boolean;
@@ -371,6 +371,28 @@ export function AiSchedulerPanel({ expanded, locked, onToggle }: AiSchedulerPane
                     rows={2}
                     value={settings.planner_preferences.memory_note}
                   />
+                </label>
+                <label className="field-block">
+                  <span>自定义排期提示词（长期生效，最多 {AI_CUSTOM_PROMPT_MAX_CHARS} 字）</span>
+                  <textarea
+                    className="text-input ai-custom-prompt"
+                    disabled={locked}
+                    maxLength={AI_CUSTOM_PROMPT_MAX_CHARS}
+                    onChange={(event) =>
+                      updateSettings({
+                        planner_preferences: {
+                          ...settings.planner_preferences,
+                          custom_prompt: event.target.value,
+                        },
+                      })
+                    }
+                    placeholder={`在这里写你完整的排期规则，例如科目优先级、整卷训练时长、作息框架。\n支持换行和 Markdown 标题，会整段交给模型。\n\n和上面「长期记忆」的分工：长期记忆写一两句话的偏好提醒；这里写完整的规则文档。`}
+                    rows={10}
+                    value={settings.planner_preferences.custom_prompt}
+                  />
+                  <span className="ai-custom-prompt-hint">
+                    每次排期都会把这段规则整段发给模型，优先级高于内置排期偏好，但仍不能违反硬性约束（只能用队列里的任务、必须落在空档内、不能超过截止日）。
+                  </span>
                 </label>
               </div>
 

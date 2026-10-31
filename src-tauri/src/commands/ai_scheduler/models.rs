@@ -156,6 +156,11 @@ pub struct AiPlannerPreferences {
     pub rest_style: String,
     pub daily_target_minutes: i64,
     pub memory_note: String,
+    /// 用户自定义的排期提示词（长期生效）。与 `memory_note` 的分工：
+    /// - `memory_note`：一两句话的短期偏好提醒，随每次请求拼进行头；
+    /// - `custom_prompt`：完整的排期规则体系（科目优先级、整卷时长、作息框架等），
+    ///   以「用户规则」整段注入，优先级高于内置排期偏好，但仍不得违反硬性规则。
+    pub custom_prompt: String,
     pub meal_windows: Vec<AiMealWindow>,
 }
 
@@ -167,6 +172,7 @@ impl Default for AiPlannerPreferences {
             rest_style: default_rest_style(),
             daily_target_minutes: DEFAULT_DAILY_TARGET_MINUTES,
             memory_note: String::new(),
+            custom_prompt: String::new(),
             meal_windows: default_meal_windows(),
         }
     }
@@ -305,6 +311,9 @@ pub struct AiConnectionTestResult {
 /// `horizon_days` 合法区间。
 pub const MIN_HORIZON_DAYS: i64 = 1;
 pub const MAX_HORIZON_DAYS: i64 = 7;
+/// 自定义排期提示词的字符上限。给足空间容纳一整份规则（科目优先级、作息框架等），
+/// 又不至于让每次请求的 token 失控。
+pub const MAX_CUSTOM_PROMPT_CHARS: usize = 8000;
 /// `extra_instruction` 的字符上限（§3.2）。
 pub const MAX_EXTRA_INSTRUCTION_CHARS: usize = 200;
 /// 「按反馈调整」的反馈文本上限，与补充说明同一量级。

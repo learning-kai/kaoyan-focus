@@ -26,8 +26,17 @@ export type AiPlannerPreferences = {
   rest_style: 'gentle' | 'balanced' | 'focused' | string;
   daily_target_minutes: number;
   memory_note: string;
+  /**
+   * 用户自定义的排期提示词（长期生效）。
+   * 与 `memory_note` 的分工：后者是一两句话的偏好提醒，前者是完整的规则体系
+   * （科目优先级、整卷时长、作息框架等），会整段注入给模型。
+   */
+  custom_prompt: string;
   meal_windows: AiMealWindow[];
 };
+
+/** 自定义提示词的字符上限，与后端 `MAX_CUSTOM_PROMPT_CHARS` 保持一致。 */
+export const AI_CUSTOM_PROMPT_MAX_CHARS = 8000;
 
 export type AiProviderPresetKey = 'deepseek' | 'openai' | 'custom';
 

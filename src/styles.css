@@ -7823,6 +7823,22 @@ html[data-study-fullscreen='true'] .focus-clock-zone strong {
   font-family: inherit;
 }
 
+/* 自定义排期提示词：用户写的是一份规则文档，等宽字体和足够行高更易读。 */
+.ai-custom-prompt {
+  min-height: 180px;
+  resize: vertical;
+  line-height: 1.55;
+  font-family: var(--font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.ai-custom-prompt-hint {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 .ai-plan-check {
   display: flex;
   align-items: center;
