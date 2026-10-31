@@ -64,3 +64,18 @@ export type WeeklyReviewDraft = {
   nextWeekFocus?: string | null;
   moodScore: number;
 };
+
+/** AI 复盘起草的结果。字段与 Daily/WeeklyReviewDraft 的文本字段一一对应。 */
+export type AiReviewDraft = {
+  /** 'daily' | 'weekly' */
+  scope: string;
+  summary: string;
+  blockers: string;
+  focus: string;
+  /** 本次用到的数据摘要，用于向用户回显发了什么。 */
+  context_notes: string[];
+  /** 出这次结果的模型名。 */
+  model: string;
+};
+
+export type ReviewAiScope = 'daily' | 'weekly';

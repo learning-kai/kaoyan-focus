@@ -33,6 +33,7 @@ mod commands {
     pub mod micro_break;
     pub mod monitor;
     pub mod review;
+    pub mod review_ai;
     pub mod schedule;
     pub mod settings;
     pub mod sync;
@@ -519,6 +520,7 @@ pub fn run() {
             commands::review::get_weekly_review_page_data,
             commands::review::save_weekly_review,
             commands::review::delete_weekly_review,
+            commands::review_ai::draft_review_with_ai,
             commands::focus::start_study_mode,
             commands::focus::start_countup_study_mode,
             commands::focus::get_study_mode_state,

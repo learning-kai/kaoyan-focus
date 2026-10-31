@@ -8,6 +8,7 @@ import {
   ListChecks,
   LoaderCircle,
   NotebookPen,
+  Sparkles,
   RefreshCw,
   Save,
   Target,
@@ -17,6 +18,7 @@ import {
 import {
   deleteDailyReview,
   deleteWeeklyReview,
+  draftReviewWithAi,
   getDailyReviewPageData,
   getWeeklyReviewPageData,
   saveDailyReview,
@@ -111,6 +113,10 @@ export default function ReviewPage() {
   const [weeklyDirty, setWeeklyDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** AI 起草进行中：按钮转圈并禁用，避免重复请求。 */
+  const [draftingAi, setDraftingAi] = useState(false);
+  /** 上一次 AI 起草用了哪些数据、哪个模型，回显给用户看。 */
+  const [aiNote, setAiNote] = useState<string | null>(null);
   const dailyRefreshTokenRef = useRef(0);
   const weeklyRefreshTokenRef = useRef(0);
 
@@ -231,6 +237,57 @@ export default function ReviewPage() {
     setWeeklyDraft((current) => ({ ...current, ...patch }));
     setWeeklyDirty(true);
     setMessage(null);
+  }
+
+  /**
+   * 让 AI 起草当前复盘。
+   *
+   * 只把结果填进三个输入框并把 dirty 置真，用户改完自己按「保存复盘」——
+   * AI 不直接落库，避免出现「你以为没存、其实已经存了」的情况。
+   * 已有内容不会被静默覆盖，会先问一句。
+   */
+  async function handleDraftWithAi() {
+    if (draftingAi) return;
+
+    const hasContent = mode === 'daily'
+      ? Boolean((draft.summary ?? '').trim() || (draft.blockers ?? '').trim() || (draft.tomorrowFocus ?? '').trim())
+      : Boolean((weeklyDraft.summary ?? '').trim() || (weeklyDraft.blockers ?? '').trim() || (weeklyDraft.nextWeekFocus ?? '').trim());
+    if (hasContent) {
+      const confirmed = await confirm({
+        confirmLabel: '覆盖已有内容',
+        cancelLabel: '保留现有',
+        message: 'AI 草稿会覆盖当前输入框里已经写的内容，且不会自动保存。',
+        title: '用 AI 草稿覆盖？',
+      });
+      if (!confirmed) return;
+    }
+
+    try {
+      setDraftingAi(true);
+      setError(null);
+      setMessage(null);
+      setAiNote(null);
+      const result = await draftReviewWithAi(mode, selectedDate);
+      if (mode === 'daily') {
+        updateDailyDraft({
+          summary: result.summary,
+          blockers: result.blockers,
+          tomorrowFocus: result.focus,
+        });
+      } else {
+        updateWeeklyDraft({
+          summary: result.summary,
+          blockers: result.blockers,
+          nextWeekFocus: result.focus,
+        });
+      }
+      const used = result.context_notes.length > 0 ? result.context_notes.join('、') : '本时段数据';
+      setAiNote(`AI 草稿由 ${result.model} 生成，用到：${used}。请按你的判断修改后再保存。`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setDraftingAi(false);
+    }
   }
 
   async function handleSave() {
@@ -452,7 +509,20 @@ export default function ReviewPage() {
             </>
           )}
 
+          {aiNote && <p className="review-ai-note" role="status"><Sparkles aria-hidden="true" size={14} /> {aiNote}</p>}
+
           <div className="review-actions">
+            <button
+              className="ghost-action review-ai-action"
+              disabled={editorDisabled || draftingAi}
+              onClick={() => void handleDraftWithAi()}
+              title="根据这段时间的学习数据生成草稿，填进下面三个框，你改完再保存"
+              type="button"
+            >
+              {draftingAi
+                ? <><LoaderCircle aria-hidden="true" className="spin" size={15} /> 正在起草…</>
+                : <><Sparkles aria-hidden="true" size={15} /> 让 AI 起草</>}
+            </button>
             <button className="primary-action" disabled={editorDisabled} type="button" onClick={() => void handleSave()}>
               <Save size={16} /> {saving ? '正在保存…' : isDirty ? '保存修改' : '保存复盘'}
             </button>

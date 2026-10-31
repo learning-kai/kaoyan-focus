@@ -640,6 +640,107 @@ fn backoff_duration(attempt: u32, retry_after_seconds: Option<f64>) -> Duration 
     Duration::from_millis(600u64.saturating_mul(1 << attempt.min(4))).min(Duration::from_secs(8))
 }
 
+/// 纯文本 Chat Completions 调用，供复盘起草这类「返回三段中文」的场景使用。
+///
+/// 与 `chat_json` 的区别：不套 `response_format`、不解析固定 schema，直接把模型文本交回
+/// 调用方；重试、退避、状态码分类、`Retry-After` 解析全部复用同一套实现，行为可预期。
+pub fn chat_text(
+    http: &Client,
+    base_url: &str,
+    api_key: &str,
+    settings: &AiSchedulerSettings,
+    system_prompt: &str,
+    user_prompt: &str,
+    max_tokens: i64,
+) -> Result<String, AiSchedulerError> {
+    let url = endpoint(base_url, "chat/completions");
+    let attempts = settings.max_retries.clamp(0, MAX_RETRIES_CEILING) as u32 + 1;
+
+    let mut last_error = AiSchedulerError::new(ERR_NETWORK, "未发起请求", true);
+    for attempt in 0..attempts {
+        if attempt > 0 {
+            std::thread::sleep(backoff_duration(
+                attempt - 1,
+                last_error.retry_after_seconds,
+            ));
+        }
+
+        let mut body = json!({
+            "model": settings.model,
+            "messages": [
+                { "role": "system", "content": system_prompt },
+                { "role": "user", "content": user_prompt },
+            ],
+            "temperature": settings.temperature,
+            "max_tokens": max_tokens,
+            "stream": false,
+        });
+        if settings.disable_thinking {
+            body["thinking"] = json!({ "type": "disabled" });
+        }
+
+        let response = match bearer_request(http, reqwest::Method::POST, &url, api_key)
+            .json(&body)
+            .send()
+        {
+            Ok(response) => response,
+            Err(error) => {
+                let classified = classify_transport_error(&error);
+                if classified.retryable && attempt + 1 < attempts {
+                    last_error = classified;
+                    continue;
+                }
+                return Err(classified);
+            }
+        };
+
+        let status = response.status();
+        let retry_after = parse_retry_after(&response);
+        let raw = response.text().unwrap_or_default();
+        if !status.is_success() {
+            let classified = classify_status(status, &raw, retry_after);
+            if classified.retryable && attempt + 1 < attempts {
+                last_error = classified;
+                continue;
+            }
+            return Err(classified);
+        }
+
+        let Ok(value) = serde_json::from_str::<Value>(&raw) else {
+            last_error =
+                AiSchedulerError::new(ERR_INVALID_RESPONSE, "服务商返回的内容不是合法 JSON", true);
+            continue;
+        };
+
+        let choice = value
+            .get("choices")
+            .and_then(Value::as_array)
+            .and_then(|choices| choices.first())
+            .cloned()
+            .unwrap_or(Value::Null);
+        let content = choice
+            .get("message")
+            .and_then(|message| message.get("content"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+
+        if content.is_empty() {
+            last_error = AiSchedulerError::new(
+                ERR_INVALID_RESPONSE,
+                "服务商返回了空内容，请稍后重试或更换模型",
+                true,
+            );
+            continue;
+        }
+
+        return Ok(content);
+    }
+
+    Err(last_error)
+}
+
 /// 正式排期调用：带重试与结构化输出档位，返回解析后的草案候选。
 ///
 /// 与 `probe_chat` 的差别：这里承载真实提示词、真实 `max_tokens`，并容忍模型输出

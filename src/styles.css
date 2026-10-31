@@ -5120,6 +5120,47 @@ details.details-card[open] > summary::before {
   min-width: 124px;
 }
 
+/* AI 起草结果说明：只做一行低调提示，不跟正文抢注意力。 */
+.review-ai-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--blue);
+  color: var(--muted);
+  background: var(--blue-soft, color-mix(in srgb, var(--blue) 10%, transparent));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.review-ai-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--blue);
+}
+
+.review-ai-action {
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.review-ai-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .review-actions {
+    flex-wrap: wrap;
+  }
+
+  .review-ai-action,
+  .review-actions .primary-action {
+    flex: 1 1 auto;
+  }
+}
+
 .review-feedback,
 .review-loading {
   display: flex;

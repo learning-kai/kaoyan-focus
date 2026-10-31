@@ -74,7 +74,7 @@ fn read_settings(connection: &Connection) -> Result<AiSchedulerSettings, AiSched
 }
 
 /// 供同模块的排期 / apply 链路复用。密钥字段在这一层已被清空，调用方拿不到明文。
-pub(super) fn current_settings(
+pub(crate) fn current_settings(
     connection: &Connection,
 ) -> Result<AiSchedulerSettings, AiSchedulerError> {
     read_settings(connection)
@@ -84,7 +84,7 @@ pub(super) fn current_settings(
 ///
 /// 与 `current_settings` 的分工：配置结构里永远没有明文（`read_settings` 已清空），
 /// 明文只在「马上要发请求」这一处按需解出，用完即弃，不进日志、不进快照。
-pub(super) fn load_api_key(connection: &Connection) -> Result<String, AiSchedulerError> {
+pub(crate) fn load_api_key(connection: &Connection) -> Result<String, AiSchedulerError> {
     let api_key = credential::get_secret(connection, API_KEY_KEY)
         .map_err(|error| AiSchedulerError::new(ERR_DB_ERROR, error, false))?;
     if api_key.trim().is_empty() {
