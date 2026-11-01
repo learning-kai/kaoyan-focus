@@ -225,6 +225,22 @@
   background: color-mix(in srgb, var(--green) 7%, var(--surface-soft));
 }
 
+/* 管家模式的勾选项是一条条纵向堆的，在 860px 宽的整行面板里要 826px 高。
+   宽屏下改两列，让这些短勾选项并排，高度直接减半。 */
+@media (min-width: 1100px) {
+  .ai-butler-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+  }
+
+  /* 标题行、三餐时段网格等跨列内容仍然独占整行。 */
+  .ai-butler-card > .ai-butler-card-head,
+  .ai-butler-card > .ai-custom-prompt-hint,
+  .ai-butler-card > .ai-meal-grid {
+    grid-column: 1 / -1;
+  }
+}
+
 .ai-butler-card-head {
   display: flex;
   align-items: flex-start;

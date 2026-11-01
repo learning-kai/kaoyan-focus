@@ -407,7 +407,35 @@ PotPlayer 视频规则只在前台进程是 `PotPlayer` 时生效，并且优先
 - `npm run test-review-layout` 断言上面第 1–3 条的分层语义（不是具体像素值）。
 - `npm run test-cta-first-screen` 在 960×680 / 1280×720 / 1366×768 / 1440×900
   四种真实窗口尺寸下渲染页面，用中心点命中测试断言第 4 条：主操作必须可点。
+- `npm run test-ai-settings-panel` 覆盖设置 → 集成 → AI 排期面板（见 3.11）。
 - `npm run test:ui-responsive` 负责真实渲染下的溢出与截断检测。
+
+### 3.11 AI 排期设置面板
+
+设置 → 集成 → 「AI 智能日程规划」是一整块长表单，出过两类问题，现均已修复：
+
+**一、展开即整页白屏**
+
+后端返回的 `planner_preferences` 只要缺任意数组字段（例如旧数据库还没有
+`meal_windows`），渲染时 `meal_windows.map(...)` 就抛
+`TypeError: Cannot read properties of undefined`，被 React 错误边界接住后
+整个设置页变成「应用加载失败」。
+
+修法在数据入口：`normalizeAiSchedulerSettings()` 在写入 state 前把所有
+数组/对象型字段补齐（`available_models`、`available_windows`、`peak_windows`、
+`meal_windows`、`memory_note`、`custom_prompt` 等），缺三餐时段时回落到与后端
+`default_meal_windows()` 一致的三档。**一个可选字段缺失不该让用户失去整页**。
+
+**二、长表单被塞进两列网格的一个格子**
+
+`.settings-grid` 是两列栅格，飞书 / CalDAV / 邮件 / AI 排期四个面板各占一格。
+AI 排期是纵向长表单（服务商、密钥、可用时段、三餐、长期记忆、8000 字自定义
+提示词……），挤在 424px 宽的格子里展开后高达 1900px，同一行的三个短面板被
+`align-self: start` 拉出大片空白。
+
+修法：该面板 `grid-column: 1 / -1` 独占整行；内部 `.form-stack` 与
+`.ai-butler-card` 在宽屏（≥1100px）改为两列，长文本域仍独占整行。
+效果：1280 窗口下面板宽度 424px → 737px，展开高度 1824px → 1367px。
 
 ## 4. 干扰记录
 

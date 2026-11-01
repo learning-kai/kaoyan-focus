@@ -1165,7 +1165,6 @@ export default function SettingsPage({
           role="tabpanel"
           tabIndex={-1}
         >
-      <div className="settings-panel-scroll">
       {isPageLoading ? (
         <div className="settings-loading-state">
           <p className="eyebrow">Loading</p>
@@ -1305,7 +1304,6 @@ export default function SettingsPage({
           webDavSettings={webDavSettings}
         />
       )}
-      </div>
         </div>
       </div>
     </section>

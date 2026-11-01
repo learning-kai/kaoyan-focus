@@ -41,6 +41,48 @@ const DISCLOSURE_KEPT_LOCAL = [
   '账号凭据与 API Key',
 ];
 
+/**
+ * 与后端 `default_meal_windows()` 保持一致的兜底三餐时段。
+ * 后端一定会返回这个字段；这里只是防御「读到的数据比当前版本旧」。
+ */
+const FALLBACK_MEAL_WINDOWS = [
+  { kind: '早餐', start_minute: 7 * 60, end_minute: 7 * 60 + 40 },
+  { kind: '午餐', start_minute: 12 * 60, end_minute: 13 * 60 },
+  { kind: '晚餐', start_minute: 18 * 60, end_minute: 19 * 60 },
+];
+
+/**
+ * 把后端返回的配置规范化成界面可以无条件渲染的形状。
+ *
+ * 面板里有十几处 `array.map(...)`。只要其中任何一个数组字段缺失，
+ * 渲染就会抛 `TypeError`，被 React 错误边界接住后整页变成
+ * 「应用加载失败」—— 一个可选字段的缺失不该让人失去整个设置页。
+ * 因此所有「数组型 / 对象型」字段都在这里补齐，下游不再需要防御。
+ */
+function normalizeAiSchedulerSettings(raw: AiSchedulerSettings): AiSchedulerSettings {
+  const preferences = raw.planner_preferences ?? ({} as AiSchedulerSettings['planner_preferences']);
+  const mealWindows = Array.isArray(preferences.meal_windows) && preferences.meal_windows.length > 0
+    ? preferences.meal_windows
+    : FALLBACK_MEAL_WINDOWS;
+
+  return {
+    ...raw,
+    available_models: Array.isArray(raw.available_models) ? raw.available_models : [],
+    available_windows: Array.isArray(raw.available_windows) ? raw.available_windows : [],
+    peak_windows: Array.isArray(raw.peak_windows) ? raw.peak_windows : [],
+    planner_preferences: {
+      ...preferences,
+      memory_note: preferences.memory_note ?? '',
+      custom_prompt: preferences.custom_prompt ?? '',
+      rest_style: preferences.rest_style ?? 'balanced',
+      daily_target_minutes: preferences.daily_target_minutes ?? 480,
+      auto_meals: preferences.auto_meals ?? true,
+      adaptive_durations: preferences.adaptive_durations ?? true,
+      meal_windows: mealWindows,
+    },
+  };
+}
+
 function minutesToTimeInput(minutes: number) {
   const clamped = Math.max(0, Math.min(1440, Math.round(minutes)));
   const hours = String(Math.floor(clamped / 60)).padStart(2, '0');
@@ -77,7 +119,12 @@ export function AiSchedulerPanel({ expanded, locked, onToggle }: AiSchedulerPane
     }
     setError(null);
     try {
-      setSettings(await getAiSchedulerSettings());
+      // 后端返回的配置要在这里规范化再进 state。
+      // 之前直接 `setSettings(await ...)`，只要可选字段缺失（例如老版本数据库
+      // 还没有 `meal_windows`），下面渲染时 `.map` 就会抛 TypeError，
+      // React 错误边界接管 → 整个设置页变成「应用加载失败」。
+      // 一个可选字段不该让用户失去整页，所以缺什么补什么。
+      setSettings(normalizeAiSchedulerSettings(await getAiSchedulerSettings()));
     } catch (reason) {
       setError(parseAiSchedulerError(reason).message);
     } finally {
