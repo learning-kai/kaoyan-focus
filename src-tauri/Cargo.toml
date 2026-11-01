@@ -13,7 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 # 同上：Cargo resolver v2 不跨 [dependencies] / [build-dependencies] 合并特性，
 # 而 schemars 出现在 tauri-build 的构建依赖链上，因此这里必须再声明一次。
-indexmap = { version = "1.9", features = ["std"] }
+indexmap = { version = "2.14", features = ["std"] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-ico"] }
@@ -29,7 +29,7 @@ base64 = "0.22"
 # 当 std 先于 preserve_order 被启用时转发静默失效，导致 indexmap 的 RandomState 失去默认值，
 # 编译报 "IndexMap takes 3 generic arguments but 2 were supplied"。
 # 这里显式启用 std，通过特性合并把缺失的特性补回去。
-indexmap = { version = "1.9", features = ["std"] }
+indexmap = { version = "2.14", features = ["std"] }
 quick-xml = "0.39.4"
 aws-config = "1"
 aws-credential-types = "1"
