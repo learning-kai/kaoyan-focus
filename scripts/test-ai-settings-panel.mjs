@@ -130,6 +130,18 @@ try {
       await aiToggle.click();
       await page.waitForTimeout(1200);
 
+      // 「可用时段」卡片：用户报告这里的文字和输入框画到卡片外面、
+      // 被上方「密钥状态」卡片盖住。根因是 professional-ui.css 的高度上限
+      // 与 apple-hig.css 的 overflow-y: visible 互相抵消（详见 CHANGELOG）。
+      // 先把它加到 7 段（用户截图里的规模），再量内容是否还留在卡片内。
+      const addWindow = page.getByRole('button', { name: '添加时段' });
+      if (await addWindow.count() > 0) {
+        for (let i = 0; i < 7; i += 1) {
+          await addWindow.first().click({ timeout: 3_000 }).catch(() => {});
+        }
+        await page.waitForTimeout(400);
+      }
+
       const result = await page.evaluate(() => {
         const crashed = document.querySelectorAll('.app-error-screen').length > 0;
         const panel = [...document.querySelectorAll('.command-panel')]
@@ -156,6 +168,48 @@ try {
             : 0,
           // 面板内部宽度不应超过网格（否则横向溢出）
           overflowsHorizontally: grid ? grid.scrollWidth - grid.clientWidth > 2 : false,
+          // 「可用时段」卡片：内容必须留在卡片自己的边界内。
+          // 判据锁「内容有没有跑出去」，不锁具体字号/间距。
+          windowsCard: (() => {
+            const card = [...document.querySelectorAll('.details-card.stacked')]
+              .find((node) => /可用时段/.test(node.textContent || ''));
+            if (!card) return { found: false };
+            const base = card.getBoundingClientRect();
+            const style = getComputedStyle(card);
+            let worst = 0;
+            for (const child of card.querySelectorAll('*')) {
+              const childStyle = getComputedStyle(child);
+              if (childStyle.display === 'none' || childStyle.visibility === 'hidden') continue;
+              const rect = child.getBoundingClientRect();
+              if (rect.width < 0.5 || rect.height < 0.5) continue;
+              // 只有「没有被任何祖先裁剪/滚动」的内容才会真的画到外面。
+              let clipped = false;
+              let node = child.parentElement;
+              while (node && node !== card) {
+                const s = getComputedStyle(node);
+                if (/^(auto|scroll|hidden|clip)$/.test(s.overflowY)) { clipped = true; break; }
+                node = node.parentElement;
+              }
+              if (clipped) continue;
+              worst = Math.max(
+                worst,
+                rect.bottom - base.bottom,
+                base.top - rect.top,
+                rect.right - base.right,
+                base.left - rect.left,
+              );
+            }
+            return {
+              found: true,
+              // 卡片高度上限 + 不裁剪 = 内容一定会画到外面
+              cappedAndUnclipped: style.maxHeight !== 'none' && style.overflowY === 'visible',
+              maxHeight: style.maxHeight,
+              overflowY: style.overflowY,
+              height: Math.round(base.height),
+              contentHeight: Math.round(card.scrollHeight),
+              worstOverflow: Math.round(worst * 10) / 10,
+            };
+          })(),
         };
       });
 
@@ -177,6 +231,23 @@ try {
         failures.push(
           `${label}: 自定义提示词输入框只有 ${result.promptLines} 行可见，长规则文档写不进去`,
         );
+      }
+      const cardInfo = result.windowsCard;
+      if (!cardInfo.found) {
+        failures.push(`${label}: 找不到「可用时段」卡片`);
+      } else {
+        if (cardInfo.cappedAndUnclipped) {
+          failures.push(
+            `${label}: 「可用时段」卡片有高度上限（${cardInfo.maxHeight}）却不裁剪内容`
+            + `（overflow-y: ${cardInfo.overflowY}），内容会画到卡片外面`,
+          );
+        }
+        if (cardInfo.worstOverflow > 1.5) {
+          failures.push(
+            `${label}: 「可用时段」的内容超出卡片 ${cardInfo.worstOverflow}px`
+            + `（卡片 ${cardInfo.height}px / 内容 ${cardInfo.contentHeight}px）`,
+          );
+        }
       }
       if (result.overflowsHorizontally) {
         failures.push(`${label}: AI 排期面板横向溢出`);

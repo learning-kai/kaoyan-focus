@@ -193,12 +193,20 @@ button {
     rgba(16, 27, 43, 0.86);
 }
 
+/* 内容卡片随内容长高，不设高度上限。
+   `.details-card` 装的是会随数据变长的内容（7 段可用时段、同步日志、运行健康
+   检查、备份列表、进程路径…）。它曾被并进下面这条「紧凑指标卡」限高规则
+   （max-height: 180px），而 apple-hig.css 为了让卡片内部的 sticky 生效，又把
+   同一批卡片的 overflow-y 改成了 visible —— 高度被砍到 180px、内容既不裁剪
+   也不滚动，多出来的行就画到卡片外面：设置 → 集成 → AI 排期里「可用时段」的
+   文字和输入框压在「密钥状态」卡片上，正是这个组合造成的。
+   `.metric-card` / `.core-fact` 只装「标签 + 一个数值」，限高同样没必要 ——
+   内容本来就比 180px 矮，去掉上限不改变现有观感，只是不再给长文案留隐患。
+   真正需要滚动的容器（.today-task-rail / .template-rail）另行显式声明。 */
 .metric-card,
 .core-fact,
 .details-card {
   min-height: 86px;
-  max-height: 180px;
-  overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(120, 120, 128, 0.3) transparent;
 }

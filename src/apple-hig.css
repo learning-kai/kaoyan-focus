@@ -304,6 +304,17 @@ body {
   overflow-y: visible;
 }
 
+/* 上面这条 `overflow-y: visible` 是为了别把卡片内部的 sticky（吸底保存栏）剪掉。
+   但「固定高度 + 内部滚动」的两条侧栏靠的正是 overflow 才能生效：
+   styles.css 给它们写了 max-height: 650px + overflow: auto，而这条同优先级、
+   后加载的规则把 overflow-y 覆盖成 visible，高度照样被砍在 650px、内容却
+   既不裁剪也不滚动 —— 第 650px 之后的行直接画到卡片外面。
+   这两条栏里没有 sticky，恢复它们的滚动语义即可（选择器更具体，覆盖上面那条）。 */
+.today-task-rail,
+.template-rail {
+  overflow-y: auto;
+}
+
 /* ---------------- Controls ---------------- */
 .primary-action,
 .primary-button,
