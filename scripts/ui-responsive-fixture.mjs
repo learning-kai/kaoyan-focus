@@ -181,6 +181,9 @@
     get_current_foreground_app: { process_id: 100, process_name: 'explorer.exe', process_path: 'C:\\Windows\\explorer.exe', window_title: '桌面' },
     get_daily_review_page_data: { review_date: '2026-07-29', review: null, summary: { study_seconds: 2280, focus_session_count: 2, interruption_count: 1, schedule_total: 2, schedule_completed: 0, today_total: 2, today_completed: 1 } },
     get_weekly_review_page_data: { week_start_date: '2026-07-27', week_end_date: '2026-08-02', review: null, summary: { study_seconds: 12840, focus_session_count: 8, interruption_count: 3 } },
+    // 日历页用它铺专注色带；缺了会返回 null，页面在 focusSessions.map 处崩溃，
+    // 整个日历页都渲染不出来（不只是少一条底色）。
+    list_focus_sessions_in_range: currentSession ? [currentSession] : [],
     get_app_data_location: { app_data_dir: 'C:\\Users\\Fixture\\AppData\\Local\\kaoyan-focus', database_path: 'C:\\Users\\Fixture\\AppData\\Local\\kaoyan-focus\\kaoyan-focus.sqlite3', database_size_bytes: 1048576 },
     get_webdav_settings: { enabled: false, url: '', username: '', password: '', remote_path: 'kaoyan-focus/kaoyan-focus.sqlite3' },
     get_object_storage_settings: { enabled: false, endpoint: '', bucket: '', access_key_id: '', secret_access_key: '', region: '', object_key: 'study-sync.json' },

@@ -226,7 +226,14 @@ body {
   background: transparent !important;
   box-shadow: none !important;
   min-width: 0;
-  overflow: hidden;
+  /* 这里原本是 overflow: hidden，本意是挡住横向溢出。但它有个严重副作用：
+     任何 overflow != visible 的祖先都会成为新的「滚动上下文」，
+     于是页面里所有 position: sticky 只在这个容器内部生效，
+     用户滚动整个页面时它们纹丝不动 —— 复盘页的吸底保存栏就是这么失效的。
+     横向溢出的真实来源是子元素过宽，正确做法是让子元素能收缩（min-width: 0），
+     而不是在外壳上裁剪。 */
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .page-shell .page-header h2,
@@ -291,7 +298,10 @@ body {
   box-shadow: var(--shadow-soft) !important;
   backdrop-filter: none !important;
   min-width: 0;
-  overflow: hidden;
+  /* 同上：不要在卡片上也裁剪，否则卡片内部的 sticky（吸底保存栏）同样失效。
+     横向溢出交给子元素 min-width: 0 收敛，圆角靠 clip 而不是 hidden 保持。 */
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 /* ---------------- Controls ---------------- */
@@ -376,10 +386,14 @@ button.primary-action,
   background: color-mix(in srgb, var(--ink) 8%, transparent) !important;
 }
 
+/* 单行输入控件的统一外观。
+   注意：这里只列「单行」控件。多行文本框（textarea）被单独拆到下面，
+   因为「控件高度」对它们而言是错的语义 —— 单行控件的高度等于一行文字，
+   多行控件套上这个高度就只剩两行可见。之前 textarea 混在这组里，
+   正是复盘页「每栏只看得见两行」的根因。 */
 .text-input,
 .number-input,
 .select-input,
-.review-textarea,
 input[type='text'],
 input[type='number'],
 input[type='password'],
@@ -388,7 +402,6 @@ input[type='url'],
 input[type='time'],
 input[type='date'],
 input[type='search'],
-textarea,
 select {
   min-height: var(--control-height);
   border: 1px solid var(--line) !important;
@@ -398,14 +411,25 @@ select {
   box-shadow: none !important;
 }
 
-/* 多行文本框必须比单行控件高：上面的选择器组里同时列了 `textarea` 和
-   `.review-textarea`，把 `styles.css` 的 `.review-textarea { min-height: 132px }`
-   按「后加载覆盖」压回了按钮高度（36px），复盘每一栏只能看到两行字。
-   这里只针对复盘输入框重新给回高度，不牵动其它页面的多行输入。 */
+/* 多行文本框：共享单行控件的外观（边框、圆角、配色），
+   但高度按「能写几行」来定，而不是按控件行高来定。 */
+textarea:not([rows='1']),
+.review-textarea {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-control) !important;
+  color: var(--ink) !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: none !important;
+  /* 不要用 --control-height：那是单行的高度。多行至少要能舒服地写几行。 */
+  min-height: 96px;
+  line-height: 1.7;
+  padding-block: 10px;
+}
+
+/* 复盘是长文写作，比普通多行输入再高一档。 */
 .review-textarea {
   min-height: 168px;
   max-height: 480px;
-  line-height: 1.7;
 }
 
 .text-input:focus,
@@ -858,7 +882,12 @@ html[data-theme='sakura'] .primary-button {
 
 
 
-/* ---- UI regression: overflow + card text ---- */
+/* ---- 防溢出：只在「确实会溢出」的地方做省略 ----
+   早期这条规则把所有面板里的 strong 一网打尽（.soft-panel strong 等），
+   统一加 overflow:hidden + min-width:0。后遗症是所有标题在 flex 布局里
+   都能被压到小于内容宽度，于是「数学强化与错题复盘」缩成 28px 的「数学…」。
+   省略号应该由「这一行确实放不下」决定，而不是由容器类型决定。
+   现在这里只保留真正需要的结构性约束：容器可收缩，文字默认可换行。 */
 .soft-panel,
 .command-panel,
 .metric-card,
@@ -878,10 +907,22 @@ html[data-theme='sakura'] .primary-button {
   min-width: 0;
 }
 
-.soft-panel strong,
-.command-panel strong,
-.metric-card strong,
-.details-card strong,
+/* 只有「单行定宽卡片」里的文字才强制单行省略 —— 那里的高度是按一行设计的，
+   换行会撑破卡片。列表/详情区的标题允许换行，长科目名才不会被吃掉。 */
+.schedule-block strong,
+.schedule-block span,
+.schedule-block small,
+.week-block,
+.today-item-row .today-item-copy strong,
+.category-task-row .checklist-task-copy strong,
+.checklist-task-card .checklist-task-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* 列表行里的标题：允许换行显示完整名称，但不许把行撑破。 */
 .list-row strong,
 .record-row strong,
 .schedule-task-row strong,
@@ -889,23 +930,31 @@ html[data-theme='sakura'] .primary-button {
 .category-task-row strong,
 .checklist-task-card strong,
 .template-row strong,
-.schedule-block strong,
-.schedule-block span,
-.schedule-block small,
-.week-block,
-.nav-item span,
-.brand h1 {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.details-card strong,
+.subject-stat-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 「今日待排」左栏内宽只有约 192px，且这个宽度由三列栅格的上限（230px）决定，
+   跟窗口多宽无关 —— 1920 下左栏一样窄。所以任何「窗口够大就横排」的分支
+   都会重新把标题压窄。这里始终堆叠：标题独占整行，操作按钮另起一行。 */
+.schedule-task-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.schedule-task-row .schedule-task-actions {
+  justify-items: start;
   min-width: 0;
 }
 
-.schedule-task-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
+.schedule-task-row .schedule-quick-slots {
+  justify-content: flex-start;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .schedule-task-row > div:first-child,

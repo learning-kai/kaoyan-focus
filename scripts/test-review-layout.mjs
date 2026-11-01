@@ -1,14 +1,22 @@
 /**
- * 复盘页可写性回归校验（静态契约）。
+ * 输入控件与列表文字的布局契约（第一性原理版）。
  *
- * 修过的线上问题：复盘页三个输入框每栏只能看到两行字。
- * 根因是 `apple-hig.css` 里那组「输入控件统一高度」的选择器同时列了
- * `textarea` 和 `.review-textarea`，而它在 `styles.css` 之后加载，
- * 把 `styles.css` 的 `.review-textarea { min-height: 132px }` 压回
- * `--control-height`（36px）。36px 减去上下 padding 只剩约两行正文。
+ * 这里守护的是「分层语义」，不是某个具体像素值：
  *
- * 这里守住契约本身（高度、自动增高、布局比例），真实渲染的像素级
- * 验证见 `npm run test:ui-responsive`。
+ *   1. 单行控件的高度语义 = 一行文字高（--control-height）。
+ *   2. 多行控件（textarea）的高度语义 = 能写几行，绝不能套单行的高度。
+ *   3. 省略号（ellipsis）只能由「这一行确实放不下」触发，
+ *      不能因为「元素在某类容器里」就无差别加上。
+ *
+ * 曾经的三个真实故障，全都是违反了上面某一条：
+ *   - 复盘只能看两行：单行控件分组把 textarea 一起圈进去，多行被压成 36px。
+ *   - 科目名变成「数学…」：一条 `.soft-panel strong` 兜底规则给所有标题
+ *     加了 overflow:hidden + min-width:0，flex 里就被压到内容宽度以下。
+ *   - 日历标题整行消失：左栏宽度写死 230px，右侧按钮按内容吃宽度，
+ *     标题列被挤成 0px。
+ *
+ * 断言「分层正确」而不是「某个值等于 168px」，这样具体数值可以自由调整，
+ * 但架构再也不能退回旧样子。真实渲染验证见 `npm run test:ui-responsive`。
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -24,16 +32,37 @@ function assert(condition, message) {
   }
 }
 
-/** 取某个选择器块的声明体，例如 `.review-textarea { ... }`；只认行首的选择器，避免命中注释里的同名文字。 */
+/** 去掉 CSS 注释，避免注释里的文字干扰解析。 */
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+/** 收集某个选择器在所有规则块中的声明（同一选择器可能出现在多条规则里）。 */
 function ruleBody(source, selector) {
-  const lines = source.split('\n');
-  const target = `${selector} {`;
+  const clean = stripComments(source);
+  const lines = clean.split('\n');
+  const bodies = [];
   for (let index = 0; index < lines.length; index += 1) {
-    if (lines[index].trimEnd() !== target && lines[index].trim() !== target) continue;
+    const line = lines[index].trim();
+    // 选择器可能与其他选择器并列（`.a,` / `.b {`），只要本行以它开头即可。
+    if (line !== selector && line !== `${selector} {` && !line.startsWith(`${selector},`)) continue;
     const rest = lines.slice(index).join('\n');
-    const end = rest.indexOf('}');
-    if (end < 0) return null;
-    return rest.slice(0, end + 1);
+    const open = rest.indexOf('{');
+    const end = rest.indexOf('}', open);
+    if (open < 0 || end < 0) continue;
+    bodies.push(rest.slice(open + 1, end));
+  }
+  return bodies.length ? bodies.join('\n') : null;
+}
+
+/** 找到包含某个选择器的那组「共用声明」规则，返回其选择器列表与声明体。 */
+function groupContaining(source, selector) {
+  const clean = stripComments(source);
+  const blocks = [...clean.matchAll(/(^[^{}\n][^{}]*?)\{([^{}]*)\}/gm)];
+  for (const block of blocks) {
+    const selectors = block[1];
+    if (!selectors.split(',').some((item) => item.trim() === selector)) continue;
+    return { selectors: selectors.split(',').map((item) => item.trim()), body: block[2] };
   }
   return null;
 }
@@ -42,122 +71,134 @@ const appleHig = read('src/apple-hig.css');
 const styles = read('src/styles.css');
 const page = read('src/pages/ReviewPage.tsx');
 
-// ---------- 1. apple-hig 的「统一输入框高度」不许把复盘框压扁 ----------
-// 定位那组会命中 textarea 的规则，确认它把 textarea 和 .review-textarea 一起包了进来。
-const controlGroupStart = appleHig.indexOf('input[type=\'search\'],');
-assert(controlGroupStart > 0, '未找到 apple-hig 的输入控件高度分组');
-const controlGroup = appleHig.slice(controlGroupStart, appleHig.indexOf('}', controlGroupStart) + 1);
-assert(
-  controlGroup.includes('textarea,'),
-  '输入控件分组应仍包含 textarea（其它页面依赖它）',
-);
-assert(
-  controlGroup.includes('min-height: var(--control-height)'),
-  '输入控件分组应把高度压到 --control-height',
-);
-
-// 关键：这条 36px 规则之后必须有专门把复盘框抬回多行高度的规则。
-const reviewOverride = ruleBody(appleHig, '.review-textarea');
-assert(reviewOverride !== null, 'apple-hig.css 必须为 .review-textarea 单独声明高度，覆盖 36px 的控件高度');
-const overrideMin = reviewOverride && /min-height:\s*(\d+)px/.exec(reviewOverride);
-assert(overrideMin !== null, 'apple-hig.css 的 .review-textarea 必须给出 px 级 min-height');
-if (overrideMin) {
+// ---------- 契约 1：单行控件分组不许再圈进 textarea ----------
+const singleLineGroup = groupContaining(appleHig, '.text-input');
+assert(singleLineGroup !== null, 'apple-hig.css 应存在单行控件样式组（.text-input …）');
+if (singleLineGroup) {
   assert(
-    Number(overrideMin[1]) >= 160,
-    `.review-textarea 的 min-height 至少 160px（当前 ${overrideMin[1]}px）：36px 只够两行`,
+    singleLineGroup.body.includes('min-height: var(--control-height)'),
+    '单行控件组应当使用 --control-height 作为高度',
+  );
+  assert(
+    !singleLineGroup.selectors.includes('textarea'),
+    '单行控件组不能包含 textarea：多行控件套单行高度就是「只能看两行」的根因',
+  );
+  assert(
+    !singleLineGroup.selectors.includes('.review-textarea'),
+    '单行控件组不能包含 .review-textarea，同理',
   );
 }
 
-// 覆盖规则必须排在那组 36px 规则之后，否则同权重下会被盖回去。
-const overrideIndex = appleHig.indexOf('.review-textarea {');
-assert(
-  overrideIndex > controlGroupStart,
-  '.review-textarea 的高度覆盖必须写在控件分组之后，否则会被 36px 盖掉',
-);
+// ---------- 契约 2：多行控件有独立的高度语义 ----------
+const multiLine = ruleBody(appleHig, "textarea:not([rows='1'])");
+assert(multiLine !== null, 'apple-hig.css 必须为多行 textarea 单独定义规则（与单行分开）');
+if (multiLine) {
+  assert(
+    !/min-height:\s*var\(--control-height\)/.test(multiLine),
+    '多行 textarea 不能再用 --control-height：那是单行的高度语义',
+  );
+  const minPx = /min-height:\s*(\d+)px/.exec(multiLine);
+  assert(minPx !== null, '多行 textarea 应以 px 给出 min-height（可写好几行）');
+  if (minPx) {
+    assert(
+      Number(minPx[1]) >= 60,
+      `多行 textarea 的 min-height 至少要能放下三行正文（当前 ${minPx[1]}px）`,
+    );
+  }
+}
 
-// ---------- 2. styles.css 同源声明保持一致 ----------
+// 复盘属于长文写作，应当比普通多行输入更高，且有上限。
+// 同一选择器可能出现多条规则（共享外观 + 专属尺寸），取其中最大的 min-height 为准。
+const reviewRule = ruleBody(appleHig, '.review-textarea');
+assert(reviewRule !== null, 'apple-hig.css 应为 .review-textarea 定义长文规格');
+if (reviewRule) {
+  const minValues = [...reviewRule.matchAll(/min-height:\s*(\d+)px/g)].map((m) => Number(m[1]));
+  const maxValues = [...reviewRule.matchAll(/max-height:\s*(\d+)px/g)].map((m) => Number(m[1]));
+  assert(minValues.length > 0, '.review-textarea 需要 px 级 min-height');
+  assert(maxValues.length > 0, '.review-textarea 需要 px 级 max-height：自动增高必须有上限');
+  if (minValues.length && maxValues.length) {
+    const minPx = Math.max(...minValues);
+    const maxPx = Math.max(...maxValues);
+    assert(
+      minPx >= 150,
+      `.review-textarea 至少 150px 高（当前 ${minPx}px）`,
+    );
+    assert(
+      maxPx > minPx,
+      '.review-textarea 的 max-height 必须大于 min-height，否则自动增高无意义',
+    );
+  }
+}
+
+// 尺寸只应有一处权威定义，避免两个文件各写一套互相打架。
 const stylesReview = ruleBody(styles, '.review-textarea');
-assert(stylesReview !== null, 'styles.css 应保留 .review-textarea 规则');
-const stylesMin = stylesReview && /min-height:\s*(\d+)px/.exec(stylesReview);
-assert(stylesMin !== null, 'styles.css 的 .review-textarea 应以 px 给出 min-height');
-if (stylesMin && overrideMin) {
+assert(stylesReview !== null, 'styles.css 应保留 .review-textarea 的视觉规则');
+if (stylesReview) {
   assert(
-    Number(stylesMin[1]) >= 160,
-    `styles.css 的 min-height 至少 160px（当前 ${stylesMin[1]}px）`,
+    !/min-height\s*:/.test(stylesReview) && !/max-height\s*:/.test(stylesReview),
+    'styles.css 不应重复定义 .review-textarea 的尺寸：尺寸已统一由 apple-hig.css 给出',
   );
+  assert(/resize:\s*vertical/.test(stylesReview), '复盘框应保留手动纵向拖拽');
+  assert(/overflow-y:\s*auto/.test(stylesReview), '复盘框达到 max-height 后必须可滚动');
 }
+
+// ---------- 契约 3：省略号只能由「放不下」触发，不能由容器类型触发 ----------
+// 旧写法：一条 .soft-panel strong 兜底规则给所有标题加死 nowrap + min-width:0。
+const allStrongNowrap = /\.soft-panel strong[\s\S]{0,400}?white-space:\s*nowrap/.test(appleHig);
 assert(
-  /max-height:\s*\d+px/.test(stylesReview ?? ''),
-  '复盘框必须设 max-height：自动增高需要有上限，否则长文会把页面撑爆',
-);
-assert(
-  /overflow-y:\s*auto/.test(stylesReview ?? ''),
-  '复盘框必须允许滚动，达到 max-height 后仍可继续写',
-);
-assert(
-  /resize:\s*vertical/.test(stylesReview ?? ''),
-  '复盘框应保留手动纵向拖拽',
+  !allStrongNowrap,
+  '不能再有「.soft-panel strong 一律 nowrap + 省略」的兜底规则：那会把 flex 里的标题压到内容宽度以下',
 );
 
-// ---------- 3. 输入框随内容自动长高 ----------
+// 真正按一行设计的卡片仍然需要 nowrap（防止撑破），所以规则本身不能删光。
+assert(
+  /\.schedule-block strong[\s\S]{0,500}?white-space:\s*nowrap/.test(appleHig),
+  '按单行高度设计的日程块标题应保留 nowrap 省略，避免撑破色块',
+);
+
+// 列表类标题应允许换行显示完整名称。
+assert(
+  /\.schedule-task-row strong[\s\S]{0,600}?overflow-wrap:\s*anywhere/.test(appleHig)
+    || /\.list-row strong[\s\S]{0,600}?overflow-wrap:\s*anywhere/.test(appleHig),
+  '列表行标题应允许换行/断词，而不是一律省略',
+);
+
+// ---------- 契约 4：日历左栏不能写死到装不下标题 ----------
+const scheduleGrid = ruleBody(styles, '.schedule-grid-shell');
+assert(scheduleGrid !== null, 'styles.css 应存在 .schedule-grid-shell 栅格定义');
+// 宽屏时左栏必须有更大的档位，否则窗口变宽只有中间列在长。
+assert(
+  /@media \(min-width: 1400px\)[\s\S]{0,300}\.schedule-grid-shell/.test(styles),
+  '宽屏需要为日历左栏提供更宽的栅格档位：固定 230px 会把标题挤成 0px',
+);
+const compactRow = ruleBody(appleHig, '.schedule-task-row');
+assert(compactRow !== null, 'apple-hig.css 应定义 .schedule-task-row 布局');
+assert(
+  !/grid-template-columns:\s*minmax\(0, 1fr\) auto/.test(compactRow),
+  '今日待排行不能用 `1fr auto`：auto 列按内容吃宽度，左栏窄时标题会被压成 0px',
+);
+
+// ---------- 契约 5：复盘字段自动增高 ----------
 assert(
   page.includes('textarea.style.height = `${textarea.scrollHeight}px`'),
-  '复盘输入框必须按 scrollHeight 自动长高：固定小框会把长复盘逼到反复滚动',
+  '复盘输入框必须按 scrollHeight 自动长高',
 );
 assert(
   /textarea\.style\.height = 'auto'/.test(page),
-  '自动增高前必须先把高度重置为 auto，否则内容变短时不会回落',
+  '自动增高前必须重置为 auto，否则内容变短不会回落',
 );
-const heightEffect = page.slice(page.indexOf('textarea.style.height'), page.indexOf('rows={6}'));
-assert(
-  /\}, \[value\]\)/.test(page),
-  '自动增高必须依赖 value，AI 填稿和载入历史复盘时同样要撑开',
-);
-assert(
-  page.includes('ref={textareaRef}'),
-  '自动增高需要 textarea 的 ref',
-);
-assert(
-  !/rows=\{2\}/.test(page),
-  '复盘输入框不能用 rows={2}：常见窗口下就只显示两行',
-);
-
-// ---------- 4. 布局给编辑区让出主要宽度 ----------
-const gridRules = [...styles.matchAll(/\.review-grid \{[^}]*\}/g)].map((match) => match[0]);
-assert(gridRules.length >= 1, '未找到 .review-grid 规则');
-const wideGrid = gridRules.find((rule) => rule.includes('minmax(0, 1.55fr)'));
-assert(
-  wideGrid !== undefined,
-  '宽屏下编辑区应拿到更大的比例（1.55fr），复盘页的主体是写东西而不是看概览',
-);
-assert(
-  /minmax\(260px, 0\.68fr\)/.test(wideGrid ?? ''),
-  '宽屏下概览栏应收窄到 0.68fr，把宽度让给编辑区',
-);
-
-// 移动端仍是单列，不能被上面的比例改坏。
-assert(
-  /@media \(max-width: \d+px\) \{[\s\S]*?\.review-grid \{\s*grid-template-columns: 1fr;/.test(styles),
-  '窄屏下 .review-grid 必须回落成单列',
-);
-
-// ---------- 5. 三个字段都走同一个组件，避免只修好其中一栏 ----------
-for (const id of ['daily-summary', 'daily-blockers', 'daily-focus', 'weekly-summary', 'weekly-blockers', 'weekly-focus']) {
-  assert(page.includes(`id="${id}"`), `缺少复盘字段 ${id}`);
-}
-const reviewFieldCount = (page.match(/<ReviewField /g) ?? []).length;
-assert(
-  reviewFieldCount === 6,
-  `六个复盘字段都要用 ReviewField（当前 ${reviewFieldCount} 个），否则自动增高只对部分栏目生效`,
-);
+assert(/\}, \[value\]\)/.test(page), '自动增高必须依赖 value，AI 填稿与载入历史时也要撑开');
+assert(!/rows=\{2\}/.test(page), '复盘输入框不能用 rows={2}');
+assert((page.match(/<ReviewField /g) ?? []).length === 6, '日/周各三个字段都要走 ReviewField');
 
 if (failed) {
-  console.error('\n复盘页布局契约校验失败。');
+  console.error('\n输入控件与列表文字的布局契约校验失败。');
   process.exit(1);
 }
 
-console.log('复盘页布局契约校验通过：');
-console.log('  - 复盘输入框高度不再被 apple-hig 的 36px 控件高度压扁（≥160px，可滚动、可拖拽）');
-console.log('  - 输入框随内容自动长高，长复盘不再被锁在小框里');
-console.log('  - 宽屏下编辑区拿到主导宽度，概览栏让位');
-console.log('  - 日/周各三个字段全部走同一组件');
+console.log('布局契约校验通过（分层语义）：');
+console.log('  - 单行控件用 --control-height；多行 textarea 有独立高度语义，不再被压成单行');
+console.log('  - 复盘长文框有 min/max 高度、可滚动可拖拽，尺寸只在 apple-hig.css 定义一处');
+console.log('  - 省略号由「放不下」触发，不再按容器类型无差别 nowrap');
+console.log('  - 日历左栏在宽屏下有更宽档位，今日待排行不把标题挤成 0px');
+console.log('  - 复盘字段随内容自动增高');

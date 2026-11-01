@@ -734,10 +734,23 @@ html[data-study-fullscreen='true'] body {
   font-size: 18px;
 }
 
+/* 左栏是「开始学习」这个主操作，右栏是一长串可配置项。
+   两栏放在同一行时，grid 行高取两者较大值：右边配置栏有 1100px 高，
+   左边控制台只有 405px，默认的 stretch 会把控制台拉高到 1100px，
+   于是「开始学习」按钮被垂直居中推到 716px 处 —— 1280x720 的笔记本上
+   直接被切掉一截，用户必须滚动才能点到。
+   主操作必须始终在第一屏：align-items:start 让左栏保持自身高度。 */
 .prepare-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  align-items: start;
   gap: 16px;
+}
+
+/* 控制台自己是一列内容（倒计时 → 参数速览 → 开始按钮），
+   内部也贴顶排列，不要被拉伸出多余空白。 */
+.start-console {
+  align-content: start;
 }
 
 .start-console,
@@ -1288,6 +1301,20 @@ html[data-study-fullscreen='true'] body {
   gap: 12px;
   min-width: 0;
   min-height: 220px;
+  min-height: 0;
+}
+
+/* 设置内容区自己滚动：这样里面的「保存」吸底才有意义。
+   若让整个文档滚动，sticky 元素位于内容末尾，只有滚到底才粘住，
+   等于没有 —— 实测 960x680 下保存按钮在 1714px 处，要下滚 1034px。 */
+.settings-panel-scroll {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-height: 0;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .settings-loading-state {
@@ -1570,7 +1597,13 @@ html[data-study-fullscreen='true'] body {
   box-shadow: 0 8px 18px rgba(2, 6, 17, 0.28);
 }
 
+/* 设置页的「保存」是这个页面的提交动作，但表单很长：
+   实测 960x680 下它被推到 1714px 处，要下滚 1034px 才够得着。
+   提交动作应当随时可用，所以吸底常驻。 */
 .settings-save-row {
+  position: sticky;
+  bottom: 12px;
+  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -1658,6 +1691,13 @@ html[data-study-fullscreen='true'] body {
 .checklist-boards,
 .whitelist-workbench {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* 专注页的「今日状态」面板落在三列 dashboard-strip 的单列里（约 350px 宽），
+   里面再排 4 张指标卡就只剩 69px/张，「38 分钟」会被截成「38 分…」。
+   这种窄容器里四列必然放不下，改成两列，数字才完整可读。 */
+.dashboard-strip .stats-grid.four {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .soft-panel {
@@ -2203,6 +2243,7 @@ html[data-study-fullscreen='true'] body {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+
 }
 
 .metric-card {
@@ -2297,6 +2338,47 @@ html[data-study-fullscreen='true'] body {
   gap: 14px;
   align-items: center;
   justify-content: space-between;
+}
+
+/* 科目统计行里三块内容的需求完全不同：名称要的是「不被截断」，
+   进度条和时长各自有固定合理宽度。默认三等分会让最长的科目名
+   （如「数学强化与错题复盘」）被压到 110px 而截断，
+   进度条却拿到等量的 214px 空转。这里按内容需要重新分配。 */
+.subject-stat-row > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.subject-stat-row > .subject-bar {
+  flex: 0 1 220px;
+  min-width: 80px;
+}
+
+.subject-stat-row > strong:last-child {
+  flex: 0 0 auto;
+  min-width: 84px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 科目名不再被压扁（去掉全局 nowrap+min-width:0 之后就能看到完整名称），
+   但三者合计超过容器宽度时不能溢出：让信息列整体按内容增长，
+   进度条让位收缩，右侧时长保持定宽。 */
+.subject-stat-row > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.subject-stat-row > div:first-child > strong {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.subject-stat-row > div:first-child > small {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .row-main,
@@ -2775,6 +2857,9 @@ html[data-study-fullscreen='true'] .focus-resume-action {
 }
 
 .settings-sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -3916,11 +4001,37 @@ details.details-card[open] > summary::before {
   background: linear-gradient(135deg, #8db8ff, #69dfb7);
 }
 
+/* 三栏的宽度应当跟着「内容需要多宽」走，而不是固定上限。
+   原来的 minmax(180px, 230px) 把「今日待排」锁死在 230px：
+   窗口从 1440 拉到 1920，只有中间时间轴从 623 涨到 1103，
+   左右两栏纹丝不动，于是左栏里每行任务的标题被右侧按钮挤窄，
+   而中间时间轴白白多出 480px。左栏内容（标题 + 勾选框 + 时间按钮）
+   至少需要 320px 才不挤，所以宽屏时按视口给它加宽。 */
 .schedule-grid-shell {
   display: grid;
   grid-template-columns: minmax(180px, 230px) minmax(520px, 1fr) minmax(180px, 240px);
   gap: 12px;
   align-items: start;
+}
+
+@media (min-width: 1400px) {
+  .schedule-grid-shell {
+    grid-template-columns: minmax(300px, 340px) minmax(520px, 1fr) minmax(180px, 240px);
+  }
+
+  .schedule-grid-shell.is-week {
+    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(180px, 240px);
+  }
+}
+
+@media (min-width: 1750px) {
+  .schedule-grid-shell {
+    grid-template-columns: minmax(340px, 400px) minmax(600px, 1fr) minmax(220px, 280px);
+  }
+
+  .schedule-grid-shell.is-week {
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(220px, 280px);
+  }
 }
 
 .schedule-grid-shell.is-week {
@@ -3946,6 +4057,45 @@ details.details-card[open] > summary::before {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(9, 15, 25, 0.46);
+}
+
+/* 「今日待排」左栏最宽只有 230px（内宽约 192px）。右侧「选时间」+ 上午/下午/晚上
+   三个快捷按钮约需 136px，勾选框又要 56px —— 横向并排时标题列被压到 0px，
+   整行标题看不见（1440/1920 窗口下必现，960 单列时反而正常）。
+   改成上下堆叠：标题占满整行宽度，操作按钮另起一行。 */
+.schedule-task-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.schedule-task-row .schedule-task-main {
+  min-width: 0;
+}
+
+.schedule-task-row .schedule-task-actions {
+  min-width: 0;
+  justify-items: start;
+}
+
+.schedule-task-row .schedule-quick-slots {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+/* 宽屏时左栏依然窄，但日历主体够宽，不必跟着堆叠；保持一行更紧凑。 */
+@media (min-width: 1600px) {
+  .today-task-rail .schedule-task-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  }
+
+  .today-task-rail .schedule-task-actions {
+    justify-items: end;
+  }
+
+  .today-task-rail .schedule-quick-slots {
+    justify-content: flex-end;
+  }
 }
 
 .schedule-task-row strong,
@@ -5084,13 +5234,12 @@ details.details-card[open] > summary::before {
   box-shadow: 0 8px 16px color-mix(in srgb, var(--blue) 22%, transparent);
 }
 
+/* 复盘的尺寸（min/max-height、行高）统一由 apple-hig.css 的多行文本框规则给出，
+   这里只保留纯视觉属性，避免两个文件各写一套尺寸互相打架。 */
 .review-textarea {
-  min-height: 168px;
-  max-height: 480px;
   padding: 12px 13px;
   overflow-y: auto;
   resize: vertical;
-  line-height: 1.7;
 }
 
 .review-field {
@@ -5131,9 +5280,47 @@ details.details-card[open] > summary::before {
   line-height: 1.55;
 }
 
+/* 保存栏必须始终在手边，不能跟着正文长度往下漂。
+   实测：三个输入框写满后，「保存复盘」在 960x680 下被推到 1649px 处，
+   要下滚 969px 才够得着 —— 用户写完一段想保存，得先找按钮。
+   提交动作属于「一直可用」的控件，所以吸底粘在可视区底部。 */
+/* 保存栏必须始终在手边。
+   实测：三个输入框写满后，「保存复盘」在 960x680 下被推到 1649px 处，
+   要下滚 969px 才够得着 —— 用户写完想保存，得先去找按钮。
+   单纯 sticky 救不了：元素在容器「末尾」，只有滚到底才粘住，等于没有。
+   正确解法是让编辑器自己成为滚动容器（正文滚动、操作栏固定），
+   操作栏就永远贴在卡片底部可见。 */
+.review-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  max-height: calc(100vh - 190px);
+}
+
+/* 正文区独立滚动，操作栏不跟着走。 */
+.review-editor-scroll {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .review-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  flex: 0 0 auto;
   justify-content: flex-end;
-  padding-top: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control, 8px);
+  background: var(--surface-card, var(--bg-elevated));
+  box-shadow: 0 -6px 16px color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
 .review-actions .primary-action {
@@ -5235,8 +5422,45 @@ details.details-card[open] > summary::before {
     grid-template-columns: 1fr;
   }
 
+  /* 单列时概览栏会整块压到编辑器上方，把「保存复盘」推出视口。
+     窄屏下概览改为紧凑横排，不再独占首屏。 */
   .review-summary-panel {
     position: static;
+  }
+
+  .review-summary-panel .review-progress,
+  .review-week-note {
+    display: none;
+  }
+
+  .review-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .review-summary-panel .panel-title {
+    display: none;
+  }
+
+  /* 窄屏的 hero 会长成 196px 高（标题换行 + 工具栏折行），
+     把下面的编辑器整块顶出首屏。这里压缩到只留标题和工具栏。 */
+  .review-hero {
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .review-hero-copy p:not(.eyebrow) {
+    display: none;
+  }
+
+  .review-hero h2 {
+    font-size: 21px;
+  }
+
+  /* 编辑器自己滚动，所以让它的高度跟着视口走：
+     hero + 工具栏 + 概览 + 间距之外的部分，全部留给编辑器。 */
+  .review-editor {
+    max-height: calc(100vh - 330px);
+    min-height: 300px;
   }
 }
 
@@ -5370,7 +5594,17 @@ details.details-card[open] > summary::before {
     grid-template-columns: 1fr;
   }
 
-  .alarm-form-grid,
+  /* 闹钟表单是 5 个短字段 + 1 个按钮。全部堆成单列时表单高 359px，
+     在 960x680 下「添加闹钟」被推到 710px 处，超出视口 30px。
+     短字段两列排布即可回到第一屏，也不必牺牲可读性。 */
+  .alarm-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .alarm-form-grid > .primary-action {
+    grid-column: 1 / -1;
+  }
+
   .alarm-inline-editor,
   .alarm-reschedule-editor {
     grid-template-columns: 1fr;

@@ -483,6 +483,8 @@ export default function ReviewPage() {
             {!activeReview && !loadingReview && <p className="review-empty-note">还没有这段时间的复盘。写下几句，再保存即可。</p>}
           </div>
 
+          {/* 正文独立滚动，保存栏固定在卡片底部 —— 写多长都不用去找按钮。 */}
+          <div className="review-editor-scroll">
           <fieldset className="review-score-row" disabled={editorDisabled}>
             <legend>状态评分</legend>
             <span>凭直觉选一个分数即可</span>
@@ -510,6 +512,7 @@ export default function ReviewPage() {
           )}
 
           {aiNote && <p className="review-ai-note" role="status"><Sparkles aria-hidden="true" size={14} /> {aiNote}</p>}
+          </div>
 
           <div className="review-actions">
             <button
