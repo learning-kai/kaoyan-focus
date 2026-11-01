@@ -976,4 +976,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - fix: 主操作必须第一屏可点 + 布局分层语义（从根因修） (65e0efe)
 
+## v1.7.2 - 2026-11-01
+
+### Desktop
+#### Fixed
+- fix: AI 排期设置面板展开即白屏 + 长表单被挤进半格 (a880109)
+
 
