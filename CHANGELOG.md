@@ -967,4 +967,10 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Fixed
 - fix: 主窗口关闭后打不开 + 复盘页只能看两行 + AI 复盘语气改为督学教练 (257d842)
 
+## v1.7.1 - 2026-11-01
+
+### Desktop
+#### Fixed
+- fix: 主操作必须第一屏可点 + 布局分层语义（从根因修） (65e0efe)
+
 
