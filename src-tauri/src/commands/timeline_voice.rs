@@ -95,9 +95,15 @@ pub fn resolve_piper_dir(app_data_dir: Option<&Path>) -> Option<PathBuf> {
             .join("piper"),
     );
 
-    candidates
-        .into_iter()
-        .find(|dir| dir.join("piper.exe").is_file() && dir.join(VOICE_MODEL).is_file())
+    candidates.into_iter().find(|dir| {
+        dir.join("piper.exe").is_file()
+                && dir.join(VOICE_MODEL).is_file()
+                // espeak-ng 的音素数据是必需的：缺了 `voices`/`lang` 目录时
+                // piper 会「加载成功、合成 0 字节、退出码 127」，极难排查。
+                && dir.join("espeak-ng-data").join("voices").is_dir()
+                && dir.join("espeak-ng-data").join("lang").is_dir()
+                && dir.join("espeak-ng-data").join("phontab").is_file()
+    })
 }
 
 /// 把 Piper 运行时准备到一个**纯 ASCII 路径**下，返回该目录。
@@ -289,6 +295,25 @@ mod tests {
     }
 
     #[test]
+    fn espeak_data_has_phoneme_sources() {
+        // 精简 espeak 数据时曾误删 voices/lang，导致 piper 静默产出 0 字节音频。
+        // 这里锁住这几个必需项，避免同类问题再次漏过。
+        let dir = resolve_piper_dir(None).expect("应找到 piper 目录");
+        let espeak = dir.join("espeak-ng-data");
+        assert!(espeak.join("voices").is_dir(), "缺少 espeak-ng-data/voices");
+        assert!(espeak.join("lang").is_dir(), "缺少 espeak-ng-data/lang");
+        assert!(
+            espeak.join("phontab").is_file(),
+            "缺少 espeak-ng-data/phontab"
+        );
+        assert!(
+            espeak.join("phondata").is_file(),
+            "缺少 espeak-ng-data/phondata"
+        );
+        assert!(espeak.join("cmn_dict").is_file(), "缺少中文词典 cmn_dict");
+    }
+
+    #[test]
     fn piper_dir_resolves_in_development() {
         // 开发期 resources/piper 一定存在（随仓库分发）。
         let dir = resolve_piper_dir(None);
@@ -312,6 +337,11 @@ mod piper_smoke {
         let runtime = ensure_ascii_runtime(&dir).expect("应能准备 ASCII 运行时目录");
         let bytes = synthesize_with_piper(&runtime, "一分钟后开始，数学套卷训练", 1.0)
             .expect("应能合成语音");
+        assert!(
+            bytes.len() > 2000,
+            "合成结果过小（{} 字节），说明引擎没有真正产出音频",
+            bytes.len()
+        );
         assert!(bytes.len() > 44, "应大于 WAV 头长度");
         assert_eq!(&bytes[0..4], b"RIFF", "应是合法 RIFF 头");
         assert_eq!(&bytes[8..12], b"WAVE", "应是合法 WAVE 格式");

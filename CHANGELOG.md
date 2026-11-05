@@ -10,6 +10,7 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ### Fixed
 
+- 修复语音播报「本地语音引擎未出声」。根因是上一版精简 espeak 词典时**误删了 `espeak-ng-data/voices` 与 `lang`** 两个必需目录——Piper 会「加载成功、合成出 0 字节、退出码 127」，而且不打印任何错误，属于最难排查的静默失败。现已恢复完整音素数据，并在 `resolve_piper_dir` 中增加 `voices`/`lang`/`phontab`/`phondata`/`cmn_dict` 的存在性校验，配套新增单测锁死这几项，冒烟测试也加了「输出必须大于 2000 字节」的断言，防止同类问题再次漏过。
 - 修复「时间轴语音播报点试听没有声音」——第三次定位，这次找到真因。根因有两层：**(1)** 浏览器 `speechSynthesis` 在 WebView2 里 `getVoices()` 返回空数组，却仍立刻触发 `end` 事件——表现为「没声音也不报错」；**(2)** Edge 在线语音依赖 WebSocket，而开启系统代理（Clash / v2ray 等）后 WSS 升级普遍被拦。现在系统语音通道改为 **进程内 COM 直接调用 SAPI `ISpVoice`**——第一版用 PowerShell 调 `System.Speech`，虽然能出声，但每次播报都会弹控制台窗口，且 `Speak()` 同步阻塞会占死 Tauri 的 IPC 线程导致界面卡死。改为进程内 COM 后把朗读放到独立线程，命令立即返回，界面不阻塞、无任何外部窗口；默认引擎同时改为「系统语音」，在线音色保留为可选。新增 `commands/timeline_voice.rs` 与 6 条单测（语速映射、文本清洗、脚本参数化防注入）。
   后续又发现：Rust 进程内 `ISpVoice.Speak()` 虽返回 Ok、耗时也正常（3 秒以上，确实在念），但**应用进程的音频会话送不到音箱**——同一台机器上白噪音（走 WebView2 音频）却能正常听到。最终方案改为**职责分离**：Rust 只负责用 SAPI 合成 WAV 字节（`synthesize_timeline_speech`，`creation_flags(CREATE_NO_WINDOW)` 保证不弹窗、不阻塞），播放交给前端 `Audio()` + Blob URL——与白噪音同一条已验证可用的通道。
 - 修复卡片内长文字被截断的问题。时间轴日程块的标题、副标题，以及「今日待排」左栏的任务名和描述，之前被一条 `white-space: nowrap` 批量规则压成单行，82–93px 宽的窄卡片里 30 字任务名只剩「数…」。现在标题最多折行两行（`line-clamp: 2`）后省略，常见长度的任务名可完整读到；紧凑卡片的时间行也允许折行，不再被切掉 11px。改动集中在 `apple-hig.css` 与 `styles.css`，并把 `test:review-layout` 的契约从「必须单行 nowrap」改为「必须有行数上限」，防止撑破色块的同时不再牺牲可读性。
