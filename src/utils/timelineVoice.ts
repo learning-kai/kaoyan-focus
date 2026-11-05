@@ -36,11 +36,18 @@ export function buildTimelineVoiceText(args: {
   const title = args.title.trim();
   const subject = args.subjectName?.trim();
   const subjectPrefix = subject ? `${subject}，` : '';
-  const start = formatMinute(args.startMinute);
-  const end = formatMinute(args.endMinute);
+  // 用口语化时间（「上午八点半」），不要用 08:30 这类数字格式 —— TTS 会念成「零八冒号三十」。
+  const startHour = Math.floor(args.startMinute / 60);
+  const endHour = Math.floor(args.endMinute / 60);
+  const samePeriod = periodLabel(startHour) === periodLabel(endHour);
+  // 同一时段内不重复前缀：说「从上午八点半到十一点半」，而不是「上午…到上午…」。
+  const start = formatSpokenMinute(args.startMinute);
+  const endText = samePeriod
+    ? formatSpokenMinute(args.endMinute).slice(periodLabel(endHour).length)
+    : formatSpokenMinute(args.endMinute);
   const duration = Math.max(0, args.endMinute - args.startMinute);
-  const durationText = duration > 0 ? `，预计 ${formatDurationText(duration)}` : '';
-  return `一分钟后开始：${subjectPrefix}${title}。时间 ${start} 到 ${end}${durationText}，请准备。`;
+  const durationText = duration > 0 ? `，预计${formatDurationText(duration)}` : '';
+  return `一分钟后开始：${subjectPrefix}${title}。时间从${start}到${endText}${durationText}，请准备。`;
 }
 
 /** 日历分类 key → 中文科目名，与 SchedulePage 的 categories 一致。 */
@@ -56,14 +63,48 @@ export function categoryLabelForVoice(key: string): string {
   return CATEGORY_LABELS[key] ?? '通用';
 }
 
-/** 把距 00:00 的分钟数转成「上午 8 点 30 分」这种口语说法。 */
+/**
+ * 把距 00:00 的分钟数转成口语说法，供 TTS 朗读。
+ *
+ * 直接念「08:30」这类数字格式，中文语音会读成「零八冒号三十」，非常别扭。
+ * 这里按中文习惯产出：
+ *   480  → 上午八点
+ *   510  → 上午八点半
+ *   495  → 上午八点十五分
+ *   720  → 中午十二点
+ *   1290 → 晚上九点半
+ * 整点不带「分」，30 分说「半」，12 点单独说「中午」。
+ */
 export function formatSpokenMinute(minute: number): string {
   const safeMinute = Math.max(0, Math.min(1439, Math.floor(minute)));
   const hour = Math.floor(safeMinute / 60);
   const minutes = safeMinute % 60;
-  const period = hour < 12 ? '上午' : hour < 18 ? '下午' : '晚上';
+
   const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  return minutes === 0 ? `${period}${hour12}点整` : `${period}${hour12}点${minutes}分`;
+
+  if (minutes === 0) return `${periodLabel(hour)}${numberToChinese(hour12)}点`;
+  if (minutes === 30) return `${periodLabel(hour)}${numberToChinese(hour12)}点半`;
+  return `${periodLabel(hour)}${numberToChinese(hour12)}点${numberToChinese(minutes)}分`;
+}
+
+/** 时间段前缀。 */
+function periodLabel(hour: number): string {
+  if (hour < 6) return '凌晨';
+  if (hour < 12) return '上午';
+  if (hour === 12) return '中午';
+  if (hour < 18) return '下午';
+  return '晚上';
+}
+
+/** 1-59 的汉字写法，供 TTS 朗读（「8 点」不如「八点」稳）。 */
+function numberToChinese(value: number): string {
+  const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  const safe = Math.max(0, Math.min(99, Math.floor(value)));
+  if (safe < 10) return digits[safe];
+  if (safe < 20) return `十${safe % 10 === 0 ? '' : digits[safe % 10]}`;
+  const tens = Math.floor(safe / 10);
+  const ones = safe % 10;
+  return `${digits[tens]}十${ones === 0 ? '' : digits[ones]}`;
 }
 
 function formatMinute(minute: number) {
@@ -72,10 +113,12 @@ function formatMinute(minute: number) {
 }
 
 function formatDurationText(minutes: number) {
-  if (minutes < 60) return `${minutes} 分钟`;
+  if (minutes < 60) return `${numberToChinese(minutes)}分钟`;
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return rest === 0 ? `${hours} 小时` : `${hours} 小时 ${rest} 分钟`;
+  return rest === 0
+    ? `${numberToChinese(hours)}小时`
+    : `${numberToChinese(hours)}小时${numberToChinese(rest)}分钟`;
 }
 
 /** 「自动 / 在线默认音色」的取值：由后端推荐的晓晓。 */

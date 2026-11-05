@@ -68,12 +68,32 @@ const spoken = voice.buildTimelineVoiceText({
 assert.match(spoken, /一分钟后开始/);
 assert.match(spoken, /数学/);
 assert.match(spoken, /套卷训练/);
-assert.match(spoken, /08:30/);
-assert.match(spoken, /11:30/);
-assert.match(spoken, /3 小时/);
+// 关键：TTS 不能念「08:30」这种数字格式（会读成「零八冒号三十」）。
+assert.ok(!/\d{2}:\d{2}/.test(spoken), `不应出现数字时间格式：${spoken}`);
+assert.match(spoken, /上午八点半到十一点半/, `时间应口语化：${spoken}`);
+assert.match(spoken, /三小时/, `时长应用汉字：${spoken}`);
 assert.ok(!spoken.includes('undefined'));
-assert.equal(voice.formatSpokenMinute(510), '上午8点30分');
-assert.equal(voice.formatSpokenMinute(1200), '晚上8点整');
+
+// 口语化时间规则
+assert.equal(voice.formatSpokenMinute(510), '上午八点半');
+assert.equal(voice.formatSpokenMinute(480), '上午八点', '整点不带「分」');
+assert.equal(voice.formatSpokenMinute(495), '上午八点十五分');
+assert.equal(voice.formatSpokenMinute(720), '中午十二点', '12 点说「中午」');
+assert.equal(voice.formatSpokenMinute(1290), '晚上九点半');
+assert.equal(voice.formatSpokenMinute(0), '凌晨十二点', '0 点归凌晨');
+
+// 同时段不重复前缀
+const sameBlock = voice.buildTimelineVoiceText({
+  title: '背单词', subjectName: '英语', startMinute: 540, endMinute: 615,
+});
+assert.match(sameBlock, /从上午九点到十点十五分/, `同时段应省略重复前缀：${sameBlock}`);
+assert.ok(!/到上午/.test(sameBlock), '同一时段内不应重复「上午」');
+
+// 跨时段仍要各自带前缀
+const cross = voice.buildTimelineVoiceText({
+  title: '午休', subjectName: null, startMinute: 720, endMinute: 780,
+});
+assert.match(cross, /从中午十二点到下午一点/, `跨时段应带各自前缀：${cross}`);
 assert.equal(voice.categoryLabelForVoice('math'), '数学');
 
 // ---------- 语速 ----------
@@ -232,6 +252,12 @@ assert.ok(
 // 资源必须随包分发，否则用户装完没有引擎。
 const tauriConf = await readSource('src-tauri/tauri.conf.json');
 assert.match(tauriConf, /resources\/piper/, 'Piper 运行时应打进安装包');
-assert.match(tauriConf, /espeak-ng-data/, 'espeak 数据目录应打进安装包');
+// 必须整目录映射：`resources/piper/espeak-ng-data/*` 这种 glob 不递归子目录，
+// 会导致 voices/lang 漏打包，piper 静默产出 0 字节。
+assert.match(
+  tauriConf,
+  /"resources"\s*:\s*\{\s*"resources\/piper"\s*:\s*"resources\/piper"/,
+  '应以整目录映射打包 Piper，避免 espeak 子目录漏打',
+);
 
 console.log('Timeline online voice assertions passed');
