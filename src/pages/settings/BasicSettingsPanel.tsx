@@ -83,6 +83,9 @@ export function BasicSettingsPanel({
   const [onlineVoices, setOnlineVoices] = useState<OnlineVoice[]>([]);
   const [onlineVoicesLoading, setOnlineVoicesLoading] = useState(false);
   const [onlineVoicesError, setOnlineVoicesError] = useState<string | null>(null);
+  /** 试听结果反馈：让「点了没声音」这件事不再是黑盒。 */
+  const [previewStatus, setPreviewStatus] = useState<string | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
 
   async function refreshOnlineVoices() {
     setOnlineVoicesLoading(true);
@@ -100,6 +103,42 @@ export function BasicSettingsPanel({
     void refreshOnlineVoices();
     return () => undefined;
   }, []);
+
+  /**
+   * 试听播报。
+   *
+   * 必须把结果如实反馈出来：之前的实现 `void` 掉了返回值，
+   * 一旦后端调用失败（命令未注册 / SAPI 出错），界面毫无反应，
+   * 用户只能得到「点了没声音」这一条信息。
+   */
+  async function handlePreviewSpeech() {
+    setPreviewBusy(true);
+    setPreviewStatus(null);
+    try {
+      const result = await speakTimelineTask({
+        text: '一分钟后开始：数学，套卷训练。时间 08:30 到 11:30，预计 3 小时，请准备。',
+        rate: normalizeVoiceRate(settings.timeline_voice_rate),
+        ratePercent: settings.timeline_voice_rate,
+        engine: normalizeVoiceEngine(settings.timeline_voice_engine),
+        onlineVoice: settings.timeline_online_voice,
+      });
+      if (result.ok && result.engine === 'online') {
+        setPreviewStatus('已用在线音色播报。');
+      } else if (result.ok && result.engine === 'system') {
+        setPreviewStatus(
+          normalizeVoiceEngine(settings.timeline_voice_engine) === 'online'
+            ? '在线语音不可用（常见于开启系统代理时 WebSocket 被拦），已自动改用系统语音播报。'
+            : '已用系统语音播报。',
+        );
+      } else {
+        setPreviewStatus('播报失败：系统语音未出声，请检查系统音量与语音包。');
+      }
+    } catch (reason) {
+      setPreviewStatus(`播报出错：${reason instanceof Error ? reason.message : String(reason)}`);
+    } finally {
+      setPreviewBusy(false);
+    }
+  }
 
   return (
     <div
@@ -362,19 +401,15 @@ export function BasicSettingsPanel({
               <div className="timeline-voice-preview">
                 <button
                   className="secondary-action"
-                  disabled={settingsLocked}
-                  onClick={() => void speakTimelineTask({
-                    text: '一分钟后开始：数学，套卷训练。时间 08:30 到 11:30，预计 3 小时，请准备。',
-                    rate: normalizeVoiceRate(settings.timeline_voice_rate),
-                    ratePercent: settings.timeline_voice_rate,
-                    engine: normalizeVoiceEngine(settings.timeline_voice_engine),
-                    onlineVoice: settings.timeline_online_voice,
-                  })}
+                  disabled={settingsLocked || previewBusy}
+                  onClick={() => void handlePreviewSpeech()}
                   type="button"
                 >
-                  <Play size={15} /> 试听播报
+                  <Play size={15} /> {previewBusy ? '正在播报…' : '试听播报'}
                 </button>
-                <span>用当前语音念一句示例。系统语音立即出声；在线音色需要联网，首次合成可能要等一两秒。</span>
+                <span>
+                  {previewStatus ?? '用当前语音念一句示例。系统语音立即出声；在线音色需要联网，首次合成可能要等一两秒。'}
+                </span>
               </div>
 
               <div className="setting-row mode-setting">
