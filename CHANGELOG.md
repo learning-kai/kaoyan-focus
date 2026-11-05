@@ -6,6 +6,7 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ### Added
 
+- 新增「时间轴语音播报」（设置 → 自动化）：时间轴任务开始前 1 分钟，用中文语音念出下一项任务的科目、标题、起止时间与时长。**语音来源默认是微软 Edge 的在线 Natural 神经音色**（晓晓、云希、晓伊、东北话小北、陕西话小妮、粤语、台湾音色等 14 个中文音色，无需 API Key，设置页可刷新列表并任选），比 Windows 自带语音自然得多；在线合成失败（断网/代理/WebSocket 被拦）时自动回落到系统语音，绝不哑掉。实现走 WSS + SSML（`src/utils/edgeTts.ts`，含 Sec-MS-GEC 签名与音频分片拼接），CSP 显式放行 `wss:`。与既有「日历铃声」完全独立——各自开关、各自去重；沿用 30 秒日程轮询，不新增后台循环。新增 `timeline_voice_enabled` / `timeline_voice_rate` / `timeline_voice_engine` / `timeline_online_voice` 设置项与试听按钮。覆盖 `npm run test:timeline-voice`。
 - AI 排期新增「自定义排期提示词」（设置 → 集成 → AI 排期）：一整套长期生效的排期规则（上限 8000 字），支持换行与 Markdown，整段注入给模型。与既有的「长期记忆」（240 字零散偏好）并存，分工明确：长期记忆写一两句话的提醒，自定义提示词写成体系的规则（科目优先级、整卷训练时长、作息框架等）。自定义规则在排期偏好层面优先于内置规则，但被显式声明不得越过硬性约束（只能用队列任务、必须落在空档内、不能超过截止日、输出仍是合法 json）；留空时不产生任何注入。新增 `AiPlannerPreferences.custom_prompt` 字段与 `MAX_CUSTOM_PROMPT_CHARS` 上限，覆盖 `cargo test custom_prompt` 与 `npm run test:ai-custom-prompt`。
 - 复盘页新增「让 AI 起草」：日复盘和周复盘都支持。后端把本地事实（学习时长、有效专注条数、干扰次数、计划完成率、事项标题、正计时休息理由）汇总成提示词，复用 AI 排期已有的密钥与模型配置，模型输出按「总结 / 卡点 / 重点」三段解析后回填到输入框。草稿**不落库**——用户改完仍走既有的保存命令，所以不新增表、不进同步包；已有内容时会先确认才覆盖；模型漏写的段落用本地事实兜底。新增 `draft_review_with_ai` 命令与 `client::chat_text` 文本补全通道（复用同一套重试、退避与错误信封）。覆盖 `cargo test review_ai` 与 `npm run test:ai-review-draft`。
 - 正计时模式点击「结束本轮并休息」时必须填写「休息理由」（最多 60 字）：主界面弹窗和悬浮小组件都要填，缺理由会被拒绝。理由写入 `study_modes.break_reason` 与对应 `focus_sessions.break_reason`，休息阶段显示在时钟下方，休息结束自动清空；专注历史里可以看到每次手动休息的理由，CSV 导出新增「休息理由」列。老数据库通过 `add_column_if_missing` 自动补列。

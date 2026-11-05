@@ -25,6 +25,14 @@ export type AppSettings = {
   show_foreground_rule_toggle: boolean;
   schedule_reminder_enabled: boolean;
   schedule_reminder_lead_minutes: number;
+  /** 是否在时间轴任务开始前 1 分钟用中文语音播报任务内容。 */
+  timeline_voice_enabled: boolean;
+  /** 语音语速倍率的百分比整数（50-200，对应 0.5-2.0）。 */
+  timeline_voice_rate: number;
+  /** 选定的在线音色 ShortName，例如 zh-CN-XiaoxiaoNeural；空串为默认音色。 */
+  timeline_online_voice: string;
+  /** 播报引擎：'online'（Edge 在线语音）| 'system'（系统语音）。 */
+  timeline_voice_engine: 'online' | 'system';
   focus_widget_enabled: boolean;
   focus_widget_mode: FocusWidgetMode;
   focus_widget_auto_follow: boolean;

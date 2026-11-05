@@ -19,6 +19,14 @@ const AUTO_START_BREAK_AFTER_FOCUS_KEY: &str = "auto_start_break_after_focus";
 const SHOW_FOREGROUND_RULE_TOGGLE_KEY: &str = "show_foreground_rule_toggle";
 const SCHEDULE_REMINDER_ENABLED_KEY: &str = "schedule_reminder_enabled";
 const SCHEDULE_REMINDER_LEAD_MINUTES_KEY: &str = "schedule_reminder_lead_minutes";
+/// 时间轴任务开始前 1 分钟，中文语音播报下一段任务内容。
+const TIMELINE_VOICE_ENABLED_KEY: &str = "timeline_voice_enabled";
+/// 语速倍率（0.5-2.0，存两位小数的整数百分比）。
+const TIMELINE_VOICE_RATE_KEY: &str = "timeline_voice_rate";
+/// 用户选定的在线音色 ShortName，例如 zh-CN-XiaoxiaoNeural。
+const TIMELINE_ONLINE_VOICE_KEY: &str = "timeline_online_voice";
+/// 播报引擎：online（Edge 在线语音）| system（系统自带语音）。
+const TIMELINE_VOICE_ENGINE_KEY: &str = "timeline_voice_engine";
 const FOCUS_WIDGET_ENABLED_KEY: &str = "focus_widget_enabled";
 const FOCUS_WIDGET_MODE_KEY: &str = "focus_widget_mode";
 const FOCUS_WIDGET_AUTO_FOLLOW_KEY: &str = "focus_widget_auto_follow";
@@ -73,6 +81,14 @@ pub struct AppSettings {
     pub show_foreground_rule_toggle: bool,
     pub schedule_reminder_enabled: bool,
     pub schedule_reminder_lead_minutes: i64,
+    /// 是否在时间轴任务开始前 1 分钟用中文语音播报任务内容。
+    pub timeline_voice_enabled: bool,
+    /// 语音语速，百分比整数（50-200，对应 0.5-2.0 倍速）。
+    pub timeline_voice_rate: i64,
+    /// 选定的在线音色 ShortName；空串时由前端使用默认音色（晓晓）。
+    pub timeline_online_voice: String,
+    /// `online` | `system`。
+    pub timeline_voice_engine: String,
     pub focus_widget_enabled: bool,
     #[serde(default = "default_focus_widget_mode")]
     pub focus_widget_mode: String,
@@ -150,6 +166,10 @@ impl Default for AppSettings {
             show_foreground_rule_toggle: true,
             schedule_reminder_enabled: true,
             schedule_reminder_lead_minutes: 5,
+            timeline_voice_enabled: false,
+            timeline_voice_rate: 100,
+            timeline_online_voice: String::new(),
+            timeline_voice_engine: "online".to_string(),
             focus_widget_enabled: false,
             focus_widget_mode: default_focus_widget_mode(),
             focus_widget_auto_follow: true,
@@ -271,6 +291,36 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
             defaults.schedule_reminder_lead_minutes,
         )?
         .clamp(0, 60),
+        timeline_voice_enabled: get_bool_setting(
+            &connection,
+            TIMELINE_VOICE_ENABLED_KEY,
+            defaults.timeline_voice_enabled,
+        )?,
+        timeline_voice_rate: get_i64_setting(
+            &connection,
+            TIMELINE_VOICE_RATE_KEY,
+            defaults.timeline_voice_rate,
+        )?
+        .clamp(50, 200),
+        timeline_online_voice: get_string_setting(
+            &connection,
+            TIMELINE_ONLINE_VOICE_KEY,
+            &defaults.timeline_online_voice,
+        )?
+        .trim()
+        .chars()
+        .take(64)
+        .collect(),
+        timeline_voice_engine: match get_string_setting(
+            &connection,
+            TIMELINE_VOICE_ENGINE_KEY,
+            &defaults.timeline_voice_engine,
+        )?
+        .trim()
+        {
+            "system" => "system".to_string(),
+            _ => "online".to_string(),
+        },
         focus_widget_enabled: get_bool_setting(
             &connection,
             FOCUS_WIDGET_ENABLED_KEY,
@@ -418,6 +468,19 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         show_foreground_rule_toggle: settings.show_foreground_rule_toggle,
         schedule_reminder_enabled: settings.schedule_reminder_enabled,
         schedule_reminder_lead_minutes: settings.schedule_reminder_lead_minutes.clamp(0, 60),
+        timeline_voice_enabled: settings.timeline_voice_enabled,
+        timeline_voice_rate: settings.timeline_voice_rate.clamp(50, 200),
+        timeline_online_voice: settings
+            .timeline_online_voice
+            .trim()
+            .chars()
+            .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-')
+            .take(64)
+            .collect(),
+        timeline_voice_engine: match settings.timeline_voice_engine.trim() {
+            "system" => "system".to_string(),
+            _ => "online".to_string(),
+        },
         focus_widget_enabled: settings.focus_widget_enabled,
         focus_widget_mode: normalize_focus_widget_mode(&settings.focus_widget_mode),
         focus_widget_auto_follow: settings.focus_widget_auto_follow,
@@ -573,6 +636,34 @@ pub fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSet
         &connection,
         SCHEDULE_REMINDER_LEAD_MINUTES_KEY,
         &normalized.schedule_reminder_lead_minutes.to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        TIMELINE_VOICE_ENABLED_KEY,
+        if normalized.timeline_voice_enabled {
+            "1"
+        } else {
+            "0"
+        },
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        TIMELINE_VOICE_RATE_KEY,
+        &normalized.timeline_voice_rate.to_string(),
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        TIMELINE_ONLINE_VOICE_KEY,
+        &normalized.timeline_online_voice,
+        &now,
+    )?;
+    set_setting(
+        &connection,
+        TIMELINE_VOICE_ENGINE_KEY,
+        &normalized.timeline_voice_engine,
         &now,
     )?;
     set_setting(

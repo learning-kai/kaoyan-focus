@@ -1,10 +1,17 @@
 import type { ChangeEvent, CSSProperties } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BellRing, Coffee, MonitorUp, Music2, Play, Power, RotateCcw, Save, Settings2, UploadCloud, VolumeX } from 'lucide-react';
 import type { AppSettings, AppTheme, ReminderSoundId, ReminderSoundSource } from '../../types/settings';
 import { APP_THEME_OPTIONS } from '../../theme';
 import { SettingNumber } from './SettingsPrimitives';
 import { COUNTUP_BREAK_MINUTES_MAX, COUNTUP_BREAK_MINUTES_MIN, COUNTUP_BREAK_STEP_MINUTES } from '../../utils/focusDuration';
+import {
+  DEFAULT_ONLINE_VOICE,
+  normalizeVoiceEngine,
+  normalizeVoiceRate,
+  speakTimelineTask,
+} from '../../utils/timelineVoice';
+import { fetchOnlineVoices, type OnlineVoice } from '../../utils/edgeTts';
 
 type SettingsTab = 'rhythm' | 'automation' | 'widget' | 'sound';
 
@@ -72,6 +79,27 @@ export function BasicSettingsPanel({
   updateSettings,
 }: BasicSettingsPanelProps) {
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('rhythm');
+  /** Edge 在线音色列表：联网从服务端拉取，不需要 API Key。 */
+  const [onlineVoices, setOnlineVoices] = useState<OnlineVoice[]>([]);
+  const [onlineVoicesLoading, setOnlineVoicesLoading] = useState(false);
+  const [onlineVoicesError, setOnlineVoicesError] = useState<string | null>(null);
+
+  async function refreshOnlineVoices() {
+    setOnlineVoicesLoading(true);
+    setOnlineVoicesError(null);
+    try {
+      setOnlineVoices(await fetchOnlineVoices());
+    } catch (reason) {
+      setOnlineVoicesError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setOnlineVoicesLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshOnlineVoices();
+    return () => undefined;
+  }, []);
 
   return (
     <div
@@ -269,6 +297,85 @@ export function BasicSettingsPanel({
                 text="0 表示到点提醒；默认 5 分钟，建议 5-10 分钟，足够收尾并切换到下一项。"
                 value={settings.schedule_reminder_lead_minutes}
               />
+
+              <div className="setting-row mode-setting">
+                <div>
+                  <strong>时间轴语音播报</strong>
+                  <p>时间轴任务开始前 1 分钟，用中文语音念出下一项任务的科目、标题和时间，例如「一分钟后开始：数学，套卷训练。时间 08:30 到 11:30」。默认使用微软 Edge 在线神经音色，可自由挑选；断网自动回落到系统语音。与日历铃声相互独立。</p>
+                </div>
+                <div className="segmented-control">
+                  <button className={settings.timeline_voice_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ timeline_voice_enabled: true })} type="button"><BellRing size={15} />开启</button>
+                  <button className={!settings.timeline_voice_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ timeline_voice_enabled: false })} type="button">关闭</button>
+                </div>
+              </div>
+
+              <div className="setting-row mode-setting timeline-voice-engine">
+                <div>
+                  <strong>语音来源</strong>
+                  <p>「在线语音」是微软 Edge 的神经音色（晓晓、云希、晓伊、东北小北等），联网即用、无需密钥；「系统语音」是 Windows 自带的离线朗读，断网时作为兜底。</p>
+                </div>
+                <div className="segmented-control">
+                  <button className={normalizeVoiceEngine(settings.timeline_voice_engine) === 'online' ? 'active' : ''} disabled={settingsLocked || !settings.timeline_voice_enabled} onClick={() => updateSettings({ timeline_voice_engine: 'online' })} type="button">在线语音</button>
+                  <button className={normalizeVoiceEngine(settings.timeline_voice_engine) === 'system' ? 'active' : ''} disabled={settingsLocked || !settings.timeline_voice_enabled} onClick={() => updateSettings({ timeline_voice_engine: 'system' })} type="button">系统语音</button>
+                </div>
+              </div>
+
+              <label className="field-block timeline-voice-select">
+                <span>在线音色</span>
+                <div className="timeline-voice-select-row">
+                  <select
+                    className="text-input"
+                    disabled={settingsLocked || !settings.timeline_voice_enabled || normalizeVoiceEngine(settings.timeline_voice_engine) !== 'online'}
+                    onChange={(event) => updateSettings({ timeline_online_voice: event.target.value })}
+                    value={onlineVoices.some((voice) => voice.shortName === settings.timeline_online_voice)
+                      ? settings.timeline_online_voice
+                      : DEFAULT_ONLINE_VOICE}
+                  >
+                    {onlineVoices.length === 0 && <option value={DEFAULT_ONLINE_VOICE}>晓晓 · 女声（默认）</option>}
+                    {onlineVoices.map((voice) => (
+                      <option key={voice.shortName} value={voice.shortName}>{voice.label}</option>
+                    ))}
+                  </select>
+                  <button className="secondary-action" disabled={settingsLocked || onlineVoicesLoading} onClick={() => void refreshOnlineVoices()} type="button">
+                    <RotateCcw size={14} /> {onlineVoicesLoading ? '拉取中' : '刷新'}
+                  </button>
+                </div>
+                <small>
+                  {onlineVoicesError
+                    ? `在线音色列表拉取失败：${onlineVoicesError}。仍可用默认音色，播报失败会自动回落到系统语音。`
+                    : onlineVoices.length > 0
+                      ? `已获取 ${onlineVoices.length} 个在线中文音色。每次播报会实时合成，断网或连接失败时自动改用系统语音，不会哑掉。`
+                      : '正在获取在线音色…'}
+                </small>
+              </label>
+
+              <SettingNumber
+                disabled={settingsLocked || !settings.timeline_voice_enabled}
+                label="播报语速（%）"
+                max={200}
+                min={50}
+                onChange={(value) => updateSettings({ timeline_voice_rate: value })}
+                text="100 为正常语速，50 最慢、200 最快。在线语音与系统语音共用此语速；在线合成失败会自动回落，不会报错。"
+                value={settings.timeline_voice_rate}
+              />
+
+              <div className="timeline-voice-preview">
+                <button
+                  className="secondary-action"
+                  disabled={settingsLocked}
+                  onClick={() => void speakTimelineTask({
+                    text: '一分钟后开始：数学，套卷训练。时间 08:30 到 11:30，预计 3 小时，请准备。',
+                    rate: normalizeVoiceRate(settings.timeline_voice_rate),
+                    ratePercent: settings.timeline_voice_rate,
+                    engine: normalizeVoiceEngine(settings.timeline_voice_engine),
+                    onlineVoice: settings.timeline_online_voice,
+                  })}
+                  type="button"
+                >
+                  <Play size={15} /> 试听播报
+                </button>
+                <span>用当前选中的音色念一句示例。在线音色需要联网，首次合成可能要等一两秒。</span>
+              </div>
 
               <div className="setting-row mode-setting">
                 <div>

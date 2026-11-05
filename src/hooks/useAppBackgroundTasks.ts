@@ -33,6 +33,14 @@ import {
   syncConfiguredStateChange,
 } from '../services/syncApi';
 import { currentMinuteOfDay, formatDateKey } from '../utils/date';
+import {
+  buildTimelineVoiceKey,
+  buildTimelineVoiceText,
+  categoryLabelForVoice,
+  normalizeVoiceRate,
+  speakTimelineTask,
+  TIMELINE_VOICE_LEAD_MINUTES,
+} from '../utils/timelineVoice';
 import type { Alarm } from '../types/alarm';
 import type { AppPage } from '../types/navigation';
 
@@ -430,14 +438,12 @@ export function useScheduleReminders() {
   useEffect(() => {
     let disposed = false;
     const remindedKeys = new Set<string>();
+    /** 语音播报与铃声通知各自去重：关掉铃声不影响播报，关掉播报也不影响铃声。 */
+    const spokenKeys = new Set<string>();
 
     async function checkScheduleReminders() {
       try {
         const settings = await getAppSettings();
-        if (!settings.schedule_reminder_enabled) {
-          return;
-        }
-
         const date = formatDateKey();
         const nowMinute = currentMinuteOfDay();
         const pageData = await getSchedulePageData(date);
@@ -446,26 +452,55 @@ export function useScheduleReminders() {
         for (const block of pageData.day_blocks) {
           if (block.status === 'completed') continue;
           const minutesUntilStart = block.start_minute - nowMinute;
-          const isInLeadWindow = minutesUntilStart >= 0
-            && minutesUntilStart <= settings.schedule_reminder_lead_minutes;
-          const isRecentlyStarted = minutesUntilStart < 0
-            && Math.abs(minutesUntilStart) <= SCHEDULE_REMINDER_LOOKBACK_MINUTES;
-          if (!isInLeadWindow && !isRecentlyStarted) continue;
 
-          const key = `${block.id}:${block.schedule_date}:${block.start_minute}`;
-          if (remindedKeys.has(key)) continue;
-          remindedKeys.add(key);
+          // 链路一：原有的铃声 + 桌面通知，按用户设的提前量触发。
+          if (settings.schedule_reminder_enabled) {
+            const isInLeadWindow = minutesUntilStart >= 0
+              && minutesUntilStart <= settings.schedule_reminder_lead_minutes;
+            const isRecentlyStarted = minutesUntilStart < 0
+              && Math.abs(minutesUntilStart) <= SCHEDULE_REMINDER_LOOKBACK_MINUTES;
+            if (isInLeadWindow || isRecentlyStarted) {
+              const key = `${block.id}:${block.schedule_date}:${block.start_minute}`;
+              if (!remindedKeys.has(key)) {
+                remindedKeys.add(key);
+                void notifyStudyReminder({
+                  title: '日程时间到了',
+                  body: `${block.title} 已到开始时间，可以回到日历一键开始专注。`,
+                });
+              }
+            }
+          }
 
-          void notifyStudyReminder({
-            title: '日程时间到了',
-            body: `${block.title} 已到开始时间，可以回到日历一键开始专注。`,
-          });
+          // 链路二：开始前 1 分钟中文语音播报下一段时间轴任务内容。
+          // 轮询 30 秒一次，用 [0, lead] 窗口兜住分钟翻转，不会漏播也不会重复播。
+          if (settings.timeline_voice_enabled
+            && minutesUntilStart >= 0
+            && minutesUntilStart <= TIMELINE_VOICE_LEAD_MINUTES) {
+            const voiceKey = buildTimelineVoiceKey(block.id, block.schedule_date, block.start_minute);
+            if (!spokenKeys.has(voiceKey)) {
+              spokenKeys.add(voiceKey);
+              const text = buildTimelineVoiceText({
+                title: block.title,
+                subjectName: categoryLabelForVoice(block.category_key),
+                startMinute: block.start_minute,
+                endMinute: block.end_minute,
+              });
+              void speakTimelineTask({
+                text,
+                rate: normalizeVoiceRate(settings.timeline_voice_rate),
+                ratePercent: settings.timeline_voice_rate,
+                engine: settings.timeline_voice_engine,
+                onlineVoice: settings.timeline_online_voice,
+              });
+            }
+          }
         }
 
         for (const key of [...remindedKeys]) {
-          if (!key.includes(`:${date}:`)) {
-            remindedKeys.delete(key);
-          }
+          if (!key.includes(`:${date}:`)) remindedKeys.delete(key);
+        }
+        for (const key of [...spokenKeys]) {
+          if (!key.startsWith(`${date}:`)) spokenKeys.delete(key);
         }
       } catch {
         // Schedule reminders are best-effort and should never interrupt the app.
