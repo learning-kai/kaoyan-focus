@@ -58,5 +58,5 @@ tauri-plugin-single-instance = "2"
 tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
-tauri-winrt-notification = "0.7.2"
+tauri-winrt-notification = "0.8.1"
 winreg = "0.55"
