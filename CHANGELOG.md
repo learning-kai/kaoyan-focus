@@ -4,6 +4,10 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ## Unreleased
 
+### Changed
+
+- 语音播报改用**本地神经网络 TTS（Piper）**：随安装包分发 `zh_CN-huayan-medium` 中文音色（华言女声）与 Piper 运行时（约 89MB），完全离线、不联网、不依赖 Windows 语音包，音质远超系统 SAPI 的拼接式机械音。单句合成约 0.1–0.2 秒（实时率 ~0.05）。新增 `ensure_ascii_runtime`：Piper 内置的 espeak-ng 无法读取含中文的路径（会报 `Illegal byte sequence` 直接退出），因此启动时先把运行时镜像到 `%LOCALAPPDATA%\kaoyan-focus	ts\` 再调用。设置页「系统语音」更名为「本地语音」并作为默认；Edge 在线音色保留为可选。
+
 ### Fixed
 
 - 修复「时间轴语音播报点试听没有声音」——第三次定位，这次找到真因。根因有两层：**(1)** 浏览器 `speechSynthesis` 在 WebView2 里 `getVoices()` 返回空数组，却仍立刻触发 `end` 事件——表现为「没声音也不报错」；**(2)** Edge 在线语音依赖 WebSocket，而开启系统代理（Clash / v2ray 等）后 WSS 升级普遍被拦。现在系统语音通道改为 **进程内 COM 直接调用 SAPI `ISpVoice`**——第一版用 PowerShell 调 `System.Speech`，虽然能出声，但每次播报都会弹控制台窗口，且 `Speak()` 同步阻塞会占死 Tauri 的 IPC 线程导致界面卡死。改为进程内 COM 后把朗读放到独立线程，命令立即返回，界面不阻塞、无任何外部窗口；默认引擎同时改为「系统语音」，在线音色保留为可选。新增 `commands/timeline_voice.rs` 与 6 条单测（语速映射、文本清洗、脚本参数化防注入）。

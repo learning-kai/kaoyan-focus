@@ -69,6 +69,10 @@
     ],
     "icon": [
       "icons/icon.ico"
+    ],
+    "resources": [
+      "resources/piper/*",
+      "resources/piper/espeak-ng-data/*"
     ]
   },
   "plugins": {

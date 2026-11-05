@@ -203,4 +203,35 @@ assert.ok(
   '在线失败必须被 try/catch 接住后才回落',
 );
 
+// ---------- 本地 Piper 引擎不变式 ----------
+const voiceRs = await readSource('src-tauri/src/commands/timeline_voice.rs');
+const NL = String.fromCharCode(10);
+const voiceRsCode = voiceRs
+  .split(NL)
+  .filter((line) => !line.trimStart().startsWith('//'))
+  .join(NL);
+assert.match(voiceRs, /piper\.exe/, '应调用随包分发的 Piper 引擎');
+assert.match(voiceRs, /zh_CN-huayan-medium\.onnx/, '应使用随包的中文语音模型');
+assert.match(voiceRs, /ensure_ascii_runtime/, '必须镜像到 ASCII 路径');
+assert.match(
+  voiceRs,
+  /Illegal byte sequence|非 ASCII/,
+  '应说明为什么必须走 ASCII 路径（espeak-ng 读不了中文路径）',
+);
+assert.match(voiceRs, /CREATE_NO_WINDOW|0x08000000/, '不得弹出控制台窗口');
+assert.ok(
+  !/powershell/i.test(voiceRsCode),
+  '不应再通过 PowerShell 调系统语音：那是拼接式机械音，且路径/转义问题多',
+);
+// 只检查代码本体：文件头注释记录「为什么放弃 ISpVoice」是必要的，不算违规。
+assert.ok(
+  !/speak_blocking|ISpVoice/.test(voiceRsCode),
+  '不应在 Rust 进程内直接朗读（音频到不了音箱）',
+);
+
+// 资源必须随包分发，否则用户装完没有引擎。
+const tauriConf = await readSource('src-tauri/tauri.conf.json');
+assert.match(tauriConf, /resources\/piper/, 'Piper 运行时应打进安装包');
+assert.match(tauriConf, /espeak-ng-data/, 'espeak 数据目录应打进安装包');
+
 console.log('Timeline online voice assertions passed');

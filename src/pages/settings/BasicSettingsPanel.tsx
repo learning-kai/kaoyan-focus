@@ -127,11 +127,11 @@ export function BasicSettingsPanel({
       } else if (result.ok && result.engine === 'system') {
         setPreviewStatus(
           normalizeVoiceEngine(settings.timeline_voice_engine) === 'online'
-            ? '在线语音不可用（常见于开启系统代理时 WebSocket 被拦），已自动改用系统语音播报。'
-            : '已用系统语音播报。',
+            ? '在线语音不可用（常见于开启系统代理时 WebSocket 被拦），已自动改用本地语音播报。'
+            : '已用本地语音播报。',
         );
       } else {
-        setPreviewStatus('播报失败：系统语音未出声，请检查系统音量与语音包。');
+        setPreviewStatus('播报失败：本地语音引擎未出声，请检查系统音量或重装应用。');
       }
     } catch (reason) {
       setPreviewStatus(`播报出错：${reason instanceof Error ? reason.message : String(reason)}`);
@@ -340,7 +340,7 @@ export function BasicSettingsPanel({
               <div className="setting-row mode-setting">
                 <div>
                   <strong>时间轴语音播报</strong>
-                  <p>时间轴任务开始前 1 分钟，用中文语音念出下一项任务的科目、标题和时间，例如「一分钟后开始：数学，套卷训练。时间 08:30 到 11:30」。默认使用微软 Edge 在线神经音色，可自由挑选；断网自动回落到系统语音。与日历铃声相互独立。</p>
+                  <p>时间轴任务开始前 1 分钟，用中文语音念出下一项任务的科目、标题和时间，例如「一分钟后开始：数学，套卷训练。时间 08:30 到 11:30」。默认使用随包分发的 Piper 本地神经网络中文音色，完全离线；也可切到微软 Edge 在线音色。与日历铃声相互独立。</p>
                 </div>
                 <div className="segmented-control">
                   <button className={settings.timeline_voice_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ timeline_voice_enabled: true })} type="button"><BellRing size={15} />开启</button>
@@ -351,11 +351,11 @@ export function BasicSettingsPanel({
               <div className="setting-row mode-setting timeline-voice-engine">
                 <div>
                   <strong>语音来源</strong>
-                  <p>「系统语音」用 Windows 自带的中文语音（Huihui / Kangkang / Yaoyao），不联网、不受代理影响，<strong>默认推荐</strong>；「在线语音」是微软 Edge 的神经音色（晓晓、云希、晓伊等），音质更自然，但依赖 WebSocket，开着系统代理时可能连不上。</p>
+                  <p>「本地语音」是随安装包分发的 Piper 神经网络中文音色（华言女声），<strong>完全离线</strong>、不联网、不依赖系统语音包，音质远超 Windows 自带的机械朗读，<strong>默认推荐</strong>；「在线语音」是微软 Edge 的晓晓/云希等音色，依赖 WebSocket，开着系统代理时可能连不上。</p>
                 </div>
                 <div className="segmented-control">
                   <button className={normalizeVoiceEngine(settings.timeline_voice_engine) === 'online' ? 'active' : ''} disabled={settingsLocked || !settings.timeline_voice_enabled} onClick={() => updateSettings({ timeline_voice_engine: 'online' })} type="button">在线语音</button>
-                  <button className={normalizeVoiceEngine(settings.timeline_voice_engine) === 'system' ? 'active' : ''} disabled={settingsLocked || !settings.timeline_voice_enabled} onClick={() => updateSettings({ timeline_voice_engine: 'system' })} type="button">系统语音</button>
+                  <button className={normalizeVoiceEngine(settings.timeline_voice_engine) === 'system' ? 'active' : ''} disabled={settingsLocked || !settings.timeline_voice_enabled} onClick={() => updateSettings({ timeline_voice_engine: 'system' })} type="button">本地语音</button>
                 </div>
               </div>
 
@@ -394,7 +394,7 @@ export function BasicSettingsPanel({
                 max={200}
                 min={50}
                 onChange={(value) => updateSettings({ timeline_voice_rate: value })}
-                text="100 为正常语速，50 最慢、200 最快。在线语音与系统语音共用此语速；在线合成失败会自动回落，不会报错。"
+                text="100 为正常语速，50 最慢、200 最快。本地语音与在线音色共用此语速；在线合成失败会自动回落本地语音，不会报错。"
                 value={settings.timeline_voice_rate}
               />
 
@@ -408,7 +408,7 @@ export function BasicSettingsPanel({
                   <Play size={15} /> {previewBusy ? '正在播报…' : '试听播报'}
                 </button>
                 <span>
-                  {previewStatus ?? '用当前语音念一句示例。系统语音立即出声；在线音色需要联网，首次合成可能要等一两秒。'}
+                  {previewStatus ?? '用当前语音念一句示例。本地语音约 0.2 秒合成完成、无需联网；在线音色需要联网，可能要等一两秒。'}
                 </span>
               </div>
 
