@@ -2836,7 +2836,7 @@ dependencies = [
  "aws-types",
  "base64 0.22.1",
  "chrono",
- "indexmap 1.9.3",
+ "indexmap 2.14.0",
  "lettre",
  "quick-xml 0.39.4",
  "reqwest",
