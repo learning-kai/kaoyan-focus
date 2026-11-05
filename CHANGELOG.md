@@ -4,6 +4,10 @@ All notable changes to `考研专注` will be documented here. The public deskto
 
 ## Unreleased
 
+### Fixed
+
+- 修复卡片内长文字被截断的问题。时间轴日程块的标题、副标题，以及「今日待排」左栏的任务名和描述，之前被一条 `white-space: nowrap` 批量规则压成单行，82–93px 宽的窄卡片里 30 字任务名只剩「数…」。现在标题最多折行两行（`line-clamp: 2`）后省略，常见长度的任务名可完整读到；紧凑卡片的时间行也允许折行，不再被切掉 11px。改动集中在 `apple-hig.css` 与 `styles.css`，并把 `test:review-layout` 的契约从「必须单行 nowrap」改为「必须有行数上限」，防止撑破色块的同时不再牺牲可读性。
+
 ### Added
 
 - 新增「时间轴语音播报」（设置 → 自动化）：时间轴任务开始前 1 分钟，用中文语音念出下一项任务的科目、标题、起止时间与时长。**语音来源默认是微软 Edge 的在线 Natural 神经音色**（晓晓、云希、晓伊、东北话小北、陕西话小妮、粤语、台湾音色等 14 个中文音色，无需 API Key，设置页可刷新列表并任选），比 Windows 自带语音自然得多；在线合成失败（断网/代理/WebSocket 被拦）时自动回落到系统语音，绝不哑掉。实现走 WSS + SSML（`src/utils/edgeTts.ts`，含 Sec-MS-GEC 签名与音频分片拼接），CSP 显式放行 `wss:`。与既有「日历铃声」完全独立——各自开关、各自去重；沿用 30 秒日程轮询，不新增后台循环。新增 `timeline_voice_enabled` / `timeline_voice_rate` / `timeline_voice_engine` / `timeline_online_voice` 设置项与试听按钮。覆盖 `npm run test:timeline-voice`。

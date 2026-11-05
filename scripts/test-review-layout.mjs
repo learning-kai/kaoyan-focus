@@ -150,10 +150,17 @@ assert(
   '不能再有「.soft-panel strong 一律 nowrap + 省略」的兜底规则：那会把 flex 里的标题压到内容宽度以下',
 );
 
-// 真正按一行设计的卡片仍然需要 nowrap（防止撑破），所以规则本身不能删光。
+// 日程块标题必须「有上限」，不能无限撑破色块。
+// 早期要求死守 nowrap 单行，但实测 82px 宽的紧凑卡片会把
+// 「数学强化阶段高等数学…」压成「数…」，用户看不到任务名。
+// 现在改为最多两行（line-clamp），既完整可读又不会撑破卡片。
 assert(
-  /\.schedule-block strong[\s\S]{0,500}?white-space:\s*nowrap/.test(appleHig),
-  '按单行高度设计的日程块标题应保留 nowrap 省略，避免撑破色块',
+  /\.schedule-block strong[\s\S]{0,600}?(-webkit-)?line-clamp:\s*2/.test(appleHig),
+  '日程块标题应限制最多两行（line-clamp），既能读到任务名又不会撑破色块',
+);
+assert(
+  /\.schedule-block strong[\s\S]{0,600}?white-space:\s*normal/.test(appleHig),
+  '日程块标题应允许折行，而不是一律单行省略',
 );
 
 // 列表类标题应允许换行显示完整名称。

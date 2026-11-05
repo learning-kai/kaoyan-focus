@@ -4173,12 +4173,38 @@ details.details-card[open] > summary::before {
   }
 }
 
-.schedule-task-row strong,
 .template-row strong,
 .week-block {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * 「今日待排」左栏只有 206px 宽，标题列约 93px。
+ * 单行 + 省略号会让 30 字的任务名只剩「高等数学…」，
+ * 所以标题改成两行折行，描述行也允许换行，至少能看清任务是什么。
+ */
+.schedule-task-row strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.schedule-task-row .schedule-task-main > span {
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .schedule-task-row span,
@@ -4192,6 +4218,33 @@ details.details-card[open] > summary::before {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+/*
+ * 时间轴卡片里的任务标题：曾经的 `.schedule-block strong` 被卷进上面的单行省略号规则，
+ * 长标题直接变成「数学强化阶段高等…」，用户看不到完整任务名。
+ * 这里让标题在卡片内换行，最多占两行；真的还放不下才省略，
+ * 至少保证常见长度的任务名完整可读。
+ */
+.schedule-block .schedule-block-content strong,
+.schedule-block-content strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+/* 副标题（科目名）允许换行，避免短卡片里只剩「专…」。 */
+.schedule-block .schedule-block-content small,
+.schedule-block-content small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 .schedule-task-row > div:first-child,
@@ -4673,7 +4726,10 @@ details.details-card[open] > summary::before {
   color: var(--ink);
   font-size: 13px;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 时间轴卡片的长标题允许折行，最多两行，不再一律截成一行。 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
 }
 
 .schedule-block.conflict {

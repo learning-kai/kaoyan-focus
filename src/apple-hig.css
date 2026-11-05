@@ -855,13 +855,48 @@ html[data-theme='sakura'] .primary-button {
   min-width: 0;
 }
 
-.schedule-page .schedule-block span,
-.schedule-page .schedule-block small,
-.schedule-page .schedule-block strong {
+.schedule-page .schedule-block span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * 紧凑卡片（is-compact）最小只有约 82px 内容宽，而「13:00-13:15 · 英语」
+ * 约需 93px —— 单行必然被切掉 11px，只剩下「13:00-13:15 · 英…」。
+ * 时间与科目之间本来就有空格，允许在紧凑卡片里折成两行。
+ */
+.schedule-page .schedule-block.is-compact .schedule-block-content > span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+/*
+ * 副标题（科目名）在窄卡片里同样只剩一两个字，允许折行。
+ * 用与上方规则同等特异性的 `.schedule-page .schedule-block small`，
+ * 靠书写顺序在后覆盖，避免再加 !important。
+ */
+.schedule-page .schedule-block small {
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+/*
+ * 卡片标题不再强制单行：长任务名（如「数学强化阶段高等数学…专项训练」）
+ * 在 93px 宽的窄卡片里会只剩几个字，改成允许折行更可读。
+ */
+.schedule-page .schedule-block strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
 }
 
 .schedule-block-actions .is-complete-toggle,
@@ -920,9 +955,7 @@ html[data-theme='sakura'] .primary-button {
 
 /* 只有「单行定宽卡片」里的文字才强制单行省略 —— 那里的高度是按一行设计的，
    换行会撑破卡片。列表/详情区的标题允许换行，长科目名才不会被吃掉。 */
-.schedule-block strong,
 .schedule-block span,
-.schedule-block small,
 .week-block,
 .today-item-row .today-item-copy strong,
 .category-task-row .checklist-task-copy strong,
@@ -931,6 +964,27 @@ html[data-theme='sakura'] .primary-button {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+/*
+ * 时间轴卡片的标题与副标题例外：卡片宽度只有 60–100px 时，
+ * 单行截断会把「数学强化阶段高等数学…」压成「数…」。
+ * 这里允许最多两行折行，高度不够时才省略。
+ */
+.schedule-block strong,
+.schedule-block small {
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.schedule-block strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 /* 列表行里的标题：允许换行显示完整名称，但不许把行撑破。 */
@@ -997,12 +1051,31 @@ html[data-theme='sakura'] .primary-button {
   overflow: hidden;
 }
 
-.schedule-task-copy strong,
-.schedule-task-copy span {
-  display: block;
+/*
+ * 「今日待排」左栏内宽约 168px，标题列约 93px。
+ * 单行 + 省略号会把 30 字的任务名截成「高等数学…」，这里放成两行，
+ * 超过两行再省略——常见任务名能完整读到。
+ */
+.schedule-task-copy strong {
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.schedule-task-copy span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.35;
 }
 
 .schedule-task-row.is-completed {
