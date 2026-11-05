@@ -585,7 +585,7 @@ pub fn run() {
             commands::review::save_weekly_review,
             commands::review::delete_weekly_review,
             commands::review_ai::draft_review_with_ai,
-            commands::timeline_voice::speak_timeline_task,
+            commands::timeline_voice::synthesize_timeline_speech,
             commands::focus::start_study_mode,
             commands::focus::start_countup_study_mode,
             commands::focus::get_study_mode_state,

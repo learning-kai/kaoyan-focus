@@ -171,14 +171,21 @@ assert.match(panel, /timeline_voice_engine: 'online'/, '应能切到在线');
 assert.match(panel, /timeline_voice_engine: 'system'/, '应能切到系统语音');
 assert.match(panel, /timeline_online_voice: event\.target\.value/, '选择应写回设置');
 assert.match(panel, /刷新/, '应有刷新按钮');
-assert.match(panel, /void speakTimelineTask\(/, '试听应使用同一个播报函数');
+assert.match(panel, /handlePreviewSpeech/, '试听应走统一的播报处理函数');
 assert.match(panel, /onlineVoice: settings\.timeline_online_voice/, '试听应带当前音色');
 
 // ---------- 回落不变式 ----------
 const timelineVoiceSrc = await readSource('src/utils/timelineVoice.ts');
 assert.match(timelineVoiceSrc, /synthesizeOnlineSpeech/, '主通道是在线合成');
 assert.match(timelineVoiceSrc, /await speakWithSystemVoice\(options\)/, '在线失败应回落系统语音');
-assert.match(timelineVoiceSrc, /speak_timeline_task/, '系统语音应调用后端 SAPI 命令');
+assert.match(timelineVoiceSrc, /synthesize_timeline_speech/, '应调用后端合成命令');
+// 关键不变式：后端只合成、播放必须在 WebView 里，否则声音到不了音箱。
+assert.match(timelineVoiceSrc, /new Audio\(url\)/, '必须用 Audio 播放合成的 WAV');
+assert.match(timelineVoiceSrc, /URL\.createObjectURL/, '应把字节转成 Blob URL 播放');
+assert.ok(
+  !/speak_timeline_task/.test(timelineVoiceSrc),
+  '不应再让 Rust 直接朗读：应用进程音频到不了音箱',
+);
 // 只检查代码本体：注释里说明「为何不用」是合理的，不算违规。
 const timelineVoiceCode = timelineVoiceSrc
   .replace(/\/\*[\s\S]*?\*\//g, '')

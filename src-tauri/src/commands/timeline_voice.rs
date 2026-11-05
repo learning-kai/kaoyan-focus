@@ -1,42 +1,40 @@
-//! 时间轴任务语音播报（Windows SAPI，进程内 COM）。
+//! 时间轴任务语音播报（Windows SAPI 合成 → 前端音频通道播放）。
 //!
-//! ## 为什么不用浏览器 speechSynthesis
+//! ## 走过的两条弯路
 //!
-//! 实测在 WebView2 里 `getVoices()` 返回空数组，却仍会立刻触发 `end` 事件：
-//! 表现为「点了试听没有声音，也不报错」。系统明明装了中文语音（Huihui 等）。
+//! 1. **浏览器 `speechSynthesis`**：WebView2 里 `getVoices()` 返回空数组，
+//!    却仍立刻触发 `end` —— 没声音也不报错。
+//! 2. **Rust 进程内 COM `ISpVoice` 直接朗读**：`Speak()` 确实执行了（耗时 3 秒以上，
+//!    说明真的在念），但应用进程的音频会话没有送到用户音箱。
+//!    同一台机器上白噪音（走 WebView2 音频）却能正常听到。
 //!
-//! ## 为什么不用 PowerShell 调 System.Speech
+//! ## 现在的做法
 //!
-//! 第一版确实是这么做的，结果有两个致命问题：
-//! 1. 每次播报都会**弹出一个 PowerShell 控制台窗口**；
-//! 2. `Speak()` 是同步阻塞的，而 `Command::output()` 又要等进程退出，
-//!    整句念完之前 Tauri 的 IPC 线程一直被占住 —— 界面直接卡死。
+//! **Rust 只负责合成，播放交给前端**：
+//! - Rust 用 SAPI 把文本合成成 WAV 字节返回（不朗读，不碰音频设备）；
+//! - 前端拿到字节后用 `<audio>` / `Audio()` 播放 —— 与白噪音同一条已验证可用的通道。
 //!
-//! 所以改成在进程内直接调用 SAPI 的 COM 接口（`ISpVoice`）。
-//! 播报放到独立线程执行，命令立即返回，界面不阻塞、也不会有任何外部窗口。
+//! 这样既绕开了浏览器语音引擎的缺陷，也绕开了「Rust 进程音频不可达」的问题。
 
 use serde::Serialize;
-use std::thread;
 
 /// 允许的语速区间（百分比整数），与设置页保持一致。
 const RATE_MIN: i64 = 50;
 const RATE_MAX: i64 = 200;
-/// 单次播报文本上限，防止把整篇笔记念成有声书。
+/// 单次合成文本上限，防止把整篇笔记念成有声书。
 const MAX_TEXT_CHARS: usize = 500;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct TimelineSpeechStatus {
-    /// 是否已发起播报（真正的朗读在后台线程进行）。
-    pub spoken: bool,
-    /// 实际使用的语音名；拿不到时为空。
-    pub voice: String,
-    /// 给界面看的一句话结果说明。
-    pub detail: String,
+pub struct TimelineSpeechAudio {
+    /// WAV 文件的字节内容（含 44 字节 RIFF 头）。
+    pub bytes: Vec<u8>,
+    /// MIME 类型，前端构造 Blob 时直接用。
+    pub mime_type: String,
 }
 
 /// 把设置里的语速百分比换算成 SAPI 的 Rate（-10..10，0 为正常语速）。
 ///
-/// SAPI 的 Rate 是相对档位而不是线性倍率，这里分段映射保证端点精确落在 ±10：
+/// SAPI 的 Rate 是相对档位而不是线性倍率，分段映射保证端点精确落在 ±10：
 /// 50% → -10，100% → 0，200% → +10。
 pub fn percent_to_sapi_rate(percent: i64) -> i32 {
     let clamped = percent.clamp(RATE_MIN, RATE_MAX);
@@ -48,13 +46,12 @@ pub fn percent_to_sapi_rate(percent: i64) -> i32 {
     rate.clamp(-10, 10)
 }
 
-/// 清洗待朗读文本：换行会让 SAPI 停顿异常，统一压成空格；控制字符直接丢弃。
+/// 清洗待合成文本：换行压成空格，控制字符丢弃。
 pub fn sanitize_speech_text(text: &str) -> String {
     let cleaned: String = text
         .chars()
         .map(|ch| match ch {
             '\r' | '\n' | '\t' => ' ',
-            // SAPI 对连续标点敏感，保留常规标点即可。
             _ if ch.is_control() => ' ',
             _ => ch,
         })
@@ -62,96 +59,97 @@ pub fn sanitize_speech_text(text: &str) -> String {
     cleaned.trim().chars().take(MAX_TEXT_CHARS).collect()
 }
 
-/// 在**当前线程**初始化 COM 并同步朗读完。
+/// 用 SAPI 合成 WAV 字节。
 ///
-/// 必须每个调用线程各自 `CoInitializeEx`：SAPI 是 apartment-threaded 的 COM 对象，
-/// 跨线程共用会拿到 RPC_E_WRONG_THREAD。
+/// 走 PowerShell 调 `System.Speech` 的 `SetOutputToWaveFile`：
+/// 它只做离线合成、不碰音频设备，因此不会再出现「声音送不到音箱」的问题，
+/// 也不会像直接 `Speak()` 那样占住调用线程几秒钟。
 #[cfg(windows)]
-fn speak_blocking(text: &str, rate: i32, volume: u32) -> Result<String, String> {
-    use windows::core::HSTRING;
-    use windows::Win32::Media::Speech::ISpVoice;
-    use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED,
-    };
+fn synthesize_wav(text: &str, rate: i32) -> Result<Vec<u8>, String> {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
 
-    // 语音对象 CLSID：SpVoice {96749377-3391-11D2-9EE3-00C04F797396}
-    const CLSID_SP_VOICE: windows::core::GUID =
-        windows::core::GUID::from_u128(0x96749377_3391_11d2_9ee3_00c04f797396);
+    // 输出到临时文件：SAPI 的 WaveFile 输出需要真实路径。
+    let temp_dir = std::env::temp_dir();
+    let file_name = format!(
+        "kaoyan-tts-{}-{}.wav",
+        std::process::id(),
+        chrono::Utc::now().timestamp_millis()
+    );
+    let wav_path = temp_dir.join(&file_name);
 
-    unsafe {
-        let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-        // RPC_E_CHANGED_MODE 说明该线程已被其它方式初始化，SAPI 仍可用，继续。
-        if hr.is_err() && hr.0 as u32 != 0x8001_0106 {
-            return Err(format!("COM 初始化失败：{hr}"));
-        }
+    // 脚本固定，文本通过环境变量传入，避免任何引号/换行转义问题。
+    let script = r#"
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Speech
+$path = $env:KAOYAN_TTS_WAV
+$rate = [int]$env:KAOYAN_TTS_RATE
+$text = $env:KAOYAN_TTS_TEXT
+$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try {
+  $synth.Rate = $rate
+  $zh = $synth.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'zh-*' } | Select-Object -First 1
+  if ($zh) { $synth.SelectVoice($zh.VoiceInfo.Name) }
+  $synth.SetOutputToWaveFile($path)
+  $synth.Speak($text)
+} finally {
+  $synth.Dispose()
+}
+"#;
 
-        // 无论后面成不成功，都要配对 CoUninitialize。
-        struct ComGuard;
-        impl Drop for ComGuard {
-            fn drop(&mut self) {
-                unsafe { CoUninitialize() };
-            }
-        }
-        let _guard = ComGuard;
+    let output = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ])
+        .env("KAOYAN_TTS_WAV", &wav_path)
+        .env("KAOYAN_TTS_RATE", rate.to_string())
+        .env("KAOYAN_TTS_TEXT", text)
+        .stdin(Stdio::null())
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW：绝不弹出控制台窗口
+        .output()
+        .map_err(|error| format!("调用系统语音合成失败：{error}"))?;
 
-        let voice: ISpVoice = CoCreateInstance(&CLSID_SP_VOICE, None, CLSCTX_ALL)
-            .map_err(|error| format!("创建语音对象失败：{error}"))?;
-
-        voice
-            .SetRate(rate)
-            .map_err(|error| format!("设置语速失败：{error}"))?;
-        voice
-            .SetVolume(volume as u16)
-            .map_err(|error| format!("设置音量失败：{error}"))?;
-
-        // 用系统默认语音。中文版 Windows 的默认语音即 Huihui，
-        // 在缺少显式语音选择 API 的情况下这是最稳的做法（见 GetVoice 返回 ISpObjectToken）。
-
-        let text = HSTRING::from(text);
-        // SPF_DEFAULT = 0，同步朗读；本函数已在独立线程里跑，不会阻塞界面。
-        voice
-            .Speak(&text, 0, None)
-            .map_err(|error| format!("朗读失败：{error}"))?;
-
-        Ok(String::new())
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = std::fs::remove_file(&wav_path);
+        return Err(format!("语音合成失败：{}", stderr.trim()));
     }
+
+    let bytes = std::fs::read(&wav_path).map_err(|error| format!("读取合成音频失败：{error}"))?;
+    let _ = std::fs::remove_file(&wav_path);
+
+    if bytes.len() <= 44 {
+        return Err("语音合成结果为空".to_string());
+    }
+    Ok(bytes)
 }
 
-/// 供前端「试听播报」和定时播报共用的命令。
-///
-/// **立即返回**，真正的朗读在后台线程进行 —— 念一整句话要好几秒，
-/// 同步等待会让界面卡死（这正是第一版 PowerShell 方案的真实故障）。
+/// 合成一段用于「开始前 1 分钟」播报的中文语音，返回 WAV 字节交给前端播放。
 #[tauri::command]
-pub fn speak_timeline_task(
+pub fn synthesize_timeline_speech(
     text: String,
     rate_percent: Option<i64>,
-) -> Result<TimelineSpeechStatus, String> {
+) -> Result<TimelineSpeechAudio, String> {
     let cleaned = sanitize_speech_text(&text);
     if cleaned.is_empty() {
         return Err("播报内容为空".to_string());
     }
     let rate = percent_to_sapi_rate(rate_percent.unwrap_or(100));
-
-    thread::Builder::new()
-        .name("timeline-tts".to_string())
-        .spawn(move || {
-            if let Err(error) = speak_blocking(&cleaned, rate, 100) {
-                // 后台线程没有回传通道，错误只能进日志；调用方已成功拿到「已发起」。
-                eprintln!("[timeline_tts] {error}");
-            }
-        })
-        .map_err(|error| format!("无法启动播报线程：{error}"))?;
-
-    Ok(TimelineSpeechStatus {
-        spoken: true,
-        voice: String::new(),
-        detail: "已发起系统语音播报".to_string(),
+    let bytes = synthesize_wav(&cleaned, rate)?;
+    Ok(TimelineSpeechAudio {
+        bytes,
+        mime_type: "audio/wav".to_string(),
     })
 }
 
 #[cfg(not(windows))]
-fn speak_blocking(_text: &str, _rate: i32, _volume: u32) -> Result<String, String> {
-    Err("当前系统不支持系统语音播报".to_string())
+fn synthesize_wav(_text: &str, _rate: i32) -> Result<Vec<u8>, String> {
+    Err("当前系统不支持系统语音合成".to_string())
 }
 
 #[cfg(test)]
@@ -185,8 +183,10 @@ mod tests {
 
     #[test]
     fn empty_text_is_rejected() {
-        let result = speak_timeline_task("   ".to_string(), Some(100));
-        assert!(result.is_err(), "空白内容不应发起播报");
+        assert!(
+            synthesize_timeline_speech("   ".to_string(), Some(100)).is_err(),
+            "空白内容不应发起合成"
+        );
     }
 }
 
@@ -194,12 +194,16 @@ mod tests {
 mod windows_smoke {
     use super::*;
 
-    /// 真机冒烟：确认 SAPI 在进程内能正常创建并朗读（会真的出声）。
-    /// 用 `cargo test timeline_tts_smoke -- --ignored --nocapture` 手动触发。
+    /// 真机冒烟：确认能合成出合法的 WAV（不依赖音频设备，可稳定断言）。
+    /// 手动跑：`cargo test timeline_tts_smoke -- --ignored --nocapture`
     #[test]
     #[ignore]
-    fn timeline_tts_smoke_speaks() {
-        let result = speak_blocking("语音播报测试", 0, 100);
-        assert!(result.is_ok(), "SAPI 朗读失败：{result:?}");
+    fn timeline_tts_smoke_synthesizes_valid_wav() {
+        let audio = synthesize_timeline_speech("语音播报测试".to_string(), Some(100))
+            .expect("应能合成语音");
+        assert_eq!(audio.mime_type, "audio/wav");
+        assert!(audio.bytes.len() > 44, "应大于 WAV 头长度");
+        assert_eq!(&audio.bytes[0..4], b"RIFF", "应是合法 RIFF 头");
+        assert_eq!(&audio.bytes[8..12], b"WAVE", "应是合法 WAVE 格式");
     }
 }

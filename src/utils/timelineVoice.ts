@@ -166,10 +166,25 @@ export async function speakTimelineTask(options: SpeakOptions): Promise<SpeakRes
 async function speakWithSystemVoice(options: SpeakOptions): Promise<boolean> {
   try {
     const ratePercent = options.ratePercent ?? Math.round(options.rate * 100);
-    await invokeCommand('speak_timeline_task', {
-      text: options.text,
-      ratePercent,
-    });
+    // 后端只做「合成」，返回 WAV 字节；播放走这里 —— 与白噪音同一条音频通道。
+    // 之前两种做法都失败了：浏览器 speechSynthesis 在 WebView2 里枚举不到语音；
+    // Rust 进程内 ISpVoice 直接朗读时，应用进程的音频到不了音箱。
+    const audio = await invokeCommand<{ bytes: number[]; mime_type: string }>(
+      'synthesize_timeline_speech',
+      { text: options.text, ratePercent },
+    );
+    if (!audio || !Array.isArray(audio.bytes) || audio.bytes.length === 0) {
+      return false;
+    }
+    const blob = new Blob([new Uint8Array(audio.bytes)], { type: audio.mime_type || 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    const element = new Audio(url);
+    element.volume = Math.min(1, Math.max(0, options.volume ?? 1));
+    // 播放结束/失败后释放 Blob URL，避免长时间运行累积内存。
+    const release = () => URL.revokeObjectURL(url);
+    element.addEventListener('ended', release, { once: true });
+    element.addEventListener('error', release, { once: true });
+    await element.play();
     return true;
   } catch {
     return false;
