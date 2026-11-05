@@ -9,6 +9,8 @@
  */
 
 /** 提前多少分钟播报：需求固定为「开始前一分钟」。 */
+import { invokeCommand } from '../services/tauriInvoke';
+
 export const TIMELINE_VOICE_LEAD_MINUTES = 1;
 
 /** 轮询间隔：30 秒一次，保证不会错过 T-1 分钟那个窗口。 */
@@ -82,8 +84,15 @@ export const DEFAULT_ONLINE_VOICE = 'zh-CN-XiaoxiaoNeural';
 /** 播报引擎：在线（默认）或系统语音。 */
 export type VoiceEngine = 'online' | 'system';
 
+/**
+ * 归一化播报引擎。
+ *
+ * 默认取 `system`：Edge 在线语音依赖 WSS，开启系统代理（Clash / v2ray 等）后
+ * WebSocket 升级经常被拦，表现为「点了试听没有声音」。系统语音不依赖网络，
+ * 保证提醒一定能出声；想要更自然的音色可以在设置里主动切到在线。
+ */
 export function normalizeVoiceEngine(value: unknown): VoiceEngine {
-  return value === 'system' ? 'system' : 'online';
+  return value === 'online' ? 'online' : 'system';
 }
 
 /** 规范化在线音色名；空串或非法值回落到默认音色。 */
@@ -112,13 +121,19 @@ type SpeakOptions = {
 };
 
 /**
+ * 朗读结果：`engine` 是真正出声的那条通道，`false` 表示两条都失败。
+ * 界面用它如实告诉用户「在线失败、已改用系统语音」，而不是静默降级。
+ */
+export type SpeakResult = { ok: boolean; engine: VoiceEngine | null };
+
+/**
  * 朗读一句中文。
  *
- * 优先走 Edge 在线语音；任何一步失败都静默回落到系统 Web Speech API，
- * 再不行就返回 false（绝不抛错影响日程提醒的其它环节）。
+ * 优先走 Edge 在线语音；任何一步失败都回落到系统 Web Speech API，
+ * 再不行就返回 ok=false（绝不抛错影响日程提醒的其它环节）。
  */
-export async function speakTimelineTask(options: SpeakOptions): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+export async function speakTimelineTask(options: SpeakOptions): Promise<SpeakResult> {
+  if (typeof window === 'undefined') return { ok: false, engine: null };
 
   const engine = normalizeVoiceEngine(options.engine);
 
@@ -131,27 +146,30 @@ export async function speakTimelineTask(options: SpeakOptions): Promise<boolean>
         ratePercent: options.ratePercent ?? Math.round(options.rate * 100),
       });
       playAudioBlob(blob, options.volume ?? 1);
-      return true;
+      return { ok: true, engine: 'online' };
     } catch {
-      // 落到系统语音，保证提醒不哑。
+      // 在线通道失败（断网 / 代理拦掉 WebSocket）→ 回落系统语音。
     }
   }
 
-  return speakWithSystemVoice(options);
+  const spoke = await speakWithSystemVoice(options);
+  return { ok: spoke, engine: spoke ? 'system' : null };
 }
 
-/** 系统 Web Speech API 回落通道。 */
-function speakWithSystemVoice(options: SpeakOptions): boolean {
-  if (!('speechSynthesis' in window)) return false;
+/**
+ * 系统语音通道：调用 Rust 后端的 Windows SAPI。
+ *
+ * 不再使用浏览器的 `speechSynthesis`：实测在 WebView2 里
+ * `getVoices()` 返回空数组、但仍会触发 `end`，表现就是「点了没声音也不报错」。
+ * 后端 SAPI 与系统「讲述人」同一条通路，只要系统能出声就一定能念。
+ */
+async function speakWithSystemVoice(options: SpeakOptions): Promise<boolean> {
   try {
-    const synth = window.speechSynthesis;
-    synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(options.text);
-    utterance.lang = 'zh-CN';
-    utterance.rate = options.rate;
-    utterance.pitch = 1;
-    utterance.volume = options.volume ?? 1;
-    synth.speak(utterance);
+    const ratePercent = options.ratePercent ?? Math.round(options.rate * 100);
+    await invokeCommand('speak_timeline_task', {
+      text: options.text,
+      ratePercent,
+    });
     return true;
   } catch {
     return false;

@@ -81,6 +81,40 @@ export async function runResponsiveMatrix(page, options) {
     }
   };
 
+  /**
+   * 卡片内文字横向硬切检测。
+   *
+   * 只抓「单行 + overflow hidden + 内容比可视区宽」这一种：
+   * 这是用户真正看到「字被吃掉」的形态（例如窄卡片里 30 字任务名只剩「数…」）。
+   * 纵向被 line-clamp 限制属于设计意图，不在此列。
+   */
+  const findHardClippedText = () => page.evaluate(() => {
+    const hits = [];
+    const targets = 'span,strong,p,small,b,label,h2,h3,h4,dd,td,th';
+    for (const element of document.querySelectorAll(targets)) {
+      const ownText = Array.from(element.childNodes)
+        .filter((node) => node.nodeType === 3)
+        .map((node) => node.textContent)
+        .join('')
+        .trim();
+      if (!ownText) continue;
+      const style = getComputedStyle(element);
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+      const rect = element.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) continue;
+      const overflowX = element.scrollWidth - element.clientWidth;
+      if (overflowX > 2 && style.overflowX === 'hidden' && style.whiteSpace === 'nowrap') {
+        hits.push({
+          tag: element.tagName.toLowerCase(),
+          className: element.className?.toString?.().slice(0, 50) ?? '',
+          overflowX,
+          text: ownText.replace(/\s+/g, ' ').slice(0, 40),
+        });
+      }
+    }
+    return hits;
+  });
+
   const gotoReady = async (target, selector) => {
     await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 15_000 });
     await page.waitForSelector(selector, { state: 'visible', timeout: 3_000 });
@@ -148,6 +182,14 @@ export async function runResponsiveMatrix(page, options) {
         for (const item of snapshot) {
           check(!item.missing, `${label} missing ${item.selector}`);
           check(item.missing || item.horizontalOverflow <= 1, `${label} horizontal overflow ${item.selector}`, JSON.stringify(item));
+        }
+        const clippedText = await findHardClippedText();
+        for (const hit of clippedText) {
+          check(
+            false,
+            `${label} 卡片文字被横向裁切 <${hit.tag}.${hit.className}>`,
+            `溢出 ${hit.overflowX}px：「${hit.text}」`,
+          );
         }
         const nav = page.locator('.sidebar .nav-item');
         check(await nav.count() === 8, `${label} navigation count`, `actual=${await nav.count()}`);

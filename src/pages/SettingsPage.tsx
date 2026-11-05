@@ -108,7 +108,7 @@ const defaultSettings: AppSettings = {
   timeline_voice_enabled: false,
   timeline_voice_rate: 100,
   timeline_online_voice: '',
-  timeline_voice_engine: 'online',
+  timeline_voice_engine: 'system',
   focus_widget_enabled: false,
   focus_widget_mode: 'floating',
   focus_widget_auto_follow: true,

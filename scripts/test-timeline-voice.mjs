@@ -3,17 +3,53 @@
  */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { transform } from 'esbuild';
+import { build } from 'esbuild';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const readSource = (relativePath) => readFile(resolve(root, relativePath), 'utf8');
 
+/**
+ * 把 TS 模块转成可 import 的 ESM。
+ *
+ * 用 bundle 模式并把 `tauriInvoke` 打桩：纯函数测试不需要真的连 Tauri，
+ * 但 `timelineVoice.ts` 现在会调用后端 SAPI 命令，必须能解析到这个依赖。
+ */
 async function loadModule(relativePath) {
-  const source = await readSource(relativePath);
-  const { code } = await transform(source, { format: 'esm', loader: 'ts', target: 'node20' });
-  return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+  const stubPlugin = {
+    name: 'stub-tauri-invoke',
+    setup(build) {
+      build.onResolve({ filter: /tauriInvoke$/ }, (args) => ({ path: args.path, namespace: 'stub' }));
+      build.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
+        contents: [
+          'export function invokeCommand() { return Promise.resolve(); }',
+          'export function isTauriRuntime() { return true; }',
+          'export const DESKTOP_RUNTIME_MESSAGE = "";',
+        ].join(String.fromCharCode(10)),
+        loader: 'js',
+      }));
+    },
+  };
+  const { outputFiles } = await build({
+    entryPoints: [resolve(root, relativePath)],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'neutral',
+    target: 'node20',
+    plugins: [stubPlugin],
+  });
+  // 写临时文件再 import：base64 data URL 在含中文时容易被 Node 的解码路径弄坏。
+  const code = outputFiles[0].text;
+  const tmpDir = join(tmpdir(), 'kaoyan-timeline-voice-test');
+  await mkdir(tmpDir, { recursive: true });
+  const tmpFile = join(tmpDir, `${relativePath.replace(/[\/.]/g, '_')}-${Date.now()}.mjs`);
+  await writeFile(tmpFile, code, 'utf8');
+  return import(pathToFileURL(tmpFile).href);
 }
 
 const voice = await loadModule('src/utils/timelineVoice.ts');
@@ -49,8 +85,8 @@ assert.equal(voice.normalizeVoiceRate(undefined), 1);
 // ---------- 引擎与音色规范化 ----------
 assert.equal(voice.normalizeVoiceEngine('online'), 'online');
 assert.equal(voice.normalizeVoiceEngine('system'), 'system');
-assert.equal(voice.normalizeVoiceEngine(undefined), 'online', '默认走在线语音');
-assert.equal(voice.normalizeVoiceEngine('bogus'), 'online');
+assert.equal(voice.normalizeVoiceEngine(undefined), 'system', '默认走系统语音：在线依赖 WSS，代理下会哑');
+assert.equal(voice.normalizeVoiceEngine('bogus'), 'system');
 assert.equal(voice.DEFAULT_ONLINE_VOICE, 'zh-CN-XiaoxiaoNeural', '默认音色为晓晓');
 assert.equal(voice.normalizeOnlineVoice(''), 'zh-CN-XiaoxiaoNeural');
 assert.equal(voice.normalizeOnlineVoice('zh-CN-YunxiNeural'), 'zh-CN-YunxiNeural');
@@ -98,7 +134,7 @@ assert.match(settingsRs, /TIMELINE_ONLINE_VOICE_KEY/, '应有在线音色设置�
 assert.match(settingsRs, /TIMELINE_VOICE_ENGINE_KEY/, '应有引擎设置键');
 assert.match(settingsRs, /pub timeline_online_voice: String,/, '结构体应包含在线音色');
 assert.match(settingsRs, /pub timeline_voice_engine: String,/, '结构体应包含引擎');
-assert.match(settingsRs, /timeline_voice_engine: "online"\.to_string\(\)/, '默认在线语音');
+assert.match(settingsRs, /timeline_voice_engine: "system"\.to_string\(\)/, '默认系统语音');
 assert.match(settingsRs, /"system" => "system"\.to_string\(\)/, '引擎值应被收敛');
 assert.match(settingsRs, /TIMELINE_ONLINE_VOICE_KEY,\s*&normalized\.timeline_online_voice/, '音色应落库');
 assert.match(settingsRs, /TIMELINE_VOICE_ENGINE_KEY,\s*&normalized\.timeline_voice_engine/, '引擎应落库');
@@ -114,7 +150,7 @@ assert.match(settingsTs, /timeline_online_voice: string;/);
 assert.match(settingsTs, /timeline_voice_engine: 'online' \| 'system';/);
 const settingsPage = await readSource('src/pages/SettingsPage.tsx');
 assert.match(settingsPage, /timeline_online_voice: '',/);
-assert.match(settingsPage, /timeline_voice_engine: 'online',/);
+assert.match(settingsPage, /timeline_voice_engine: 'system',/, '前端默认系统语音');
 
 // ---------- hook 接线 ----------
 const hook = await readSource('src/hooks/useAppBackgroundTasks.ts');
@@ -141,11 +177,23 @@ assert.match(panel, /onlineVoice: settings\.timeline_online_voice/, '试听应�
 // ---------- 回落不变式 ----------
 const timelineVoiceSrc = await readSource('src/utils/timelineVoice.ts');
 assert.match(timelineVoiceSrc, /synthesizeOnlineSpeech/, '主通道是在线合成');
-assert.match(timelineVoiceSrc, /return speakWithSystemVoice\(options\)/, '在线失败应回落系统语音');
-assert.match(timelineVoiceSrc, /speechSynthesis/, '系统语音兜底仍保留');
+assert.match(timelineVoiceSrc, /await speakWithSystemVoice\(options\)/, '在线失败应回落系统语音');
+assert.match(timelineVoiceSrc, /speak_timeline_task/, '系统语音应调用后端 SAPI 命令');
+// 只检查代码本体：注释里说明「为何不用」是合理的，不算违规。
+const timelineVoiceCode = timelineVoiceSrc
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
 assert.ok(
-  timelineVoiceSrc.indexOf('synthesizeOnlineSpeech') < timelineVoiceSrc.indexOf('return speakWithSystemVoice'),
-  '在线通道必须先于回落被尝试',
+  !/speechSynthesis/.test(timelineVoiceCode),
+  '代码里不应再用浏览器 speechSynthesis：WebView2 里 getVoices() 返回空数组且静默触发 end',
+);
+// 控制流顺序：在线分支（try）必须在前，系统语音调用在其之后，作为失败兜底。
+const onlineTryAt = timelineVoiceCode.indexOf('synthesizeOnlineSpeech');
+const systemCallAt = timelineVoiceCode.indexOf('await speakWithSystemVoice(options)');
+assert.ok(onlineTryAt > 0 && systemCallAt > onlineTryAt, '在线通道必须先于系统语音回落被尝试');
+assert.ok(
+  /catch \{[\s\S]{0,200}?\}/.test(timelineVoiceCode.slice(onlineTryAt, systemCallAt)),
+  '在线失败必须被 try/catch 接住后才回落',
 );
 
 console.log('Timeline online voice assertions passed');

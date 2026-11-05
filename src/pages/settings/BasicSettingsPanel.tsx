@@ -312,7 +312,7 @@ export function BasicSettingsPanel({
               <div className="setting-row mode-setting timeline-voice-engine">
                 <div>
                   <strong>语音来源</strong>
-                  <p>「在线语音」是微软 Edge 的神经音色（晓晓、云希、晓伊、东北小北等），联网即用、无需密钥；「系统语音」是 Windows 自带的离线朗读，断网时作为兜底。</p>
+                  <p>「系统语音」用 Windows 自带的中文语音（Huihui / Kangkang / Yaoyao），不联网、不受代理影响，<strong>默认推荐</strong>；「在线语音」是微软 Edge 的神经音色（晓晓、云希、晓伊等），音质更自然，但依赖 WebSocket，开着系统代理时可能连不上。</p>
                 </div>
                 <div className="segmented-control">
                   <button className={normalizeVoiceEngine(settings.timeline_voice_engine) === 'online' ? 'active' : ''} disabled={settingsLocked || !settings.timeline_voice_enabled} onClick={() => updateSettings({ timeline_voice_engine: 'online' })} type="button">在线语音</button>
@@ -374,7 +374,7 @@ export function BasicSettingsPanel({
                 >
                   <Play size={15} /> 试听播报
                 </button>
-                <span>用当前选中的音色念一句示例。在线音色需要联网，首次合成可能要等一两秒。</span>
+                <span>用当前语音念一句示例。系统语音立即出声；在线音色需要联网，首次合成可能要等一两秒。</span>
               </div>
 
               <div className="setting-row mode-setting">

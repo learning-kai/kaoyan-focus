@@ -37,6 +37,7 @@ mod commands {
     pub mod schedule;
     pub mod settings;
     pub mod sync;
+    pub mod timeline_voice;
     pub mod whitelist;
 }
 mod background_tasks;
@@ -584,6 +585,7 @@ pub fn run() {
             commands::review::save_weekly_review,
             commands::review::delete_weekly_review,
             commands::review_ai::draft_review_with_ai,
+            commands::timeline_voice::speak_timeline_task,
             commands::focus::start_study_mode,
             commands::focus::start_countup_study_mode,
             commands::focus::get_study_mode_state,

@@ -169,7 +169,9 @@ impl Default for AppSettings {
             timeline_voice_enabled: false,
             timeline_voice_rate: 100,
             timeline_online_voice: String::new(),
-            timeline_voice_engine: "online".to_string(),
+            // 默认走系统语音：Edge 在线语音依赖 WSS，而开启系统代理（Clash 等）
+            // 后 WebSocket 升级常被拦掉，会导致「点了播报没声音」。系统语音零依赖。
+            timeline_voice_engine: "system".to_string(),
             focus_widget_enabled: false,
             focus_widget_mode: default_focus_widget_mode(),
             focus_widget_auto_follow: true,
@@ -318,8 +320,10 @@ pub fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
         )?
         .trim()
         {
+            "online" => "online".to_string(),
             "system" => "system".to_string(),
-            _ => "online".to_string(),
+            // 历史遗留值或非法值：跟随默认（当前为 system）。
+            _ => defaults.timeline_voice_engine.clone(),
         },
         focus_widget_enabled: get_bool_setting(
             &connection,
