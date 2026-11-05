@@ -6,6 +6,7 @@ import { APP_THEME_OPTIONS } from '../../theme';
 import { SettingNumber } from './SettingsPrimitives';
 import { COUNTUP_BREAK_MINUTES_MAX, COUNTUP_BREAK_MINUTES_MIN, COUNTUP_BREAK_STEP_MINUTES } from '../../utils/focusDuration';
 import {
+  buildTimelineVoiceText,
   DEFAULT_ONLINE_VOICE,
   normalizeVoiceEngine,
   normalizeVoiceRate,
@@ -115,8 +116,17 @@ export function BasicSettingsPanel({
     setPreviewBusy(true);
     setPreviewStatus(null);
     try {
+      // 试听必须与真实播报复用同一个文案生成函数。
+      // 之前这里写死了「时间 08:30 到 11:30」，导致正式播报改了口语化时间后，
+      // 试听仍然念旧格式，看起来像修复没生效。
+      const previewText = buildTimelineVoiceText({
+        title: '套卷训练',
+        subjectName: '数学',
+        startMinute: 8 * 60 + 30,
+        endMinute: 11 * 60 + 30,
+      });
       const result = await speakTimelineTask({
-        text: '一分钟后开始：数学，套卷训练。时间 08:30 到 11:30，预计 3 小时，请准备。',
+        text: previewText,
         rate: normalizeVoiceRate(settings.timeline_voice_rate),
         ratePercent: settings.timeline_voice_rate,
         engine: normalizeVoiceEngine(settings.timeline_voice_engine),
@@ -340,7 +350,7 @@ export function BasicSettingsPanel({
               <div className="setting-row mode-setting">
                 <div>
                   <strong>时间轴语音播报</strong>
-                  <p>时间轴任务开始前 1 分钟，用中文语音念出下一项任务的科目、标题和时间，例如「一分钟后开始：数学，套卷训练。时间 08:30 到 11:30」。默认使用随包分发的 Piper 本地神经网络中文音色，完全离线；也可切到微软 Edge 在线音色。与日历铃声相互独立。</p>
+                  <p>时间轴任务开始前 1 分钟，用中文语音念出下一项任务的科目、标题和时间，例如「一分钟后开始：数学，套卷训练。时间从上午八点半到十一点半」。默认使用随包分发的 Piper 本地神经网络中文音色，完全离线；也可切到微软 Edge 在线音色。与日历铃声相互独立。</p>
                 </div>
                 <div className="segmented-control">
                   <button className={settings.timeline_voice_enabled ? 'active' : ''} disabled={settingsLocked} onClick={() => updateSettings({ timeline_voice_enabled: true })} type="button"><BellRing size={15} />开启</button>

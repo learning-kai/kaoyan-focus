@@ -193,6 +193,13 @@ assert.match(panel, /timeline_online_voice: event\.target\.value/, '选择应写
 assert.match(panel, /刷新/, '应有刷新按钮');
 assert.match(panel, /handlePreviewSpeech/, '试听应走统一的播报处理函数');
 assert.match(panel, /onlineVoice: settings\.timeline_online_voice/, '试听应带当前音色');
+// 试听必须复用真实文案生成函数，不能写死字符串 ——
+// 曾因为写死「时间 08:30 到 11:30」，导致正式播报改成口语化后试听仍念旧格式。
+assert.match(panel, /buildTimelineVoiceText\(/, '试听应调用真实文案生成函数');
+assert.ok(
+  !/text:\s*'一分钟后开始/.test(panel),
+  '试听不应硬编码播报文本',
+);
 
 // ---------- 回落不变式 ----------
 const timelineVoiceSrc = await readSource('src/utils/timelineVoice.ts');
