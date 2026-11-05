@@ -1012,4 +1012,19 @@ Old auto-generated changelog entries with empty `No commits found` sections were
 #### Changed
 - chore: release v1.7.3 (2b67d66)
 
+## v1.7.5 - 2026-11-05
+
+### Desktop
+#### Added
+- feat: 时间轴语音播报改用 Edge 在线神经音色 (9d4c578)
+
+#### Fixed
+- fix: 语音播报没声音（改用后端 SAPI，不再依赖浏览器/网络） (fa0dc30)
+- fix: 卡片内长文字不再被单行截断 (5ab8afd)
+- 修复卡片大小溢出 (5d31b77)
+
+#### Changed
+- chore: release v1.7.4 (efd3a72)
+- chore: release v1.7.3 (2b67d66)
+
 
